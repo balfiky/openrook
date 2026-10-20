@@ -2,8 +2,10 @@
 """Regenerate the architecture diagrams as SVG + PNG under docs/diagrams/.
 
 SVG sources are built from ``nur_tools/build_diagrams.py`` (structural diagrams)
-and ``nur_tools/build_showcase.py`` (data-driven README visuals); PNGs are
-rasterized with cairosvg at 2x device pixels (the social cover stays 1280 x 640).
+and ``nur_tools/build_showcase.py`` (data-driven README visuals). Each README
+showcase has transparent light and dark SVG + PNG variants, named with
+``-light`` and ``-dark`` suffixes. PNGs are rasterized with cairosvg at 2x device
+pixels (the single light social cover stays opaque at 1280 x 640).
 The hand-authored ``docs/diagrams/feature-overview.svg`` is also rasterized;
 edit that SVG directly, as it has no builder. Both formats are tracked in git — SVGs are the
 source of truth that GitHub and local HTML export embed, and PNGs are the
@@ -64,6 +66,7 @@ def render_one(name: str) -> None:
 
 
 def render_showcase(name: str) -> None:
+    """Render every registered theme, retaining each SVG's canvas transparency."""
     svg_text = SHOWCASE[name]()
     width, height = SIZES[name]
     scale = 1 if name == "github-cover" else PNG_SCALE
@@ -82,7 +85,7 @@ def render_showcase(name: str) -> None:
 def render_brand() -> None:
     """Wordmarks for the README and the rook icon for the web UI and favicon."""
     (OUT_DIR / "wordmark-light.svg").write_text(wordmark_svg("#1F1830"), encoding="utf-8")
-    (OUT_DIR / "wordmark-dark.svg").write_text(wordmark_svg("#F5EFE6"), encoding="utf-8")
+    (OUT_DIR / "wordmark-dark.svg").write_text(wordmark_svg("#E6EDF3"), encoding="utf-8")
     (STATIC_DIR / "openrook-icon.svg").write_text(rook_icon_svg(64), encoding="utf-8")
     (STATIC_DIR / "openrook-mark.svg").write_text(rook_icon_svg(64, background=None), encoding="utf-8")
     print("wrote wordmarks and web UI rook icons")

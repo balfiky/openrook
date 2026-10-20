@@ -94,13 +94,30 @@ def test_version_consistency_accepts_released_heading(tmp_path):
     assert validate._check_version_consistency(tmp_path) == "0.28.13"
 
 
-def test_version_consistency_rejects_missing_badge(tmp_path):
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "openrook"\nversion = "0.28.13"\n',
-        encoding="utf-8",
+def test_version_consistency_accepts_missing_badge(tmp_path):
+    _write_repo(
+        tmp_path,
+        version="0.28.13",
+        badge_color="1A1428",
+        changelog_body="## Unreleased\n",
     )
     (tmp_path / "README.md").write_text("Version `0.28.13`.\n", encoding="utf-8")
-    (tmp_path / "CHANGELOG.md").write_text("## Unreleased\n", encoding="utf-8")
+
+    assert validate._check_version_consistency(tmp_path) == "0.28.13"
+
+
+def test_version_consistency_rejects_mismatched_badge(tmp_path):
+    _write_repo(
+        tmp_path,
+        version="0.28.13",
+        badge_color="1A1428",
+        changelog_body="## Unreleased\n",
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8").replace("version-0.28.13-", "version-0.28.12-"),
+        encoding="utf-8",
+    )
 
     try:
         validate._check_version_consistency(tmp_path)

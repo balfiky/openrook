@@ -317,7 +317,11 @@ def _check_version_consistency(root: Path) -> str:
     readme = _read(root / "README.md")
     changelog = _read(root / "CHANGELOG.md")
     badge_pattern = re.compile(rf"version-{re.escape(version)}-[^?\"\s]+")
-    _require(bool(badge_pattern.search(readme)), "README badge version mismatch.")
+    version_badges = re.findall(r"img\.shields\.io/badge/(version-[^?\"\s)<>]+)", readme)
+    _require(
+        all(badge_pattern.fullmatch(badge) for badge in version_badges),
+        "README badge version mismatch.",
+    )
     _require(f"Version `{version}`" in readme, "README current-status version mismatch.")
     has_release_heading = f"## v{version} " in changelog or f"## v{version}\n" in changelog
     has_unreleased = "## Unreleased" in changelog

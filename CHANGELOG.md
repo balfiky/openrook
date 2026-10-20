@@ -9,19 +9,38 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 - The GitHub repository moved from `balfiky/nur` to `balfiky/openrook` (old URLs
   redirect); install commands, badges, project URLs, and citation metadata follow.
 - New brand mark in `nur_tools/brand.py`: a chess-rook keep with a lit window and
-  a six-modulator band. It replaces the orb in the README wordmarks, showcase hero
-  (window glow follows the replayed valence), social cover, web UI header, and
+  a six-modulator band. It replaces the orb in the README wordmarks, showcase hero,
+  social cover, web UI header, and
   favicon. The header name now updates without removing the mark.
 
 ### Showcase visuals
 
+- Ship transparent light/dark SVGs and PNG fallbacks for all four README visuals,
+  selected with theme-aware `<picture>` elements. Remove starfields, chart glows,
+  and wordmark halos; use flat panels, stronger light-theme colors, and larger
+  chart labels. Put the install commands before the explainer and use flat badges.
+- Give the emotional-arc reveal mask explicit canvas bounds so PNG exports show
+  the full 90 minutes, including repair. Keep animations brief and single-play;
+  fingerprints are static, and reduced-motion/print views show complete charts.
+- Lead the README with “LLMs forget. OpenRook remembers.” and a two-lane
+  explainer showing how persisted memory, relationship history, modeled mood,
+  and identity reach a later prompt. Label the dialogue and state changes as
+  illustrative, qualify the plain-call comparison, and show an explicit
+  session-consolidation step rather than claiming every reply persists memory.
+- Move the six-variable conversation chart into an “Under the hood” section
+  with a plain-language reading guide; simplify the introduction and badges,
+  retain the scope caveat and deeper docs, and align the social-cover tagline.
+  The new hero includes accessible SVG text, reduced-motion support, a static
+  PNG fallback, and builder-parity coverage.
+- Allow the README version badge to be omitted; still reject a badge whose
+  version differs from package metadata.
 - New data-driven README visuals in `nur_tools/build_showcase.py`: an animated
   hero evaluating an authored rupture → repair event sequence with the real
   emotional engine (illustrative dialogue, no LLM), four-moment modulator
   "fingerprints", and the v4 retained-choice result as a paired dot plot with its
-  interval and caveats. Animations share one timeline and respect
+  interval and caveats. Animations respect
   `prefers-reduced-motion`; PNG fallbacks show the complete static chart.
-- New dark OpenRook social cover built from the same engine replay; the text-only
+- New light OpenRook social cover built from the same engine replay; the text-only
   hero banner is retired. `tests/test_showcase_visuals.py` ties the charts to the
   engine and the published study numbers.
 

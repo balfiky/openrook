@@ -91,8 +91,8 @@ def wordmark_svg(text_color: str) -> str:
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" width="720" height="160" '
         'role="img" aria-label="OpenRook">'
-        f"<defs>{rook_defs('wm')}</defs>"
-        f"{rook_mark(30, 14, 132, 'wm')}"
+        f"<defs>{rook_defs('wm', halo=False)}</defs>"
+        f"{rook_mark(30, 14, 132, 'wm', halo=False)}"
         f'<text x="158" y="108" font-family="{SERIF}" font-size="96" font-weight="500" '
         f'fill="{text_color}" letter-spacing="-3">OpenRook</text></svg>\n'
     )

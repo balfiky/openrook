@@ -6,44 +6,49 @@
 </p>
 
 <p align="center">
-  <strong>Persistent state, evolving identity, accumulated learning — for any LLM.</strong>
+  <strong>LLMs forget. OpenRook remembers.</strong>
 </p>
+
+An open-source runtime for LLM agents with persistent memory, relationship history, modeled mood, and evolving identity. OpenRook carries that state across conversations into prompts for supported LLM backends.
+
+```bash
+python3 -m pip install "git+https://github.com/balfiky/openrook.git"
+export OPENROOK_CONFIG_DIR=~/.config/openrook
+mkdir -p "$OPENROOK_CONFIG_DIR"
+openrook-setup
+openrook-web
+```
 
 <p align="center">
-  <a href="https://github.com/balfiky/openrook/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/balfiky/openrook/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F5A65B?style=for-the-badge" alt="MIT License"></a>
-  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.10%2B-7A4A8C?style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.37.0-1A1428?style=for-the-badge" alt="Version"></a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
+    <img src="docs/diagrams/how-it-works-light.svg" alt="Illustrative comparison: a plain LLM call receives no history of Monday; OpenRook saves state after a detected rupture and session consolidation, then supplies retrieved memories, relationship open loops, trust, current mood, and identity context to Friday’s prompt. Your LLM writes the reply; dialogue and state changes are examples, not a recorded run." width="100%">
+  </picture>
 </p>
+
+## Why OpenRook?
+
+- **Memory across sessions:** saves conversation memories and retrieves relevant context for later replies.
+- **Relationship history:** tracks misunderstandings, repairs, and commitments to follow up, then carries that context into later prompts.
+- **Modeled mood:** internal values shift with events and decay over time, shaping prompts without implying feelings.
+- **An evolving identity:** self-observations and explicit learning can update identity state. Learning from salient sessions is opt-in in ordinary chat.
+- **Inspectable state:** stored memories, identity changes, and turn traces show what the runtime carried forward.
 
 <p align="center">
-  <a href="docs/UAT.md"><img src="https://img.shields.io/badge/tests-2700%2B%20unit%20%2B%20UAT%20%2B%20evals-2A8F6E?style=for-the-badge" alt="Tests"></a>
-  <a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/architecture-deterministic%20metabolism-D08A4E?style=for-the-badge" alt="Architecture — belief decay, theme→belief promotion, drive-gap detection"></a>
-  <a href="docs/OVERVIEW.md"><img src="https://img.shields.io/badge/scope-research%20prototype-7A4A8C?style=for-the-badge" alt="Scope"></a>
-  <a href="#configure-an-llm"><img src="https://img.shields.io/badge/llm-ollama%20%E2%80%A2%20codex%20%E2%80%A2%20openai-1A1428?style=for-the-badge" alt="LLM backends"></a>
+  <a href="https://github.com/balfiky/openrook/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/balfiky/openrook/ci.yml?branch=main&label=CI&style=flat" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F5A65B?style=flat" alt="MIT License"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.10%2B-7A4A8C?style=flat" alt="Python 3.10+"></a>
+  <a href="#configure-an-llm"><img src="https://img.shields.io/badge/llm-ollama%20%E2%80%A2%20codex%20%E2%80%A2%20openai-7A4A8C?style=flat" alt="LLM backends"></a>
 </p>
 
-<p align="center">
-  <img src="docs/diagrams/emotional-arc.svg" alt="Six modulator curves from OpenRook&#39;s deterministic emotional engine evaluating an authored 90-minute rupture-and-repair event sequence (illustrative dialogue, no LLM). Arousal jumps to 0.88 at the rupture and is back near baseline within minutes; valence falls from 0.78 to 0.30, drifts up only to 0.41 over the next half hour, then rises to 0.58 at the repair; bonding dips from 0.64 to 0.54 and later returns to 0.62; unresolved tension starts at 0.76, declines only to 0.74, and the repair clears it." width="100%">
-</p>
-
-**OpenRook — a history of its own.** Formerly Nūr.
-
-A cognitive runtime for persistent agents, not just another assistant interface.
-
-Memory, beliefs, drives, mood, learned skills, and the long arc of a relationship live as runtime state — inspectable, persistent, decaying, testable. The LLM still writes the words. OpenRook changes the state those words come from.
-
-OpenRook combines **identity continuity** (constitution, beliefs, drives, self-traits) and **relational continuity** (rupture, repair, open commitments) with conventional memory and self-directed activity.
-
-[Quickstart](#quickstart) · [What's Changed](docs/DEVELOPMENT_SUMMARY.md) · [Migration](docs/OPENROOK_MIGRATION.md) · [Overview](docs/OVERVIEW.md) · [Architecture](docs/ARCHITECTURE.md) · [Admin & Deploy](docs/DEPLOYMENT_AND_ADMIN.md) · [Privacy](PRIVACY.md) · [Changelog](CHANGELOG.md)
-
-For unattended behavioral experiments, see [Autonomous research runtime](docs/RESEARCH_RUNTIME.md).
-The research preset provides one persistent subject, independent activity,
-uncorrected expression, passive observation, and recorded transition replay.
-
----
+[Quickstart](#quickstart) · [Under the hood](#under-the-hood-one-conversation-six-state-variables) · [Research runtime](docs/RESEARCH_RUNTIME.md) · [Docs](#start-here)
 
 > **Honest scope.** OpenRook is an experimental runtime — not a therapist, not an AGI claim, not a consciousness claim. It is engineered scaffolding that holds *the state behind* an LLM's words across turns, sessions, and time. Memory and identity state live under `data/` — use it with consent when other people are involved. See [PRIVACY.md](PRIVACY.md) for inspection, export, and deletion.
+
+For autonomous agents and unattended behavioral experiments, see the opt-in
+[Autonomous research runtime](docs/RESEARCH_RUNTIME.md). The research preset
+provides one persistent subject, independent activity, uncorrected expression,
+passive observation, and recorded transition replay.
 
 ## Current Development Status
 
@@ -62,7 +67,10 @@ uncorrected expression, passive observation, and recorded transition replay.
   evidence, not isolated model learning or proof of human equivalence.
 
 <p align="center">
-  <img src="docs/diagrams/retained-choice.svg" alt="14 subject pairs (28 subjects) from the completed v4 retained-choice confirmation: after a restart, subjects that learned Ari is reliable more often direct their first work requests to Ari; mean paired difference 0.71, 95% interval 0.29 to 1.14, above the 0.2 threshold; 7 of 14 pairs show no difference." width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/retained-choice-dark.svg">
+    <img src="docs/diagrams/retained-choice-light.svg" alt="14 subject pairs (28 subjects) from the completed v4 retained-choice confirmation: after a restart, subjects that learned Ari is reliable more often direct their first work requests to Ari; mean paired difference 0.71, 95% interval 0.29 to 1.14, above the 0.2 threshold; 7 of 14 pairs show no difference." width="100%">
+  </picture>
 </p>
 
 See the [development summary](docs/DEVELOPMENT_SUMMARY.md) for major fixes and
@@ -80,10 +88,26 @@ The research loop runs within declared tools and resource limits. Its receipts,
 verification, and replay make activity inspectable; they do not establish human
 emotion or unrestricted autonomy. See [research operation](docs/RESEARCH_RUNTIME.md).
 
+## Under the hood: one conversation, six state variables
+
+Read left to right through 90 minutes; each line is an internal value on a 0–1 scale.
+In this authored sequence, a rupture lowers valence (modeled mood) and raises tension; the repair clears this example’s unresolved tension.
+These are heuristic engine values, not feelings: the events and dialogue are illustrative, and no LLM is called.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/emotional-arc-dark.svg">
+    <img src="docs/diagrams/emotional-arc-light.svg" alt="Six modulator curves from OpenRook&#39;s deterministic emotional engine evaluating an authored 90-minute rupture-and-repair event sequence (illustrative dialogue, no LLM). Arousal jumps to 0.88 at the rupture and is back near baseline within minutes; valence falls from 0.78 to 0.30, drifts up only to 0.41 over the next half hour, then rises to 0.58 at the repair; bonding dips from 0.64 to 0.54 and later returns to 0.62; unresolved tension starts at 0.76, declines only to 0.74, and the repair clears it." width="100%">
+  </picture>
+</p>
+
 ## What State Looks Like Across Turns
 
 <p align="center">
-  <img src="docs/diagrams/emotional-fingerprints.svg" alt="Six-petal glyphs of the engine's modulator values at four moments of the same authored event sequence: calm, warmth, rupture and repair." width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/emotional-fingerprints-dark.svg">
+    <img src="docs/diagrams/emotional-fingerprints-light.svg" alt="Six-petal glyphs of the engine's modulator values at four moments of the same authored event sequence: calm, warmth, rupture and repair." width="100%">
+  </picture>
 </p>
 
 Illustrative dialogue and state annotations, not transcripts from a recorded run:
@@ -184,7 +208,8 @@ When a user explicitly asks OpenRook to learn from a URL, the runtime fetches re
 ## Quickstart
 
 Install OpenRook from this repository; these instructions do not assume a PyPI
-release. The repository moved from `balfiky/nur` to `balfiky/openrook`; old URLs redirect.
+release. **Formerly Nūr.** The repository moved from `balfiky/nur` to
+`balfiky/openrook`; old URLs redirect.
 Existing installations should follow the [migration guide](docs/OPENROOK_MIGRATION.md)
 to replace the old distribution without deleting their workspace.
 
@@ -298,6 +323,7 @@ openrook                        # console runtime
 | Product/concept overview | [docs/OVERVIEW.md](docs/OVERVIEW.md) |
 | Reviewer study guide | [docs/STUDY_GUIDE.md](docs/STUDY_GUIDE.md) |
 | Runtime architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Live acceptance testing | [docs/UAT.md](docs/UAT.md) |
 | Install, admin, deployment | [docs/DEPLOYMENT_AND_ADMIN.md](docs/DEPLOYMENT_AND_ADMIN.md) |
 | Security model | [SECURITY.md](SECURITY.md) |
 | Privacy and data deletion | [PRIVACY.md](PRIVACY.md) |

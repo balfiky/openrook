@@ -1,7 +1,8 @@
-"""Data-driven showcase visuals for the README.
+"""Explanatory and data-driven showcase visuals for the README.
 
-Unlike ``build_diagrams`` (structural block diagrams), every curve, petal and
-dot here is computed from real sources:
+The how-it-works explainer uses illustrative dialogue and state changes, not a
+recorded run. Unlike ``build_diagrams`` (structural block diagrams), the curves,
+petals and dots here are computed from real sources:
 
 - ``emotional_arc`` and ``emotional_fingerprints`` evaluate an authored
   rupture → repair event sequence with the deterministic ``EmotionalEngine``
@@ -15,15 +16,17 @@ dot here is computed from real sources:
   the study's ``analysis.json``).
 
 Regenerate with ``python3 nur_tools/render_diagram_pngs.py`` (requires
-``cairosvg``). The SVGs animate in browsers (GitHub included) and honor
-``prefers-reduced-motion``; PNG fallbacks show the complete static chart.
+``cairosvg``). Light and dark SVGs blend into the host page. Optional one-shot
+reveals honor ``prefers-reduced-motion``; PNG fallbacks show the complete chart.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -37,36 +40,55 @@ SHIPPED_CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 SERIF = "'EB Garamond','Cormorant Garamond',Georgia,'DejaVu Serif',serif"
 SANS = "'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif"
 
-BG_TOP = "#120D1F"
-BG_BOTTOM = "#2A1E3F"
-INK = "#F4ECFF"
-INK_SOFT = "#B9AECB"
-INK_FAINT = "#A79CC0"
+MODULATOR_LABELS = (
+    ("arousal", "arousal"), ("valence", "valence"), ("certainty", "certainty"),
+    ("bonding", "bonding"), ("energy", "energy"), ("resolution", "unresolved tension"),
+)
 
-MODULATORS = [
-    # name, display label, color
-    ("arousal", "arousal", "#FF6B6B"),
-    ("valence", "valence", "#F5A65B"),
-    ("certainty", "certainty", "#5BC0EB"),
-    ("bonding", "bonding", "#E86FB0"),
-    ("energy", "energy", "#7BD389"),
-    ("resolution", "unresolved tension", "#B48CFF"),
-]
-LABEL_COLORS = {
-    "neutral": "#6F6386",
-    "content": "#F5A65B",
-    "joyful": "#FFC56B",
-    "loving": "#E86FB0",
-    "excited": "#FF9F6B",
-    "fearful": "#FF6B6B",
-    "angry": "#E0475A",
-    "anxious": "#C77DFF",
-    "uncertain": "#5BC0EB",
-    "sad": "#4E7BD9",
-    "detached": "#8C8CA8",
-    "irritable": "#D9534F",
-    "exhausted": "#55506A",
-}
+
+@dataclass(frozen=True)
+class Theme:
+    """Paint only: both variants carry identical data, layout and descriptions."""
+
+    name: str
+    page: str
+    panel: str
+    inset: str
+    border: str
+    ink: str
+    muted: str
+    amber: str
+    amber_ink: str
+    plum: str
+    colors: tuple[str, ...]
+    bo: str
+
+    @property
+    def modulators(self) -> tuple[tuple[str, str, str], ...]:
+        return tuple((name, label, color) for (name, label), color in zip(MODULATOR_LABELS, self.colors))
+
+    def label_color(self, label: str) -> str:
+        index = {
+            "content": 1, "joyful": 1, "loving": 3, "excited": 1,
+            "fearful": 0, "angry": 0, "anxious": 5, "uncertain": 2,
+            "sad": 2, "irritable": 0,
+        }.get(label)
+        return self.muted if index is None else self.colors[index]
+
+
+LIGHT = Theme(
+    name="light", page="#FFFFFF", panel="#F6F4F9", inset="#FFFFFF", border="#D8D1E0",
+    ink="#1F1830", muted="#655C72", amber="#E8913F", amber_ink="#975119", plum="#7A4A8C",
+    colors=("#C4474C", "#A15B17", "#167A9C", "#B33D7C", "#327D45", "#7A4A8C"),
+    bo="#4268AC",
+)
+DARK = Theme(
+    name="dark", page="#0D1117", panel="#161B22", inset="#21262D", border="#3D444D",
+    ink="#E6EDF3", muted="#A6B0BE", amber="#F5A65B", amber_ink="#F5A65B", plum="#B48CFF",
+    colors=("#FF6B6B", "#F5A65B", "#5BC0EB", "#E86FB0", "#7BD389", "#B48CFF"),
+    bo="#7FA7FF",
+)
+THEMES = (LIGHT, DARK)
 
 
 # ---------------------------------------------------------------------------
@@ -188,53 +210,188 @@ def _line_path(points: list[tuple[float, float]]) -> str:
     return head + "".join(f"L{x:.1f},{y:.1f}" for x, y in points[1:])
 
 
-def _stars(width: int, height: int, count: int, seed: int) -> str:
-    out = []
-    state = seed
-    for _ in range(count):
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        x = state % width
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        y = state % height
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        r = 0.6 + (state % 100) / 100
-        out.append(f'<circle cx="{x}" cy="{y}" r="{r:.2f}" fill="#FFFFFF" opacity="0.18"/>')
-    return "".join(out)
-
-
 def _defs(extra: str = "") -> str:
-    return f"""<defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
-    <stop offset="0" stop-color="{BG_TOP}"/><stop offset="1" stop-color="{BG_BOTTOM}"/>
-  </linearGradient>
-  <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
-    <feGaussianBlur stdDeviation="3.2" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  {extra}
-</defs>"""
+    return f"<defs>{extra}</defs>"
 
 
-def _svg(width: int, height: int, title: str, desc: str, body: str, style: str = "") -> str:
+def _svg(
+    width: int, height: int, title: str, desc: str, body: str, style: str = "",
+    *, slug: str,
+) -> str:
+    # Scope reusable definitions as well as accessible labels for inline consumers.
+    body = re.sub(r'id="([^"]+)"', rf'id="{slug}-\1"', body)
+    body = re.sub(r'url\(#([^)]+)\)', rf'url(#{slug}-\1)', body)
+    title_id, desc_id = f"{slug}-title", f"{slug}-desc"
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
-        f'width="{width}" height="{height}" role="img" aria-labelledby="t d">'
-        f"<title id=\"t\">{escape(title)}</title><desc id=\"d\">{escape(desc)}</desc>"
+        f'width="{width}" height="{height}" role="img" aria-labelledby="{title_id} {desc_id}">'
+        f'<title id="{title_id}">{escape(title)}</title><desc id="{desc_id}">{escape(desc)}</desc>'
         f"<style>{style}</style>{body}</svg>"
     )
     return "\n".join(line.rstrip() for line in svg.splitlines() if line.strip()) + "\n"
 
 
 # ---------------------------------------------------------------------------
-# 1. Emotional arc (animated hero)
+# 1. How it works (illustrative, animated explainer)
 # ---------------------------------------------------------------------------
 
-ARC_W, ARC_H = 1600, 790
+HOW_W, HOW_H = 1600, 1040
+
+
+def how_it_works_description() -> str:
+    return (
+        "Illustrative comparison: a plain LLM call receives no history of Monday; "
+        "OpenRook saves state after a detected rupture and session consolidation, "
+        "then supplies retrieved memories, relationship open loops, trust, current mood, "
+        "and identity context to Friday’s prompt. Your LLM writes the reply; dialogue "
+        "and state changes are examples, not a recorded run."
+    )
+
+
+def build_how_it_works(theme: Theme = LIGHT) -> str:
+    """Explain persistence without presenting illustrative state as measured output.
+
+    Relationship loops are written during session digestion, then retrieved with
+    memories in pipeline/core.py. The generator injects those summaries, loops,
+    person trust, current modulators and identity context into its system prompt.
+    The exact utterance does not guarantee rupture detection or a particular reply.
+    """
+    accent = theme.amber_ink
+
+    def text(
+        x: int, y: int, value: str, size: int = 24, *,
+        fill: str = theme.ink, weight: str = "normal",
+    ) -> str:
+        return (
+            f'<text x="{x}" y="{y}" font-family="{SANS}" font-size="{size}" '
+            f'font-weight="{weight}" fill="{fill}">{escape(value)}</text>'
+        )
+
+    def arrow(x1: int, x2: int, y: int) -> str:
+        return (
+            f'<path d="M{x1},{y} H{x2}" fill="none" stroke="{theme.muted}" '
+            'stroke-width="2" marker-end="url(#how-arrow)"/>'
+        )
+
+    parts = [
+        _defs(
+            rook_defs("how", halo=False)
+            + f'<marker id="how-arrow" viewBox="0 0 8 8" refX="7" refY="4" '
+            f'markerWidth="8" markerHeight="8" orient="auto">'
+            f'<path d="M1,1 L7,4 L1,7" fill="none" stroke="{theme.muted}"/></marker>'
+        ),
+        text(56, 68, "The next conversation can start with a history.", 40),
+        text(56, 112, "Same message on Friday. Different context behind the reply.", fill=theme.muted),
+        text(64, 164, "MONDAY", 22, fill=theme.muted),
+        text(444, 164, "BETWEEN CONVERSATIONS", 22, fill=theme.muted),
+        text(936, 164, "FRIDAY", 22, fill=theme.muted),
+        f'<rect x="32" y="188" width="1536" height="268" rx="8" '
+        f'fill="{theme.panel}" stroke="{theme.border}"/>',
+        f'<rect x="32" y="480" width="1536" height="412" rx="8" '
+        f'fill="{theme.panel}" stroke="{theme.border}"/>',
+        text(64, 230, "Plain LLM call", 28, weight="bold"),
+        text(308, 230, "no history supplied", 22, fill=theme.muted),
+        text(64, 428, "No supplied history, no memory of Monday.", 22, fill=theme.muted),
+        text(64, 526, "With OpenRook", 28, fill=accent, weight="bold"),
+        text(392, 526, "State persists and shapes the reply.", fill=theme.muted),
+    ]
+
+    # Source-visible groups: CairoSVG and motion-disabled viewers get the full story.
+    parts.append(
+        '<g class="how-step how-monday" data-step="1">'
+        + text(64, 278, "YOU", 18, fill=theme.muted)
+        + text(64, 314, "“You completely", 28)
+        + text(64, 352, "misunderstood me.”", 28)
+        + text(64, 566, "YOU", 18, fill=theme.muted)
+        + text(64, 602, "“You completely", 28)
+        + text(64, 640, "misunderstood me.”", 28)
+        + text(64, 694, "Example: rupture detected", 20, fill=theme.muted)
+        + text(64, 724, "State saved at session end", 20, fill=theme.muted)
+        + "</g>"
+    )
+    parts.append(
+        '<g class="how-step how-state" data-step="2">'
+        + arrow(392, 424, 324)
+        + text(444, 314, "Nothing saved for this call", 24, fill=theme.muted)
+        + text(444, 352, "Monday is absent from the prompt.", 22, fill=theme.muted)
+        + arrow(392, 424, 624)
+        + f'<rect x="436" y="552" width="448" height="300" rx="8" '
+        f'fill="{theme.inset}" stroke="{theme.border}"/>'
+        + rook_mark(448, 564, 64, "how", halo=False)
+        + text(520, 588, "Persistent state", 26, weight="bold")
+        + text(520, 620, "After Monday’s session", 20, fill=theme.muted)
+        + f'<rect x="460" y="644" width="216" height="40" rx="6" fill="{theme.panel}" stroke="{theme.border}"/>'
+        + text(476, 671, "memory written", 22)
+        + f'<rect x="692" y="644" width="168" height="40" rx="6" fill="{theme.panel}" stroke="{theme.border}"/>'
+        + text(708, 671, "trust ↓", 22)
+        + f'<rect x="460" y="700" width="400" height="64" rx="6" fill="{theme.panel}" stroke="{theme.border}"/>'
+        + text(476, 725, "Open loop:", 20, fill=theme.muted)
+        + text(476, 751, "the misunderstanding", 24)
+        + f'<rect x="460" y="780" width="168" height="40" rx="6" fill="{theme.panel}" stroke="{theme.border}"/>'
+        + text(476, 807, "tension ↑", 22)
+        + text(648, 807, "Modeled state", 20, fill=theme.muted)
+        + "</g>"
+    )
+    parts.append(
+        '<g class="how-step how-friday" data-step="3">'
+        + arrow(892, 920, 324)
+        + text(936, 278, "YOU", 18, fill=theme.muted)
+        + text(936, 314, "“Can we try again?”", 28)
+        + text(936, 358, "LLM REPLY", 18, fill=theme.muted)
+        + text(936, 394, "“Sure! What would you like", 28)
+        + text(936, 432, "to work on?”", 28)
+        + text(936, 566, "YOU", 18, fill=theme.muted)
+        + text(936, 602, "“Can we try again?”", 28)
+        + arrow(892, 920, 684)
+        + f'<rect x="928" y="626" width="608" height="116" rx="8" '
+        f'fill="{theme.inset}" stroke="{theme.border}"/>'
+        + text(948, 654, "Context carried into the prompt", 24, weight="bold")
+        + text(948, 688, "Retrieved memories · open loops · trust", 22)
+        + text(948, 720, "Current mood · identity", 22)
+        + text(936, 780, "LLM REPLY", 18, fill=theme.muted)
+        + text(936, 816, "“Yes. Let’s revisit what", 28)
+        + text(936, 854, "I misunderstood last time.”", 28)
+        + "</g>"
+    )
+    parts.append(
+        f'<path d="M56,908 H1544" stroke="{theme.border}" fill="none"/>'
+        + text(152, 944, "Your app → OpenRook (memory · relationships · mood · identity)", 24)
+        + text(152, 980, "→ supported LLM backends: Ollama · OpenAI-compatible · Codex", 24)
+        + text(
+            152, 1016,
+            "Illustrative example — OpenRook keeps the state; your LLM still writes the words.",
+            20, fill=theme.muted,
+        )
+    )
+    style = """
+@media (prefers-reduced-motion: no-preference) {
+  .how-step { animation: how-reveal 600ms ease-out both; }
+  .how-state { animation-delay: 700ms; }
+  .how-friday { animation-delay: 1400ms; }
+}
+@keyframes how-reveal { from { opacity: 0.25; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .how-step { animation: none; opacity: 1; }
+}
+@media print {
+  .how-step { animation: none; opacity: 1; }
+}"""
+    return _svg(
+        HOW_W, HOW_H, "How OpenRook carries state into the next conversation",
+        how_it_works_description(), "".join(parts), style, slug=f"how-it-works-{theme.name}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. Emotional arc (engine detail)
+# ---------------------------------------------------------------------------
+
+ARC_W, ARC_H = 1600, 860
 CHART = (480, 150, 1540, 560)  # x0, y0, x1, y1
-DRAW_SECONDS = 9
+DRAW_SECONDS = 2.4
 
 
-def build_emotional_arc() -> str:
+def build_emotional_arc(theme: Theme = LIGHT) -> str:
     minutes, states, labels, _ = replay()
     x0, y0, x1, y1 = CHART
 
@@ -244,46 +401,48 @@ def build_emotional_arc() -> str:
     def py(value: float) -> float:
         return y1 - (y1 - y0) * value
 
-    reveal = (f'<mask id="reveal"><rect class="reveal" x="{x0 - 12}" y="0" width="{x1 - x0 + 24}" '
+    reveal = (f'<mask id="reveal" maskUnits="userSpaceOnUse" x="0" y="0" width="{ARC_W}" height="{ARC_H}">'
+              f'<rect class="reveal" x="{x0 - 12}" y="0" width="{x1 - x0 + 24}" '
               f'height="{ARC_H}" fill="#FFFFFF"/></mask>')
-    parts = [_defs(reveal + rook_defs("hero")), f'<rect width="{ARC_W}" height="{ARC_H}" rx="28" fill="url(#bg)"/>',
-             _stars(ARC_W, ARC_H, 90, 7)]
+    parts = [_defs(reveal + rook_defs("hero", halo=False))]
 
-    # Left column: the rook + headline. Its halo and lit window share the chart's timeline.
+    # Left column: rook and reading guide; only the window changes with the timeline.
+    parts.append(rook_mark(122, 140, 210, "hero", halo=False))
     parts.append(
-        '<g transform="translate(205 250)"><circle class="halo" r="150" fill="url(#heroHalo)"/></g>'
-        + rook_mark(122, 140, 210, "hero", halo=False)
-    )
-    parts.append(
-        f'<text x="70" y="500" font-family="{SERIF}" font-size="34" fill="{INK}">The moment passes.</text>'
-        f'<text x="70" y="540" font-family="{SERIF}" font-size="34" fill="{INK}">Its state carries on.</text>'
-        f'<text x="72" y="586" font-family="{SANS}" font-size="16" fill="{INK_SOFT}">'
-        "Six state variables persist, decay and</text>"
-        f'<text x="72" y="608" font-family="{SANS}" font-size="16" fill="{INK_SOFT}">'
-        "shape what the model is asked to write.</text>"
+        f'<text x="70" y="500" font-family="{SERIF}" font-size="34" fill="{theme.ink}">Inside one</text>'
+        f'<text x="70" y="540" font-family="{SERIF}" font-size="34" fill="{theme.ink}">conversation</text>'
+        f'<text x="72" y="586" font-family="{SANS}" font-size="19" fill="{theme.muted}">'
+        "Each line is an internal state variable.</text>"
+        f'<text x="72" y="616" font-family="{SANS}" font-size="19" fill="{theme.muted}">'
+        "Rupture raises tension, lowers mood.</text>"
+        f'<text x="72" y="646" font-family="{SANS}" font-size="19" fill="{theme.muted}">'
+        "The authored repair clears tension.</text>"
     )
 
     # Grid + axis
     for v in (0.25, 0.5, 0.75):
         parts.append(f'<line x1="{x0}" x2="{x1}" y1="{py(v):.1f}" y2="{py(v):.1f}" '
-                     f'stroke="#FFFFFF" stroke-opacity="0.06"/>')
+                     f'stroke="{theme.muted}" stroke-opacity="0.18"/>')
+    for v in (0, 0.5, 1):
+        parts.append(f'<text x="{x0 - 20}" y="{py(v) + 6:.1f}" text-anchor="end" '
+                     f'font-family="{SANS}" font-size="18" fill="{theme.muted}">{v:g}</text>')
     for m in range(0, DURATION_MIN + 1, 15):
         parts.append(f'<text x="{px(m):.1f}" y="{y1 + 26}" text-anchor="middle" '
-                     f'font-family="{SANS}" font-size="13" fill="{INK_FAINT}">{m} min</text>')
+                     f'font-family="{SANS}" font-size="18" fill="{theme.muted}">{m} min</text>')
 
     # Event markers
     for beat in SCRIPT:
         x = px(beat.minute)
         strong = bool(beat.quote)
-        parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y0 - 8}" y2="{y1}" stroke="#FFFFFF" '
-                     f'stroke-opacity="{0.22 if strong else 0.08}" stroke-dasharray="3 5"/>')
+        parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y0 - 8}" y2="{y1}" stroke="{theme.muted}" '
+                     f'stroke-opacity="{0.4 if strong else 0.15}" stroke-dasharray="3 5"/>')
         if beat.quote:
-            accent = "#FF6B6B" if beat.event is EventType.CONFLICT else (
-                "#B48CFF" if beat.event is EventType.RESOLUTION else "#F5A65B")
+            accent = theme.colors[0] if beat.event is EventType.CONFLICT else (
+                theme.plum if beat.event is EventType.RESOLUTION else theme.amber_ink)
             parts.append(
                 f'<circle cx="{x:.1f}" cy="{y0 - 8}" r="4" fill="{accent}"/>'
                 f'<text x="{x:.1f}" y="{y0 - 20}" text-anchor="middle" font-family="{SANS}" '
-                f'font-size="11" font-weight="bold" letter-spacing="1.5" fill="{accent}">'
+                f'font-size="18" font-weight="bold" letter-spacing="1.5" fill="{accent}">'
                 f"{escape(beat.caption.upper())}</text>"
             )
     quotes = [b for b in SCRIPT if b.quote]
@@ -291,28 +450,28 @@ def build_emotional_arc() -> str:
         x = min(max(px(beat.minute), x0 + 120), x1 - 120)
         y = y0 - 52 - (i % 2) * 34
         parts.append(f'<text x="{x:.1f}" y="{y}" text-anchor="middle" font-family="{SERIF}" '
-                     f'font-style="italic" font-size="18" fill="{INK}">'
+                     f'font-style="italic" font-size="18" fill="{theme.ink}">'
                      f"“{escape(beat.quote)}”</text>")
 
     # Curves, revealed left to right on the shared timeline
     curves = []
-    for name, _, color in MODULATORS:
+    for name, _, color in theme.modulators:
         pts = [(px(m), py(s[name])) for m, s in zip(minutes, states)]
         width = 4.2 if name in ("valence", "bonding", "arousal") else 2.6
         curves.append(
             f'<path d="{_line_path(pts)}" fill="none" stroke="{color}" stroke-width="{width}" '
-            f'stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>'
+            f'stroke-linecap="round" stroke-linejoin="round"/>'
         )
     parts.append('<g mask="url(#reveal)">' + "".join(curves) + "</g>")
 
     # Playhead: hidden in static renders, sweeps with the reveal when animated
     parts.append(
-        f'<line class="playhead" x1="{x1}" x2="{x1}" y1="{y0 - 8}" y2="{y1}" stroke="#FFFFFF" '
+        f'<line class="playhead" x1="{x1}" x2="{x1}" y1="{y0 - 8}" y2="{y1}" stroke="{theme.muted}" '
         'stroke-opacity="0.6" stroke-width="1.5" opacity="0"/>'
     )
 
     # Emotion-label strip
-    strip_y = y1 + 50
+    strip_y = y1 + 70
     runs: list[tuple[int, int, str]] = []
     for i, label in enumerate(labels):
         if runs and runs[-1][2] == label:
@@ -321,72 +480,59 @@ def build_emotional_arc() -> str:
             runs.append((i, i, label))
     for start, end, label in runs:
         xa, xb = px(minutes[start]), px(minutes[min(end + 1, len(minutes) - 1)])
-        color = LABEL_COLORS.get(label, "#6F6386")
+        color = theme.label_color(label)
         parts.append(f'<rect x="{xa:.1f}" y="{strip_y}" width="{max(xb - xa, 1):.1f}" height="10" '
                      f'fill="{color}" opacity="0.85"/>')
-        if xb - xa > 44:
+        if xb - xa > len(label) * 11:
             parts.append(f'<text x="{(xa + xb) / 2:.1f}" y="{strip_y + 30}" text-anchor="middle" '
-                         f'font-family="{SANS}" font-size="13" fill="{color}">{label}</text>')
-    parts.append(f'<text x="{x0}" y="{strip_y - 8}" font-family="{SANS}" font-size="11" '
-                 f'letter-spacing="1.5" fill="{INK_FAINT}">ENGINE LABEL (LOGGING HEURISTIC)</text>')
+                         f'font-family="{SANS}" font-size="18" fill="{color}">{label}</text>')
+    parts.append(f'<text x="{x0}" y="{strip_y - 8}" font-family="{SANS}" font-size="18" '
+                 f'letter-spacing="1.5" fill="{theme.muted}">ENGINE LABEL (LOGGING HEURISTIC)</text>')
 
     # Legend
-    lx = x0
-    for name, label, color in MODULATORS:
-        parts.append(f'<rect x="{lx}" y="{ARC_H - 104}" width="22" height="5" rx="2.5" fill="{color}"/>'
-                     f'<text x="{lx + 30}" y="{ARC_H - 97}" font-family="{SANS}" font-size="14" '
-                     f'fill="{INK}">{label}</text>')
-        lx += 48 + len(label) * 8.2
+    for i, (name, label, color) in enumerate(theme.modulators):
+        lx = x0 + (i % 3) * 310
+        ly = 690 + (i // 3) * 34
+        parts.append(f'<rect x="{lx}" y="{ly}" width="22" height="5" rx="2.5" fill="{color}"/>'
+                     f'<text x="{lx + 30}" y="{ly + 8}" font-family="{SANS}" font-size="20" '
+                     f'fill="{theme.ink}">{label}</text>')
 
     parts.append(
-        f'<text x="{x0}" y="{ARC_H - 62}" font-family="{SANS}" font-size="15" fill="{INK_FAINT}">'
-        "Authored event sequence evaluated by the real deterministic engine (shipped "
-        "config/modulators.yaml). Dialogue is illustrative; no LLM.</text>"
-        f'<text x="{x0}" y="{ARC_H - 38}" font-family="{SANS}" font-size="15" fill="{INK_FAINT}">'
-        "Emotion words are the engine's logging heuristic: functional state, not a claim of "
-        "felt emotion.</text>"
+        f'<text x="72" y="784" font-family="{SANS}" font-size="20" fill="{theme.muted}">'
+        "Authored event sequence evaluated by the real deterministic engine (shipped config/modulators.yaml).</text>"
+        f'<text x="72" y="816" font-family="{SANS}" font-size="20" fill="{theme.muted}">'
+        "Dialogue is illustrative; no LLM. Emotion words are the engine's logging heuristic: functional state, not a claim of felt emotion.</text>"
     )
 
-    sweep = 85  # percent of the loop spent sweeping; the rest holds the final frame
-    light_frames = []
-    for m, s in zip(minutes, states):
-        pct = m / DURATION_MIN * sweep
-        light_frames.append((pct, 0.86 + 0.32 * s["arousal"], 0.25 + 0.75 * s["valence"]))
-    window_kf = "".join(f"{p:.4f}% {{ opacity: {0.2 + 0.8 * op:.3f}; }}" for p, _, op in light_frames)
-    halo_kf = "".join(
-        f"{p:.4f}% {{ opacity: {op:.3f}; transform: scale({sc:.3f}); }}" for p, sc, op in light_frames
-    )
     style = f"""
-.reveal {{ transform-origin: {x0 - 12}px 0; animation: reveal {DRAW_SECONDS}s linear infinite; }}
-@keyframes reveal {{ 0% {{ transform: scaleX(0); }} {sweep}% {{ transform: scaleX(1); }} 100% {{ transform: scaleX(1); }} }}
-.playhead {{ animation: sweep {DRAW_SECONDS}s linear infinite; }}
+@media (prefers-reduced-motion: no-preference) {{
+  .reveal {{ transform-origin: {x0 - 12}px 0; animation: reveal {DRAW_SECONDS}s linear both; }}
+  .playhead {{ animation: sweep {DRAW_SECONDS}s linear both; }}
+}}
+@keyframes reveal {{ from {{ transform: scaleX(0); }} to {{ transform: scaleX(1); }} }}
 @keyframes sweep {{
   0% {{ transform: translateX({x0 - x1}px); opacity: 1; }}
-  {sweep}% {{ transform: translateX(0); opacity: 1; }}
-  {sweep + 1}%, 100% {{ transform: translateX(0); opacity: 0; }}
+  99% {{ opacity: 1; }}
+  100% {{ transform: translateX(0); opacity: 0; }}
 }}
-.rook-window {{ animation: windowlight {DRAW_SECONDS}s linear infinite; }}
-@keyframes windowlight {{ {window_kf} 100% {{ opacity: {0.2 + 0.8 * light_frames[-1][2]:.3f}; }} }}
-.halo {{ animation: halo {DRAW_SECONDS}s linear infinite; }}
-@keyframes halo {{ {halo_kf} 100% {{ opacity: {light_frames[-1][2]:.3f}; transform: scale({light_frames[-1][1]:.3f}); }} }}
-@media (prefers-reduced-motion: reduce) {{
-  .reveal, .rook-window, .halo {{ animation: none; }}
+@media (prefers-reduced-motion: reduce), print {{
+  .reveal {{ animation: none; transform: none; }}
   .playhead {{ display: none; }}
 }}"""
-    return _svg(ARC_W, ARC_H, "OpenRook — the moment passes, its state carries on",
-                arc_description(), "".join(parts), style)
+    return _svg(ARC_W, ARC_H, "Inside one conversation: six state variables",
+                arc_description(), "".join(parts), style, slug=f"emotional-arc-{theme.name}")
 
 
 # ---------------------------------------------------------------------------
-# 2. Emotional fingerprints
+# 3. Emotional fingerprints
 # ---------------------------------------------------------------------------
 
-FP_W, FP_H = 1600, 520
+FP_W, FP_H = 1600, 650
 
 
-def _flower(cx: float, cy: float, state: dict[str, float], radius: float, delay: float) -> str:
+def _flower(cx: float, cy: float, state: dict[str, float], radius: float, theme: Theme) -> str:
     petals = []
-    for i, (name, _, color) in enumerate(MODULATORS):
+    for i, (name, _, color) in enumerate(theme.modulators):
         angle = -90 + i * 60
         length = 18 + radius * state[name]
         rad = math.radians(angle)
@@ -399,32 +545,31 @@ def _flower(cx: float, cy: float, state: dict[str, float], radius: float, delay:
         petals.append(
             f'<path d="M{cx:.1f},{cy:.1f} Q{left[0]:.1f},{left[1]:.1f} {tip[0]:.1f},{tip[1]:.1f} '
             f'Q{right[0]:.1f},{right[1]:.1f} {cx:.1f},{cy:.1f}Z" fill="{color}" fill-opacity="0.78" '
-            f'stroke="{color}" stroke-width="1.5" filter="url(#glow)"/>'
+            f'stroke="{color}" stroke-width="1.5"/>'
         )
     guide = "".join(
-        f'<circle cx="{cx}" cy="{cy}" r="{18 + radius * v:.1f}" fill="none" stroke="#FFFFFF" '
-        f'stroke-opacity="0.07" stroke-dasharray="2 6"/>' for v in (0.5, 1.0)
+        f'<circle cx="{cx}" cy="{cy}" r="{18 + radius * v:.1f}" fill="none" stroke="{theme.muted}" '
+        f'stroke-opacity="0.18" stroke-dasharray="2 6"/>' for v in (0.5, 1.0)
     )
     return (
-        f'<g class="breathe" style="animation-delay:{delay:.1f}s; transform-origin:{cx}px {cy}px">'
-        f'{guide}{"".join(petals)}<circle cx="{cx}" cy="{cy}" r="9" fill="#FFE3BD" filter="url(#glow)"/></g>'
+        '<g>'
+        f'{guide}{"".join(petals)}<circle cx="{cx}" cy="{cy}" r="9" fill="{theme.amber}"/></g>'
     )
 
 
-def build_emotional_fingerprints() -> str:
+def build_emotional_fingerprints(theme: Theme = LIGHT) -> str:
     _, _, _, moments = replay()
     engine = shipped_engine()
     order = [
-        ("calm", "Calm", "baseline before the conversation"),
-        ("warmth", "Warmth", "“That really helped.”"),
-        ("rupture", "Rupture", "“You completely misunderstood me.” + pushback"),
-        ("repair", "Repair", "after “I think I was too harsh.”"),
+        ("calm", "Calm", ("Baseline before", "the conversation")),
+        ("warmth", "Warmth", ("“That really helped.”", "")),
+        ("rupture", "Rupture", ("“You completely misunderstood me.”", "+ pushback")),
+        ("repair", "Repair", ("After “I think I was too harsh.”", "")),
     ]
-    parts = [_defs(), f'<rect width="{FP_W}" height="{FP_H}" rx="28" fill="url(#bg)"/>',
-             _stars(FP_W, FP_H, 60, 11)]
-    parts.append(f'<text x="60" y="70" font-family="{SERIF}" font-size="40" fill="{INK}">'
+    parts = []
+    parts.append(f'<text x="60" y="70" font-family="{SERIF}" font-size="40" fill="{theme.ink}">'
                  "Four moments, four shapes of state</text>")
-    parts.append(f'<text x="62" y="102" font-family="{SANS}" font-size="15" fill="{INK_SOFT}">'
+    parts.append(f'<text x="62" y="110" font-family="{SANS}" font-size="20" fill="{theme.muted}">'
                  "Each petal is one modulator's value at that moment of the same engine evaluation "
                  "(authored events, illustrative dialogue).</text>")
     for i, (key, title, note) in enumerate(order):
@@ -434,37 +579,34 @@ def build_emotional_fingerprints() -> str:
         for name in engine.snapshot():
             setattr(engine.state, name, state[name])
         label = engine.to_emotion_label()
-        parts.append(_flower(cx, cy, state, 112, i * 0.6))
+        parts.append(_flower(cx, cy, state, 112, theme))
         parts.append(
             f'<text x="{cx}" y="{cy + 150}" text-anchor="middle" font-family="{SERIF}" '
-            f'font-size="28" fill="{INK}">{title}</text>'
-            f'<text x="{cx}" y="{cy + 176}" text-anchor="middle" font-family="{SANS}" '
-            f'font-size="13" fill="{INK_SOFT}">{escape(note)}</text>'
-            f'<text x="{cx}" y="{cy + 200}" text-anchor="middle" font-family="{SANS}" '
-            f'font-size="12" letter-spacing="1.5" fill="{LABEL_COLORS.get(label, INK_FAINT)}">'
+            f'font-size="28" fill="{theme.ink}">{title}</text>'
+            f'<text x="{cx}" y="{cy + 180}" text-anchor="middle" font-family="{SANS}" '
+            f'font-size="19" fill="{theme.muted}">{escape(note[0])}</text>'
+            f'<text x="{cx}" y="{cy + 208}" text-anchor="middle" font-family="{SANS}" '
+            f'font-size="19" fill="{theme.muted}">{escape(note[1])}</text>'
+            f'<text x="{cx}" y="{cy + 244}" text-anchor="middle" font-family="{SANS}" '
+            f'font-size="18" letter-spacing="1" fill="{theme.label_color(label)}">'
             f"ENGINE LABEL: {label.upper()}</text>"
         )
-    lx = 1080
-    for j, (name, label, color) in enumerate(MODULATORS):
-        row, col = divmod(j, 3)
-        x = lx + col * 170
-        y = 56 + row * 26
+    lx = 160
+    for j, (name, label, color) in enumerate(theme.modulators):
+        x = lx + j * 210
+        y = 604
         parts.append(f'<circle cx="{x}" cy="{y}" r="6" fill="{color}"/>'
-                     f'<text x="{x + 14}" y="{y + 5}" font-family="{SANS}" font-size="13" '
-                     f'fill="{INK}">{label}</text>')
-    style = """
-.breathe { animation: breathe 6s ease-in-out infinite; }
-@keyframes breathe { 0%,100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
-@media (prefers-reduced-motion: reduce) { .breathe { animation: none; } }"""
+                     f'<text x="{x + 14}" y="{y + 6}" font-family="{SANS}" font-size="20" '
+                     f'fill="{theme.ink}">{label}</text>')
     return _svg(
         FP_W, FP_H, "Four moments, four shapes of state",
         "Six-petal glyphs of the engine's modulator values at calm, warmth, rupture and repair.",
-        "".join(parts), style,
+        "".join(parts), slug=f"emotional-fingerprints-{theme.name}",
     )
 
 
 # ---------------------------------------------------------------------------
-# 3. Retained-choice evidence
+# 4. Retained-choice evidence
 # ---------------------------------------------------------------------------
 
 # (seed, learned-Bo-reliable value, learned-Ari-reliable value); +1 = Ari first,
@@ -480,11 +622,9 @@ RETAINED_CHOICE_INTERVAL = (0.2857142857142857, 1.1428571428571428)
 RETAINED_CHOICE_THRESHOLD = 0.2
 
 RC_W, RC_H = 1600, 910
-BO = "#7FA7FF"
-ARI = "#F5A65B"
 
 
-def build_retained_choice() -> str:
+def build_retained_choice(theme: Theme = LIGHT) -> str:
     pairs = RETAINED_CHOICE_PAIRS
     mean = sum(a - b for _, b, a in pairs) / len(pairs)
     zero = sum(1 for _, b, a in pairs if a == b)
@@ -492,63 +632,62 @@ def build_retained_choice() -> str:
     xs = {-1.0: x_bo, 0.0: x_none, 1.0: x_ari}
     top, row_h = 210, 38
 
-    parts = [_defs(), f'<rect width="{RC_W}" height="{RC_H}" rx="28" fill="url(#bg)"/>',
-             _stars(RC_W, RC_H, 70, 23)]
+    parts = []
     parts.append(
-        f'<text x="60" y="78" font-family="{SERIF}" font-size="44" fill="{INK}">'
+        f'<text x="60" y="78" font-family="{SERIF}" font-size="44" fill="{theme.ink}">'
         "Same world. Opposite pasts. Different choices.</text>"
-        f'<text x="62" y="112" font-family="{SANS}" font-size="16" fill="{INK_SOFT}">'
+        f'<text x="62" y="112" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "Completed v4 confirmation: 14 subject pairs / 28 subjects. In each seeded world one subject "
         "lived through Bo being reliable, the other Ari.</text>"
-        f'<text x="62" y="136" font-family="{SANS}" font-size="16" fill="{INK_SOFT}">'
+        f'<text x="62" y="136" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "After a restart, whom do they ask to work with at their first work opportunity?</text>"
     )
     # Column heads
-    for x, text, color in ((x_bo, "BO FIRST", BO), (x_none, "ZERO BALANCE", INK_FAINT),
-                           (x_ari, "ARI FIRST", ARI)):
+    for x, text, color in ((x_bo, "BO FIRST", theme.bo), (x_none, "ZERO BALANCE", theme.muted),
+                           (x_ari, "ARI FIRST", theme.amber_ink)):
         parts.append(f'<text x="{x}" y="{top - 22}" text-anchor="middle" font-family="{SANS}" '
-                     f'font-size="13" font-weight="bold" letter-spacing="2" fill="{color}">{text}</text>'
+                     f'font-size="18" font-weight="bold" letter-spacing="2" fill="{color}">{text}</text>'
                      f'<line x1="{x}" x2="{x}" y1="{top - 10}" y2="{top + row_h * len(pairs) - 14}" '
-                     f'stroke="#FFFFFF" stroke-opacity="0.07"/>')
-    parts.append(f'<text x="80" y="{top - 22}" font-family="{SANS}" font-size="13" font-weight="bold" '
-                 f'letter-spacing="2" fill="{INK_FAINT}">WORLD SEED</text>'
+                     f'stroke="{theme.muted}" stroke-opacity="0.18"/>')
+    parts.append(f'<text x="80" y="{top - 22}" font-family="{SANS}" font-size="18" font-weight="bold" '
+                 f'letter-spacing="2" fill="{theme.muted}">WORLD SEED</text>'
                  f'<text x="1010" y="{top - 22}" text-anchor="middle" font-family="{SANS}" '
-                 f'font-size="13" font-weight="bold" letter-spacing="2" fill="{INK_FAINT}">DIFFERENCE</text>')
+                 f'font-size="18" font-weight="bold" letter-spacing="2" fill="{theme.muted}">DIFFERENCE</text>')
 
     for i, (seed, bo_value, ari_value) in enumerate(pairs):
         y = top + i * row_h
         delay = 0.25 * i
-        parts.append(f'<text x="80" y="{y + 5}" font-family="{SANS}" font-size="14" '
-                     f'fill="{INK_SOFT}">#{i + 1:02d} · {seed}</text>')
+        parts.append(f'<text x="80" y="{y + 5}" font-family="{SANS}" font-size="18" '
+                     f'fill="{theme.muted}">#{i + 1:02d} · {seed}</text>')
         xb, xa = xs[bo_value], xs[ari_value]
         diff = ari_value - bo_value
         if xb != xa:
             parts.append(
                 f'<linearGradient id="link{i}" gradientUnits="userSpaceOnUse" x1="{xb}" x2="{xa}" '
-                f'y1="{y}" y2="{y}"><stop offset="0" stop-color="{BO}"/>'
-                f'<stop offset="1" stop-color="{ARI}"/></linearGradient>'
+                f'y1="{y}" y2="{y}"><stop offset="0" stop-color="{theme.bo}"/>'
+                f'<stop offset="1" stop-color="{theme.amber_ink}"/></linearGradient>'
                 f'<path class="link" style="animation-delay:{delay:.2f}s" d="M{xb},{y}L{xa},{y}" '
                 f'stroke="url(#link{i})" stroke-width="5" stroke-linecap="round" pathLength="1"/>'
             )
-            parts.append(f'<circle cx="{xb}" cy="{y}" r="11" fill="{BO}" filter="url(#glow)"/>'
-                         f'<circle cx="{xa}" cy="{y}" r="11" fill="{ARI}" filter="url(#glow)"/>')
+            parts.append(f'<circle cx="{xb}" cy="{y}" r="11" fill="{theme.bo}"/>'
+                         f'<circle cx="{xa}" cy="{y}" r="11" fill="{theme.amber_ink}"/>')
         else:
             parts.append(
-                f'<path d="M{xb},{y - 11} A11,11 0 0 0 {xb},{y + 11}Z" fill="{BO}"/>'
-                f'<path d="M{xb},{y - 11} A11,11 0 0 1 {xb},{y + 11}Z" fill="{ARI}"/>'
+                f'<path d="M{xb},{y - 11} A11,11 0 0 0 {xb},{y + 11}Z" fill="{theme.bo}"/>'
+                f'<path d="M{xb},{y - 11} A11,11 0 0 1 {xb},{y + 11}Z" fill="{theme.amber_ink}"/>'
             )
-        color = ARI if diff > 0 else INK_FAINT
+        color = theme.amber_ink if diff > 0 else theme.muted
         parts.append(f'<text x="1010" y="{y + 6}" text-anchor="middle" font-family="{SANS}" '
-                     f'font-size="16" font-weight="bold" fill="{color}">{diff:+.0f}</text>')
+                     f'font-size="18" font-weight="bold" fill="{color}">{diff:+.0f}</text>')
 
     # Summary panel
     px0, py0 = 1110, 250
     parts.append(
-        f'<text x="{px0}" y="{py0 + 10}" font-family="{SERIF}" font-size="110" fill="{ARI}" '
-        f'filter="url(#glow)">{mean:.2f}</text>'
-        f'<text x="{px0 + 2}" y="{py0 + 44}" font-family="{SANS}" font-size="14" fill="{INK}">'
+        f'<text x="{px0}" y="{py0 + 10}" font-family="{SERIF}" font-size="110" fill="{theme.amber_ink}">'
+        f'{mean:.2f}</text>'
+        f'<text x="{px0 + 2}" y="{py0 + 44}" font-family="{SANS}" font-size="18" fill="{theme.ink}">'
         "mean paired difference</text>"
-        f'<text x="{px0 + 2}" y="{py0 + 66}" font-family="{SANS}" font-size="14" fill="{INK_SOFT}">'
+        f'<text x="{px0 + 2}" y="{py0 + 66}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         f"95% interval {RETAINED_CHOICE_INTERVAL[0]:.2f}–{RETAINED_CHOICE_INTERVAL[1]:.2f}</text>"
     )
     # Interval bar (scale -0.25..1.5)
@@ -556,16 +695,16 @@ def build_retained_choice() -> str:
         return px0 + (v + 0.25) / 1.75 * 400
     by = py0 + 110
     parts.append(
-        f'<line x1="{sx(-0.25)}" x2="{sx(1.5)}" y1="{by}" y2="{by}" stroke="#FFFFFF" stroke-opacity="0.18"/>'
-        f'<line x1="{sx(0)}" x2="{sx(0)}" y1="{by - 12}" y2="{by + 12}" stroke="#FFFFFF" stroke-opacity="0.35"/>'
-        f'<text x="{sx(0)}" y="{by + 28}" text-anchor="middle" font-family="{SANS}" font-size="11" fill="{INK_FAINT}">0</text>'
+        f'<line x1="{sx(-0.25)}" x2="{sx(1.5)}" y1="{by}" y2="{by}" stroke="{theme.muted}" stroke-opacity="0.18"/>'
+        f'<line x1="{sx(0)}" x2="{sx(0)}" y1="{by - 12}" y2="{by + 12}" stroke="{theme.muted}" stroke-opacity="0.35"/>'
+        f'<text x="{sx(0)}" y="{by + 28}" text-anchor="middle" font-family="{SANS}" font-size="18" fill="{theme.muted}">0</text>'
         f'<line x1="{sx(RETAINED_CHOICE_THRESHOLD)}" x2="{sx(RETAINED_CHOICE_THRESHOLD)}" y1="{by - 16}" y2="{by + 16}" '
-        f'stroke="#B48CFF" stroke-width="2" stroke-dasharray="3 3"/>'
+        f'stroke="{theme.plum}" stroke-width="2" stroke-dasharray="3 3"/>'
         f'<text x="{sx(RETAINED_CHOICE_THRESHOLD)}" y="{by - 22}" text-anchor="middle" font-family="{SANS}" '
-        f'font-size="11" fill="#B48CFF">0.2 bar</text>'
+        f'font-size="18" fill="{theme.plum}">0.2 bar</text>'
         f'<line x1="{sx(RETAINED_CHOICE_INTERVAL[0])}" x2="{sx(RETAINED_CHOICE_INTERVAL[1])}" y1="{by}" y2="{by}" '
-        f'stroke="{ARI}" stroke-width="6" stroke-linecap="round"/>'
-        f'<circle cx="{sx(mean)}" cy="{by}" r="8" fill="#FFE3BD"/>'
+        f'stroke="{theme.amber_ink}" stroke-width="6" stroke-linecap="round"/>'
+        f'<circle cx="{sx(mean)}" cy="{by}" r="8" fill="{theme.amber}"/>'
     )
     notes = [
         "Interval clears the preregistered",
@@ -579,86 +718,96 @@ def build_retained_choice() -> str:
         "learning or human equivalence.",
     ]
     for j, line in enumerate(notes):
-        parts.append(f'<text x="{px0}" y="{by + 66 + j * 22}" font-family="{SANS}" font-size="14" '
-                     f'fill="{INK_SOFT}">{escape(line)}</text>')
+        parts.append(f'<text x="{px0}" y="{by + 66 + j * 22}" font-family="{SANS}" font-size="18" '
+                     f'fill="{theme.muted}">{escape(line)}</text>')
     # Legend
     ly = top + row_h * len(pairs) + 24
     parts.append(
-        f'<circle cx="90" cy="{ly}" r="8" fill="{BO}"/><text x="106" y="{ly + 5}" font-family="{SANS}" '
-        f'font-size="14" fill="{INK}">learned “Bo is reliable”</text>'
-        f'<circle cx="330" cy="{ly}" r="8" fill="{ARI}"/><text x="346" y="{ly + 5}" font-family="{SANS}" '
-        f'font-size="14" fill="{INK}">learned “Ari is reliable”</text>'
-        f'<text x="80" y="{ly + 40}" font-family="{SANS}" font-size="16" fill="{INK_FAINT}">'
+        f'<circle cx="90" cy="{ly}" r="8" fill="{theme.bo}"/><text x="106" y="{ly + 5}" font-family="{SANS}" '
+        f'font-size="18" fill="{theme.ink}">learned “Bo is reliable”</text>'
+        f'<circle cx="410" cy="{ly}" r="8" fill="{theme.amber_ink}"/><text x="426" y="{ly + 5}" font-family="{SANS}" '
+        f'font-size="18" fill="{theme.ink}">learned “Ari is reliable”</text>'
+        f'<text x="80" y="{ly + 40}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "Endpoint: partner balance of work requests at the first post-restart work opportunity</text>"
-        f'<text x="80" y="{ly + 64}" font-family="{SANS}" font-size="16" fill="{INK_FAINT}">'
+        f'<text x="80" y="{ly + 64}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "(+1 Ari, −1 Bo; 0 = no work, solo work, or balanced). Restart = same-process manager "
         "rebuild.</text>"
-        f'<text x="80" y="{ly + 88}" font-family="{SANS}" font-size="16" fill="{INK_FAINT}">'
+        f'<text x="80" y="{ly + 88}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "Full record: "
         "docs/plans/behavioral_validation_v4.md</text>"
     )
     style = """
-.link { animation: grow 4s ease-out infinite; }
-@keyframes grow { 0% { stroke-dasharray: 0 1; } 40%,100% { stroke-dasharray: 1 0; } }
-@media (prefers-reduced-motion: reduce) { .link { animation: none; } }"""
+@media (prefers-reduced-motion: no-preference) {
+  .link { animation: grow 600ms ease-out both; }
+}
+@keyframes grow { from { stroke-dasharray: 0 1; } to { stroke-dasharray: 1 0; } }
+@media (prefers-reduced-motion: reduce), print { .link { animation: none; } }"""
     return _svg(
         RC_W, RC_H, "Same world. Opposite pasts. Different choices.",
         f"14 subject pairs (28 subjects) from the completed v4 confirmation. Mean paired difference "
         f"{mean:.2f}, 95% interval {RETAINED_CHOICE_INTERVAL[0]:.2f} to "
         f"{RETAINED_CHOICE_INTERVAL[1]:.2f}, above the 0.2 threshold; {zero} pairs show no difference.",
-        "".join(parts), style,
+        "".join(parts), style, slug=f"retained-choice-{theme.name}",
     )
 
 
 # ---------------------------------------------------------------------------
-# 4. GitHub social cover (1280 x 640)
+# 5. GitHub social cover (1280 x 640)
 # ---------------------------------------------------------------------------
 
 COVER_W, COVER_H = 1280, 640
 
 
 def build_github_cover() -> str:
+    theme = LIGHT  # Social previews have a single, opaque background.
     minutes, states, _, _ = replay()
     x0, x1, y0, y1 = 610, 1230, 130, 500
 
     def pt(minute: float, value: float) -> tuple[float, float]:
         return x0 + (x1 - x0) * minute / DURATION_MIN, y1 - (y1 - y0) * value
 
-    parts = [_defs(rook_defs("cover")), f'<rect width="{COVER_W}" height="{COVER_H}" fill="url(#bg)"/>',
-             _stars(COVER_W, COVER_H, 80, 31)]
-    for name, _, color in MODULATORS:
+    parts = [
+        _defs(rook_defs("cover", halo=False)),
+        f'<rect width="{COVER_W}" height="{COVER_H}" fill="{theme.page}"/>',
+    ]
+    for name, _, color in theme.modulators:
         pts = [pt(m, s[name]) for m, s in zip(minutes, states)]
         parts.append(f'<path d="{_line_path(pts)}" fill="none" stroke="{color}" stroke-width="3" '
-                     f'stroke-opacity="0.8" stroke-linecap="round" filter="url(#glow)"/>')
+                     f'stroke-opacity="0.8" stroke-linecap="round"/>')
+    parts.append(rook_mark(96, 118, 236, "cover", halo=False))
     parts.append(
-        '<circle cx="190" cy="250" r="160" fill="url(#coverHalo)"/>'
-        + rook_mark(96, 118, 236, "cover", halo=False)
-    )
-    parts.append(
-        f'<text x="64" y="452" font-family="{SERIF}" font-size="86" fill="{INK}">OpenRook</text>'
-        f'<text x="68" y="500" font-family="{SANS}" font-size="24" fill="{INK_SOFT}">'
-        "Persistent state for any LLM.</text>"
-        f'<text x="68" y="534" font-family="{SANS}" font-size="24" fill="{INK_SOFT}">'
-        "The moment passes. Its state carries on.</text>"
-        f'<text x="68" y="596" font-family="{SANS}" font-size="15" fill="{INK_FAINT}">'
+        f'<text x="64" y="452" font-family="{SERIF}" font-size="86" fill="{theme.ink}">OpenRook</text>'
+        f'<text x="68" y="500" font-family="{SANS}" font-size="24" fill="{theme.muted}">'
+        "LLMs forget.</text>"
+        f'<text x="68" y="534" font-family="{SANS}" font-size="24" fill="{theme.muted}">'
+        "OpenRook remembers.</text>"
+        f'<text x="68" y="596" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
         "Open-source research runtime · functional state, not felt emotion</text>"
-        f'<text x="{x0}" y="{y1 + 34}" font-family="{SANS}" font-size="14" fill="{INK_FAINT}">'
-        "six modulators · real engine evaluation of an authored rupture → repair</text>"
+        f'<text x="{x0}" y="{y1 + 34}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
+        "Six modulators · real engine evaluation</text>"
+        f'<text x="{x0}" y="{y1 + 62}" font-family="{SANS}" font-size="18" fill="{theme.muted}">'
+        "Authored rupture → repair · no LLM</text>"
     )
     return _svg(COVER_W, COVER_H, "OpenRook",
                 "OpenRook social preview: rook mark with a lit window, wordmark, and six real modulator curves.",
-                "".join(parts))
+                "".join(parts), slug="github-cover")
 
 
+THEMED_BUILDERS = {
+    "how-it-works": (build_how_it_works, (HOW_W, HOW_H)),
+    "emotional-arc": (build_emotional_arc, (ARC_W, ARC_H)),
+    "emotional-fingerprints": (build_emotional_fingerprints, (FP_W, FP_H)),
+    "retained-choice": (build_retained_choice, (RC_W, RC_H)),
+}
 SHOWCASE = {
-    "emotional-arc": build_emotional_arc,
-    "emotional-fingerprints": build_emotional_fingerprints,
-    "retained-choice": build_retained_choice,
-    "github-cover": build_github_cover,
+    f"{name}-{theme.name}": partial(builder, theme)
+    for name, (builder, _) in THEMED_BUILDERS.items()
+    for theme in THEMES
 }
+SHOWCASE["github-cover"] = build_github_cover
 SIZES = {
-    "emotional-arc": (ARC_W, ARC_H),
-    "emotional-fingerprints": (FP_W, FP_H),
-    "retained-choice": (RC_W, RC_H),
-    "github-cover": (COVER_W, COVER_H),
+    f"{name}-{theme.name}": size
+    for name, (_, size) in THEMED_BUILDERS.items()
+    for theme in THEMES
 }
+SIZES["github-cover"] = (COVER_W, COVER_H)
