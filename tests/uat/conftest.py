@@ -89,6 +89,7 @@ class UATServer:
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["OPENROOK_CONFIG_DIR"] = str(self.workspace / "config")
+        env["OPENROOK_RUNTIME_CONFIG"] = str(self.config_path)
         cmd = [
             sys.executable,
             "-m",

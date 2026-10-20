@@ -333,14 +333,17 @@ def _check_version_consistency(root: Path) -> str:
 
 
 def _check_runtime_safe_defaults(root: Path) -> str:
-    cfg = RuntimeConfig.from_yaml(str(root / "runtime_config.example.yaml"))
     failures = []
-    if cfg.llm_backend == "mock":
-        failures.append("example llm_backend must not be 'mock' — OpenRook requires a real backend")
-    if cfg.api_key:
-        failures.append("example api_key must be empty")
-    if cfg.telegram_token:
-        failures.append("example telegram_token must be empty")
+    for filename in ("runtime_config.example.yaml", "runtime_config.research.example.yaml"):
+        path = root / filename
+        _require(path.is_file(), f"missing reference config: {filename}")
+        cfg = RuntimeConfig.from_yaml(str(path))
+        if cfg.llm_backend == "mock":
+            failures.append(f"{filename}: llm_backend must not be 'mock'")
+        for field in ("llm_model", "api_key", "llm_api_key", "telegram_token"):
+            if getattr(cfg, field):
+                failures.append(f"{filename}: {field} must be empty")
+    cfg = RuntimeConfig.from_yaml(str(root / "runtime_config.example.yaml"))
     if cfg.tools_enabled:
         failures.append("example tools_enabled must be false")
     if cfg.shell_tool_enabled:
@@ -349,7 +352,7 @@ def _check_runtime_safe_defaults(root: Path) -> str:
         failures.append("example cors_origins must be empty")
     if failures:
         raise ValidationFailure("; ".join(failures))
-    return "no token, tools off, shell off"
+    return "examples have no model or secrets; starter tools off, shell off"
 
 
 def _check_package_data_sources(root: Path) -> str:
@@ -524,7 +527,6 @@ def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
     with tempfile.TemporaryDirectory(prefix="nur-wheel-smoke-") as tmp:
         workspace = Path(tmp) / "workspace"
         workspace.mkdir()
-        (workspace / "runtime_config.yaml").write_text("llm_backend: mock\n", encoding="utf-8")
         venv_dir = Path(tmp) / "venv"
         venv.EnvBuilder(with_pip=True).create(venv_dir)
         python = _venv_python(venv_dir)

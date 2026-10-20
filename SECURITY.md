@@ -41,7 +41,8 @@ extra scrutiny:
 - `runtime/life_history.py` — shared identity-level experience and evolution
   storage in `data/shared/life_history.db`. Pasted text and local-file
   excerpts can be persisted as evidence for belief/drive changes.
-- `runtime_config.yaml` — may contain API keys. The secret fields
+- `runtime_config.yaml` — local, gitignored, and created on first run or by setup;
+  may contain API keys. The secret fields
   (enumerated in `runtime/config.py:_SECRET_FIELDS`) are `telegram_token`,
   `llm_api_key`, and `api_key`. Keep real values out of
   committed files; use `runtime_config.example.yaml` as the tracked starter

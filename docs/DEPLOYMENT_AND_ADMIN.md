@@ -31,6 +31,14 @@ That command creates `runtime_config.yaml`, creates data/workspace folders,
 prompts for model backend, identity, Telegram, and tool settings, and exits. It
 does not start a browser.
 
+The repository does not ship a live `runtime_config.yaml`; this local file is
+gitignored. `openrook-web` creates it on first run with no model selected, and
+`openrook-setup --init-only` creates the same starter without prompts. For manual
+setup, copy [`runtime_config.example.yaml`](../runtime_config.example.yaml) to
+`runtime_config.yaml`. The research reference is
+[`runtime_config.research.example.yaml`](../runtime_config.research.example.yaml).
+Neither example preselects a model; choose one served by your backend.
+
 The backend menu includes Codex CLI. API keys and Telegram tokens are hidden
 while typing. After the URL and key are entered, setup lists models reported by
 the backend. Select a number or type a model ID manually. There is no OpenRook
@@ -358,7 +366,11 @@ The safe default posture is localhost-only, a configured local LLM backend
 ## Runtime Config
 
 `runtime_config.yaml` is the source of truth for deployment settings. The
-settings workspace reads and writes this file.
+settings workspace reads and writes this gitignored local file. First-run
+bootstrap reuses an existing file. Before updating an older clone that still
+tracks it, back up the file outside the checkout: Git may remove an unchanged
+tracked copy when applying the tracking removal. Restore the backup afterward
+if needed to keep your existing configuration.
 
 Saving config through `/settings` writes `runtime_config.yaml`, evicts active
 web sessions so new pipelines use the saved settings, and restarts the built-in

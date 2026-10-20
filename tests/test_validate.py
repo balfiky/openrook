@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nur_tools import validate
 
 
@@ -16,8 +18,6 @@ def test_auto_target_uses_repo_when_root_has_project_files(tmp_path):
 
 
 def test_auto_target_uses_install_for_plain_workspace(tmp_path):
-    (tmp_path / "runtime_config.yaml").write_text("llm_backend: mock\n", encoding="utf-8")
-
     assert validate._resolve_target("auto", tmp_path) == "install"
 
 
@@ -25,6 +25,46 @@ def test_workspace_runtime_config_missing_is_nonfatal(tmp_path):
     detail = validate._check_workspace_runtime_config(tmp_path)
 
     assert "runtime_config.yaml not found" in detail
+
+
+def _write_reference_configs(root: Path) -> None:
+    (root / "runtime_config.example.yaml").write_text("{}\n", encoding="utf-8")
+    (root / "runtime_config.research.example.yaml").write_text(
+        "research_mode: true\ntools_enabled: true\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("has_local_config", [False, True])
+def test_runtime_safe_defaults_only_reads_reference_configs(tmp_path, has_local_config):
+    _write_reference_configs(tmp_path)
+    if has_local_config:
+        (tmp_path / "runtime_config.yaml").write_text("invalid: [\n", encoding="utf-8")
+
+    assert "no model or secrets" in validate._check_runtime_safe_defaults(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "filename", ["runtime_config.example.yaml", "runtime_config.research.example.yaml"]
+)
+@pytest.mark.parametrize("field", ["llm_model", "api_key", "llm_api_key", "telegram_token"])
+def test_runtime_safe_defaults_rejects_prefilled_models_and_secrets(tmp_path, filename, field):
+    _write_reference_configs(tmp_path)
+    (tmp_path / filename).write_text(f"{field}: user-selected-value\n", encoding="utf-8")
+
+    with pytest.raises(validate.ValidationFailure, match=f"{filename}: {field} must be empty"):
+        validate._check_runtime_safe_defaults(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "filename", ["runtime_config.example.yaml", "runtime_config.research.example.yaml"]
+)
+def test_runtime_safe_defaults_requires_both_references(tmp_path, filename):
+    _write_reference_configs(tmp_path)
+    (tmp_path / filename).unlink()
+
+    with pytest.raises(validate.ValidationFailure, match=f"missing reference config: {filename}"):
+        validate._check_runtime_safe_defaults(tmp_path)
 
 
 def test_docs_drift_check_flags_stale_phrase(tmp_path):

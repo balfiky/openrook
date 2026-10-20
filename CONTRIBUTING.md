@@ -26,6 +26,18 @@ python3 -m pip install -e ".[dev]"
 python3 -m pytest -q        # full suite; see CI for the current collected count
 ```
 
+`runtime_config.yaml` is local, gitignored, and absent from a fresh checkout.
+`openrook-web` creates it on first run, or use `openrook-setup` for terminal setup
+(`--init-only` creates a starter without prompts). You can also copy
+`runtime_config.example.yaml` to `runtime_config.yaml` for manual setup.
+Both that example and `runtime_config.research.example.yaml` leave the model
+empty; choose a model served by your backend in setup or Settings.
+Keep keys and tokens in the local config, never in tracked examples.
+
+Tests and `openrook-validate --mode quick` / `--mode ci` must work without the
+local runtime config. Config tests should create temporary configs or use
+tracked fixtures instead of reading the developer's repo-root file.
+
 Optional:
 
 ```bash

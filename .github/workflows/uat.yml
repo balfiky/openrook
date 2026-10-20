@@ -58,11 +58,13 @@ jobs:
           cd "$workdir"
           openrook-web --host 127.0.0.1 --port 8123 >server.log 2>&1 &
           server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8123/v1/health >/dev/null 2>&1 && break
             sleep 1
           done
           curl -fsS http://127.0.0.1:8123/v1/health
+          python -c "from pathlib import Path; import yaml; path = Path('runtime_config.yaml'); assert path.is_file(); assert yaml.safe_load(path.read_text())['llm_model'] == ''"
           status=$(curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:8123/)
           echo "root: $status"
           kill "$server_pid" || true
@@ -71,6 +73,13 @@ jobs:
             cat server.log
             exit 1
           fi
+
+      - name: Setup creates a config without a selected model
+        run: |
+          workdir=$(mktemp -d)
+          cd "$workdir"
+          openrook-setup --init-only
+          python -c "from pathlib import Path; import yaml; path = Path('runtime_config.yaml'); assert path.is_file(); assert yaml.safe_load(path.read_text())['llm_model'] == ''"
 
   live-uat:
     name: Browser/Admin UAT (live backend)

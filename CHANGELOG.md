@@ -6,6 +6,11 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ### Installation-to-chat experience
 
+- Stop tracking `runtime_config.yaml` and ignore it so saved keys, tokens, and
+  model choices stay local. Fresh installs create a starter with no model
+  selected; both tracked examples also leave the model empty. Existing local
+  configs are reused. Existing clones should back up their file before pulling
+  the tracking removal and restore it if Git removes the previously tracked copy.
 - Keep tool inventory, profile/memory inspection, rest, and idle session actions
   usable before model selection. Defer session backends and native tool clients
   until generation; report expected HTTP, console, Telegram, and proactive

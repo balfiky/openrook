@@ -122,6 +122,21 @@ class TestNonLoopbackBinds:
 
 
 class TestFirstRunBootstrap:
+    def test_default_config_is_created_in_a_fresh_working_directory(
+        self, tmp_path, fake_uvicorn, monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("OPENROOK_RUNTIME_CONFIG", raising=False)
+        monkeypatch.delenv("NUR_RUNTIME_CONFIG", raising=False)
+        monkeypatch.setattr(sys, "argv", ["openrook-web"])
+
+        nur_api.main()
+
+        cfg = RuntimeConfig.from_yaml(str(tmp_path / "runtime_config.yaml"))
+        assert cfg.llm_model == ""
+        assert cfg.data_dir == str(tmp_path / "data")
+        assert fake_uvicorn
+
     def test_missing_config_is_auto_created_with_safe_defaults(
         self, tmp_path, fake_uvicorn, monkeypatch,
     ):
@@ -138,6 +153,9 @@ class TestFirstRunBootstrap:
         assert cfg.tools_enabled is False
         assert cfg.shell_tool_enabled is False
         assert cfg.api_key == ""
+        assert cfg.llm_model == ""
+        assert cfg.llm_api_key == ""
+        assert cfg.telegram_token == ""
         # Data dir was created.
         assert Path(cfg.data_dir).is_dir()
         assert fake_uvicorn[-1]["host"] == "127.0.0.1"
@@ -154,6 +172,7 @@ class TestFirstRunBootstrap:
         assert Path(cfg_path).is_file()
         cfg = RuntimeConfig.from_yaml(cfg_path)
         assert cfg.api_key == ""
+        assert cfg.llm_model == ""
         # Warning printed; server still binds.
         err = capsys.readouterr().err
         assert "WARNING" in err

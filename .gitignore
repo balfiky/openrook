@@ -23,6 +23,7 @@ NUR_CLAUDE_CODE_PLANNING_AUDIT.md
 # Persisted user/session data — NEVER commit
 data/
 *.session.json
+runtime_config.yaml
 runtime_config.local.yaml
 
 # Eval reports — raw per-run/per-scenario artifacts stay local.

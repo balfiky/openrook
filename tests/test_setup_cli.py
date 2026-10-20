@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -12,6 +13,7 @@ from interface.setup import (
     _initialize_workspace,
     _prompt_secret,
     _run_terminal_setup,
+    main,
 )
 
 
@@ -38,7 +40,27 @@ def test_initialize_workspace_creates_config_and_dirs(tmp_path):
     assert created is True
     config = RuntimeConfig.from_yaml(str(config_path))
     assert config.data_dir == str(tmp_path / "data")
+    assert config.llm_model == ""
+    assert config.api_key == ""
+    assert config.llm_api_key == ""
+    assert config.telegram_token == ""
     assert (tmp_path / "data").is_dir()
+    assert (tmp_path / "data" / "workspace").is_dir()
+
+
+def test_init_only_creates_config_in_a_fresh_working_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPENROOK_RUNTIME_CONFIG", raising=False)
+    monkeypatch.delenv("NUR_RUNTIME_CONFIG", raising=False)
+    monkeypatch.setattr(sys, "argv", ["openrook-setup", "--init-only"])
+
+    main()
+
+    path = tmp_path / "runtime_config.yaml"
+    assert path.is_file()
+    config = RuntimeConfig.from_yaml(str(path))
+    assert config.llm_model == ""
+    assert config.data_dir == str(tmp_path / "data")
     assert (tmp_path / "data" / "workspace").is_dir()
 
 

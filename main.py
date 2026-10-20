@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 from config.environment import project_env
 from runtime.app import OpenRookApp
@@ -49,7 +50,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    config = RuntimeConfig.from_yaml(args.config)
+    config_path = Path(args.config).expanduser()
+    if not config_path.is_file():
+        raise SystemExit(
+            f"Runtime config not found: {config_path}. "
+            "Run openrook-setup or openrook-web to create it "
+            "(use --config for a custom path)."
+        )
+    config = RuntimeConfig.from_yaml(str(config_path))
+    if config.llm_backend != "codex" and not (config.llm_model or "").strip():
+        raise SystemExit(
+            f"No LLM model selected in {config_path}. "
+            "Run openrook-setup or openrook-web and choose a model served by "
+            "your backend in setup or Settings → LLM "
+            "(use --config for a custom path)."
+        )
     logging.basicConfig(
         level=logging.INFO if args.verbose or not config.console_enabled else logging.WARNING,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",

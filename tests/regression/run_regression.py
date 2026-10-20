@@ -13,8 +13,8 @@ Sprint 0.4 deliverable. Captures snapshots of two things across phase changes:
      refactor regressions.
 
 WHAT THIS DOES NOT CAPTURE: end-to-end conversational responses. Those require
-a configured LLM backend (currently runtime_config.yaml has llm_backend=mock).
-Once a real backend is wired, extend `_run_conversational_baseline()` below.
+a configured LLM backend and an operator-selected model. To capture them,
+extend `_run_conversational_baseline()` below.
 
 USAGE:
   python tests/regression/run_regression.py --capture   # write baseline JSON

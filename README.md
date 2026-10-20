@@ -258,9 +258,15 @@ local data/workspace folders, and marks setup complete. It does **not** launch a
 browser.
 
 If you'd rather skip the terminal prompts, `openrook-web` works on a clean
-install too — it auto-creates `runtime_config.yaml` with safe defaults
+install too — it auto-creates `runtime_config.yaml` with no model selected
 on first run, then opens the browser setup wizard at `/` that walks you
 through model, identity, and tool settings.
+
+The runtime config is local and gitignored; it is not shipped in the repository.
+Choose a model from those served by your backend during setup or in Settings.
+The tracked references are [`runtime_config.example.yaml`](runtime_config.example.yaml)
+and [`runtime_config.research.example.yaml`](runtime_config.research.example.yaml);
+neither preselects a model.
 
 Start the browser UI only when you ask for it:
 
@@ -321,6 +327,17 @@ openrook-uninstall              # remove local config/data after confirmation
 openrook-validate --mode full   # local release-readiness validation
 openrook                        # console runtime
 ```
+
+A fresh checkout has no `runtime_config.yaml`. The first `openrook-web` run or
+`openrook-setup` creates it; `openrook-setup --init-only` creates a starter without
+prompts. For manual setup, copy `runtime_config.example.yaml` to
+`runtime_config.yaml`, then configure your backend and choose one of its served
+models before chatting. The local file is gitignored and existing files are
+reused. Tests and quick/CI validation do not need a local runtime config.
+
+Before updating an older clone that still tracks `runtime_config.yaml`, back up
+the file outside the checkout. Git may remove an unchanged tracked copy when
+applying the tracking removal; restore your backup afterward if needed.
 
 <details>
 <summary><strong>What's new</strong> — OpenRook and experience-grounded autonomy (full notes in <a href="CHANGELOG.md">CHANGELOG.md</a>)</summary>
