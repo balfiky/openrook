@@ -1,4 +1,4 @@
-"""SVG diagram toolkit for Project Nūr architecture diagrams.
+"""SVG diagram toolkit for OpenRook architecture diagrams.
 
 Primitives: Canvas, box, diamond, cylinder, group frame, arrow (orthogonal),
 legend, note.
@@ -8,12 +8,11 @@ Design language
 - Flat, grid-based, no drop shadows.
 - Small palette with semantic meaning (process / storage / client / danger /
   attention / neutral).
-- Orthogonal arrow routing (L / Z shapes); diagonals only used for explicit
-  fan-out relationships.
+- Orthogonal arrow routing with rounded elbows.
 - Typography hierarchy: title 28 / section 16 / box title 15 / body 12 /
   edge label 11.
 
-The toolkit is only used by ``tools/render_diagram_pngs.py`` to regenerate
+The toolkit is used by ``nur_tools/render_diagram_pngs.py`` to regenerate
 the SVG + PNG pairs under ``docs/diagrams/``.  SVGs are the source of truth
 that ships with the repo; PNGs are derived artifacts.
 """
@@ -27,7 +26,9 @@ from typing import Iterable, Literal
 # Theme
 # ---------------------------------------------------------------------------
 
-FONT_STACK = "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif"
+# CairoSVG uses the first installed family, without browser-style per-glyph
+# fallback. DejaVu Sans includes the arrows used in the diagrams.
+FONT_STACK = "'DejaVu Sans', 'Liberation Sans', Arial, sans-serif"
 
 THEME = {
     "bg": "#fafbfc",
@@ -76,6 +77,28 @@ def _text(x: float, y: float, s: str, *, size: int, weight: int = 400,
     )
 
 
+def _rounded_path(points: list[tuple[float, float]]) -> str:
+    """Route orthogonal connectors with small rounded corners."""
+    if len(points) < 2:
+        raise ValueError("A connector needs at least two points")
+    for start, end in zip(points, points[1:]):
+        if start[0] != end[0] and start[1] != end[1]:
+            raise ValueError("Diagram connectors must be orthogonal")
+    path = f"M{points[0][0]},{points[0][1]}"
+    for previous, corner, following in zip(points, points[1:], points[2:]):
+        incoming = abs(corner[0] - previous[0]) + abs(corner[1] - previous[1])
+        outgoing = abs(following[0] - corner[0]) + abs(following[1] - corner[1])
+        radius = min(8, incoming / 2, outgoing / 2)
+        if not incoming or not outgoing:
+            continue
+        before = tuple(corner[i] + (previous[i] - corner[i]) * radius / incoming
+                       for i in (0, 1))
+        after = tuple(corner[i] + (following[i] - corner[i]) * radius / outgoing
+                      for i in (0, 1))
+        path += f" L{before[0]},{before[1]} Q{corner[0]},{corner[1]} {after[0]},{after[1]}"
+    return path + f" L{points[-1][0]},{points[-1][1]}"
+
+
 # ---------------------------------------------------------------------------
 # Canvas
 # ---------------------------------------------------------------------------
@@ -88,6 +111,7 @@ class Canvas:
     title: str = ""
     subtitle: str = ""
     pieces: list[str] = field(default_factory=list)
+    show_heading: bool = True
 
     # ---- helpers -------------------------------------------------------
 
@@ -110,18 +134,19 @@ class Canvas:
 
     def tile(self, x: float, y: float, w: float, h: float, title: str,
              body: Iterable[str] = (), *, color: str = "process",
-             title_size: int = 15, body_size: int = 12) -> None:
-        """Solid rounded rectangle with a bold title and optional body lines."""
+             title_size: int = 15, body_size: int = 12,
+             title_offset: int = 23, body_offset: int = 45) -> None:
+        """Card with text baseline offsets measured from its top edge."""
         c = PALETTE[color]
         self.add(
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="10" '
             f'fill="{c["fill"]}" stroke="{c["stroke"]}" stroke-width="1.5"/>'
         )
         cx = x + w / 2
-        self.add(_text(cx, y + 23, title, size=title_size, weight=700,
+        self.add(_text(cx, y + title_offset, title, size=title_size, weight=700,
                        fill=c["ink"], anchor="middle"))
         for i, line in enumerate(body):
-            self.add(_text(cx, y + 45 + i * (body_size + 5), line,
+            self.add(_text(cx, y + body_offset + i * (body_size + 5), line,
                            size=body_size, fill=THEME["ink_soft"],
                            anchor="middle"))
 
@@ -169,10 +194,10 @@ class Canvas:
             f'opacity="0.6"/>'
         )
         cx = x + w / 2
-        self.add(_text(cx, y + 30, title, size=14, weight=700,
+        self.add(_text(cx, y + 40, title, size=14, weight=700,
                        fill=c["ink"], anchor="middle"))
         for i, line in enumerate(body):
-            self.add(_text(cx, y + 50 + i * 16, line, size=12,
+            self.add(_text(cx, y + 62 + i * 16, line, size=12,
                            fill=THEME["ink_soft"], anchor="middle"))
 
     # ---- arrows --------------------------------------------------------
@@ -181,33 +206,15 @@ class Canvas:
               label: str = "", dashed: bool = False,
               route: Literal["direct", "h-then-v", "v-then-h"] = "direct",
               color: str | None = None) -> None:
-        stroke = color or THEME["arrow"]
-        dasharray = ' stroke-dasharray="6 4"' if dashed else ""
         x1, y1 = start
         x2, y2 = end
-        if route == "direct":
-            d = f"M{x1},{y1} L{x2},{y2}"
-            label_pos = ((x1 + x2) / 2, (y1 + y2) / 2)
-        elif route == "h-then-v":
-            d = f"M{x1},{y1} L{x2},{y1} L{x2},{y2}"
-            label_pos = ((x1 + x2) / 2, y1)
-        else:  # v-then-h
-            d = f"M{x1},{y1} L{x1},{y2} L{x2},{y2}"
-            label_pos = (x1, (y1 + y2) / 2)
-        self.add(
-            f'<path d="{d}" fill="none" stroke="{stroke}" '
-            f'stroke-width="1.75" marker-end="url(#arrowhead)"{dasharray}/>'
-        )
-        if label:
-            lx, ly = label_pos
-            # White chip so the label doesn't smear over the arrow.
-            w = 8 + 7 * len(label)
-            self.add(
-                f'<rect x="{lx - w / 2}" y="{ly - 10}" width="{w}" '
-                f'height="16" rx="4" fill="{THEME["bg"]}" opacity="0.95"/>'
-            )
-            self.add(_text(lx, ly + 2, label, size=11, weight=600,
-                           fill=THEME["ink_soft"], anchor="middle"))
+        if x1 == x2 or y1 == y2:
+            points = [start, end]
+        elif route == "v-then-h":
+            points = [start, (x1, y2), end]
+        else:
+            points = [start, (x2, y1), end]
+        self.connector(points, label=label, dashed=dashed, color=color)
 
     def connector(self, points: list[tuple[float, float]], *,
                   label: str = "", dashed: bool = False,
@@ -215,7 +222,7 @@ class Canvas:
         """Explicit polyline for when none of the routes fit."""
         stroke = color or THEME["arrow"]
         dasharray = ' stroke-dasharray="6 4"' if dashed else ""
-        d = "M" + " L".join(f"{x},{y}" for x, y in points)
+        d = _rounded_path(points)
         self.add(
             f'<path d="{d}" fill="none" stroke="{stroke}" '
             f'stroke-width="1.75" marker-end="url(#arrowhead)"{dasharray}/>'
@@ -226,7 +233,11 @@ class Canvas:
             prev = points[len(points) // 2 - 1]
             lx = (mid[0] + prev[0]) / 2
             ly = (mid[1] + prev[1]) / 2
-            w = 8 + 7 * len(label)
+            w = 12 + 7 * len(label)
+            if mid[1] == prev[1]:
+                ly -= 20
+            else:
+                lx += w / 2 + 10
             self.add(
                 f'<rect x="{lx - w / 2}" y="{ly - 10}" width="{w}" '
                 f'height="16" rx="4" fill="{THEME["bg"]}" opacity="0.95"/>'
@@ -268,11 +279,14 @@ class Canvas:
     # ---- finalize ------------------------------------------------------
 
     def to_svg(self) -> str:
+        slug = "-".join(
+            "".join(char.lower() if char.isalnum() else " " for char in self.title).split()
+        ) or "diagram"
         head = (
             f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'width="{self.width}" height="{self.height}" '
             f'viewBox="0 0 {self.width} {self.height}" role="img" '
-            f'aria-labelledby="title desc">'
+            f'aria-labelledby="{slug}-title {slug}-desc">'
         )
         defs = (
             '<defs>'
@@ -282,18 +296,18 @@ class Canvas:
             '</marker>'
             '</defs>'
         )
-        title_el = f'<title id="title">{_esc(self.title)}</title>'
-        desc_el = f'<desc id="desc">{_esc(self.subtitle or self.title)}</desc>'
+        title_el = f'<title id="{slug}-title">{_esc(self.title)}</title>'
+        desc_el = f'<desc id="{slug}-desc">{_esc(self.subtitle or self.title)}</desc>'
         bg = f'<rect width="100%" height="100%" fill="{THEME["bg"]}"/>'
         title_line = (
             _text(48, 52, self.title, size=28, weight=800,
                   fill=THEME["ink"])
-            if self.title else ""
+            if self.title and self.show_heading else ""
         )
         subtitle_line = (
             _text(48, 78, self.subtitle, size=14,
                   fill=THEME["ink_soft"])
-            if self.subtitle else ""
+            if self.subtitle and self.show_heading else ""
         )
         body = "\n".join(self.pieces)
         return (

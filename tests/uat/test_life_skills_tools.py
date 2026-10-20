@@ -123,7 +123,7 @@ def test_admin_life_history_ingest_is_visible_in_ui_and_api(uat_server, page):
 
     page.fill("#lifeTextTitle", "UAT formative note")
     page.fill("#lifeSourceType", "admin_pasted_text")
-    page.fill("#lifeParticipants", "operator, Nur")
+    page.fill("#lifeParticipants", "operator, OpenRook")
     page.fill(
         "#lifeText",
         (
@@ -173,7 +173,7 @@ def test_life_upload_local_file_and_rollback_paths(uat_server, tmp_path):
         uploaded = uat_server.post(
             "/admin/life/experiences/upload",
             files={"file": ("uploaded-life.md", handle, "text/markdown")},
-            data={"title": "Uploaded Life UAT", "participants": "operator, Nur"},
+            data={"title": "Uploaded Life UAT", "participants": "operator, OpenRook"},
         )
     upload_payload = expect_json(uploaded)
     assert upload_payload["experience"]["source_title"] == "Uploaded Life UAT"
@@ -191,7 +191,7 @@ def test_life_upload_local_file_and_rollback_paths(uat_server, tmp_path):
             {
                 "file_path": str(local_file),
                 "title": "Local Life UAT",
-                "participants": ["operator", "Nur"],
+                "participants": ["operator", "OpenRook"],
             },
         )
     )
@@ -213,7 +213,7 @@ def test_life_digest_changes_later_policy_signals(uat_server):
             {
                 "title": "Repair drive seed",
                 "source_type": "admin_pasted_text",
-                "participants": ["operator", "Nur"],
+                "participants": ["operator", "OpenRook"],
                 "text": (
                     "Relationship repair, trust, apology, and continuity matter. "
                     "A rupture should be revisited carefully until it is resolved."

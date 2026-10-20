@@ -3,7 +3,7 @@
 Imported Agent Skills are installed locally, audited, and disabled until an
 operator enables them. Enabled skills are exposed to generation as bounded
 private guidance. Skill scripts and resources are never executed by this module;
-real actions still go through Nūr's normal tool gates.
+real actions still go through OpenRook's normal tool gates.
 
 Skills vs life-history seeds (Sprint 4 categorization rule):
   - Procedural skill = an invokable craft with a clear trigger condition
@@ -333,7 +333,7 @@ def migrate_skill_to_life(
 
     Reads the skill body, ingests it as an experience with
     ``source_type='operator_directive'`` so the content becomes part of
-    Nūr's evolving worldview rather than always-on prompt guidance. The
+    OpenRook's evolving worldview rather than always-on prompt guidance. The
     original skill is marked ``status='migrated'`` and disabled, but its
     files remain on disk for provenance.
 
@@ -449,9 +449,9 @@ def _audit_payload(
     unsupported = _infer_unsupported_features(text)
     files = _scan_skill_files(source_root)
     if unsupported:
-        warnings.append("Some platform-specific features may need custom Nūr adapters.")
+        warnings.append("Some platform-specific features may need custom OpenRook adapters.")
     if files["script_count"]:
-        warnings.append("Skill includes scripts. Nūr imports them for review but does not execute them during import.")
+        warnings.append("Skill includes scripts. OpenRook imports them for review but does not execute them during import.")
     return {
         "compatible": not errors,
         "errors": errors,

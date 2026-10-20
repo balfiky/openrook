@@ -7,7 +7,7 @@ from concurrent.futures import Executor
 from contextlib import suppress
 from functools import partial
 import logging
-import time
+from core.clock import clock as time
 from dataclasses import dataclass
 from typing import Any, Awaitable, TypeVar
 
@@ -188,8 +188,11 @@ class UserSession:
         )
 
     def _session_extra_state(self) -> dict[str, object]:
+        exporter = getattr(self.pipeline, "export_session_state", None)
+        pipeline_state = exporter() if callable(exporter) else {}
         return {
             "turn_index": self.turn_index,
+            "pipeline_state": pipeline_state if isinstance(pipeline_state, dict) else {},
             "pending_learning_intake": (
                 self.pending_learning_intake.to_dict()
                 if self.pending_learning_intake is not None
@@ -200,6 +203,9 @@ class UserSession:
     def restore_session_extra_state(self, state: dict | None) -> None:
         if not isinstance(state, dict):
             return
+        restorer = getattr(self.pipeline, "restore_session_state", None)
+        if callable(restorer):
+            restorer(state.get("pipeline_state", {}))
         try:
             self.turn_index = int(state.get("turn_index", self.turn_index))
         except (TypeError, ValueError):
@@ -216,6 +222,11 @@ class UserSession:
     @property
     def _queued_message_count(self) -> int:
         return max(0, self._pending_message_count - self._active_message_count)
+
+    @property
+    def queue_depth(self) -> int:
+        """Pending-queue size; exists for the v1 introspection surface."""
+        return self._queue.qsize()
 
     def mark_work_started(self) -> None:
         """Mark a unit of session work as active."""
@@ -361,6 +372,8 @@ class UserSession:
 
     async def _apply_rest_async(self, hours: float) -> None:
         """Worker-thread wrapper for rest application."""
+        if getattr(self.pipeline, "_research_mode", False):
+            raise RuntimeError("Simulated rest changes the experiment; research rest uses elapsed time")
         self.mark_work_started()
         try:
             if self._user_lock is not None:

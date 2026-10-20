@@ -5,7 +5,7 @@ without a real browser. The default provider is a no-op that returns
 an error asking for configuration.
 
 When Playwright or another automation library is available, a concrete
-provider can be plugged in without changing any Nūr code.
+provider can be plugged in without changing any OpenRook code.
 """
 
 from __future__ import annotations
@@ -14,6 +14,21 @@ from typing import Any, Protocol
 
 from core.types import ToolCapability, ToolCategory, ToolResult
 from nur_tools.executor import ToolHandler
+from runtime.security import validate_http_url
+
+
+def _validate_url(url: str) -> str:
+    """SSRF guard applied at the tool boundary, before any provider call.
+
+    The default provider is a no-op, but a real automation backend plugged
+    in later inherits this check without changes. Shares the web-fetch
+    opt-in env var so trusted deployments configure private access once.
+    """
+    return validate_http_url(
+        url,
+        allow_loopback=False,
+        allow_private_env="OPENROOK_ALLOW_PRIVATE_WEB_FETCH",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +150,7 @@ def create_handlers(provider: BrowserProvider | None = None) -> dict[str, ToolHa
     prov = provider or NullBrowserProvider()
 
     def _open_url(args: dict[str, Any]) -> ToolResult:
-        url = args["url"]
+        url = _validate_url(args["url"])
         title = prov.open_url(url)
         return ToolResult(
             tool_name="browser.open_url",
@@ -146,7 +161,7 @@ def create_handlers(provider: BrowserProvider | None = None) -> dict[str, ToolHa
         )
 
     def _get_page_text(args: dict[str, Any]) -> ToolResult:
-        url = args["url"]
+        url = _validate_url(args["url"])
         text = prov.get_page_text(url)
         truncated = len(text) > _MAX_PAGE_TEXT
         output = text[:_MAX_PAGE_TEXT]
@@ -185,6 +200,8 @@ def create_handlers(provider: BrowserProvider | None = None) -> dict[str, ToolHa
 
     def _screenshot(args: dict[str, Any]) -> ToolResult:
         url = args.get("url")
+        if url:
+            url = _validate_url(url)
         path = prov.screenshot(url)
         return ToolResult(
             tool_name="browser.screenshot",

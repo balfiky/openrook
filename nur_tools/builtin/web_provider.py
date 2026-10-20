@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from html import unescape
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import requests
 
@@ -17,8 +17,11 @@ from runtime.security import validate_http_url
 
 
 _DEFAULT_TIMEOUT = 15.0
-_USER_AGENT = "Mozilla/5.0 (compatible; Nur/1.0)"
+_USER_AGENT = "Mozilla/5.0 (compatible; OpenRook/1.0)"
 _MAX_FETCH_BYTES = 2_000_000  # 2 MB cap on fetched content
+_MAX_REDIRECT_HOPS = 5  # manual redirect cap — every hop is re-validated
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_SEARCH_URL = "https://html.duckduckgo.com/html/"
 
 
 class RequestsWebProvider:
@@ -30,14 +33,35 @@ class RequestsWebProvider:
         self._timeout = timeout
 
     def search(self, query: str, limit: int) -> list[dict[str, str]]:
-        """Search via DuckDuckGo HTML lite endpoint."""
+        """Search via DuckDuckGo HTML lite endpoint.
+
+        Redirects are never followed automatically: each hop is validated
+        with ``validate_http_url`` before it is requested (see ``fetch``).
+        """
         with self._session.post(
-            "https://html.duckduckgo.com/html/",
+            _SEARCH_URL,
             data={"q": query},
             timeout=self._timeout,
+            allow_redirects=False,
         ) as resp:
-            resp.raise_for_status()
-            return _parse_ddg_results(resp.text, limit)
+            if resp.status_code in _REDIRECT_STATUSES:
+                next_url = self._next_redirect_target(_SEARCH_URL, resp)
+            else:
+                resp.raise_for_status()
+                return _parse_ddg_results(resp.text, limit)
+
+        # Follow redirect hops with GET (requests/browser semantics for a
+        # redirected POST), validating each target before requesting it.
+        for _ in range(_MAX_REDIRECT_HOPS):
+            with self._session.get(
+                next_url, timeout=self._timeout, allow_redirects=False,
+            ) as resp:
+                if resp.status_code in _REDIRECT_STATUSES:
+                    next_url = self._next_redirect_target(next_url, resp)
+                    continue
+                resp.raise_for_status()
+                return _parse_ddg_results(resp.text, limit)
+        raise ValueError(f"Too many redirects (more than {_MAX_REDIRECT_HOPS})")
 
     def fetch(self, url: str) -> str:
         """Fetch raw HTML/text content from a URL.
@@ -45,28 +69,52 @@ class RequestsWebProvider:
         Honors ``_MAX_FETCH_BYTES`` by streaming chunks and stopping once
         the cap is reached — ``resp.content`` would silently ignore the cap
         and buffer the entire body first.
+
+        Redirects are followed manually (``allow_redirects=False``): each
+        hop's target URL is validated with ``validate_http_url`` before it
+        is requested, so a public URL cannot bounce the fetch into loopback,
+        link-local (cloud metadata), or private address space. The chain is
+        capped at ``_MAX_REDIRECT_HOPS``; the streaming byte cap and timeout
+        apply to every hop.
         """
-        safe_url = validate_http_url(
+        safe_url = self._validate(url)
+        for _ in range(_MAX_REDIRECT_HOPS + 1):
+            with self._session.get(
+                safe_url, timeout=self._timeout, stream=True,
+                allow_redirects=False,
+            ) as resp:
+                if resp.status_code in _REDIRECT_STATUSES:
+                    safe_url = self._next_redirect_target(safe_url, resp)
+                    continue
+                resp.raise_for_status()
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in resp.iter_content(chunk_size=65_536):
+                    if not chunk:
+                        continue
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    if total >= _MAX_FETCH_BYTES:
+                        break
+                content = b"".join(chunks)[:_MAX_FETCH_BYTES]
+                encoding = resp.encoding or "utf-8"
+            return content.decode(encoding, errors="replace")
+        raise ValueError(f"Too many redirects (more than {_MAX_REDIRECT_HOPS})")
+
+    @staticmethod
+    def _validate(url: str) -> str:
+        return validate_http_url(
             url,
             allow_loopback=False,
-            allow_private_env="NUR_ALLOW_PRIVATE_WEB_FETCH",
+            allow_private_env="OPENROOK_ALLOW_PRIVATE_WEB_FETCH",
         )
-        with self._session.get(
-            safe_url, timeout=self._timeout, stream=True,
-        ) as resp:
-            resp.raise_for_status()
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in resp.iter_content(chunk_size=65_536):
-                if not chunk:
-                    continue
-                chunks.append(chunk)
-                total += len(chunk)
-                if total >= _MAX_FETCH_BYTES:
-                    break
-            content = b"".join(chunks)[:_MAX_FETCH_BYTES]
-            encoding = resp.encoding or "utf-8"
-        return content.decode(encoding, errors="replace")
+
+    def _next_redirect_target(self, current_url: str, resp: requests.Response) -> str:
+        """Resolve and validate the Location header of a redirect response."""
+        location = resp.headers.get("Location") or ""
+        if not location:
+            raise ValueError("Redirect response missing Location header")
+        return self._validate(urljoin(current_url, location))
 
     def extract_text(self, url: str) -> str:
         """Fetch a URL and return cleaned body text."""

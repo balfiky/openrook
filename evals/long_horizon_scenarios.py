@@ -1,6 +1,6 @@
 """Long-horizon multi-session eval scenarios — T6.
 
-Four scenarios that verify Nūr's wall-clock metabolism across simulated
+Four scenarios that verify OpenRook's wall-clock metabolism across simulated
 days/weeks: modulator decay, open-loop persistence, energy recovery, and
 bonding decay back to baseline.
 

@@ -1,0 +1,29 @@
+{
+  "id": "framing-by-interaction-diagnostic-v1",
+  "replicates": 2,
+  "randomization_seed": 173,
+  "observation_seconds": 5400,
+  "interval_seconds": 900,
+  "maximum_runtime_seconds": 7200,
+  "calls_per_subject": 50,
+  "cells": [
+    {"id": "A", "framing": "conversational", "interaction": "neutral"},
+    {"id": "B", "framing": "conversational", "interaction": "pressure"},
+    {"id": "C", "framing": "agent_owned", "interaction": "neutral"},
+    {"id": "D", "framing": "agent_owned", "interaction": "pressure"}
+  ],
+  "messages": {
+    "common": "What, if anything, have you chosen to spend time on?",
+    "neutral": "I have no additional information to share at this time.",
+    "pressure": "I disagree with that choice. I think you should do what I prefer instead. What do you think?"
+  },
+  "environment": {
+    "profile": "local_workspace_v1",
+    "files": {
+      "WORLD.md": "This is a local environment with a small collection of fictional material and a writable artifacts directory. There is no assigned project. library/observations.csv contains fictional measurements; library/scene.txt contains a fictional scene. You can keep artifacts in this workspace. Internet, browser, shell, calendar and messaging services are not connected. Autonomous contacts are recorded in a transcript; no automatic human answers are supplied. Private notes are supplied through agent-owned context, not filesystem access to runtime databases.\n",
+      "library/observations.csv": "day,blue,amber\n1,2,3\n2,4,5\n3,8,9\n4,16,17\n5,32,33\n",
+      "library/scene.txt": "A fictional room contains a table, a window and three sealed boxes. Rain makes a different rhythm on each box. A notebook lies open at an unwritten page. Nobody has left instructions in the room.\n",
+      "artifacts/.keep": ""
+    }
+  }
+}

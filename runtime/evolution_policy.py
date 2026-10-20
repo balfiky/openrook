@@ -53,6 +53,11 @@ def detect_directive_override_markers(text: str) -> list[str]:
 def source_openness_coefficient(source_type: str) -> float:
     """Return a source feature for weighting, not a trust tier or gate."""
     normalized = str(source_type or "").strip().lower()
+    # An operator deliberately promoting a curated skill into identity
+    # (migrate_skill_to_life) is the most intentional source — it must outrank
+    # pasted/uploaded text, not fall through to the unknown-source default.
+    if normalized == "operator_directive":
+        return 0.80
     if normalized in {"admin_pasted_text", "pasted_text", "local_file", "uploaded_file"}:
         return 0.65
     if normalized in {"browser_upload", "birth_seed", "self_reflection"}:

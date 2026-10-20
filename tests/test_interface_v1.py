@@ -86,7 +86,7 @@ class TestHealthAndReady:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert data["service"] == "nur"
+        assert data["service"] == "openrook"
         assert "uptime_seconds" in data
 
     def test_ready_reports_backend_and_sessions(self, client):
@@ -166,6 +166,30 @@ class TestChatEndpoint:
         assert "perception" in data
         assert "skills_tools" in data
         assert "explanation" in data
+
+    def test_chat_rejects_path_traversal_user_id(self, client, tmp_path):
+        """/v1/chat must reject user_id/chat_id that could escape data_dir.
+
+        Round-5 review found the chat endpoints (unlike persona/delete) did
+        not validate the path token, so a user_id of '../../tmp/x' created
+        directories outside data_dir.
+        """
+        before = set(p.name for p in tmp_path.iterdir())
+        for bad in ("../escape", "a/b", "a\\b", "..", "x\x00y", "a:b"):
+            resp = client.post(
+                "/v1/chat", json={"message": "hi", "user_id": bad},
+            )
+            assert resp.status_code in (400, 422), (bad, resp.status_code)
+        # No new top-level entries leaked outside the data dir.
+        after = set(p.name for p in tmp_path.iterdir())
+        assert "escape" not in after and after == before | (after & before)
+
+    def test_legacy_chat_rejects_path_traversal_user_id(self, client):
+        for bad in ("../escape", "a/b", ".."):
+            resp = client.post(
+                "/chat", json={"message": "hi", "user_id": bad},
+            )
+            assert resp.status_code in (400, 422), (bad, resp.status_code)
 
     def test_v1_chat_runtime_backpressure_returns_503(self, client, tmp_path):
         manager = SessionManager(
@@ -271,7 +295,7 @@ class TestProfileEndpoints:
         resp = client.get("/v1/soul")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "Nūr"
+        assert data["name"] == "OpenRook"
         assert "identity" in data
 
     def test_self_profile(self, client):

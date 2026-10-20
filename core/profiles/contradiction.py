@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from config.loader import get_config
-from core.profiles.base import Observation, ProfileStore
+from core.profiles.base import ProfileStore
 
 # ---------------------------------------------------------------------------
 # Config-driven constants (loaded from config/profiles_schema.yaml)
@@ -83,12 +83,13 @@ class ContradictionDetector:
 
     def __init__(self, store: ProfileStore) -> None:
         self._store = store
+        self._config = get_config().contradiction
 
     def detect(
         self,
         entity_id: str,
         expected_traits: dict[str, float],
-        window: int = RECENT_WINDOW,
+        window: int | None = None,
     ) -> ContradictionResult:
         """Compare recent observations against expected trait profile.
 
@@ -100,7 +101,7 @@ class ContradictionDetector:
         if not expected_traits:
             return ContradictionResult(entity_id=entity_id)
 
-        recent = self._store.get_observations(entity_id, limit=window)
+        recent = self._store.get_observations(entity_id, limit=self._config.recent_window if window is None else window)
         if not recent:
             return ContradictionResult(entity_id=entity_id)
 
@@ -125,7 +126,7 @@ class ContradictionDetector:
             divergence = abs(expected_score - observed_avg)
             all_divergences.append(divergence)
 
-            if divergence >= CONTRADICTION_THRESHOLD:
+            if divergence >= self._config.threshold:
                 signal = ContradictionSignal(
                     entity_id=entity_id,
                     trait=trait,

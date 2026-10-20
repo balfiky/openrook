@@ -14,7 +14,7 @@ USAGE:
     → keeps the temp db on disk; prints its path.
 
 Decision Gate 2 (manual): of the questions printed, how many would you
-write yourself if asked "what does Nur not yet understand?" >= 7/10 of
+write yourself if asked "what does OpenRook not yet understand?" >= 7/10 of
 the top open questions = pass. <= 3/10 = stop and rework digest/emission.
 """
 from __future__ import annotations
@@ -263,7 +263,7 @@ def _print_decision_gate_prompt() -> None:
     _print_section("DECISION GATE 2 (manual rating)")
     print(
         "For each open question above, ask: 'would I write this question if "
-        "asked what Nur does not yet understand?'\n"
+        "asked what OpenRook does not yet understand?'\n"
         "  >=7 of top 10 = real gaps   → pass; proceed to Sprint 3.\n"
         "  4-6 of 10                   → partial; rework priority/threshold.\n"
         "  <=3 of 10                   → fail; rework digest or emission."

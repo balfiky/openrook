@@ -4,7 +4,7 @@ Designed behind a CalendarProvider protocol so tests can inject a fake.
 The default provider is a no-op that returns an error.
 
 A real provider can connect to Google Calendar, Outlook, or any
-calendar API without changing Nūr code.
+calendar API without changing OpenRook code.
 """
 
 from __future__ import annotations

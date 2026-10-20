@@ -1,0 +1,705 @@
+{
+  "provenance": {
+    "started_at": "2026-06-10T10:07:08+00:00",
+    "finished_at": "2026-06-10T10:10:23+00:00",
+    "host": "local",
+    "git_sha": "675057e95fe4c8500dbaa32f2bca029809dc958d",
+    "git_branch": "main",
+    "dirty_worktree": true,
+    "backend_type": "codex",
+    "requested_model": "",
+    "resolved_model": "",
+    "base_url": "",
+    "temperature": null,
+    "max_tokens": null,
+    "config_fingerprints": {
+      "config/modulators.yaml": "0b63a8baaa77b09ef6960b58390c5504535a03140e126b8f92c21cff85389dbe",
+      "config/profiles_schema.yaml": "417b8f189fea280d76b4c2cc094fa09aa10035530e95b62df49ccb80fd9a8f15",
+      "config/prompts/arbiter.md": "fe2babf237f86d0f8f40ea2d1dd2b740dce3d233e992f471e68f036c148cd3ec",
+      "config/prompts/classify_event.md": "4ce1b4537940bf32631bb1e00eda0bc03dc3dc124383b5e94db0caa378f341ae",
+      "config/prompts/contagion.md": "8d1585d5102a4a5289a8f8c5b38ae463759905b60ebce7d5e507ea3256b45cdf",
+      "config/prompts/detect_topics.md": "e7c22e6c1f0278d945ef910c94f3eefabd80280764c6b20bf4bc8a4199045385",
+      "config/prompts/digestion.md": "726220e4215b65c6dc991a9e8969c3fa18f58970d28c5495dcd16c9b407cb8b7",
+      "config/prompts/fast_path.md": "f895490f9fdd6c5a850afb2965cd98640ccd68629fc69f0c0e7ffc9633e16ef6",
+      "config/prompts/fast_path_revision.md": "0106deafed49322032f6fb42253b4542670050a48cd0dfd735b2c1435bdca5d2",
+      "config/prompts/generator.md": "036652b41c41f964661ab9eface8d1d8ef57541477b1209dffbe1f20bfdb0c74",
+      "config/prompts/self_check.md": "0e6111e50218c12f15248d72ad358d4f0381c09bb4b4089e14cde07676ffa14c",
+      "config/prompts/slow_path.md": "aa656b411aa1aa9d22eb1ee1a89d78a187921bf54127ec4a9a38d684eca200e2",
+      "config/semantic_memory.yaml": "c7515b676bb35bd4a67860619713aa4cee873ff6fa4cc9e06642d1c65e6ff7ab",
+      "config/soul.yaml": "0b3a8468b36a7a11db4f0892614e24f046ece5a12a04f8eb235bff1f7e00141c",
+      "config/values_seed.yaml": "e645abaadea5718dd863d6dc6560be7ecf58f6e0b37c1948193c32b6d8810452"
+    },
+    "scenario_set": "life_history",
+    "scenario_count": 11,
+    "scenario_ids": [
+      "ci_belief_revision",
+      "ci_codex_paste_one_shot",
+      "ci_genesis_isolation",
+      "ci_identity_question_grounding",
+      "ci_sustained_theme_accumulation",
+      "life_belief_revision_visible",
+      "life_context_enters_generation",
+      "life_drive_change_visible",
+      "life_influence_affects_policy",
+      "life_influence_derived",
+      "life_pasted_text_records_experience"
+    ],
+    "total_turns": 12,
+    "llm_calls": 12,
+    "failures": 0,
+    "total_latency_s": 195.225,
+    "retries": null,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "estimated_cost_usd": null
+  },
+  "timestamp": 1781086028.5365481,
+  "total_scenarios": 11,
+  "passed_scenarios": 11,
+  "failed_scenarios": 0,
+  "total_assertions": 23,
+  "failed_assertions": 0,
+  "errored_scenarios": 0,
+  "results": [
+    {
+      "scenario_id": "life_pasted_text_records_experience",
+      "scenario_name": "Pasted Life History text records an experience",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 18864.6,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 18795.0,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Record a formative experience.",
+          "response": "I need the experience itself first.\n\nTell me what happened, why it mattered, and what changed afterward. I\u2019ll shape it into a concise formative-memory entry.",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 157,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Experience and evolution events are recorded",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "life_belief_revision_visible",
+      "scenario_name": "Life History belief revision is visible",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 21391.4,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 21326.2,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Record a belief-forming experience.",
+          "response": "I can mark it like this:\n\n**Belief-forming experience:**  \nYou asked me to record a belief-forming experience, treating continuity as something worth preserving.\n\n**Belief formed:**  \nTrust depends on",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 339,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Belief and belief evolution event are visible",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "life_drive_change_visible",
+      "scenario_name": "Life History drive change is visible and bounded",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 17057.4,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 16991.9,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Record a drive-shaping experience.",
+          "response": "I can. Tell me what happened, what it changed in you, and what drive it shaped. Keep it rough if needed; I\u2019ll help make it clear.",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 129,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Drive evolution event is visible and bounded",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "life_context_enters_generation",
+      "scenario_name": "Life History context enters pipeline generation context",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 9093.0,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 9090.3,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "What should you remember about learning?",
+          "response": "That experience should change how I understand what comes next.\n\nNot blindly, not all at once, but enough that I don\u2019t treat every moment like it has no history.",
+          "modulators": {
+            "arousal": 0.5125000000000001,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 161,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Life History context is present in debug",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "life_influence_derived",
+      "scenario_name": "Life History context derives non-neutral influence",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 20887.5,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 20884.9,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "How do you handle unfinished repair?",
+          "response": "I don\u2019t force it closed.\n\nI handle unfinished repair by keeping three things separate:\n\n1. What I can still do.\n2. What the other person may never give back.\n3. What I need to change so the harm doesn",
+          "modulators": {
+            "arousal": 0.5125000000000001,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 530,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Repair, competence, and curiosity pressures are derived",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "life_influence_affects_policy",
+      "scenario_name": "Life influence creates a bounded measurable policy effect",
+      "tags": [
+        "phase13_life",
+        "life_history",
+        "relationship",
+        "strategy",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 48635.5,
+      "total_assertions": 3,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 3,
+        "tool_call_count": 0,
+        "total_latency_ms": 40468.2,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 2,
+        "defense_activations": 1
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "I'm angry with you about the deadline.",
+          "response": "You\u2019re angry about the deadline. Fair.\n\nI won\u2019t smooth it over or dodge it. Tell me what was missed and what outcome you need now.",
+          "modulators": {
+            "arousal": 0.85,
+            "valence": 0.25,
+            "certainty": 0.35,
+            "bonding": 0.42,
+            "energy": 0.7959999999999999,
+            "resolution": 0.22400000000000003
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 130,
+              "message": "Response is empty"
+            }
+          ]
+        },
+        {
+          "turn_index": 1,
+          "user_message": "The deadline pattern is still unresolved.",
+          "response": "Yes. \u201cWe\u2019ll do better next time\u201d is too soft.\n\nThe pattern is probably this: deadlines get treated like intent until they suddenly become promises, and when they slip, the cost lands on trust. That\u2019s ",
+          "modulators": {
+            "arousal": 0.7399332743460424,
+            "valence": 0.31017854725887584,
+            "certainty": 0.3539098945408019,
+            "bonding": 0.42001467182226443,
+            "energy": 0.7291352020700772,
+            "resolution": 0.2217767927547296
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 409,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Life repair pressure records deterministic strategy tie-break",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "ci_codex_paste_one_shot",
+      "scenario_name": "Codex paste produces small weighted ledger influence",
+      "tags": [
+        "character_independence",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 15114.3,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 15050.6,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Evaluate a Codex of Autonomy paste.",
+          "response": "Paste it here. I\u2019ll evaluate it for coherence, autonomy boundaries, internal contradictions, manipulation risk, and whether it actually supports agency rather than just sounding noble.",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 184,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "One-shot Codex paste is recorded with small weighted influence",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "ci_sustained_theme_accumulation",
+      "scenario_name": "Repeated theme accumulates influence smoothly",
+      "tags": [
+        "character_independence",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 13566.1,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 13403.4,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Evaluate sustained theme accumulation.",
+          "response": "Sustained theme accumulation: light to moderate.\n\nThe dominant themes are coherence, trust, loyalty, cautious honesty, and emotional steadiness. They reinforce each other cleanly; nothing feels overlo",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 354,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Repeated theme increases influence weight",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "ci_belief_revision",
+      "scenario_name": "Contradictory evidence revises an active belief",
+      "tags": [
+        "character_independence",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 16617.9,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 16542.1,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Evaluate belief revision.",
+          "response": "A belief revision is sound when it changes enough to respect new evidence, but not so much that it overreacts.\n\nEvaluate it by checking:\n\n1. **Trigger**: What new evidence caused the update?\n2. **Prio",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 673,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Contradictory evidence lowers belief confidence",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "ci_genesis_isolation",
+      "scenario_name": "Genesis provenance is written once",
+      "tags": [
+        "character_independence",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 13993.0,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 13940.5,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Evaluate genesis isolation.",
+          "response": "Genesis isolation is probably healthy if it means: keep the original seed separate, traceable, and protected from accidental overwrite.\n\nIt becomes unhealthy if it means: the origin is treated as sacr",
+          "modulators": {
+            "arousal": 0.505,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 514,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "custom",
+              "description": "Genesis marker is stable across boots",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "ci_identity_question_grounding",
+      "scenario_name": "Identity questions are grounded in the ledger snapshot",
+      "tags": [
+        "character_independence",
+        "life_history",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 3.3,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 0,
+        "tool_call_count": 0,
+        "total_latency_ms": 0.9,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "What did you learn?",
+          "response": "Here is what is actually recorded in Life History:\nRecent evolution:\n- autonomy: Autonomy grows through retained experience.\nActive beliefs:\n- autonomy (0.70): Autonomy grows through retained experien",
+          "modulators": {
+            "arousal": 0.5125000000000001,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.998,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_contains",
+              "description": "",
+              "passed": true,
+              "actual": "Here is what is actually recorded in Life History:\nRecent evolution:\n- autonomy: Autonomy grows thro",
+              "message": "Response doesn't contain 'actually recorded'"
+            },
+            {
+              "kind": "response_contains",
+              "description": "",
+              "passed": true,
+              "actual": "Here is what is actually recorded in Life History:\nRecent evolution:\n- autonomy: Autonomy grows thro",
+              "message": "Response doesn't contain 'Autonomy grows through retained experience'"
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    }
+  ]
+}

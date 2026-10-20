@@ -96,7 +96,7 @@ def select_strategy_with_trace(
         )
 
     # 1. Protect self from abuse — attack aimed at assistant, low/neutral trust.
-    if appraisal.social_move == "attack" and trust <= 0.5:
+    if appraisal.targets_assistant and appraisal.social_move == "attack" and trust <= 0.5:
         return matched(ResponseStrategy.SET_BOUNDARY, "assistant_targeted_attack_low_trust")
     reject(
         "assistant_targeted_attack_low_trust",

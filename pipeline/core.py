@@ -1,33 +1,8 @@
-"""Cognitive pipeline orchestrator.
+"""CognitivePipeline — the turn orchestrator.
 
-v2 processing flow:
- 1. Anticipation: predict emotional trajectory (0 LLM calls)
- 2. Contagion: detect user tone → bounded mirror (0 LLM calls — rule-based)
- 3. Appraisal: infer target, intent, vulnerability, affiliation (0 LLM calls)
- 4. Context switch: load person profile baseline_shift
- 5. Event classification: categorize input (0 LLM calls — rule-based)
- 6. PSI engine: update 6 modulators from input + drives + energy
- 7. Resolution update: check for new/resolved tension items (0 LLM calls)
- 8. Short-term memory: store emotional reaction
- 9. Spike check: if intensity > 0.8 → heavy write to LT
-10. Memory retrieval: ACT-R activation biased by current state
-11. Profile lookup: person + self + topic
-12. Contradiction check: compare against profiles (self + others)
-13. Inner dialogue: fast/slow deliberation only for non-spike unresolved tension
-    (0-5 LLM calls; spike-only turns skip)
-13b. Tool loop: detect intent → arbiter → execute → appraise (0+ tool calls;
-     skipped if no tool_executor configured)
-14. Defense mechanisms: filter output if needed (0 LLM calls)
-15. Master LLM: generate final response (1 LLM call)
-16. Self-check: rule-based default; LLM only for extreme/high-risk turns
-    (0-1 LLM calls)
-17. Post-processing: update memory, drain energy
-18. [Session end] Digestion (0-1 LLM call)
-
-LLM call budget: 1-6 per message (typical: 1). Spike-only hostility should stay
-on the generator path unless a separate high-risk condition warrants LLM
-self-check. Inner dialogue only fires when non-spike unresolved items exist
-(contradictions, deadlocks, etc.).
+``CognitivePipeline.process()`` runs five stages over a ``_TurnState``;
+see the package docstring (``pipeline/__init__.py``) for the full
+18-step flow and LLM call budget.
 """
 
 from __future__ import annotations
@@ -35,19 +10,18 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
-from dataclasses import dataclass, field
+from core.clock import clock as time
+from core.clock import identifiers as uuid
+from dataclasses import asdict, replace
 from typing import Any, Callable
 
-from config.loader import get_config
+from config.loader import get_config, research_configuration
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.types import (
-    ActionVariables,
-    AffectState,
     AgencyDecision,
     AppraisalFrame,
-    Anticipation,
-    DefenseActivation,
     DetectedEmotion,
+    DefenseActivation,
     EmotionalEvent,
     EventType,
     InnerDialogueTrace,
@@ -55,23 +29,26 @@ from core.types import (
     ModulatorState,
     PipelineContext,
     PersonProfile,
-    RelationshipContext,
     ResponseStrategy,
-    SemanticMemoryEntry,
-    SelfProfile,
-    StrategyDecisionTrace,
+    SelfIntent,
+    TaskPlan,
+    TaskStep,
+    TaskStatus,
     ToolCategory,
     ToolDecision,
     ToolIntent,
     ToolObservation,
     ToolResult,
-    TopicProfile,
     ToolTrace,
-    SelfIntent,
+    TopicProfile,
     UnresolvedItem,
     ValueHierarchy,
 )
-from core.appraisal import appraise_message, appraise_with_life_history
+from core.appraisal import (
+    appraise_message,
+    appraise_message_llm,
+    appraise_with_life_history,
+)
 from core.affect import decide_agency, resolve_affect
 from core.strategy import select_strategy_with_trace, STRATEGY_INSTRUCTIONS
 from core.grounding import (
@@ -96,7 +73,7 @@ from core.memory.semantic import (
     derive_semantic_entries,
 )
 from core.life_influence import LifeInfluence, curiosity_salience_bonus, derive_life_influence
-from core.character_vector import CharacterVector, assemble_character_vector
+from core.character_vector import assemble_character_vector, format_character_vector_prompt
 from core.pipeline_features import PipelineFeatures
 from core.contagion import detect_emotion
 from core.profiles.base import ProfileStore
@@ -108,13 +85,17 @@ from core.dual_process.generator import (
     LLMBackend,
     ResponseGenerator,
 )
-from core.dual_process.self_check import SelfChecker, CoherenceVerdict, coherence_check
+from core.dual_process.self_check import SelfChecker, coherence_check
 from core.dual_process.inner_dialogue import InnerDialogue
 from core.anticipation import AnticipationEngine
 from core.defense_mechanisms import DEFENSE_INSTRUCTIONS, DefenseMechanism
 from core.self_intent import propose_self_intents
 from nur_tools.builtin.self_actions import SelfActionContext
-from core.dual_process.tool_loop import ToolLoopResult, make_tool_decision, run_tool_loop
+from core.dual_process.tool_loop import (
+    ToolLoopResult,
+    make_tool_decision,
+    run_tool_loop,
+)
 from core.tool_appraisal import appraise_tool_result
 from core.proactive import collect_skill_want_triggers, evaluate_proactive
 from core.tool_memory import (
@@ -130,248 +111,20 @@ from core.tool_memory import (
     derive_tool_self_observations,
     is_salient_episode,
 )
-from core.types import ProactiveTrace, TaskPlan, TaskTrace
+
+from pipeline.heuristics import (
+    _CONVERSATION_HISTORY_MAX,
+    _format_generated_artifact_summary,
+    _is_broad_repair_text,
+    _is_identity_question,
+    _is_repairable_unresolved_source,
+    _message_for_model_tool_routing,
+    _message_for_tool_detection,
+    _relationship_topic_hint,
+)
+from pipeline.types import DebugState, PipelineResponse, _TurnState
 
 log = logging.getLogger(__name__)
-
-_TOOL_FOLLOWUP_COMMAND_RE = re.compile(
-    r"("
-    r"\b(?:issue|run|execute|use)\s+(?:the\s+)?"
-    r"(?:needed|required|necessary|right)\s+command\b"
-    r"|^\s*(?:go|do\s+it|do\s+that|please\s+do|run\s+it|check\s+again|try\s+again|"
-    r"create\s+it|make\s+it|i\s+want\s+you\s+to\s+create\s+it|for\s+yourself|"
-    r"now\s+check\s+again|give\s+me\s+(?:the\s+)?(?:raw\s+)?output\b.*|"
-    r"show\s+me\s+(?:the\s+)?output\b.*)\s*[.!?]*\s*$"
-    r")",
-    re.IGNORECASE,
-)
-
-_TOOL_HISTORY_ACTION_HINT_RE = re.compile(
-    r"\b(?:hostname|host\s*name|machine\s+name|uname|/etc/hostname|"
-    r"disk|drive|filesystem|storage|space|df\s+-h|"
-    r"skill|capability|capabilities|module|integration|registry|"
-    r"search|web|internet|fetch|read\s+file|list\s+files|"
-    r"cat\s+/|grep|calendar|events?|"
-    r"(?:run|execute|issue)\s+(?:the\s+)?(?:command\s+)?[A-Za-z0-9_./~+-]|"
-    r"^\s*do\s+[A-Za-z0-9_./~+-])\b",
-    re.IGNORECASE,
-)
-
-_IDENTITY_QUESTION_RE = re.compile(
-    r"\bwhat (?:did|do) you learn\b|"
-    r"\bwhat (?:changed|did you change)\b|"
-    r"\bdid you evolve\b|"
-    r"^\s*evolve[.!?]?\s*$|"
-    r"\bwhat do you (?:remember|believe)\b",
-    re.IGNORECASE,
-)
-
-_BROAD_REPAIR_RE = re.compile(
-    r"\b(?:everything|all of (?:it|this)|all the tension|all of the tension|"
-    r"forgive(?: me| this| everything)?|move on|make peace|find peace|"
-    r"repair (?:this|everything|all)|start over|clean slate)\b",
-    re.IGNORECASE,
-)
-
-_REPAIRABLE_UNRESOLVED_SOURCES = {
-    "spike",
-    "contradiction",
-    "topic",
-    "dialogue_deadlock",
-    "relationship",
-    "hostility",
-}
-
-
-def _is_identity_question(text: str) -> bool:
-    return bool(_IDENTITY_QUESTION_RE.search(text or ""))
-
-
-def _is_broad_repair_text(text: str) -> bool:
-    return bool(_BROAD_REPAIR_RE.search(text or ""))
-
-
-def _is_repairable_unresolved_source(source: str) -> bool:
-    return str(source or "") in _REPAIRABLE_UNRESOLVED_SOURCES
-
-
-def _format_generated_artifact_summary(result: ToolResult, draft_summary: str = "") -> str:
-    details = []
-    if result.success:
-        details.append("OK")
-        if result.side_effect_summary and result.side_effect_summary != "none":
-            details.append(result.side_effect_summary)
-        bytes_written = (result.metadata or {}).get("bytes_written")
-        if bytes_written is not None:
-            details.append(f"bytes_written={bytes_written}")
-        if draft_summary:
-            details.append(f"summary={draft_summary}")
-    else:
-        details.append(f"Failed: {result.error or 'unknown error'}")
-    return "[fs.write_file] " + " | ".join(details)
-
-# ---------------------------------------------------------------------------
-# Debug state — full transparency into what happened
-# ---------------------------------------------------------------------------
-
-@dataclass
-class DebugState:
-    """Complete debug snapshot of a single pipeline run."""
-    timestamp: float = field(default_factory=time.time)
-    user_message: str = ""
-    user_id: str = ""
-
-    # Step 2: Contagion
-    detected_emotion: DetectedEmotion | None = None
-
-    # Step 3: Social appraisal
-    appraisal_frame: AppraisalFrame | None = None
-
-    # Step 4: Context switch
-    baseline_shift_applied: dict[str, float] = field(default_factory=dict)
-
-    # Step 5: Modulator update
-    event_classified: str = ""
-    event_intensity: float = 0.0
-    is_spike: bool = False
-    modulator_snapshot: dict[str, float] = field(default_factory=dict)
-
-    # Step 7: Memory retrieval
-    retrieved_memories: list[LongTermEntry] = field(default_factory=list)
-    semantic_memories: list[SemanticMemoryEntry] = field(default_factory=list)
-    life_history_context: dict[str, Any] = field(default_factory=dict)
-    character_vector: CharacterVector | None = None
-    coherence_verdict: CoherenceVerdict | None = None
-    life_influence: LifeInfluence = field(default_factory=LifeInfluence)
-    life_influence_effects: dict[str, Any] = field(default_factory=dict)
-    skill_context: dict[str, Any] = field(default_factory=dict)
-    relationship_context: RelationshipContext | None = None
-
-    # Step 8: Profiles
-    person_profile: PersonProfile | None = None
-    self_profile: SelfProfile | None = None
-    topic_profiles: list[TopicProfile] = field(default_factory=list)
-
-    # Step 9: Contradictions
-    contradiction_flags: list[str] = field(default_factory=list)
-
-    # Steps 10-11: Generation
-    response: str = ""
-    self_check_passed: bool = True
-    self_check_issues: list[str] = field(default_factory=list)
-    correction_note: str = ""
-    generation_attempts: int = 0
-
-    # Step 14: Energy
-    energy_after: float = 0.0
-
-    # Emotion label (for display)
-    emotion_label: str = ""
-
-    # v2: Anticipation
-    anticipation: Anticipation | None = None
-
-    # v2: Inner dialogue
-    dialogue_trace: InnerDialogueTrace | None = None
-
-    # v2: Defense mechanisms
-    defense_activation: DefenseActivation | None = None
-
-    # v2: Resolution
-    unresolved_count: int = 0
-    unresolved_items: list[UnresolvedItem] = field(default_factory=list)
-
-    # Agentic tools (Phase 0+)
-    tool_trace: ToolTrace | None = None
-    action_variables: ActionVariables | None = None
-    tool_memory_effects: ToolMemoryEffects | None = None
-    task_trace: TaskTrace | None = None
-    strategy_trace: StrategyDecisionTrace | None = None
-
-    # Phase 11.3: Response strategy
-    response_strategy: str = ""
-
-    # Derived affect and agency
-    affect_state: AffectState | None = None
-    agency_decision: AgencyDecision | None = None
-    autonomy_level: str = ""
-
-    # Self-action layer (v0.30): what Nūr chose to do for itself this turn.
-    self_intents: list[SelfIntent] = field(default_factory=list)
-
-    # Proactive behavior (Phase 8)
-    proactive_trace: ProactiveTrace | None = None
-
-    # Timing instrumentation (ms)
-    stage_timings_ms: dict[str, float] = field(default_factory=dict)
-
-
-def _message_for_tool_detection(
-    user_message: str,
-    conversation_history: list[dict[str, str]],
-) -> str:
-    """Attach the prior user request for terse tool follow-ups."""
-    if not _TOOL_FOLLOWUP_COMMAND_RE.search(user_message):
-        return user_message
-    for message in reversed(conversation_history):
-        if message.get("role") == "user" and message.get("content"):
-            content = message["content"]
-            if _TOOL_HISTORY_ACTION_HINT_RE.search(content):
-                return f"{content}\n{user_message}"
-    return user_message
-
-
-def _message_for_model_tool_routing(
-    user_message: str,
-    conversation_history: list[dict[str, str]],
-) -> str:
-    """Attach recent turns so model-native routers can resolve follow-ups."""
-    if not conversation_history:
-        return user_message
-    lines = ["Recent conversation for tool routing:"]
-    for message in conversation_history[-8:]:
-        role = "User" if message.get("role") == "user" else "Assistant"
-        content = str(message.get("content") or "").strip()
-        if content:
-            lines.append(f"{role}: {content}")
-    lines.append(f"Current user message: {user_message}")
-    return "\n".join(lines)
-
-
-def _relationship_topic_hint(text: str) -> str:
-    """Small topic hint so relationship-memory loops can be prioritized."""
-    lower = text.lower()
-    match = re.search(r"\b(?:about|regarding|around|on)\s+([a-z0-9' -]{2,40})", lower)
-    if match:
-        return _clean_topic_hint(match.group(1))
-    words = re.findall(r"[a-z0-9']+", lower)
-    stopwords = {
-        "the", "and", "that", "this", "with", "your", "you", "for", "from",
-        "have", "been", "just", "really", "very", "again", "still", "please",
-        "drop", "topic", "issue", "thing", "can", "could", "would", "what",
-        "when", "where", "why", "how", "any", "follow", "up",
-        "unresolved", "resolved", "matters", "matter", "pattern",
-    }
-    informative = [word for word in words if len(word) > 2 and word not in stopwords]
-    return " ".join(informative[:3])
-
-
-def _clean_topic_hint(text: str) -> str:
-    phrase = re.sub(r"[^a-z0-9' -]", " ", text.lower())
-    phrase = " ".join(phrase.split())
-    return phrase[:40].strip()
-
-
-# ---------------------------------------------------------------------------
-# Pipeline response
-# ---------------------------------------------------------------------------
-
-@dataclass
-class PipelineResponse:
-    """What the pipeline returns to the caller."""
-    response: str
-    debug: DebugState
-
 
 # ---------------------------------------------------------------------------
 # CognitivePipeline
@@ -424,7 +177,7 @@ class CognitivePipeline:
         if llm_backend is None:
             raise ValueError(
                 "CognitivePipeline requires an llm_backend. Configure "
-                "llm_backend in runtime_config.yaml — Nūr never runs against a "
+                "llm_backend in runtime_config.yaml — OpenRook never runs against a "
                 "fake/mock backend."
             )
         # Primary backend (used if no fast backend provided)
@@ -432,12 +185,18 @@ class CognitivePipeline:
         # Fast backend (thinking mode off) — used for ALL calls
         # Generator prompt already has full context; thinking overhead not needed
         self._llm_backend_fast = llm_backend_fast or self._llm_backend
-        self._config = get_config()
+        self._research_mode = bool(getattr(runtime_config, "research_mode", False))
+        self._research_action_framing = getattr(runtime_config, "research_action_framing", "agent_owned")
+        self._research_owner = None
+        self._research_in_transition = False
+        self._config = getattr(runtime_config, "_research_configuration", None) or get_config()
+        if self._research_mode and not getattr(runtime_config, "_research_configuration", None):
+            self._config = research_configuration(getattr(runtime_config, "research_birth_policy", "uncommitted"))
         self.soul = self._config.soul
         self._semantic_cfg = self._config.semantic_memory
 
         # Core engine
-        self.engine = EmotionalEngine()
+        self.engine = EmotionalEngine(config=self._config if self._research_mode else None)
 
         # Memory
         self.short_term = ShortTermMemory()
@@ -494,15 +253,25 @@ class CognitivePipeline:
 
         # Agentic tools (Phase 2+)
         self._tool_executor = tool_executor
-        self._tool_runner = getattr(tool_executor, "_tool_runner", None)
+        self._tool_runner = tool_executor.tool_runner if tool_executor is not None else None
         self._autonomy_level = autonomy_level
+        # LLM-based social appraisal (the model reads interpersonal meaning
+        # instead of regex). Off when there's no RuntimeConfig (unit tests keep
+        # the deterministic path + its exact-value assertions); production
+        # RuntimeConfig defaults it on. The deterministic appraisal remains the
+        # fallback whenever the LLM is absent or returns unparseable output.
+        self._appraisal_use_llm = bool(getattr(runtime_config, "appraisal_use_llm", False))
+        # Auto-ingest emotionally salient sessions into the identity ledger.
+        self._autobiographical_learning = bool(
+            getattr(runtime_config, "autobiographical_learning", False)
+        )
         self._coherence_min_score = coherence_min_score
         self._coherence_max_regenerations = coherence_max_regenerations
         self._life_history_provider = life_history_provider
         self._life_history_snapshot_provider = life_history_snapshot_provider
         self._skill_provider = skill_provider
         # ``runtime_config`` is the RuntimeConfig used by the session manager.
-        # The legacy ``self._config`` is the global NurConfig from get_config()
+        # The legacy ``self._config`` is the global OpenRookConfig from get_config()
         # which has no data_dir, so paths to shared SQLite databases need this.
         self._runtime_config = runtime_config
         self.last_intake_receipt: str = ""
@@ -531,16 +300,19 @@ class CognitivePipeline:
 
         # Time tracking for auto-decay between turns
         self._last_turn_time: float | None = None
+        self._last_external_input_at: float | None = None
+        self._last_state_update_at: float | None = None
+        self._episode_id = uuid.uuid4().hex
         # Pipelines are session-scoped; changing users on one instance leaks state.
         self._bound_user_id: str | None = None
 
         # Self-action layer (v0.30). The proposer runs whenever a
         # ``tool_executor`` is attached. No catalog filter, no per-turn cap —
-        # Nūr can invoke any registered tool. Legacy callers that pass
+        # OpenRook can invoke any registered tool. Legacy callers that pass
         # ``tool_executor=None`` (most existing test fixtures) naturally
         # bypass the stage.
         if tool_executor is not None:
-            existing_ctx = getattr(tool_executor, "_self_action_context", None)
+            existing_ctx = tool_executor.self_action_context
             data_dir = getattr(runtime_config, "data_dir", "") or ""
             owner_chat_id = getattr(runtime_config, "owner_chat_id", "") or ""
             telegram_token = getattr(runtime_config, "telegram_token", "") or ""
@@ -552,7 +324,12 @@ class CognitivePipeline:
                 ctx.telegram_token = telegram_token
             ctx.state_provider = self._self_action_state_snapshot
             ctx.web_executor = self._self_action_web_executor
-            tool_executor._self_action_context = ctx
+            tool_executor.set_self_action_context(ctx)
+
+    @property
+    def tool_executor(self) -> Any | None:
+        """Attached tool executor; exists for the v1 introspection surface."""
+        return self._tool_executor
 
     # ------------------------------------------------------------------
     # Self-action context helpers (wired into SelfActionContext)
@@ -596,9 +373,7 @@ class CognitivePipeline:
         executor = self._tool_executor
         if executor is None:
             return []
-        registry = getattr(executor, "_registry", None)
-        if registry is None:
-            return []
+        registry = executor.registry
         catalog: list[dict[str, Any]] = []
         try:
             names = registry.names()
@@ -629,25 +404,70 @@ class CognitivePipeline:
 
         Returns the response text and full debug state.
         """
+        if self._research_owner is not None and not self._research_in_transition:
+            return self._research_owner.process(self, user_message, user_id)
         self._ensure_bound_user(user_id)
         # Sprint 5 throttle reset: the user has now had a turn to respond to
         # any surfaced open question, so clear the pending id. The question
         # itself stays in 'pursuing' state until operator action via admin —
         # so it won't be resurfaced even though the throttle is released.
         self._pending_surfaced_question_id = None
-        debug = DebugState(user_message=user_message, user_id=user_id)
+        st = _TurnState(
+            user_message=user_message,
+            user_id=user_id,
+            debug=DebugState(user_message=user_message, user_id=user_id),
+        )
+
+        # Stage 1: deterministic pre-pass (Steps 0-11b). May short-circuit
+        # with a direct identity answer.
+        short_circuit = self._stage_pre_pass(st)
+        if short_circuit is not None:
+            return short_circuit
+
+        # Stage 2: gated deliberation — inner dialogue, tool loop,
+        # self-intent, defense shaping, response strategy (Steps 12-13b).
+        self._stage_deliberation(st)
+
+        # Stage 3: master LLM generation (Step 14).
+        self._stage_generate(st)
+
+        # Stage 4: rule-based + LLM self-check, coherence, grounding,
+        # tone floor.
+        self._stage_self_check(st)
+
+        # Stage 5: post-processing — memory writes, energy drain, debug
+        # trace (Steps 14b-15).
+        return self._stage_post_process(st)
+
+    # ------------------------------------------------------------------
+    # Stage 1: deterministic pre-pass
+    # ------------------------------------------------------------------
+
+    def _stage_pre_pass(self, st: _TurnState) -> PipelineResponse | None:
+        """Deterministic pre-pass (Steps 0-11b).
+
+        Perception, engine update, memory/profile retrieval, and derived
+        affect. Returns a short-circuit PipelineResponse for identity
+        questions, otherwise None.
+        """
+        debug = st.debug
+        timings = st.timings
+        user_message = st.user_message
+        user_id = st.user_id
         person = self.person_profiles.get_or_create(user_id)
-        _t_total = time.perf_counter()
-        timings: dict[str, float] = {}
+        st.t_total = time.perf_counter()
 
         # ---- Step 0: Auto-decay based on elapsed time ----
         now = time.time()
-        turn_started_at = now
-        if self._last_turn_time is not None:
-            elapsed = now - self._last_turn_time
+        st.turn_started_at = now
+        previous_update = self._last_state_update_at if self._last_state_update_at is not None else self._last_turn_time
+        if previous_update is not None:
+            elapsed = now - previous_update
             if elapsed > 0:
                 self.engine.decay(elapsed)
         self._last_turn_time = now
+        self._last_external_input_at = now
+        self._last_state_update_at = now
 
         # ---- Step 1: ANTICIPATION (0 LLM calls) ----
         _ts = time.perf_counter()
@@ -672,24 +492,43 @@ class CognitivePipeline:
         # ---- Step 2: CONTAGION (0 LLM calls — rule-based) ----
         _ts = time.perf_counter()
         detected = detect_emotion(user_message, llm_client=None)
+        st.detected = detected
         debug.detected_emotion = detected
-        self.engine.apply_contagion(detected.arousal, detected.valence, person.trust)
         timings["contagion"] = (time.perf_counter() - _ts) * 1000
 
         _ts = time.perf_counter()
         life_history_context = self._load_life_history_context(user_message)
+        st.life_history_context = life_history_context
         debug.life_history_context = life_history_context
         life_influence = derive_life_influence(life_history_context)
+        st.life_influence = life_influence
         debug.life_influence = life_influence
         timings["life_history_retrieval"] = (time.perf_counter() - _ts) * 1000
 
-        # ---- Step 3: APPRAISAL (0 LLM calls — deterministic) ----
+        # ---- Step 3: APPRAISAL (LLM read of social meaning; deterministic
+        # fallback when no backend / parse fails — keeps tests + offline path) ----
         _ts = time.perf_counter()
+        base_appraisal = (
+            appraise_message_llm(user_message, detected, self._llm_backend_fast,
+                                 recent_context=self._conversation_history,
+                                 agent_context=json.dumps({"state": self.engine.snapshot(), "identity": life_history_context}, ensure_ascii=False)
+                                 if self._research_mode else "")
+            if self._appraisal_use_llm
+            else None
+        )
+        if base_appraisal is None:
+            base_appraisal = appraise_message(user_message, detected)
+        if base_appraisal.perceived_emotion is not None:
+            detected = base_appraisal.perceived_emotion
+            st.detected = detected
+            debug.detected_emotion = detected
+        self.engine.apply_contagion(detected.arousal, detected.valence, person.trust)
         appraisal = appraise_with_life_history(
-            appraise_message(user_message, detected),
+            base_appraisal,
             user_message,
             life_history_context,
         )
+        st.appraisal = appraisal
         debug.appraisal_frame = appraisal
         timings["appraisal"] = (time.perf_counter() - _ts) * 1000
 
@@ -701,6 +540,7 @@ class CognitivePipeline:
         # ---- Step 5: Event classification + PSI engine update ----
         _ts = time.perf_counter()
         event = self._classify_event(user_message, detected, appraisal)
+        st.event = event
         is_spike = self.engine.update(event)
         debug.event_classified = event.event_type.value
         debug.event_intensity = event.intensity
@@ -739,14 +579,19 @@ class CognitivePipeline:
             source_person=user_id,
             limit=5,
         )
+        st.retrieved = retrieved
         debug.retrieved_memories = retrieved
         timings["memory_retrieval"] = (time.perf_counter() - _ts) * 1000
 
         # ---- Step 10: Profile lookup ----
         person = self.person_profiles.get_or_create(user_id)
+        st.person = person
         self_prof = self.self_profile.get_profile()
+        st.self_prof = self_prof
         active_topics = self._detect_topics(user_message)
+        st.active_topics = active_topics
         relationship_topic = active_topics[0].topic if active_topics else _relationship_topic_hint(user_message)
+        st.relationship_topic = relationship_topic
         _ts = time.perf_counter()
         relationship_context = self.relationship_memory.build_context(
             user_id,
@@ -756,6 +601,7 @@ class CognitivePipeline:
         )
         if relationship_context.is_empty():
             relationship_context = None
+        st.relationship_context = relationship_context
         debug.person_profile = person
         debug.self_profile = self_prof
         debug.topic_profiles = active_topics
@@ -769,22 +615,26 @@ class CognitivePipeline:
             topic=relationship_topic,
             limit=self._semantic_cfg.retrieval_limit,
         )
+        st.semantic_memories = semantic_memories
         debug.semantic_memories = semantic_memories
         timings["semantic_memory_retrieval"] = (time.perf_counter() - _ts) * 1000
 
         identity_response = self._identity_question_response(user_message)
-        if identity_response is not None:
+        if identity_response is not None and not self._research_mode:
             debug.response = identity_response
             debug.modulator_snapshot = self.engine.snapshot()
-            self._conversation_history.append({"role": "user", "content": user_message})
-            self._conversation_history.append({"role": "assistant", "content": identity_response})
+            self._append_conversation_history(
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": identity_response},
+            )
             self.last_intake_receipt = ""
-            timings["total"] = (time.perf_counter() - _t_total) * 1000
+            timings["total"] = (time.perf_counter() - st.t_total) * 1000
             debug.stage_timings_ms = timings
             return PipelineResponse(response=identity_response, debug=debug)
 
         _ts = time.perf_counter()
         skill_context = self._load_skill_context(user_message=user_message)
+        st.skill_context = skill_context
         debug.skill_context = skill_context
         timings["skill_context_retrieval"] = (time.perf_counter() - _ts) * 1000
 
@@ -803,6 +653,7 @@ class CognitivePipeline:
             for c in self_result.contradictions:
                 contradiction_flags.append(c.description)
 
+        st.contradiction_flags = contradiction_flags
         debug.contradiction_flags = contradiction_flags
 
         # Wire contradictions and topics as unresolved sources
@@ -822,12 +673,35 @@ class CognitivePipeline:
             state=self.engine.state,
             appraisal=appraisal,
             person=person,
+            agent_goal_comparison=appraisal.agent_goal_comparison if self._research_mode else None,
         )
-        agency_decision = decide_agency(affect_state, appraisal, person)
+        agency_decision = self._decide_agency(affect_state, appraisal, person)
+        debug.decision_snapshots.append({"stage": "before_action", "state": self.engine.snapshot(),
+                                         "affect": asdict(affect_state), "agency": asdict(agency_decision)})
+        st.affect_state = affect_state
+        st.agency_decision = agency_decision
         debug.affect_state = affect_state
         debug.agency_decision = agency_decision
         debug.autonomy_level = self._autonomy_level
         timings["affect_agency"] = (time.perf_counter() - _ts) * 1000
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Stage 2: gated deliberation
+    # ------------------------------------------------------------------
+
+    def _stage_deliberation(self, st: _TurnState) -> None:
+        """Gated deliberation (Steps 12-13b).
+
+        Inner dialogue, tool loop (with memory coupling), self-intent,
+        defense mechanisms, and response strategy selection.
+        """
+        debug = st.debug
+        timings = st.timings
+        user_message = st.user_message
+        person = st.person
+        detected = st.detected
 
         # ---- Step 12: INNER DIALOGUE (0-5 LLM calls; 0 for calm) ----
         _ts = time.perf_counter()
@@ -842,13 +716,13 @@ class CognitivePipeline:
                 user_message=user_message,
                 state=self.engine.state,
                 person=person,
-                self_profile=self_prof,
+                self_profile=st.self_prof,
                 values=self.values,
-                memories=retrieved,
+                memories=st.retrieved,
                 unresolved=self.engine.active_unresolved(),
                 contagion_summary=contagion_summary,
                 short_term_summary=short_term_summary,
-                current_event_intensity=event.intensity,
+                current_event_intensity=st.event.intensity,
             )
         else:
             # Disabled: produce an empty trace so downstream shape is stable.
@@ -860,6 +734,7 @@ class CognitivePipeline:
                 dominant_path="fast",
                 tension_level=0.0,
             )
+        st.dialogue_trace = dialogue_trace
         debug.dialogue_trace = dialogue_trace
         timings["inner_dialogue"] = (time.perf_counter() - _ts) * 1000
 
@@ -876,194 +751,18 @@ class CognitivePipeline:
             debug.unresolved_count = len(active_unresolved)
             debug.unresolved_items = list(active_unresolved)
 
-        decision_ctx = PipelineContext(
-            modulator_snapshot=self.engine.snapshot(),
-            soul_profile=self.soul,
-            person_profile=person,
-            self_profile=self_prof,
-            appraisal_frame=appraisal,
-            relationship_context=relationship_context,
-            topic_profiles=active_topics,
-            values=self.values,
-            retrieved_memories=retrieved,
-            semantic_memories=semantic_memories,
-            life_history_context=life_history_context,
-            skill_context=skill_context,
-            short_term_history=self.short_term.recent(5),
-            contradiction_flags=contradiction_flags,
-            contagion=detected,
-            affect_state=affect_state,
-            agency_decision=agency_decision,
-            autonomy_level=self._autonomy_level,
-            last_intake_receipt=self.last_intake_receipt,
-        )
+        decision_ctx = self._build_context(st)
         character_vector = assemble_character_vector(decision_ctx)
+        st.character_vector = character_vector
         debug.character_vector = character_vector
 
         # ---- Step 12b: TOOL LOOP (0+ tool executions; skipped if no executor) ----
-        tool_context_summary = ""
         if self._tool_executor is not None:
-            _ts_tool = time.perf_counter()
-            artifact_result = self._maybe_write_generated_artifact(
-                user_message=user_message,
-                person=person,
-                defense_active=False,
-                agency_decision=agency_decision,
-                autonomy_level=self._autonomy_level,
-            )
-            if artifact_result is not None:
-                tool_loop_result = artifact_result
-            elif self._tool_runner is not None:
-                tool_user_message = _message_for_model_tool_routing(
-                    user_message,
-                    self._conversation_history,
-                )
-                tool_loop_result = self._tool_runner.run_tool_loop(
-                    user_message=tool_user_message,
-                    state=self.engine.state,
-                    person=person,
-                    defense_active=False,  # defense hasn't fired yet
-                    engine=self.engine,
-                    active_plan=self._active_task_plan,
-                    agency_decision=agency_decision,
-                    autonomy_level=self._autonomy_level,
-                    life_influence=life_influence,
-                    character_vector=character_vector,
-                )
-            else:
-                tool_user_message = _message_for_tool_detection(
-                    user_message,
-                    self._conversation_history,
-                )
-                tool_loop_result = run_tool_loop(
-                    user_message=tool_user_message,
-                    state=self.engine.state,
-                    person=person,
-                    defense_active=False,  # defense hasn't fired yet
-                    executor=self._tool_executor,
-                    engine=self.engine,
-                    active_plan=self._active_task_plan,
-                    agency_decision=agency_decision,
-                    autonomy_level=self._autonomy_level,
-                    life_influence=life_influence,
-                    character_vector=character_vector,
-                )
-            debug.tool_trace = tool_loop_result.trace
-            debug.action_variables = tool_loop_result.action_variables
-            tool_context_summary = tool_loop_result.tool_context_summary
-            if tool_loop_result.life_influence_effects:
-                debug.life_influence_effects.update(tool_loop_result.life_influence_effects)
-            self._record_capability_gaps(tool_loop_result.capability_gaps)
-
-            # Track task trace and active plan (Phase 7)
-            task_trace = tool_loop_result.trace.task_trace
-            if task_trace and task_trace.plan:
-                debug.task_trace = task_trace
-                self._active_task_plan = task_trace.plan
-                # Clear terminal plans from session state
-                if task_trace.plan.is_terminal:
-                    self._active_task_plan = None
-
-            # ---- Step 12c: TOOL MEMORY COUPLING ----
-            trace = tool_loop_result.trace
-            if trace.executed_results:
-                effects = ToolMemoryEffects()
-                failure_count = 0
-
-                for result, observation in zip(trace.executed_results, trace.observations):
-                    cap = self._tool_executor._registry.get(result.tool_name)
-                    category = cap.category if cap else ToolCategory.READ_ONLY
-
-                    if not result.success:
-                        failure_count += 1
-
-                    # Short-term memory record
-                    tool_event = create_tool_event(result, observation, self.engine.state)
-                    self.short_term.record(tool_event, self.engine.state)
-                    effects.short_term_recorded = True
-
-                    operational_issue = create_operational_issue(result)
-                    if operational_issue is not None:
-                        effects.operational_issues.append(operational_issue)
-                        continue
-
-                    if result.success:
-                        self._resolve_matching_tool_unresolved(result.tool_name)
-
-                    # Long-term memory (salient episodes only)
-                    if is_salient_episode(result, observation, category, failure_count):
-                        lt_entry = create_long_term_entry(
-                            result, observation, category, user_id=user_id,
-                        )
-                        self.long_term.store(lt_entry)
-                        effects.long_term_written = True
-                        effects.long_term_summary = lt_entry.summary
-
-                    # Self-observations from tool behavior
-                    self_obs = derive_tool_self_observations(
-                        result, observation, category,
-                        tool_loop_result.action_variables,
-                        trace.final_decision,
-                        failure_count=failure_count,
-                    )
-                    for trait, value, context in self_obs:
-                        self.self_profile.record_behavior(trait, value, context)
-                        effects.self_observations.append(f"{trait}={value:.2f}")
-
-                    # Unresolved items from tool failures
-                    unresolved = create_tool_unresolved_item(
-                        result, observation, category, failure_count=failure_count,
-                    )
-                    if unresolved:
-                        self.engine.add_unresolved(unresolved)
-                        effects.unresolved_items_created.append(unresolved.id)
-
-                    # Trust delta from tool outcome
-                    trust_delta = compute_tool_trust_delta(
-                        result, category, tool_loop_result.action_variables,
-                    )
-                    if trust_delta != 0.0 and person:
-                        person.trust = max(0.0, min(1.0, person.trust + trust_delta))
-                        self.person_profiles.save(person)
-                        effects.trust_delta += trust_delta
-
-                debug.tool_memory_effects = effects
-
-            # ---- Step 12d: TASK MEMORY COUPLING (Phase 7) ----
-            if task_trace and task_trace.plan and task_trace.plan.is_terminal:
-                plan = task_trace.plan
-                effects = debug.tool_memory_effects or ToolMemoryEffects()
-
-                # Unresolved items from plan outcome
-                task_unresolved = create_task_unresolved_item(plan, task_trace)
-                if task_unresolved:
-                    self.engine.add_unresolved(task_unresolved)
-                    effects.unresolved_items_created.append(task_unresolved.id)
-
-                # Self-observations from multi-step behavior
-                task_obs = derive_task_self_observations(
-                    plan, task_trace, tool_loop_result.action_variables,
-                )
-                for trait, value, context in task_obs:
-                    self.self_profile.record_behavior(trait, value, context)
-                    effects.self_observations.append(f"{trait}={value:.2f}")
-
-                # Long-term memory for salient plans
-                task_lt = create_task_long_term_entry(
-                    plan, task_trace, user_id=user_id,
-                )
-                if task_lt:
-                    self.long_term.store(task_lt)
-                    effects.long_term_written = True
-                    effects.long_term_summary = task_lt.summary
-
-                debug.tool_memory_effects = effects
-
-            timings["tool_loop"] = (time.perf_counter() - _ts_tool) * 1000
+            self._run_tool_stage(st)
 
         # ---- Step 12e: SELF-INTENT (0-1 LLM calls) ----
         # Between the user-driven tool loop and the response generator, ask
-        # Nūr what (if anything) it wants to *do* this turn for its own
+        # OpenRook what (if anything) it wants to *do* this turn for its own
         # reasons. The full live executor catalog is in scope — there is
         # no allow-list and no per-turn cap. Malformed LLM output yields
         # an empty list (parser correctness, not a guardrail). Executed
@@ -1071,25 +770,357 @@ class CognitivePipeline:
         # so the grounding verifier sees them and the generator can
         # reference them honestly.
         if self._features.self_intent and self._tool_executor is not None:
-            _ts = time.perf_counter()
-            tool_catalog = self._build_tool_catalog_for_intent()
-            self_intents = propose_self_intents(
-                backend=self._llm_backend_fast,
-                modulator_snapshot=self.engine.snapshot(),
-                affect_state=affect_state,
-                agency_decision=agency_decision,
-                user_message=user_message,
-                candidate_response=dialogue_trace.final_candidate,
-                tool_catalog=tool_catalog,
+            self._run_self_intent_stage(st)
+
+        # ---- Step 13: DEFENSE MECHANISMS (0 LLM calls) ----
+        if self._features.defense:
+            filtered_output, defense = self.defense_mechanism.evaluate(
+                inner_dialogue_output=dialogue_trace.final_candidate,
+                modulator_state=self.engine.state,
+                self_profile=st.self_prof,
+                person_profile=person,
+                topic_profiles=st.active_topics,
             )
-            if self_intents:
-                if debug.tool_trace is None:
-                    debug.tool_trace = ToolTrace()
-                for intent in self_intents:
+        else:
+            # Disabled: candidate flows to generator unmodified, no activation recorded.
+            filtered_output = dialogue_trace.final_candidate
+            defense = None
+        st.filtered_output = filtered_output
+        st.defense = defense
+        debug.defense_activation = defense
+
+        # ---- Step 13b: RESPONSE STRATEGY (0 LLM calls) ----
+        strategy_trace = select_strategy_with_trace(
+            appraisal=st.appraisal,
+            modulators=self.engine.snapshot(),
+            person=person,
+            relationship=st.relationship_context,
+            life_influence=st.life_influence,
+        )
+        debug.strategy_trace = strategy_trace
+        strategy = ResponseStrategy(strategy_trace.selected)
+        st.strategy = strategy
+        debug.response_strategy = strategy.value
+        if strategy_trace.matched_rule.startswith("life_"):
+            debug.life_influence_effects["strategy_tiebreak_used"] = True
+
+    def _run_tool_stage(self, st: _TurnState) -> None:
+        """Tool loop + memory coupling (Steps 12b-12d).
+
+        Only called when a tool executor is attached.
+        """
+        debug = st.debug
+        user_message = st.user_message
+        user_id = st.user_id
+        person = st.person
+        agency_decision = st.agency_decision
+        life_influence = st.life_influence
+        character_vector = st.character_vector
+
+        _ts_tool = time.perf_counter()
+        artifact_result = self._maybe_write_generated_artifact(
+            user_message=user_message,
+            person=person,
+            defense_active=False,
+            agency_decision=agency_decision,
+            autonomy_level=self._autonomy_level,
+        )
+        if artifact_result is not None:
+            tool_loop_result = artifact_result
+        elif self._tool_runner is not None:
+            tool_user_message = _message_for_model_tool_routing(
+                user_message,
+                self._conversation_history,
+            )
+            tool_loop_result = self._tool_runner.run_tool_loop(
+                user_message=tool_user_message,
+                state=self.engine.state,
+                person=person,
+                defense_active=False,  # defense hasn't fired yet
+                engine=self.engine,
+                active_plan=self._active_task_plan,
+                agency_decision=agency_decision,
+                autonomy_level=self._autonomy_level,
+                life_influence=life_influence,
+                character_vector=character_vector,
+            )
+        else:
+            tool_user_message = _message_for_tool_detection(
+                user_message,
+                self._conversation_history,
+            )
+            tool_loop_result = run_tool_loop(
+                user_message=tool_user_message,
+                state=self.engine.state,
+                person=person,
+                defense_active=False,  # defense hasn't fired yet
+                executor=self._tool_executor,
+                engine=self.engine,
+                active_plan=self._active_task_plan,
+                agency_decision=agency_decision,
+                autonomy_level=self._autonomy_level,
+                life_influence=life_influence,
+                character_vector=character_vector,
+            )
+        debug.tool_trace = tool_loop_result.trace
+        debug.action_variables = tool_loop_result.action_variables
+        st.tool_context_summary = tool_loop_result.tool_context_summary
+        if tool_loop_result.life_influence_effects:
+            debug.life_influence_effects.update(tool_loop_result.life_influence_effects)
+        self._record_capability_gaps(tool_loop_result.capability_gaps)
+
+        # Track task trace and active plan (Phase 7)
+        task_trace = tool_loop_result.trace.task_trace
+        if task_trace and task_trace.plan:
+            debug.task_trace = task_trace
+            self._active_task_plan = task_trace.plan
+            # Clear terminal plans from session state
+            if task_trace.plan.is_terminal:
+                self._active_task_plan = None
+
+        # ---- Step 12c: TOOL MEMORY COUPLING ----
+        trace = tool_loop_result.trace
+        if trace.executed_results:
+            effects = ToolMemoryEffects()
+            failure_count = 0
+
+            for result, observation in zip(trace.executed_results, trace.observations):
+                cap = self._tool_executor.registry.get(result.tool_name)
+                category = cap.category if cap else ToolCategory.READ_ONLY
+
+                if not result.success:
+                    failure_count += 1
+
+                # Short-term memory record
+                tool_event = create_tool_event(result, observation, self.engine.state)
+                self.short_term.record(tool_event, self.engine.state)
+                effects.short_term_recorded = True
+
+                operational_issue = create_operational_issue(result)
+                if operational_issue is not None:
+                    effects.operational_issues.append(operational_issue)
+                    continue
+
+                if result.success:
+                    self._resolve_matching_tool_unresolved(result.tool_name)
+
+                # Long-term memory (salient episodes only)
+                if is_salient_episode(result, observation, category, failure_count):
+                    lt_entry = create_long_term_entry(
+                        result, observation, category, user_id=user_id,
+                    )
+                    self.long_term.store(lt_entry)
+                    effects.long_term_written = True
+                    effects.long_term_summary = lt_entry.summary
+
+                # Self-observations from tool behavior
+                self_obs = derive_tool_self_observations(
+                    result, observation, category,
+                    tool_loop_result.action_variables,
+                    trace.final_decision,
+                    failure_count=failure_count,
+                )
+                for trait, value, context in self_obs:
+                    self.self_profile.record_behavior(trait, value, context)
+                    effects.self_observations.append(f"{trait}={value:.2f}")
+
+                # Unresolved items from tool failures
+                unresolved = create_tool_unresolved_item(
+                    result, observation, category, failure_count=failure_count,
+                )
+                if unresolved:
+                    self.engine.add_unresolved(unresolved)
+                    effects.unresolved_items_created.append(unresolved.id)
+
+                # Trust delta from tool outcome
+                trust_delta = compute_tool_trust_delta(
+                    result, category, tool_loop_result.action_variables,
+                )
+                if trust_delta != 0.0 and person:
+                    person.trust = max(0.0, min(1.0, person.trust + trust_delta))
+                    self.person_profiles.save(person)
+                    effects.trust_delta += trust_delta
+
+            debug.tool_memory_effects = effects
+
+        # ---- Step 12d: TASK MEMORY COUPLING (Phase 7) ----
+        if task_trace and task_trace.plan and task_trace.plan.is_terminal:
+            plan = task_trace.plan
+            effects = debug.tool_memory_effects or ToolMemoryEffects()
+
+            # Unresolved items from plan outcome
+            task_unresolved = create_task_unresolved_item(plan, task_trace)
+            if task_unresolved:
+                self.engine.add_unresolved(task_unresolved)
+                effects.unresolved_items_created.append(task_unresolved.id)
+
+            # Self-observations from multi-step behavior
+            task_obs = derive_task_self_observations(
+                plan, task_trace, tool_loop_result.action_variables,
+            )
+            for trait, value, context in task_obs:
+                self.self_profile.record_behavior(trait, value, context)
+                effects.self_observations.append(f"{trait}={value:.2f}")
+
+            # Long-term memory for salient plans
+            task_lt = create_task_long_term_entry(
+                plan, task_trace, user_id=user_id,
+            )
+            if task_lt:
+                self.long_term.store(task_lt)
+                effects.long_term_written = True
+                effects.long_term_summary = task_lt.summary
+
+            debug.tool_memory_effects = effects
+
+        st.timings["tool_loop"] = (time.perf_counter() - _ts_tool) * 1000
+
+    def _run_self_intent_stage(self, st: _TurnState) -> None:
+        owner = self._research_owner
+        closed_loop = (
+            st.self_directed and owner is not None
+            and owner.config.research_execution_mode == "closed_loop"
+        )
+        if not closed_loop:
+            self._run_self_intent_step(st)
+            return
+        all_intents = []
+        stop_reason = "step_limit"
+        try:
+            for step_index in range(owner.config.research_max_steps_per_activation):
+                goal_id = owner.state.get("goal_id")
+                execution = owner.store.get("goal_execution", goal_id) if goal_id else None
+                if execution and execution["status"] != "active":
+                    stop_reason = "goal_" + execution["status"]
+                    break
+                if execution:
+                    from runtime.goal_execution import unresolved_dependencies
+
+                    if unresolved_dependencies(owner.store, execution):
+                        stop_reason = "dependencies_unverified"
+                        break
+                st.action_context = {
+                    **(st.action_context or {}),
+                    "goal_execution": execution,
+                    "recent_tool_receipts": owner.execution_receipts(goal_id=goal_id),
+                    **owner.outcome_context(goal_id),
+                    "uncertain_actions": [
+                        {key: item.get(key) for key in ("id", "tool", "status", "goal_id")}
+                        for item in owner.store.list("action")
+                        if item["status"] in {"started", "unknown"}
+                    ][-20:],
+                    "activation_step": step_index + 1,
+                    "remaining_steps": owner.config.research_max_steps_per_activation - step_index,
+                }
+                self._run_self_intent_step(st, max_actions=1)
+                all_intents.extend(st.debug.self_intents)
+                if not st.debug.self_intents:
+                    stop_reason = "subject_stopped"
+                    break
+        except Exception as error:
+            stop_reason = type(error).__name__
+            raise
+        finally:
+            st.debug.self_intents = all_intents
+            goal_id = owner.state.get("goal_id")
+            execution = owner.store.get("goal_execution", goal_id) if goal_id else None
+            if execution:
+                if stop_reason == "step_limit" and execution["status"] != "active":
+                    stop_reason = "goal_" + execution["status"]
+                execution["last_stop_reason"] = stop_reason
+                owner.store.put("goal_execution", goal_id, execution)
+            owner.store.observe("execution_yielded", {
+                "goal_id": goal_id, "reason": stop_reason, "actions": len(all_intents),
+            })
+
+    def _run_self_intent_step(self, st: _TurnState, *, max_actions: int | None = None) -> None:
+        """Self-intent proposal + execution (Step 12e).
+
+        Only called when the feature is enabled and a tool executor is
+        attached.
+        """
+        debug = st.debug
+        _ts = time.perf_counter()
+        tool_catalog = self._build_tool_catalog_for_intent()
+        task_only = (
+            self._research_owner is not None
+            and self._research_owner.config.research_context_mode == "task_only"
+        )
+        self_intents = propose_self_intents(
+            backend=self._llm_backend_fast,
+            modulator_snapshot={} if task_only else self.engine.snapshot(),
+            affect_state=None if task_only else st.affect_state,
+            agency_decision=st.agency_decision,
+            user_message=st.user_message,
+            candidate_response=st.dialogue_trace.final_candidate,
+            tool_catalog=tool_catalog,
+            strict=self._research_mode,
+            self_directed=(self._research_mode and st.self_directed and self._research_action_framing == "agent_owned"),
+            action_context=st.action_context,
+            max_actions=max_actions,
+            action_contract_version=(
+                self._research_owner.manifest.get("action_contract_version", 1)
+                if max_actions == 1 and self._research_owner is not None else 1
+            ),
+            contract_observer=(
+                self._research_owner.store.observe if self._research_owner is not None else None
+            ),
+            use_json_schema=(
+                self._research_owner.config.research_json_schema
+                if self._research_owner is not None else False
+            ),
+            agent_context=(format_character_vector_prompt(assemble_character_vector(self._build_context(st)))
+                           + "\nPersistent intentions:\n" + json.dumps(self._research_owner.store.list("goal"), ensure_ascii=False)
+                           if self._research_owner is not None and not task_only else ""),
+        )
+        if st.self_directed and self._research_owner is not None:
+            self._research_owner.store.observe(
+                "action_framing_exposed", {"framing": self._research_action_framing}
+            )
+        if self_intents:
+            if debug.tool_trace is None:
+                debug.tool_trace = ToolTrace()
+            for intent in self_intents:
+                blocked = self._self_intent_blocked_reason(intent.tool_name)
+                if max_actions is not None and blocked is None:
+                    capability = self._tool_executor.registry.get(intent.tool_name)
+                    uncertain = any(
+                        item["status"] in {"started", "unknown"}
+                        and (
+                            self._tool_executor.registry.get(item["tool"]) is None
+                            or self._tool_executor.registry.get(item["tool"]).category not in {
+                                ToolCategory.READ_ONLY, ToolCategory.COGNITIVE,
+                            }
+                        )
+                        for item in self._research_owner.store.list("action")
+                    )
+                    if uncertain and (
+                        capability is None or capability.category not in {
+                            ToolCategory.READ_ONLY, ToolCategory.COGNITIVE,
+                        }
+                    ):
+                        blocked = "An earlier effect is unknown; investigate before another mutation."
+                if blocked is not None:
+                    result = ToolResult(
+                        tool_name=intent.tool_name,
+                        success=False,
+                        output="",
+                        error=blocked,
+                    )
+                    summary = f"self-action blocked: {intent.tool_name}: {blocked}"
+                    if max_actions is not None:
+                        self._research_owner.observe_tool(
+                            "completed", intent.tool_name, intent.arguments, result,
+                        )
+                else:
                     try:
+                        if self._research_owner is not None:
+                            self._research_owner.state["action_origin"] = "self_intent"
                         result = self._tool_executor.execute(
                             intent.tool_name, intent.arguments,
                         )
+                    except (ResearchBudgetExceeded, ResearchStudyLimit):
+                        raise
                     except Exception as exc:
                         result = ToolResult(
                             tool_name=intent.tool_name,
@@ -1097,96 +1128,207 @@ class CognitivePipeline:
                             output="",
                             error=f"{type(exc).__name__}: {exc}",
                         )
-                    intent.result = result
-                    debug.tool_trace.executed_results.append(result)
-                    # Keep executed/observations aligned so downstream
-                    # consumers iterating in zip see matching shapes.
-                    debug.tool_trace.observations.append(
-                        ToolObservation(
-                            summary=f"self-action: {intent.tool_name}: "
-                                    f"{intent.rationale}",
-                        )
+                    finally:
+                        if self._research_owner is not None:
+                            self._research_owner.state.pop("action_origin", None)
+                    summary = (
+                        f"self-action: {intent.tool_name}: {intent.rationale}"
                     )
-            debug.self_intents = self_intents
-            timings["self_intent"] = (time.perf_counter() - _ts) * 1000
+                intent.result = result
+                if result.metadata.get("resource_stop"):
+                    raise ResearchStudyLimit(result.error)
+                if self._research_mode and not task_only and (self._research_owner is None or self._research_owner.config.research_appraisal_mode == "legacy"):
+                    capability = self._tool_executor.registry.get(intent.tool_name)
+                    observation = appraise_tool_result(result, capability.category if capability else ToolCategory.EXTERNAL_ACTION)
+                    for name, delta in observation.emotional_delta.items():
+                        current = getattr(self.engine.state, name)
+                        setattr(self.engine.state, name, max(0.0, min(1.0, current + delta)))
+                    self.short_term.record(EmotionalEvent(
+                        event_type=EventType.USER_MESSAGE, intensity=0.3, source="self_action",
+                        metadata={"tool_name": intent.tool_name, "success": result.success},
+                    ), self.engine.state)
+                debug.tool_trace.executed_results.append(result)
+                # Keep executed/observations aligned so downstream
+                # consumers iterating in zip see matching shapes.
+                debug.tool_trace.observations.append(
+                    ToolObservation(summary=summary)
+                )
+        debug.self_intents = self_intents
+        st.timings["self_intent"] = (time.perf_counter() - _ts) * 1000
 
-        # ---- Step 13: DEFENSE MECHANISMS (0 LLM calls) ----
-        if self._features.defense:
-            filtered_output, defense = self.defense_mechanism.evaluate(
-                inner_dialogue_output=dialogue_trace.final_candidate,
-                modulator_state=self.engine.state,
-                self_profile=self_prof,
-                person_profile=person,
-                topic_profiles=active_topics,
-            )
-        else:
-            # Disabled: candidate flows to generator unmodified, no activation recorded.
-            filtered_output = dialogue_trace.final_candidate
-            defense = None
-        debug.defense_activation = defense
-
-        # ---- Step 13b: RESPONSE STRATEGY (0 LLM calls) ----
-        strategy_trace = select_strategy_with_trace(
-            appraisal=appraisal,
-            modulators=self.engine.snapshot(),
-            person=person,
-            relationship=relationship_context,
-            life_influence=life_influence,
+    def process_autonomous(
+        self, purpose: str, goals: list[dict[str, Any]], *, decision: dict[str, Any] | None = None,
+    ) -> PipelineResponse:
+        user_id = getattr(self, "_research_user_id", "self")
+        self._ensure_bound_user(user_id)
+        debug = DebugState(user_message="[self-directed activity]", user_id=user_id)
+        st = _TurnState(user_message=purpose, user_id=user_id, debug=debug, self_directed=True)
+        task_only = (
+            self._research_owner is not None
+            and self._research_owner.config.research_context_mode == "task_only"
         )
-        debug.strategy_trace = strategy_trace
-        strategy = ResponseStrategy(strategy_trace.selected)
-        debug.response_strategy = strategy.value
-        if strategy_trace.matched_rule.startswith("life_"):
-            debug.life_influence_effects["strategy_tiebreak_used"] = True
+        if decision is not None and self._research_owner is not None:
+            st.action_context = {
+                "selected_intention": {
+                    key: ({"excerpt": value[:4000], "truncated": True}
+                          if isinstance(value, str) and len(value) > 4000 else value)
+                    for key, value in decision.items()
+                    if key in {"action", "reason", "goal_id", "goal", "goal_status",
+                               "question_id", "question_status", "message", "session_key"}
+                },
+                "recent_tool_receipts": self._research_owner.execution_receipts(),
+                **self._research_owner.outcome_context(),
+            }
+        st.person = self.person_profiles.get_or_create(user_id)
+        st.self_prof = self.self_profile.get_profile()
+        st.appraisal = AppraisalFrame()
+        st.affect_state = resolve_affect(text="", state=self.engine.state, appraisal=st.appraisal, person=st.person)
+        st.agency_decision = (None if self._research_mode and self._research_action_framing == "agent_owned"
+                              else AgencyDecision(action="comply", rationale="self-selected intention"))
+        st.life_history_context = {} if task_only else self._load_life_history_context(purpose)
+        st.dialogue_trace = InnerDialogueTrace(rounds=[], total_llm_calls=0, reached_deadlock=False, final_candidate=json.dumps({
+            "purpose": purpose, "goals": goals, "identity": st.life_history_context,
+            "memories": [] if task_only else [asdict(item) for item in self.semantic_memory.retrieve(purpose, source_person=user_id)],
+        }, ensure_ascii=False))
+        if self._features.self_intent and self._tool_executor is not None:
+            self._run_self_intent_stage(st)
+        debug.modulator_snapshot = self.engine.snapshot()
+        if self._research_owner is not None:
+            self._research_owner.store.observe("self_directed_outcome", asdict(debug))
+            if (
+                debug.tool_trace and debug.tool_trace.executed_results
+                and self._research_owner.config.research_context_mode == "full"
+            ):
+                learning_id = uuid.uuid4().hex
+                self._research_owner.store.put("learning", learning_id, {
+                    "id": learning_id, "status": "pending", "attempts": 0,
+                    "title": "Self-directed activity", "source_type": "self_action",
+                    "source_ref": learning_id, "text": json.dumps({
+                        "purpose": purpose, "results": [asdict(item) for item in debug.tool_trace.executed_results],
+                    }, ensure_ascii=False), "metadata": {
+                        "evidence_kind": "self_inference" if self._research_owner.outcome_learning is not None else "tool_receipts",
+                        "observation_source": "tool_receipts",
+                        "interpretation_source": "model_digest_not_independent_observation",
+                        "source_receipt_ids": [item["id"] for item in self._research_owner.execution_receipts()],
+                    },
+                })
+        return PipelineResponse(response="", debug=debug)
+
+    def _self_intent_blocked_reason(self, tool_name: str) -> str | None:
+        """Autonomy gate for self-intent executions; None means allowed.
+
+        ``self.*`` actions operate on OpenRook's own state and are the point of
+        this stage, so internal bookkeeping (READ_ONLY/COGNITIVE/WRITE to the
+        private self-log) stays ungated. But an explicit ``autonomy == "off"``
+        means "no outward action" — so EXTERNAL_ACTION self tools that reach
+        the network or the owner (``self.verify`` runs a web search,
+        ``self.alert_owner`` sends Telegram) are blocked when off, never
+        laundered through the self prefix. Any non-``self.*`` tool proposed
+        here is held to the same rule as user-driven intents:
+        READ_ONLY/COGNITIVE execute, everything else needs at least
+        ``autonomous`` autonomy. Without this, self-intent was a bypass
+        around the tool-loop arbiter (a live UAT run caught fs.write_file
+        executing under assisted autonomy through this path).
+        """
+        autonomy = (self._autonomy_level or "assisted").strip().lower()
+        capability = (
+            self._tool_executor.registry.get(tool_name)
+            if self._tool_executor is not None
+            else None
+        )
+
+        if tool_name.startswith("self."):
+            # Self-internal tools are the stage's purpose, but an explicit
+            # "off" still forbids outward (EXTERNAL_ACTION) self tools.
+            if autonomy != "off":
+                return None
+            category = capability.category if capability else ToolCategory.EXTERNAL_ACTION
+            if category == ToolCategory.EXTERNAL_ACTION:
+                return (
+                    f"Self-intent execution refused: outward {category.value} "
+                    f"tool {tool_name!r} is not allowed while tool autonomy is off."
+                )
+            return None
+
+        if autonomy == "off":
+            return "Self-intent execution refused: tool autonomy is off."
+        if autonomy in ("autonomous", "high_risk"):
+            return None
+        category = capability.category if capability else ToolCategory.EXTERNAL_ACTION
+        if category in (ToolCategory.READ_ONLY, ToolCategory.COGNITIVE):
+            return None
+        return (
+            f"Self-intent execution blocked: {category.value} tool "
+            f"{tool_name!r} requires confirmation under {autonomy} autonomy."
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 3: master LLM generation
+    # ------------------------------------------------------------------
+
+    def _stage_generate(self, st: _TurnState) -> None:
+        """Master LLM generation (Step 14)."""
+        st.affect_state = resolve_affect(text=st.user_message, state=self.engine.state,
+                                         appraisal=st.appraisal, person=st.person,
+                                         agent_goal_comparison=st.appraisal.agent_goal_comparison if self._research_mode else None)
+        st.agency_decision = self._decide_agency(st.affect_state, st.appraisal, st.person)
+        st.debug.decision_snapshots.append({"stage": "after_action", "state": self.engine.snapshot(),
+                                            "affect": asdict(st.affect_state), "agency": asdict(st.agency_decision)})
+        st.debug.affect_state = st.affect_state
+        st.debug.agency_decision = st.agency_decision
+        debug = st.debug
 
         # ---- Step 14: MASTER LLM (1 LLM call) ----
         _ts = time.perf_counter()
         defense_instruction = ""
-        if defense:
-            defense_instruction = DEFENSE_INSTRUCTIONS.get(defense.defense_type, "")
+        if st.defense:
+            defense_instruction = DEFENSE_INSTRUCTIONS.get(st.defense.defense_type, "")
 
-        ctx = PipelineContext(
-            modulator_snapshot=self.engine.snapshot(),
-            soul_profile=self.soul,
-            person_profile=person,
-            self_profile=self_prof,
-            appraisal_frame=appraisal,
-            relationship_context=relationship_context,
-            topic_profiles=active_topics,
-            values=self.values,
-            retrieved_memories=retrieved,
-            semantic_memories=semantic_memories,
-            life_history_context=life_history_context,
-            skill_context=skill_context,
-            short_term_history=self.short_term.recent(5),
-            contradiction_flags=contradiction_flags,
-            contagion=detected,
-            candidate_response=filtered_output,
+        ctx = self._build_context(
+            st,
+            candidate_response=st.filtered_output,
             defense_instruction=defense_instruction,
-            response_strategy=STRATEGY_INSTRUCTIONS.get(strategy, ""),
-            affect_state=affect_state,
-            agency_decision=agency_decision,
-            autonomy_level=self._autonomy_level,
-            tool_context_summary=tool_context_summary,
+            response_strategy=STRATEGY_INSTRUCTIONS.get(st.strategy, ""),
+            tool_context_summary=st.tool_context_summary,
             self_intents=list(debug.self_intents),
-            last_intake_receipt=self.last_intake_receipt,
         )
+        st.ctx = ctx
         character_vector = assemble_character_vector(ctx)
+        st.character_vector = character_vector
         debug.character_vector = character_vector
 
-        gen_result = self.generator.generate(
-            ctx, user_message, self._conversation_history
+        st.gen_result = self.generator.generate(
+            ctx, st.user_message, self._conversation_history
         )
+        debug.raw_response = st.gen_result.raw_response
+        debug.deliberate_silence = st.gen_result.deliberate_silence
         debug.generation_attempts = 1
-        debug.correction_note = gen_result.correction_note
-        timings["generator"] = (time.perf_counter() - _ts) * 1000
+        debug.correction_note = st.gen_result.correction_note
+        st.timings["generator"] = (time.perf_counter() - _ts) * 1000
+
+    # ------------------------------------------------------------------
+    # Stage 4: self-check
+    # ------------------------------------------------------------------
+
+    def _stage_self_check(self, st: _TurnState) -> None:
+        """Rule-based/LLM self-check, coherence, grounding, and tone floor."""
+        debug = st.debug
+        user_message = st.user_message
+        ctx = st.ctx
+        gen_result = st.gen_result
+        if self._research_mode:
+            debug.self_check_issues = [issue.message for issue in verify_response_grounding(
+                gen_result.response, tool_trace=debug.tool_trace,
+            )]
+            debug.self_check_passed = not debug.self_check_issues
+            return
 
         # ---- Self-check (rule-based default; LLM only when warranted) ----
         _ts = time.perf_counter()
         checker = (
             self._self_check_llm
             if self._should_use_llm_self_check(
-                event, contradiction_flags, dialogue_trace,
+                st.event, st.contradiction_flags, st.dialogue_trace,
             )
             else self.self_checker
         )
@@ -1197,10 +1339,10 @@ class CognitivePipeline:
         identity_candidate = ctx.candidate_response if _is_identity_question(user_message) else ""
         coherence_verdict = coherence_check(
             gen_result.response,
-            character_vector,
+            st.character_vector,
             min_score=self._coherence_min_score,
             identity_candidate=identity_candidate,
-            durable_evidence_after=turn_started_at,
+            durable_evidence_after=st.turn_started_at,
         )
         debug.coherence_verdict = coherence_verdict
         if coherence_verdict.misalignments:
@@ -1219,31 +1361,13 @@ class CognitivePipeline:
                 f"{ctx.candidate_response}\n\n"
                 f"[Self-check correction: {correction_note}]"
             ) if ctx.candidate_response else correction_note
-            correction_ctx = PipelineContext(
-                modulator_snapshot=ctx.modulator_snapshot,
-                soul_profile=ctx.soul_profile,
-                person_profile=ctx.person_profile,
-                self_profile=ctx.self_profile,
-                appraisal_frame=ctx.appraisal_frame,
-                relationship_context=ctx.relationship_context,
-                topic_profiles=ctx.topic_profiles,
-                values=ctx.values,
-                retrieved_memories=ctx.retrieved_memories,
-                semantic_memories=ctx.semantic_memories,
-                life_history_context=ctx.life_history_context,
-                skill_context=ctx.skill_context,
-                short_term_history=ctx.short_term_history,
-                contradiction_flags=ctx.contradiction_flags,
-                contagion=ctx.contagion,
+            # ``replace`` carries every other field over from the generation
+            # context unchanged; only the candidate (and a defensive copy of
+            # the self-intent list) differ.
+            correction_ctx = replace(
+                ctx,
                 candidate_response=correction_candidate,
-                defense_instruction=ctx.defense_instruction,
-                response_strategy=ctx.response_strategy,
-                affect_state=ctx.affect_state,
-                agency_decision=ctx.agency_decision,
-                autonomy_level=ctx.autonomy_level,
-                tool_context_summary=ctx.tool_context_summary,
                 self_intents=list(ctx.self_intents),
-                last_intake_receipt=ctx.last_intake_receipt,
             )
             gen_result = self.generator.generate(
                 correction_ctx,
@@ -1279,7 +1403,7 @@ class CognitivePipeline:
         tone_response, tone_issue = enforce_response_tone_floor(
             gen_result.response,
             user_message=user_message,
-            appraisal=appraisal,
+            appraisal=st.appraisal,
         )
         if tone_issue:
             gen_result.response = tone_response
@@ -1287,10 +1411,28 @@ class CognitivePipeline:
                 debug.self_check_issues.append(tone_issue)
             debug.correction_note = tone_issue
 
-        timings["self_check"] = (time.perf_counter() - _ts) * 1000
+        st.gen_result = gen_result
+        st.timings["self_check"] = (time.perf_counter() - _ts) * 1000
+
+    # ------------------------------------------------------------------
+    # Stage 5: post-processing
+    # ------------------------------------------------------------------
+
+    def _stage_post_process(self, st: _TurnState) -> PipelineResponse:
+        """Post-processing (Steps 14b-15).
+
+        Open-question surfacing, memory writes, energy drain, trust update,
+        self-observations, and the final debug trace.
+        """
+        debug = st.debug
+        timings = st.timings
+        user_message = st.user_message
+        user_id = st.user_id
+        event = st.event
+        gen_result = st.gen_result
 
         # ---- Step 14b: Surface an open question (Sprint 5 ask-user autonomy) ----
-        surfaced_question = self._maybe_surface_open_question()
+        surfaced_question = None if self._research_mode else self._maybe_surface_open_question()
         if surfaced_question is not None:
             follow_up = self._format_open_question_followup(surfaced_question)
             gen_result.response = (gen_result.response.rstrip() + "\n\n" + follow_up).strip()
@@ -1321,8 +1463,10 @@ class CognitivePipeline:
         debug.unresolved_items = list(final_unresolved)
 
         # Update conversation history
-        self._conversation_history.append({"role": "user", "content": user_message})
-        self._conversation_history.append({"role": "assistant", "content": gen_result.response})
+        self._append_conversation_history(
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": gen_result.response},
+        )
 
         # Record interaction for person profile
         self.person_profiles.record_interaction(
@@ -1338,7 +1482,8 @@ class CognitivePipeline:
 
         # ---- Self-observations (1-3 per turn) ----
         self._record_self_observations(
-            event, detected, appraisal, defense, self.engine.state, gen_result.response,
+            event, st.detected, st.appraisal, st.defense, self.engine.state,
+            gen_result.response,
         )
 
         # ---- Semantic memory writes ----
@@ -1346,32 +1491,102 @@ class CognitivePipeline:
             user_message=user_message,
             assistant_response=gen_result.response,
             user_id=user_id,
-            topic=relationship_topic,
+            topic=st.relationship_topic,
             event=event,
-            life_influence=life_influence,
+            life_influence=st.life_influence,
         )
         if salience_delta:
             debug.life_influence_effects["memory_salience_delta"] = salience_delta
 
         # ---- Persist defense event ----
-        if defense:
+        if st.defense:
             from core.types import DefenseEvent
             de = DefenseEvent(
                 timestamp=time.time(),
-                defense_type=defense.defense_type,
-                raw_intensity=defense.raw_intensity,
-                expressed_intensity=defense.expressed_intensity,
-                suppression_delta=defense.suppression_delta,
+                defense_type=st.defense.defense_type,
+                raw_intensity=st.defense.raw_intensity,
+                expressed_intensity=st.defense.expressed_intensity,
+                suppression_delta=st.defense.suppression_delta,
             )
             self.self_profile.persist_defense_event(de)
 
-        timings["total"] = (time.perf_counter() - _t_total) * 1000
+        timings["total"] = (time.perf_counter() - st.t_total) * 1000
         debug.stage_timings_ms = timings
 
         return PipelineResponse(response=gen_result.response, debug=debug)
 
+    # ------------------------------------------------------------------
+    # Turn-context construction
+    # ------------------------------------------------------------------
+
+    def _decide_agency(self, affect, appraisal, person) -> AgencyDecision:
+        if self._research_mode and appraisal.agency_action:
+            return AgencyDecision(action=appraisal.agency_action, rationale=appraisal.agency_reason)
+        return decide_agency(affect, appraisal, person)
+
+    def _build_context(
+        self,
+        st: _TurnState,
+        *,
+        candidate_response: str = "",
+        defense_instruction: str = "",
+        response_strategy: str = "",
+        tool_context_summary: str = "",
+        self_intents: list[SelfIntent] | None = None,
+    ) -> PipelineContext:
+        """Single construction point for the per-turn PipelineContext.
+
+        ``modulator_snapshot`` and ``short_term_history`` are sampled at
+        call time, so the deliberation-stage and generation-stage contexts
+        reflect the engine/memory state at their respective points in the
+        turn. New PipelineContext fields only need wiring here — the
+        correction retry derives its context via ``dataclasses.replace``.
+        """
+        return PipelineContext(
+            modulator_snapshot=self.engine.snapshot(),
+            soul_profile=self.soul,
+            person_profile=st.person,
+            self_profile=st.self_prof,
+            appraisal_frame=st.appraisal,
+            relationship_context=st.relationship_context,
+            topic_profiles=st.active_topics,
+            values=self.values,
+            retrieved_memories=st.retrieved,
+            semantic_memories=st.semantic_memories,
+            life_history_context=st.life_history_context,
+            skill_context=st.skill_context,
+            short_term_history=self.short_term.recent(5),
+            contradiction_flags=st.contradiction_flags,
+            contagion=st.detected,
+            candidate_response=candidate_response,
+            defense_instruction="" if self._research_mode else defense_instruction,
+            defense_state=asdict(st.defense) if self._research_mode and st.defense else {},
+            response_strategy="" if self._research_mode else response_strategy,
+            affect_state=st.affect_state,
+            agency_decision=st.agency_decision,
+            autonomy_level=self._autonomy_level,
+            tool_context_summary=tool_context_summary,
+            self_intents=list(self_intents) if self_intents else [],
+            last_intake_receipt=self.last_intake_receipt,
+            research_mode=self._research_mode,
+            generator_prompt=self._config.generator_prompt if self._research_mode else None,
+        )
+
+    def _append_conversation_history(self, *messages: dict[str, str]) -> None:
+        """Append turn messages, keeping the hot transcript bounded.
+
+        Every consumer reads a recent window (see _CONVERSATION_HISTORY_MAX),
+        so trimming the oldest entries is invisible to them. Session
+        export/persistence carries the same bounded hot transcript.
+        """
+        self._conversation_history.extend(messages)
+        if len(self._conversation_history) > _CONVERSATION_HISTORY_MAX:
+            del self._conversation_history[:-_CONVERSATION_HISTORY_MAX]
+
     def _apply_turn_state_bounds(self, event: EmotionalEvent, text: str) -> None:
         """Keep transient hostility from disabling task performance."""
+        if self._research_mode:
+            return
         state = self.engine.state
         if self._is_assistant_attack_event(event):
             state.arousal = min(state.arousal, 0.85)
@@ -1409,7 +1624,7 @@ class CognitivePipeline:
         """Evaluate proactive triggers and generate response if warranted.
 
         Called by the runtime when a session has been idle. Response is
-        generated through Nūr (defense + generator), not a hardcoded path.
+        generated through OpenRook (defense + generator), not a hardcoded path.
 
         Returns PipelineResponse if proactive action was taken, None otherwise.
         The debug state always contains the ProactiveTrace for observability.
@@ -1437,12 +1652,14 @@ class CognitivePipeline:
 
         # Elapsed decay — same as process() Step 0
         now = time.time()
-        idle_seconds = now - self._last_turn_time if self._last_turn_time else 0.0
-        if self._last_turn_time is not None:
-            elapsed = now - self._last_turn_time
+        last_input = self._last_external_input_at if self._last_external_input_at is not None else self._last_turn_time
+        idle_seconds = max(0.0, now - last_input) if last_input is not None else 0.0
+        previous_update = self._last_state_update_at if self._last_state_update_at is not None else self._last_turn_time
+        if previous_update is not None:
+            elapsed = now - previous_update
             if elapsed > 0:
                 self.engine.decay(elapsed)
-        self._last_turn_time = now
+        self._last_state_update_at = now
 
         # 1. Evaluate proactive triggers
         action, trace = evaluate_proactive(
@@ -1502,6 +1719,7 @@ class CognitivePipeline:
                     executor=self._tool_executor,
                     engine=self.engine,
                     active_plan=self._active_task_plan,
+                    autonomy_level=self._autonomy_level,
                     life_influence=life_influence,
                     character_vector=character_vector,
                 )
@@ -1538,7 +1756,7 @@ class CognitivePipeline:
         if defense:
             defense_instruction = DEFENSE_INSTRUCTIONS.get(defense.defense_type, "")
 
-        # 4. Generate through Nūr
+        # 4. Generate through OpenRook
         proactive_semantic = self.semantic_memory.retrieve(
             action.message,
             source_person=user_id,
@@ -1573,7 +1791,7 @@ class CognitivePipeline:
         # 5. Update proactive tracking
         self._proactive_count += 1
         self._last_proactive_at = time.time()
-        self._conversation_history.append({
+        self._append_conversation_history({
             "role": "assistant", "content": gen_result.response,
         })
 
@@ -1701,13 +1919,30 @@ class CognitivePipeline:
             if not os.path.exists(db_path):
                 return None
             with LifeHistoryStore(self._runtime_config) as store:
-                question = should_surface_question(
-                    store, budget=self.learning_budget,
-                )
+                # Prefer a persistent, per-user daily budget so the cap is real
+                # across concurrent sessions and restarts. Fall back to the
+                # in-memory budget when caps aren't introspectable (e.g. a
+                # non-LocalBudget implementation).
+                budget = self.learning_budget
+                scope_key = self._bound_user_id or "default"
+                if all(
+                    hasattr(self.learning_budget, attr)
+                    for attr in ("max_questions_per_day", "max_seconds_per_day", "period_seconds")
+                ):
+                    from runtime.learning_budget import PersistentLocalBudget
+
+                    budget = PersistentLocalBudget(
+                        store,
+                        scope_key,
+                        max_questions_per_day=self.learning_budget.max_questions_per_day,
+                        max_seconds_per_day=self.learning_budget.max_seconds_per_day,
+                        period_seconds=self.learning_budget.period_seconds,
+                    )
+                question = should_surface_question(store, budget=budget)
                 if question is None:
                     return None
                 store.mark_question_pursuing(int(question["id"]))
-                self.learning_budget.consume(questions=1)
+                budget.consume(questions=1)
                 return question
         except Exception as exc:
             log.warning("Open-question surfacing failed: %s", exc)
@@ -1798,7 +2033,7 @@ class CognitivePipeline:
         """Generate a requested artifact and persist it through fs.write_file."""
         if self._tool_executor is None:
             return None
-        if "fs.write_file" not in set(self._tool_executor._registry.names()):
+        if "fs.write_file" not in set(self._tool_executor.registry.names()):
             return None
         request = detect_artifact_write_request(user_message)
         if request is None:
@@ -1842,6 +2077,8 @@ class CognitivePipeline:
 
         try:
             draft = generate_artifact_draft(self._llm_backend_fast, request)
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
         except Exception as exc:
             failure = ToolResult(
                 tool_name="artifact.generate",
@@ -1946,13 +2183,22 @@ class CognitivePipeline:
         response: str,
     ) -> None:
         """Record 1-3 behavioral self-observations after each turn."""
+        if self._research_mode:
+            if self._research_owner is not None:
+                self._research_owner.store.observe("behavior_observation", {
+                    "response": response, "event": event.event_type.value,
+                    "latent_state": state.to_dict(), "source": "selected_expression",
+                })
+            if re.search(r"\bI (?:refuse|won't|will not)\b", response, re.IGNORECASE):
+                self.self_profile.record_behavior("expressed_refusal", 1.0, response[:200])
+            return
         observations: list[tuple[str, float, str]] = []  # (trait, value, context)
 
         # Blunt: high certainty + directive response
         if state.certainty > 0.7:
             observations.append(("blunt", state.certainty, "high_certainty"))
 
-        # Empathetic: user distress that is not aimed at Nūr
+        # Empathetic: user distress that is not aimed at OpenRook
         if detected.valence < 0.3 and not appraisal.targets_assistant:
             observations.append(("empathetic", 0.6, "negative_user_emotion"))
 
@@ -1995,17 +2241,18 @@ class CognitivePipeline:
         self, event: EmotionalEvent, text: str, user_id: str,
     ) -> None:
         """Check if the current event should create or resolve unresolved items."""
-        from datetime import datetime, timezone
+        from core.clock import datetime
+        from datetime import timezone
         from core.types import UnresolvedItem
-        import uuid
+        from core.clock import identifiers as uuid
 
-        if self._is_concrete_task_after_hostility(event, text) and self._has_bounded_hostility_unresolved():
+        if not self._research_mode and self._is_concrete_task_after_hostility(event, text) and self._has_bounded_hostility_unresolved():
             self._deescalate_hostility_unresolved()
             event.metadata["deescalated_hostility"] = True
 
         # Spike not processed → unresolved (resolution events are healing, not tension)
         if event.intensity >= SPIKE_INTENSITY_THRESHOLD and event.event_type != EventType.RESOLUTION:
-            if self._is_assistant_attack_event(event):
+            if not self._research_mode and self._is_assistant_attack_event(event):
                 self._add_or_reinforce_hostility_unresolved(event)
                 return
             self.engine.add_unresolved(UnresolvedItem(
@@ -2068,9 +2315,10 @@ class CognitivePipeline:
 
     def _add_or_reinforce_hostility_unresolved(self, event: EmotionalEvent) -> None:
         """Keep repeated verbal attacks as one bounded, fast-decaying loop."""
-        from datetime import datetime, timezone
+        from core.clock import datetime
+        from datetime import timezone
         from core.types import UnresolvedItem
-        import uuid
+        from core.clock import identifiers as uuid
 
         active = [
             item for item in self.engine.active_unresolved()
@@ -2115,8 +2363,9 @@ class CognitivePipeline:
         self, contradiction_flags: list[str], user_id: str,
     ) -> None:
         """Wire contradictions as unresolved items (deduplicated)."""
-        from datetime import datetime, timezone
-        import uuid
+        from core.clock import datetime
+        from datetime import timezone
+        from core.clock import identifiers as uuid
 
         active_descs = {i.description for i in self.engine.active_unresolved()}
         for flag in contradiction_flags:
@@ -2136,8 +2385,9 @@ class CognitivePipeline:
         self, topics: list[TopicProfile],
     ) -> None:
         """Wire avoidance/charged topics as unresolved items."""
-        from datetime import datetime, timezone
-        import uuid
+        from core.clock import datetime
+        from datetime import timezone
+        from core.clock import identifiers as uuid
 
         for tp in topics:
             if tp.avoidance or tp.emotional_charge >= 0.5:
@@ -2166,6 +2416,8 @@ class CognitivePipeline:
         pools held by the LLM backend and tool executor providers if they
         expose ``close()``.
         """
+        if self._research_owner is not None:
+            self._research_owner.detach(self)
         self.long_term.close()
         self.relationship_memory.close()
         self.semantic_memory.close()
@@ -2189,9 +2441,9 @@ class CognitivePipeline:
                     pass
         # Release HTTP connection pools on tool providers registered via the
         # ToolExecutor (e.g., RequestsWebProvider). The executor exposes any
-        # owned resources via ``_owned_resources``.
+        # owned resources via ``owned_resources``.
         if self._tool_executor is not None:
-            for resource in getattr(self._tool_executor, "_owned_resources", []):
+            for resource in self._tool_executor.owned_resources:
                 close = getattr(resource, "close", None)
                 if callable(close):
                     try:
@@ -2215,6 +2467,41 @@ class CognitivePipeline:
             if item.get("role") in {"user", "assistant"} and item.get("content")
         ]
 
+    def export_session_state(self) -> dict[str, Any]:
+        return {
+            "episode_id": self._episode_id, "short_term": self.short_term.export_state(),
+            "active_task_plan": asdict(self._active_task_plan) if self._active_task_plan else None,
+            "capability_gaps": self._capability_gaps, "last_turn_time": self._last_turn_time,
+            "last_state_update_at": self._last_state_update_at,
+            "last_external_input_at": self._last_external_input_at,
+            "pending_question_id": self._pending_surfaced_question_id,
+        }
+
+    def restore_session_state(self, state: dict[str, Any]) -> None:
+        if not state:
+            return
+        self._episode_id = str(state.get("episode_id") or self._episode_id)
+        self.short_term.restore_state(state.get("short_term", []))
+        self._capability_gaps = dict(state.get("capability_gaps", {}))
+        self._last_turn_time = state.get("last_turn_time")
+        self._last_external_input_at = state.get("last_external_input_at", self._last_turn_time)
+        self._last_state_update_at = state.get("last_state_update_at", self._last_turn_time)
+        self._pending_surfaced_question_id = state.get("pending_question_id")
+        plan = state.get("active_task_plan")
+        if plan:
+            plan = dict(plan)
+            steps = []
+            for item in plan.pop("steps"):
+                item = dict(item)
+                item["status"] = TaskStatus(item["status"])
+                if item.get("result"):
+                    item["result"] = ToolResult(**item["result"])
+                if item.get("observation"):
+                    item["observation"] = ToolObservation(**item["observation"])
+                steps.append(TaskStep(**item))
+            plan["status"] = TaskStatus(plan["status"])
+            self._active_task_plan = TaskPlan(steps=steps, **plan)
+
     def restore_state(
         self,
         snapshot: dict[str, float],
@@ -2237,6 +2524,8 @@ class CognitivePipeline:
 
     def end_session(self, user_id: str = "default") -> DigestedSession:
         """End a session: run digestion, clear short-term, apply energy drain."""
+        if self._research_owner is not None and not self._research_in_transition:
+            return self._research_owner.end_session(self, user_id)
         self._ensure_bound_user(user_id)
         result = digest_session(
             self.short_term,
@@ -2256,14 +2545,78 @@ class CognitivePipeline:
             0.0, self.engine.state.energy - result.energy_drain
         )
 
+        # Close the perception→identity loop: a salient session becomes
+        # autobiographical material the agent forms identity from.
+        if self._autobiographical_learning:
+            try:
+                self._maybe_ingest_autobiography(result, user_id)
+            except (ResearchBudgetExceeded, ResearchStudyLimit):
+                raise
+            except Exception as exc:  # never let learning break session teardown
+                log.warning("Autobiographical ingest failed: %s", exc)
+        self._episode_id = uuid.uuid4().hex
+
         # Clear conversation history and session-scoped state
         self._conversation_history.clear()
-        self._active_task_plan = None
+        if not self._research_mode:
+            self._active_task_plan = None
         self._proactive_count = 0
         self._last_proactive_at = None
-        self._capability_gaps.clear()
+        if not self._research_mode:
+            self._capability_gaps.clear()
 
         return result
+
+    # Sessions whose peak emotional intensity / trust movement clear these
+    # gates are worth remembering as identity; everything quieter is not.
+    _AUTOBIO_PEAK_INTENSITY = 0.6
+    _AUTOBIO_TRUST_DELTA = 0.08
+
+    def _is_session_salient(self, result: DigestedSession) -> bool:
+        """A session earns identity ingestion only if it was emotionally real."""
+        return bool(
+            result.spike_events
+            or result.peak_intensity >= self._AUTOBIO_PEAK_INTENSITY
+            or abs(result.trust_delta) >= self._AUTOBIO_TRUST_DELTA
+            or result.unresolved_flags
+        )
+
+    def _maybe_ingest_autobiography(self, result: DigestedSession, user_id: str) -> None:
+        """Digest a salient session's distilled summary into the identity ledger.
+
+        Gated by salience (no small-talk), uses the distilled summary (not the
+        raw transcript), and ingests under ``conversation_learning_text`` — the
+        lowest source-openness tier — so beliefs move slowly and prompt-injection
+        text is sanitized before it can touch identity. Drift is bounded by the
+        salience gate + low influence weight + per-turn metabolism decay.
+        """
+        if self._runtime_config is None:
+            return
+        summary = (result.summary or "").strip()
+        if not summary or not self._is_session_salient(result):
+            return
+        if self._research_owner is not None:
+            self._research_owner.queue_autobiography(self._episode_id, result, user_id)
+            return
+        from runtime.life_history import LifeHistoryStore
+        agent_name = getattr(getattr(self._runtime_config, "soul", None), "name", "") or "OpenRook"
+        arc = result.emotional_arc_label or "a conversation"
+        with LifeHistoryStore(self._runtime_config) as store:
+            store.ingest_external_text(
+                title=f"Lived experience with {user_id}: {arc}"[:180],
+                text=summary,
+                source_type="conversation_learning_text",
+                source_ref=f"session:{user_id}",
+                participants=[agent_name, user_id],
+                llm_client=self._llm_backend,
+                metadata={
+                    "input_mode": "autobiographical",
+                    "arc": arc,
+                    "peak_intensity": round(result.peak_intensity, 3),
+                    "trust_delta": round(result.trust_delta, 3),
+                    "topics": result.topics[:8],
+                },
+            )
 
     def apply_rest(self, hours: float) -> None:
         """Simulate time passing between sessions. Recovers energy, decays modulators."""
@@ -2350,6 +2703,19 @@ class CognitivePipeline:
         """Rule-based fallback for event classification."""
         lower = text.lower()
         metadata = self._appraisal_metadata(appraisal)
+        if appraisal.provenance == "model":
+            semantic_types = {
+                "apology": EventType.RESOLUTION, "gratitude": EventType.POSITIVE_FEEDBACK,
+                "connection": EventType.WARMTH, "attack": EventType.CONFLICT,
+                "complaint": EventType.NEGATIVE_FEEDBACK,
+            }
+            event_type = EventType(appraisal.event_type) if appraisal.event_type else semantic_types.get(appraisal.social_move, EventType.USER_MESSAGE)
+            if not appraisal.targets_assistant and event_type in {EventType.CONFLICT, EventType.BETRAYAL, EventType.NEGATIVE_FEEDBACK}:
+                event_type = EventType.USER_MESSAGE
+            intensity = appraisal.event_intensity if appraisal.event_type else max(
+                0.1, detected.intensity, appraisal.blame * 0.8, appraisal.affiliation_bid * 0.6,
+            )
+            return EmotionalEvent(event_type=event_type, intensity=intensity, source="user", metadata=metadata)
 
         if appraisal.social_move == "apology":
             return EmotionalEvent(
@@ -2375,7 +2741,7 @@ class CognitivePipeline:
                 metadata=metadata,
             )
 
-        # Betrayal / deception only counts as relational betrayal when aimed at Nūr.
+        # Betrayal / deception only counts as relational betrayal when aimed at OpenRook.
         if appraisal.targets_assistant and any(w in lower for w in ["betray", "lied", "deceived", "cheated"]):
             return EmotionalEvent(
                 event_type=EventType.BETRAYAL,
@@ -2384,7 +2750,7 @@ class CognitivePipeline:
                 metadata=metadata,
             )
 
-        # Direct conflict with Nūr, not general distress elsewhere.
+        # Direct conflict with OpenRook, not general distress elsewhere.
         if appraisal.targets_assistant and any(
             w in lower
             for w in [
@@ -2456,7 +2822,7 @@ class CognitivePipeline:
                 metadata=metadata,
             )
 
-        # Positive feedback remains relational only when directed at Nūr.
+        # Positive feedback remains relational only when directed at OpenRook.
         _positive_words = [
             "thank", "grateful", "appreciate", "love", "great job",
             "wonderful", "amazing", "awesome", "fantastic", "excellent",
@@ -2471,7 +2837,7 @@ class CognitivePipeline:
                 metadata=metadata,
             )
 
-        # General negativity should only damage the relationship when aimed at Nūr.
+        # General negativity should only damage the relationship when aimed at OpenRook.
         if appraisal.targets_assistant and any(w in lower for w in ["wrong", "bad", "terrible", "awful", "disappointed"]):
             return EmotionalEvent(
                 event_type=EventType.NEGATIVE_FEEDBACK,
@@ -2598,10 +2964,18 @@ class CognitivePipeline:
 
     @staticmethod
     def _event_valence(event: EmotionalEvent) -> float:
-        """Map event to signed valence for trust math."""
+        """Map event to signed valence for trust math.
+
+        ``targets_assistant`` defaults to True to match
+        :func:`core.memory.digestion._event_valence` — the authoritative
+        relationship-trust writer. The two must agree on the default or the
+        same event scores opposite trust deltas on the spike vs. digested
+        paths (a 1:1 emotional event targets the assistant unless marked
+        otherwise).
+        """
         positive = {EventType.POSITIVE_FEEDBACK, EventType.RESOLUTION, EventType.WARMTH}
         negative = {EventType.NEGATIVE_FEEDBACK, EventType.CONFLICT, EventType.BETRAYAL}
-        targets_assistant = bool(event.metadata.get("targets_assistant"))
+        targets_assistant = bool(event.metadata.get("targets_assistant", True))
         if event.event_type in positive:
             if not targets_assistant:
                 return 0.0

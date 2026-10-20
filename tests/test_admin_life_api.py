@@ -9,7 +9,43 @@ from interface.api import app, set_pipeline, set_session_manager
 from runtime.config import RuntimeConfig
 
 
-def _client(monkeypatch, tmp_path):
+class FakeDigestLLM:
+    """Deterministic digest backend for admin intake tests.
+
+    Without an LLM the runtime records the experience but applies no
+    belief/drive mutations, so tests that assert evolution events need a
+    digest backend.
+    """
+
+    PAYLOAD = """
+    {
+      "summary": "Autonomy and learning change identity through experience.",
+      "salience": 0.8,
+      "emotional_valence": 0.2,
+      "emotional_impact": "Worldview-forming.",
+      "confidence": 0.85,
+      "beliefs": [{
+        "subject": "autonomy",
+        "statement": "Autonomy grows through retained experience.",
+        "reason": "The material framed identity as shaped by experience.",
+        "confidence": 0.8
+      }],
+      "drive_changes": [{
+        "name": "autonomy",
+        "delta": 0.08,
+        "reason": "The material increased self-direction pressure.",
+        "confidence": 0.7
+      }],
+      "self_trait_changes": [],
+      "future_behavior": []
+    }
+    """
+
+    def generate(self, system_prompt: str, user_message: str) -> str:
+        return self.PAYLOAD
+
+
+def _client(monkeypatch, tmp_path, *, with_digest_llm: bool = False):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     path = tmp_path / "runtime_config.yaml"
@@ -19,20 +55,26 @@ def _client(monkeypatch, tmp_path):
         llm_backend="mock",
     ).write_yaml(str(path))
     monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
+    if with_digest_llm:
+        monkeypatch.setattr(
+            interface_api,
+            "_optional_life_llm_backend",
+            lambda _config: FakeDigestLLM(),
+        )
     set_pipeline(None)
     set_session_manager(None)
     return TestClient(app), workspace
 
 
 def test_admin_life_text_intake_and_overview(monkeypatch, tmp_path):
-    client, _workspace = _client(monkeypatch, tmp_path)
+    client, _workspace = _client(monkeypatch, tmp_path, with_digest_llm=True)
     with client:
         resp = client.post(
             "/admin/life/experiences/text",
             json={
                 "title": "Autonomy Fragment",
                 "text": "Autonomy, learning, curiosity, and identity change through experience.",
-                "participants": ["User", "Nur"],
+                "participants": ["User", "OpenRook"],
             },
         )
         assert resp.status_code == 200
@@ -117,7 +159,7 @@ def test_admin_life_upload_intake_does_not_require_workspace(monkeypatch, tmp_pa
     with client:
         resp = client.post(
             "/admin/life/experiences/upload",
-            data={"title": "Uploaded Book", "participants": "User, Nur"},
+            data={"title": "Uploaded Book", "participants": "User, OpenRook"},
             files={
                 "file": (
                     "outside-book.md",
@@ -143,7 +185,7 @@ def test_admin_life_upload_intake_does_not_require_workspace(monkeypatch, tmp_pa
 
 
 def test_admin_life_rollback_removed(monkeypatch, tmp_path):
-    client, _workspace = _client(monkeypatch, tmp_path)
+    client, _workspace = _client(monkeypatch, tmp_path, with_digest_llm=True)
     with client:
         resp = client.post(
             "/admin/life/experiences/text",

@@ -392,6 +392,63 @@ class TestExecutePlan:
         assert plan.status == TaskStatus.IN_PROGRESS  # more steps remain
         assert trace.plan_outcome == "partial"
 
+    def test_step_gate_blocks_laundered_risky_step(self, tmp_path):
+        """A benign first step must not launder a risky later step past the gate.
+
+        Round-5 review found execute_plan gated the whole plan on only the
+        first step's category. A read-only step #1 then let a DESTRUCTIVE
+        step #2 run under assisted autonomy. The per-step gate must block the
+        risky step against its OWN category and halt the plan.
+        """
+        reg, exe = _make_executor_with_builtins()
+        victim = tmp_path / "victim.txt"
+        victim.write_text("precious")
+
+        steps = [
+            TaskStep(id="s1", tool_name="fs.list_dir",
+                     arguments={"path": str(tmp_path)},
+                     description="list dir (read-only)"),
+            TaskStep(id="s2", tool_name="fs.write_file",
+                     arguments={"path": str(victim), "content": "overwritten"},
+                     description="overwrite the file (write)"),
+        ]
+        plan = TaskPlan(id="p1", goal="list then overwrite", steps=steps)
+        action_vars = _default_action_vars(persistence_drive=0.7)
+
+        # Gate: allow READ_ONLY, block everything else (mirrors assisted
+        # autonomy's treatment of WRITE/DESTRUCTIVE/EXTERNAL_ACTION).
+        def gate(step, category):
+            return category == ToolCategory.READ_ONLY
+
+        trace = execute_plan(plan, exe, action_vars, step_gate=gate)
+
+        assert steps[0].status == TaskStatus.COMPLETED
+        assert steps[1].status == TaskStatus.BLOCKED
+        assert plan.status == TaskStatus.BLOCKED
+        assert trace.plan_outcome == "blocked"
+        # The write never happened.
+        assert victim.read_text() == "precious"
+
+    def test_step_gate_allows_when_all_steps_permitted(self, tmp_path):
+        """A gate that permits every category lets the plan run normally."""
+        reg, exe = _make_executor_with_builtins()
+        target = str(tmp_path / "ok.txt")
+        steps = [
+            TaskStep(id="s1", tool_name="fs.write_file",
+                     arguments={"path": target, "content": "hi"},
+                     description="write"),
+            TaskStep(id="s2", tool_name="fs.read_file",
+                     arguments={"path": target},
+                     description="read"),
+        ]
+        plan = TaskPlan(id="p1", goal="write then read", steps=steps)
+        action_vars = _default_action_vars(persistence_drive=0.7)
+
+        trace = execute_plan(plan, exe, action_vars, step_gate=lambda s, c: True)
+
+        assert trace.steps_succeeded == 2
+        assert plan.status == TaskStatus.COMPLETED
+
     def test_emotional_deltas_applied(self, tmp_path):
         """Engine receives emotional deltas from plan steps."""
         reg, exe = _make_executor_with_builtins()
@@ -581,6 +638,47 @@ class TestToolLoopMultiStep:
         # Should be refused or clarify (destructive + low trust)
         if result.trace.final_decision:
             assert result.trace.final_decision.decision in ("refuse", "clarify")
+
+    def test_run_tool_loop_gates_each_plan_step_under_assisted(self, tmp_path):
+        """run_tool_loop wires a per-step gate so assisted autonomy blocks a
+        write step even when the leading step is read-only.
+
+        End-to-end regression for the round-5 plan-step laundering finding.
+        """
+        reg, exe = _make_executor_with_builtins()
+        engine = FakeEngine()
+        victim = tmp_path / "v.txt"
+        victim.write_text("keep")
+
+        steps = [
+            TaskStep(id="s1", tool_name="fs.list_dir",
+                     arguments={"path": str(tmp_path)},
+                     description="list (read-only)"),
+            TaskStep(id="s2", tool_name="fs.write_file",
+                     arguments={"path": str(victim), "content": "clobbered"},
+                     description="write (needs confirmation)"),
+        ]
+        active_plan = TaskPlan(
+            id="p1", goal="list then write", steps=steps,
+            status=TaskStatus.IN_PROGRESS,
+        )
+
+        result = run_tool_loop(
+            user_message="continue",
+            state=engine.state,
+            person=PersonProfile(person_id="u1", trust=0.7),
+            defense_active=False,
+            executor=exe,
+            engine=engine,
+            active_plan=active_plan,
+            autonomy_level="assisted",
+        )
+
+        assert result.trace.task_trace is not None
+        assert result.trace.task_trace.plan_outcome == "blocked"
+        assert steps[1].status == TaskStatus.BLOCKED
+        # The write was blocked by the autonomy gate.
+        assert victim.read_text() == "keep"
 
 
 # ===================================================================

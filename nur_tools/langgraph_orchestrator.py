@@ -1,6 +1,6 @@
-"""LangGraph-backed tool orchestration for Nūr.
+"""LangGraph-backed tool orchestration for OpenRook.
 
-This adapter keeps Nūr's existing tool registry/executor, appraisal, traces,
+This adapter keeps OpenRook's existing tool registry/executor, appraisal, traces,
 and memory coupling, but delegates tool selection/execution flow to a
 LangGraph tool-calling graph when configured.
 """
@@ -20,10 +20,12 @@ from core.dual_process.tool_loop import (
     DEFAULT_MAX_EXECUTIONS,
     ToolLoopResult,
     _apply_emotional_deltas,
+    _build_step_gate,
     _summarize_for_generator,
     make_tool_decision,
     run_tool_loop as run_heuristic_tool_loop,
 )
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.life_influence import (
     LifeInfluence,
     action_variable_deltas,
@@ -50,15 +52,37 @@ from core.types import (
     ToolResult,
     ToolTrace,
 )
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.tools import StructuredTool
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode
 from nur_tools.executor import ToolExecutor
 
+# langgraph/langchain are an optional extra: this module must import cleanly
+# without them so `import nur_tools.langgraph_orchestrator` (and the test
+# collector) never hard-requires the dependency. The runner constructor
+# raises a clear ImportError with install guidance when they are absent.
+try:
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_core.tools import StructuredTool
+    from langchain_openai import ChatOpenAI
+    from langgraph.graph import END, START, MessagesState, StateGraph
+    from langgraph.prebuilt import ToolNode
 
-_TOOL_SYSTEM_PROMPT = """You are Nūr's tool router.
+    _LANGGRAPH_IMPORT_ERROR: Exception | None = None
+except ImportError as _exc:  # pragma: no cover - exercised via tests' sys.modules patching
+    AIMessage = HumanMessage = SystemMessage = None  # type: ignore[assignment]
+    StructuredTool = ChatOpenAI = None  # type: ignore[assignment]
+    END = START = MessagesState = StateGraph = ToolNode = None  # type: ignore[assignment]
+    _LANGGRAPH_IMPORT_ERROR = _exc
+
+
+def _require_langgraph() -> None:
+    """Fail loud (and helpfully) when the optional langgraph extra is missing."""
+    if _LANGGRAPH_IMPORT_ERROR is not None:
+        raise ImportError(
+            "LangGraph tool orchestration requires the optional 'langgraph' "
+            "extra. Install it with: pip install openrook[langgraph]"
+        ) from _LANGGRAPH_IMPORT_ERROR
+
+
+_TOOL_SYSTEM_PROMPT = """You are OpenRook's tool router.
 
 Use the provided tools when the user asks to inspect, search, fetch, run,
 check, calculate, list, read, write, or act on external state. Do not answer
@@ -77,7 +101,7 @@ Do not claim cleanup, deletion, or state changes unless a tool call actually
 performed that action.
 """
 
-_STRUCTURED_ROUTER_SYSTEM_PROMPT = """You are Nūr's structured tool router.
+_STRUCTURED_ROUTER_SYSTEM_PROMPT = """You are OpenRook's structured tool router.
 
 Return ONLY one JSON object:
 {"tool_name": string|null, "arguments": object, "confidence": number, "rationale": string}
@@ -113,7 +137,7 @@ _ROUTER_PARSE_FAILED = object()
 
 
 class LangGraphToolRunner:
-    """Run Nūr tools through a LangGraph tool-calling loop."""
+    """Run OpenRook tools through a LangGraph tool-calling loop."""
 
     def __init__(
         self,
@@ -126,6 +150,7 @@ class LangGraphToolRunner:
         fallback_to_heuristic: bool = False,
         chat_model: Any | None = None,
     ) -> None:
+        _require_langgraph()
         if chat_model is None:
             if not base_url:
                 raise ValueError("LangGraph tool runner requires llm_base_url")
@@ -172,7 +197,7 @@ class LangGraphToolRunner:
         life_effects: dict[str, float] = {}
 
         # Preserve the existing explicit task-plan state machine. LangGraph
-        # handles fresh multi-tool requests, but active plans are Nūr state.
+        # handles fresh multi-tool requests, but active plans are OpenRook state.
         if active_plan and not active_plan.is_terminal:
             if is_status_request(user_message):
                 return ToolLoopResult(
@@ -181,8 +206,14 @@ class LangGraphToolRunner:
                     tool_context_summary=summarize_plan_status(active_plan),
                 )
             if is_continue_request(user_message):
+                # Gate every step against its own category so plan
+                # continuation cannot launder a risky step past the autonomy
+                # arbiter (parity with the heuristic and native loops).
                 task_trace = execute_plan(
                     active_plan, self._executor, action_vars, engine=engine,
+                    step_gate=_build_step_gate(
+                        action_vars, trust, agency_decision, autonomy_level,
+                    ),
                 )
                 executed = [
                     step.result for step in active_plan.steps if step.result is not None
@@ -226,6 +257,8 @@ class LangGraphToolRunner:
                 {"messages": [HumanMessage(content=user_message)]},
                 config={"recursion_limit": max(3, min(max_executions, hard_cap) * 2 + 3)},
             )
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
         except Exception as exc:
             if self._fallback_to_heuristic:
                 return self._run_heuristic(
@@ -288,7 +321,7 @@ class LangGraphToolRunner:
             self._appraise_and_apply(result, engine) for result in executed_results
         ]
         if proposed:
-            capability = self._executor._registry.get(proposed[0].tool_name)
+            capability = self._executor.registry.get(proposed[0].tool_name)
             category = capability.category if capability else ToolCategory.READ_ONLY
             effective_action_vars = _with_life_influence(
                 action_vars,
@@ -377,7 +410,7 @@ class LangGraphToolRunner:
         character_vector: CharacterVector | None = None,
     ) -> list[Any]:
         capabilities: list[Any] = []
-        for capability in self._executor._registry.list_tools():
+        for capability in self._executor.registry.list_tools():
             adjusted_action_vars = _with_life_influence(
                 action_vars,
                 life_influence,
@@ -408,12 +441,12 @@ class LangGraphToolRunner:
         return capabilities
 
     def _to_langchain_tool(self, original_name: str) -> StructuredTool:
-        capability = self._executor._registry.get(original_name)
+        capability = self._executor.registry.get(original_name)
         if capability is None:
             raise ValueError(f"Unknown tool: {original_name}")
         safe_name = self._safe_tool_name(original_name)
         description = (
-            f"{capability.description}. Nūr tool name: {original_name}. "
+            f"{capability.description}. OpenRook tool name: {original_name}. "
             f"Category: {capability.category.value}."
         )
         args_schema = _pydantic_args_schema(safe_name, capability.arg_schema)
@@ -512,7 +545,7 @@ class LangGraphToolRunner:
             )
 
         tool_name, arguments, confidence, rationale = route
-        capability = self._executor._registry.get(tool_name)
+        capability = self._executor.registry.get(tool_name)
         if capability is None:
             return None
         adjusted_action_vars = _with_life_influence(
@@ -603,12 +636,16 @@ class LangGraphToolRunner:
             try:
                 response = bind(response_format={"type": "json_object"}).invoke(messages)
                 data = _parse_router_json(_message_text(response))
+            except (ResearchBudgetExceeded, ResearchStudyLimit):
+                raise
             except Exception:
                 data = None
 
         if data is None:
             try:
                 response = self._base_model.invoke(messages)
+            except (ResearchBudgetExceeded, ResearchStudyLimit):
+                raise
             except Exception:
                 return _ROUTER_PARSE_FAILED
             data = _parse_router_json(_message_text(response))
@@ -631,7 +668,7 @@ class LangGraphToolRunner:
         return tool_name, dict(arguments_raw), confidence, rationale
 
     def _appraise_and_apply(self, result: ToolResult, engine: Any) -> ToolObservation:
-        capability = self._executor._registry.get(result.tool_name)
+        capability = self._executor.registry.get(result.tool_name)
         category = capability.category if capability else ToolCategory.READ_ONLY
         observation = appraise_tool_result(result, category)
         _apply_emotional_deltas(engine, observation)

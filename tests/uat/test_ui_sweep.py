@@ -206,7 +206,7 @@ def test_admin_workspace_life_file_upload_via_file_input(uat_server, page, tmp_p
     # Set file first, then fill metadata — ingest does NOT auto-fire on change.
     page.set_input_files("#lifeUploadFile", str(upload))
     page.fill("#lifeFileTitle", "UAT Sweep Upload")
-    page.fill("#lifeUploadParticipants", "operator, Nur")
+    page.fill("#lifeUploadParticipants", "operator, OpenRook")
     page.click("#ingestLifeFileBtn")
 
     # Live LLM digest — generous timeout for codex.

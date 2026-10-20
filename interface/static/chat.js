@@ -17,7 +17,7 @@ const userId = getOrCreateId('nur_user_id', localStorage);
 const chatId = getOrCreateId('nur_chat_id', sessionStorage);
 let sending = false;
 let lastEmotion = 'neutral';
-let agentName = 'Nūr';
+let agentName = 'OpenRook';
 let lastExplanation = null;
 let lastDebugPayload = null;
 const ChatState = createSurfaceState({ sending: false, messageCount: 0 }, {
@@ -65,13 +65,13 @@ async function authedFetch(url, opts) {
 }
 
 // Prompt the operator for a bearer token when /chat or another endpoint
-// 401s. Only used reactively (not on page load), since the default Nūr
+// 401s. Only used reactively (not on page load), since the default OpenRook
 // posture is open like Ollama/Jupyter — auth is only required when the
 // operator deliberately sets `api_key` in runtime_config.yaml.
 async function promptForBearerToken(reason) {
   const hint =
     (reason ? reason + '\n\n' : '') +
-    'This Nūr server has `api_key` set in runtime_config.yaml, so this ' +
+    'This OpenRook server has `api_key` set in runtime_config.yaml, so this ' +
     'endpoint requires a bearer token. Paste the token from your config ' +
     'here. You can also manage tokens via /admin → API Token.';
   const tok = window.prompt(hint, '');
@@ -946,7 +946,7 @@ async function exportConfig() {
     const res = await authedFetch('/admin/export/config');
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
-    downloadJson('nur-runtime-config-redacted.json', data);
+    downloadJson('openrook-runtime-config-redacted.json', data);
     el.className = 'admin-test-result ok';
     el.textContent = 'Redacted config export prepared. Secrets were not included.';
   } catch (err) {
@@ -1360,7 +1360,7 @@ function openWizard() {
   sv('wiz-shell_tool_enabled', 'false');
   sv('wiz-character_independence', 'false');
   const soulName = document.getElementById('wiz-soul-name');
-  if (soulName) soulName.value = 'Nūr';
+  if (soulName) soulName.value = 'OpenRook';
   const lifeTitle = document.getElementById('wiz-life-title');
   if (lifeTitle) lifeTitle.value = 'Initial formative context';
   wizardApplyArchetype('steady');

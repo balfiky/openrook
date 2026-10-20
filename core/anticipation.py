@@ -9,7 +9,8 @@ before you read it.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from core.clock import datetime
+from datetime import timezone
 
 from core.types import (
     Anticipation,

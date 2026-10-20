@@ -36,3 +36,10 @@ reports/ablation/*
 !reports/ablation/life_history_summary.json
 !reports/ablation/semantic_memory_summary.json
 !reports/ablation/relationship_phase12_summary.json
+# Live-backend eval packs are tracked as evidence (real model runs with
+# provenance). The dirty_worktree flag in them is truthful while this work
+# is uncommitted; a re-run after commit stamps clean provenance.
+!reports/live/
+reports/live/*
+!reports/live/phase11_codex.json
+!reports/live/life_history_codex.json

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from config.environment import project_env
+
 import os
 import json
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Any
 
 import requests
@@ -42,18 +45,86 @@ class OpenAICompatibleLLMBackend:
         safe_base_url = validate_http_url(
             base_url,
             allow_loopback=True,
-            allow_private_env="NUR_ALLOW_PRIVATE_LLM_URLS",
+            allow_private_env="OPENROOK_ALLOW_PRIVATE_LLM_URLS",
         )
         self._base_url = safe_base_url.rstrip("/").removesuffix("/chat/completions")
         self._model = model
         self._timeout = timeout
-        self._session = requests.Session()
-        headers: dict[str, str] = {"Content-Type": "application/json"}
+        self._max_output_tokens = 2048
+        self._research_single_attempt = False
+        self.last_response_metadata: dict[str, Any] = {}
+        self._headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        self._session.headers.update(headers)
+            self._headers["Authorization"] = f"Bearer {api_key}"
+        self._session = self._new_session()
+        self._last_request_at: float | None = None
 
-    def generate(self, system_prompt: str, user_message: str) -> str:
+    def set_research_limits(self, *, output_tokens: int, timeout: float) -> None:
+        if type(output_tokens) is not int or not 1 <= output_tokens <= 8192 or not 0 < timeout <= 120:
+            raise ValueError("Invalid bounded generation settings")
+        self._max_output_tokens = output_tokens
+        self._timeout = timeout
+        self._research_single_attempt = True
+
+    def disable_transport_retries(self) -> None:
+        self._research_single_attempt = True
+
+    def _new_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update(self._headers)
+        return session
+
+    def _reset_session(self) -> None:
+        self._session.close()
+        self._session = self._new_session()
+
+    def _post(
+        self, url: str, payload: dict[str, Any], attempts: list[dict[str, Any]]
+    ) -> requests.Response:
+        while True:
+            started = time.monotonic()
+            try:
+                response = self._session.post(url, json=payload, timeout=self._timeout, **({"allow_redirects": False} if self._research_single_attempt else {}))
+            except requests.RequestException as error:
+                attempts.append(
+                    {
+                        "error_type": type(error).__name__,
+                        "duration_ms": (time.monotonic() - started) * 1000,
+                    }
+                )
+                if (
+                    self._research_single_attempt
+                    or not isinstance(error, requests.ConnectionError)
+                    or sum("error_type" in attempt for attempt in attempts) > 1
+                ):
+                    raise
+                self._reset_session()
+            else:
+                attempts.append(
+                    {
+                        "status_code": response.status_code,
+                        "duration_ms": (time.monotonic() - started) * 1000,
+                    }
+                )
+                if self._research_single_attempt and 300 <= response.status_code < 400:
+                    raise RuntimeError("Bounded model requests do not follow redirects")
+                return response
+            finally:
+                self._last_request_at = time.monotonic()
+
+    def generate(
+        self, system_prompt: str, user_message: str, *, response_schema: dict[str, Any] | None = None
+    ) -> str:
+        idle_reset = (
+            self._last_request_at is not None and time.monotonic() - self._last_request_at > 60
+        )
+        if idle_reset:
+            self._reset_session()
+        attempts: list[dict[str, Any]] = []
+        self.last_response_metadata = {
+            "transport_attempts": attempts,
+            "idle_session_reset": idle_reset,
+        }
         url = f"{self._base_url}/chat/completions"
         payload = {
             "model": self._model,
@@ -61,19 +132,28 @@ class OpenAICompatibleLLMBackend:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            "max_tokens": 2048,
+            "max_tokens": self._max_output_tokens,
             "chat_template_kwargs": {"enable_thinking": False},
         }
-        response = self._session.post(url, json=payload, timeout=self._timeout)
-        if _should_retry_without_chat_template_kwargs(response):
-            retry_payload = {
-                key: value
-                for key, value in payload.items()
-                if key != "chat_template_kwargs"
+        if self._research_single_attempt:
+            payload.pop("chat_template_kwargs", None)
+        if response_schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "nur_output", "schema": response_schema, "strict": True},
             }
-            response = self._session.post(url, json=retry_payload, timeout=self._timeout)
+            self.last_response_metadata["structured_output_requested"] = True
+        response = self._post(url, payload, attempts)
+        if not self._research_single_attempt and _should_retry_without_chat_template_kwargs(response):
+            retry_payload = {
+                key: value for key, value in payload.items() if key != "chat_template_kwargs"
+            }
+            response = self._post(url, retry_payload, attempts)
         response.raise_for_status()
         data: dict[str, Any] = response.json()
+        self.last_response_metadata.update(
+            {key: data.get(key) for key in ("model", "usage", "id", "created")}
+        )
         content = data["choices"][0]["message"]["content"] or ""
         content = _THINK_RE.sub("", content).strip()
         return content
@@ -90,7 +170,7 @@ class CodexCLIBackend:
     ephemeral mode and captures only the final message. By default each
     call uses a temporary working directory so normal chat turns do not give
     Codex a project workspace to edit or inspect. Operators can opt into a
-    stable read-only workdir with ``NUR_CODEX_WORKDIR``.
+    stable read-only workdir with ``OPENROOK_CODEX_WORKDIR``.
     """
 
     def __init__(
@@ -101,14 +181,14 @@ class CodexCLIBackend:
         executable: str | None = None,
         workdir: str | None = None,
     ) -> None:
-        self._executable = executable or os.environ.get("NUR_CODEX_BIN", "codex")
+        self._executable = executable or project_env("CODEX_BIN", "codex")
         if not shutil.which(self._executable):
             raise ValueError("Codex backend requires the codex CLI on PATH")
         self._model = (model or "").strip()
         self._timeout = _codex_timeout(timeout)
-        self._workdir = (workdir or os.environ.get("NUR_CODEX_WORKDIR", "")).strip()
+        self._workdir = (workdir or project_env("CODEX_WORKDIR", "")).strip()
         if self._workdir and not os.path.isdir(self._workdir):
-            raise ValueError(f"NUR_CODEX_WORKDIR does not exist: {self._workdir}")
+            raise ValueError(f"OPENROOK_CODEX_WORKDIR does not exist: {self._workdir}")
 
     def generate(self, system_prompt: str, user_message: str) -> str:
         with tempfile.TemporaryDirectory(prefix="nur-codex-") as tmpdir:
@@ -162,7 +242,7 @@ class CodexCLIBackend:
 
 def codex_cli_available(executable: str | None = None) -> bool:
     """Return whether the configured Codex CLI executable is available."""
-    return shutil.which(executable or os.environ.get("NUR_CODEX_BIN", "codex")) is not None
+    return shutil.which(executable or project_env("CODEX_BIN", "codex")) is not None
 
 
 def list_codex_models(
@@ -170,7 +250,7 @@ def list_codex_models(
     timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """Return the safe Codex model catalog for UI selection."""
-    exe = executable or os.environ.get("NUR_CODEX_BIN", "codex")
+    exe = executable or project_env("CODEX_BIN", "codex")
     if not shutil.which(exe):
         raise ValueError("Codex backend requires the codex CLI on PATH")
     catalog_timeout = timeout if timeout is not None else 20.0
@@ -199,7 +279,7 @@ def list_codex_models(
 def _codex_timeout(timeout: float | None) -> float:
     if timeout is not None:
         return timeout
-    raw = os.environ.get("NUR_CODEX_TIMEOUT_SECONDS", "").strip()
+    raw = project_env("CODEX_TIMEOUT_SECONDS", "").strip()
     if not raw:
         return 300.0
     try:
@@ -209,7 +289,7 @@ def _codex_timeout(timeout: float | None) -> float:
 
 
 def _read_codex_models_cache() -> str:
-    cache_path = os.environ.get("NUR_CODEX_MODELS_CACHE", "").strip()
+    cache_path = project_env("CODEX_MODELS_CACHE", "").strip()
     path = cache_path or os.path.expanduser("~/.codex/models_cache.json")
     try:
         with open(path, encoding="utf-8") as handle:
@@ -269,10 +349,10 @@ def _codex_reasoning_levels(value: Any) -> list[str]:
 
 def _codex_prompt(system_prompt: str, user_message: str) -> str:
     return (
-        "You are acting as Nūr's response-generation backend.\n"
+        "You are acting as OpenRook's response-generation backend.\n"
         "Return only the assistant response that should be shown to the user.\n"
         "Do not edit files, do not run commands, and do not mention this backend wrapper.\n\n"
-        "Nūr system prompt:\n"
+        "OpenRook system prompt:\n"
         "<system_prompt>\n"
         f"{system_prompt}\n"
         "</system_prompt>\n\n"
@@ -307,7 +387,7 @@ def _should_retry_without_chat_template_kwargs(response: requests.Response) -> b
 def create_llm_backend(config=None) -> LLMBackend:
     """Create an LLM backend based on runtime config and environment.
 
-    Nūr requires a real LLM backend to operate. There is no mock or
+    OpenRook requires a real LLM backend to operate. There is no mock or
     fallback path — when intelligence is required, the configured model is
     called. The factory raises ``ValueError`` if no usable backend can be
     constructed from the provided config.
@@ -336,7 +416,7 @@ def create_llm_backend(config=None) -> LLMBackend:
 
     if backend_type == "mock":
         raise ValueError(
-            "llm_backend='mock' is no longer supported. Nūr requires a real "
+            "llm_backend='mock' is no longer supported. OpenRook requires a real "
             "LLM backend (provider, openai_compatible, codex, or minimax). "
             "Configure llm_backend in runtime_config.yaml."
         )

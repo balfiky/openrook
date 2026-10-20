@@ -70,9 +70,9 @@ def test_consistent_theme_promotes_to_belief_via_consolidation(tmp_path):
 def test_contradicting_experience_reduces_existing_belief_confidence(tmp_path):
     """Sprint 1.5 wires revise_beliefs_against_evidence into _ingest_text.
 
-    A new experience whose text contains both an existing belief's key AND a
-    contradiction word ('not', 'false', 'contradict') multiplies that
-    belief's confidence by 0.7.
+    A new experience whose text contains a contradiction word ('not',
+    'false', 'contradict*') within the negation window of an existing
+    belief's key token multiplies that belief's confidence by 0.7.
     """
     config = _config(tmp_path)
     now = time.time()
@@ -100,13 +100,13 @@ def test_contradicting_experience_reduces_existing_belief_confidence(tmp_path):
             "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
         ).fetchone()
         assert row is not None
-        # Contradiction revise reduces 0.8 to 0.56. Then the heuristic digest
-        # asserts a fresh autonomy belief at low weighted confidence, which
-        # merges via max(new, old*0.9) — yielding 0.56 * 0.9 = 0.504.
+        # Contradiction revise reduces 0.8 to 0.56. The heuristic digest no
+        # longer fabricates a fresh autonomy belief by default (heuristic
+        # mutations require allow_heuristic_digest=True), so no merge follows.
         # The key invariant: confidence DROPPED from the seeded 0.8.
         final = float(row["confidence"])
         assert final < 0.8, "contradicting evidence should lower confidence"
-        assert final == pytest.approx(0.504, rel=1e-2)
+        assert final == pytest.approx(0.56, rel=1e-2)
 
 
 # ---------------------------------------------------------------------------
@@ -288,3 +288,40 @@ def test_wall_clock_decay_runs_after_one_day(tmp_path):
     # 31 days is roughly one half-life — drive delta of 0.3 should drop to ~0.146.
     # Result: value ≈ 0.5 + 0.146 = 0.646.
     assert float(autonomy["value"]) == pytest.approx(0.646, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Clock-skew: a future last_decay_at must self-correct, not stall metabolism
+# ---------------------------------------------------------------------------
+
+def test_wall_clock_decay_self_corrects_future_timestamp(tmp_path):
+    """A last_decay_at in the future (backward clock jump) re-anchors to now
+    instead of suppressing all future decay until wall-clock catches up.
+    """
+    config = _config(tmp_path)
+    with LifeHistoryStore(config) as store:
+        future = time.time() + (10 * 86400)  # 10 days ahead
+        store._conn.execute(
+            "UPDATE metabolism_state SET last_decay_at = ? WHERE id = 1",
+            (future,),
+        )
+        store._conn.commit()
+
+        outcome = store.wall_clock_decay(min_elapsed_days=0.0)
+        # This tick is a no-op (no real elapsed time) but re-anchors the clock.
+        assert outcome["decayed"] is False
+        anchored = store._conn.execute(
+            "SELECT last_decay_at FROM metabolism_state WHERE id = 1"
+        ).fetchone()["last_decay_at"]
+        assert float(anchored) <= time.time() + 1.0  # no longer in the future
+
+        # Metabolism is unblocked: backdate 31 days and decay now fires.
+        store._conn.execute(
+            "UPDATE drive_states SET value = 0.8 WHERE name = 'autonomy'"
+        )
+        store._conn.execute(
+            "UPDATE metabolism_state SET last_decay_at = ? WHERE id = 1",
+            (time.time() - 31 * 86400,),
+        )
+        store._conn.commit()
+        assert store.wall_clock_decay()["decayed"] is True

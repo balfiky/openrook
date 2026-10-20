@@ -20,6 +20,41 @@ def _config(tmp_path):
     return RuntimeConfig(data_dir=str(tmp_path / "data"), llm_backend="mock")
 
 
+class FakeDigestLLM:
+    """Deterministic digest backend for intake tests that assert mutations."""
+
+    def __init__(self, payload: str) -> None:
+        self.payload = payload
+
+    def generate(self, system_prompt: str, user_message: str) -> str:
+        return self.payload
+
+
+AUTONOMY_DIGEST = """
+{
+  "summary": "Autonomy and learning should change identity through experience.",
+  "salience": 0.8,
+  "emotional_valence": 0.2,
+  "emotional_impact": "Worldview-forming.",
+  "confidence": 0.85,
+  "beliefs": [{
+    "subject": "autonomy",
+    "statement": "Autonomy grows through retained experience.",
+    "reason": "The source framed identity as shaped by experience.",
+    "confidence": 0.8
+  }],
+  "drive_changes": [{
+    "name": "autonomy",
+    "delta": 0.08,
+    "reason": "The material increased self-direction pressure.",
+    "confidence": 0.7
+  }],
+  "self_trait_changes": [],
+  "future_behavior": []
+}
+"""
+
+
 class FakeWebProvider:
     def __init__(self, text: str = "") -> None:
         self.text = text
@@ -97,7 +132,7 @@ def test_url_learning_intake_writes_life_history(tmp_path):
         "Please learn from this https://example.com/autonomy-guide",
         actor="alice",
         web_provider=provider,
-        llm_client_factory=lambda _config: None,
+        llm_client_factory=lambda _config: FakeDigestLLM(AUTONOMY_DIGEST),
     )
 
     assert result is not None

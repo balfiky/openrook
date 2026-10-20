@@ -1,6 +1,6 @@
 # Privacy & Data Retention
 
-Project Nūr is a cognitive runtime that maintains **persistent state**
+OpenRook is a cognitive runtime that maintains **persistent state**
 across turns and sessions: memory (relational, semantic, long-term),
 identity (beliefs, drives, self-traits), emotion modulators, and the
 identity-level Life History ledger. That means it stores information
@@ -10,22 +10,31 @@ inspect, export, or delete it.
 
 ## Storage Layout
 
-All persistent data lives under a single configurable directory:
+Runtime state lives under a configurable directory:
 
 - `runtime_config.yaml → data_dir` (default: `./data/`)
 
-Within `data_dir`, Nūr writes:
+Within `data_dir`, OpenRook writes:
 
 | Path | Contents |
 |------|----------|
 | `data/shared/self_model.db` | Shared self-model — observations and defense log for entity `__self__` |
 | `data/shared/life_history.db` | Shared life-history/evolution ledger — formative experiences, belief revisions, drive changes, self-trait observations |
+| `data/shared/agent_runtime.db` | Research subject manifest, checkpoints, intentions, goals, action/outcome history and learning records |
 | `data/<platform>_<user_id>/nur.db` | Per-user SQLite: emotional memory, relationship events, open loops, person/topic profiles, semantic memory |
 | `data/<platform>_<user_id>/sessions/<chat_id>.json` | Per-session engine state: `modulator_snapshot`, `saved_at`, and `unresolved_items` |
 | `data/<platform>_<user_id>/sessions/<chat_id>.history.json` | Active hot transcript for that chat, restored until the session is explicitly ended or reset |
 | `data/<platform>_<user_id>/engine_state.json` | Legacy per-user engine-state snapshot (kept for backward-compatible restore) |
 
 The entire `data/` directory is gitignored. Do not commit it.
+
+Research jobs can additionally write manifests, model prompts/responses, tool
+receipts, replay frames, and reports under the explicitly selected study output
+directory, commonly `reports/`. Those artifacts can contain sensitive content
+even when credential fields are redacted. Custom data/output directories need
+their own ignore rules and access controls; the default `data/` rule does not
+cover every possible location. The OpenRook rename does not move these records
+or change the historical `nur.db` filename.
 
 ## Tables Inside the Per-User DB (`nur.db`)
 
@@ -55,12 +64,12 @@ The runtime deliberately splits self-model storage away from per-user data
 ## Tables Inside the Shared Life-History DB (`data/shared/life_history.db`)
 
 The Life History layer is identity-level data. It may include material pasted
-by an operator or read from a local file, plus Nūr's derived interpretation of
+by an operator or read from a local file, plus OpenRook's derived interpretation of
 that material:
 
 | Table | Columns of interest | Purpose |
 |-------|--------------------|---------|
-| `experience_events` | `source_type`, `source_title`, `source_ref`, `participants_json`, `content_summary`, `raw_excerpt`, `salience`, `emotional_impact` | What Nūr encountered and how salient it was |
+| `experience_events` | `source_type`, `source_title`, `source_ref`, `participants_json`, `content_summary`, `raw_excerpt`, `salience`, `emotional_impact` | What OpenRook encountered and how salient it was |
 | `evolution_events` | `domain`, `subject`, `before_state`, `after_state`, `reason`, `confidence`, `evidence` | What changed after an experience |
 | `beliefs` | `key`, `statement`, `confidence`, `status`, `evidence` | Current worldview/belief records |
 | `belief_revisions` | `before_statement`, `after_statement`, `reason`, `confidence` | Belief revision history |
@@ -83,21 +92,25 @@ it before sharing a database.
 
 Life History is different: pasted text and local-file excerpts can be stored
 as experience evidence. Treat `data/shared/life_history.db` as sensitive.
+When autobiographical learning is enabled, salient distilled sessions can enter
+this shared store too; research mode enables that path. Research event/replay
+records may also retain conversation or tool content separately from hot chat
+transcripts, so clearing a chat is not a complete study-data deletion.
 
 ## Consent
 
-If you deploy Nūr to talk to anyone other than yourself, **you are
+If you deploy OpenRook to talk to anyone other than yourself, **you are
 responsible for obtaining their informed consent** to the persistence
 described above. A minimum disclosure should state:
 
-- Nūr remembers how conversations feel, not just what was said
+- OpenRook stores inferred affect and relationship state, not just what was said
 - Memory persists across sessions unless explicitly wiped
 - Trust and bonding build and break based on interaction history
 - Users can request export or deletion (see below)
 
 ## Inspection APIs
 
-The `/v1` API surfaces what Nūr knows about a user:
+The `/v1` API surfaces what OpenRook knows about a user:
 
 - `GET /v1/profiles/person?user_id=<id>`
 - `GET /v1/profiles/self`
@@ -107,11 +120,14 @@ The `/v1` API surfaces what Nūr knows about a user:
 
 ## Deletion
 
-The built-in admin console at `/admin` also exposes guarded user deletion. It
-requires the operator to type `DELETE <platform>:<user_id>` before the request is
-accepted.
+In ordinary mode, the built-in admin console at `/admin` also exposes guarded
+user deletion. It requires the operator to type `DELETE <platform>:<user_id>`
+before the request is accepted. Research observation is read-only: DELETE
+requests and mutating administrative requests return `409`, including user
+deletion, resets, and backup creation. Use the stopped-owner procedures below
+for a research subject.
 
-### API (recommended)
+### API (recommended in ordinary mode)
 
 `DELETE /v1/users/{platform}/{user_id}` wipes all persisted data for a
 user on a given platform in one call:
@@ -126,6 +142,10 @@ user on a given platform in one call:
 - **Does not touch** `data/shared/life_history.db` — formative experiences
   and evolution events are assistant-level identity data. They may still
   mention people if the operator included them in a Life intake.
+- **Does not touch** shared research state in `agent_runtime.db`, study output
+  directories, exported reports, or backups. Review those separately when
+  honoring a deletion request; autogenerated autobiographical records can also
+  mention the person even without manual intake.
 
 ```bash
 # With auth disabled (api_key empty):
@@ -139,10 +159,10 @@ curl -X DELETE http://localhost:8000/v1/users/web/alice \
 Python client:
 
 ```python
-from interface.client import NurClient
+from interface.client import OpenRookClient
 
-with NurClient("http://localhost:8000", api_key="my-secret-token") as nur:
-    result = nur.delete_user("alice", platform="web")
+with OpenRookClient("http://localhost:8000", api_key="my-secret-token") as client:
+    result = client.delete_user("alice", platform="web")
     print(result)
     # {
     #   "deleted": true,
@@ -159,17 +179,32 @@ Returns `404` if no data exists for that `platform:user_id`. Row counts
 are best-effort: if a count query fails, that table reports `null` but
 the wipe still proceeds.
 
-### Manual (if the service is stopped)
+### Manual user deletion (with the service stopped)
+
+Stop the service and any research owner before removing the selected user's
+directory:
 
 ```
 rm -rf data/<platform>_<user_id>
 ```
 
 This removes `nur.db` and all session JSON/transcript files in one step.
+Shared identity and research stores, study outputs, and backups remain; inspect
+them separately for material concerning that user.
 
-If you want a full reset of the assistant's self-model (e.g., before
-handing the system to a different operator), also delete
-`data/shared/self_model.db` and `data/shared/life_history.db`.
+### Full runtime and research-subject reset
+
+Stop the owner process and every other writer before taking any required
+[research backup](docs/DEPLOYMENT_AND_ADMIN.md#research-backup-with-the-owner-stopped).
+Then remove the entire configured data directory, including `shared/self_model.db`,
+`shared/life_history.db`, `shared/agent_runtime.db`, per-user records, and SQLite
+sidecar files. A surviving research manifest or checkpoint can resume the old
+subject, so deleting only the self-model and Life History databases is not a
+research-subject reset.
+
+Remove or securely archive associated research outputs and backups separately.
+Runtime and identity configuration outside `data_dir` remains in place; the next
+startup uses that configuration to initialize fresh state.
 
 ## Retention
 
@@ -180,7 +215,7 @@ to your deployment.
 
 ## Data Leaving the Host
 
-Nūr does not phone home. However, if you configure an external LLM backend
+OpenRook does not phone home. However, if you configure an external LLM backend
 (MiniMax, OpenAI-compatible, etc.), **every turn sends the assembled
 prompt — which includes retrieved memory, profiles, and relationship
 context — to that provider**. Runtime sessions may also include a compact

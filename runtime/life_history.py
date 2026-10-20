@@ -1,26 +1,29 @@
 """Identity-level life history and evolution storage.
 
 This module is intentionally separate from per-user chat memory. It stores
-Nūr's own accumulated experiences and the durable changes those experiences
+OpenRook's own accumulated experiences and the durable changes those experiences
 produce in beliefs, drives, and self-observations.
 """
 
 from __future__ import annotations
+
+from config.environment import project_env
 
 import json
 import logging
 import os
 import re
 import sqlite3
-import time
-import uuid
+from core.clock import clock as time
+from core.clock import identifiers as uuid
 import hashlib
 from pathlib import Path
 from typing import Any, Protocol
 
 log = logging.getLogger(__name__)
 
-from config.loader import get_config
+from config.loader import get_config, research_configuration
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from runtime.config import RuntimeConfig
 from runtime.evolution_policy import (
     detect_directive_override_markers,
@@ -60,17 +63,48 @@ def life_history_db_path(config: RuntimeConfig) -> str:
 class LifeHistoryStore:
     """SQLite-backed source of truth for experiences and self-change."""
 
-    def __init__(self, config: RuntimeConfig, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        db_path: str | None = None,
+        *,
+        allow_heuristic_digest: bool = False,
+        read_only: bool = False,
+    ) -> None:
         self.config = config
         self.db_path = db_path or life_history_db_path(config)
+        self.allow_heuristic_digest = allow_heuristic_digest
+        if read_only:
+            self._conn = sqlite3.connect(
+                Path(self.db_path).resolve().as_uri() + "?mode=ro", uri=True,
+                check_same_thread=False,
+            )
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA query_only=ON")
+            return
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        try:
+            version = self._conn.execute("SELECT version FROM life_schema_version LIMIT 1").fetchone()
+        except sqlite3.OperationalError:
+            version = None
+        if version is not None and int(version["version"]) >= 2:
+            return
+        # The shared life_history.db is opened concurrently by per-session
+        # decay ticks, context reads, and ingest writes (all on the manager's
+        # executor). WAL lets readers run alongside a writer, and a generous
+        # busy_timeout lets a concurrent write wait for the lock instead of
+        # raising "database is locked".
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._create_tables()
         self._ensure_default_drives()
         self._ensure_genesis_storage()
         self._ensure_metabolism_state()
         self._ensure_identity_state()
+        self._conn.execute("UPDATE life_schema_version SET version = 2")
+        self._conn.commit()
 
     def __enter__(self) -> LifeHistoryStore:
         return self
@@ -179,7 +213,7 @@ class LifeHistoryStore:
         """Digest externally collected material while preserving its source ref.
 
         Browser uploads and local files already have dedicated intake paths. This
-        method is for runtime learning flows where Nūr gathered material from a
+        method is for runtime learning flows where OpenRook gathered material from a
         URL or direct conversation text and needs that source recorded in the
         identity-level ledger.
         """
@@ -255,14 +289,19 @@ class LifeHistoryStore:
         return [_evolution_to_dict(row) for row in rows]
 
     def rollback_batch(self, batch_id: str) -> dict[str, Any]:
-        """Rollback one applied Life History evolution batch.
+        """Rollback one fully COMMITTED Life History evolution batch.
+
+        This is a test-only undo for batches that were applied successfully;
+        crash atomicity is handled separately — _ingest_text applies each
+        batch inside a single transaction, so a mid-batch failure rolls back
+        automatically and never needs this method.
 
         Experiences remain in the ledger, but durable belief/drive changes and
         evolution rows for the batch are removed or reverted. Rollback is
         intentionally conservative: if a later batch has already modified a
         belief or drive, this method raises instead of corrupting newer state.
         """
-        if os.environ.get("NUR_TESTING") != "1":
+        if project_env("TESTING") != "1":
             raise LifeHistoryError(
                 "Life History rollback is disabled outside test mode; reset genesis explicitly instead."
             )
@@ -534,7 +573,7 @@ class LifeHistoryStore:
                 break
         for drive in self.list_drives():
             name = str(drive.get("name") or "")
-            baseline, _description = DEFAULT_DRIVES.get(name, (0.5, ""))
+            baseline, _description = getattr(self.config, "_research_drive_baselines", DEFAULT_DRIVES).get(name, (0.5, ""))
             value = float(drive.get("value", baseline))
             delta = value - baseline
             if abs(delta) < 0.08:
@@ -553,11 +592,18 @@ class LifeHistoryStore:
                 break
         return dispositions[:7]
 
-    def decay_step(self, *, elapsed_days: float = 1.0) -> dict[str, int]:
+    def decay_step(self, *, elapsed_days: float = 1.0, _commit: bool = True) -> dict[str, int]:
         """Metabolic decay for beliefs and drive deltas.
 
         Beliefs whose confidence falls below 0.2 after decay are marked revoked,
         matching the threshold used by revise_beliefs_against_evidence.
+
+        Decay is metabolism, not evidence: it stamps ``last_decayed_at`` and
+        leaves ``updated_at`` untouched so the recency ordering used by
+        list_beliefs/prompt_context still reflects genuine updates. Elapsed
+        time is supplied by the caller (wall_clock_decay tracks it in
+        metabolism_state), so decay compounds correctly across ticks without
+        per-belief timestamps.
         """
         elapsed_days = max(0.0, float(elapsed_days))
         decayed_beliefs = 0
@@ -570,7 +616,7 @@ class LifeHistoryStore:
             new_confidence = _clamp(confidence * pow(0.5, elapsed_days / 30.0))
             new_status = "revoked" if new_confidence < 0.2 else "active"
             self._conn.execute(
-                "UPDATE beliefs SET confidence = ?, status = ?, updated_at = ? WHERE id = ?",
+                "UPDATE beliefs SET confidence = ?, status = ?, last_decayed_at = ? WHERE id = ?",
                 (new_confidence, new_status, now, row["id"]),
             )
             decayed_beliefs += 1
@@ -579,7 +625,7 @@ class LifeHistoryStore:
         decayed_drives = 0
         for row in self._conn.execute("SELECT * FROM drive_states").fetchall():
             name = str(row["name"])
-            baseline, _description = DEFAULT_DRIVES.get(name, (0.5, ""))
+            baseline, _description = getattr(self.config, "_research_drive_baselines", DEFAULT_DRIVES).get(name, (0.5, ""))
             value = float(row["value"])
             delta = value - baseline
             if abs(delta) < 0.001:
@@ -603,7 +649,8 @@ class LifeHistoryStore:
                 (new_weight, row["id"]),
             )
             decayed_themes += 1
-        self._conn.commit()
+        if _commit:
+            self._conn.commit()
         return {
             "beliefs": decayed_beliefs,
             "drives": decayed_drives,
@@ -621,6 +668,16 @@ class LifeHistoryStore:
 
         Updates ``last_decay_at`` only when decay actually runs.
         """
+        try:
+            self._conn.execute("BEGIN IMMEDIATE")
+            result = self._wall_clock_decay_locked(min_elapsed_days=min_elapsed_days)
+            self._conn.commit()
+            return result
+        except Exception:
+            self._conn.rollback()
+            raise
+
+    def _wall_clock_decay_locked(self, *, min_elapsed_days: float) -> dict[str, Any]:
         now = time.time()
         row = self._conn.execute(
             "SELECT last_decay_at FROM metabolism_state WHERE id = 1"
@@ -630,19 +687,27 @@ class LifeHistoryStore:
                 "INSERT INTO metabolism_state (id, last_decay_at) VALUES (1, ?)",
                 (now,),
             )
-            self._conn.commit()
             return {"decayed": False, "elapsed_days": 0.0, "result": {}}
         last_at = float(row["last_decay_at"])
+        # Self-correct a future ``last_decay_at`` (backward clock jump / NTP
+        # correction). Without this, a stored timestamp in the future would
+        # suppress metabolism indefinitely until real wall-clock caught up.
+        # Re-anchor to now; we still never over-decay (elapsed clamps at 0).
+        if last_at > now:
+            self._conn.execute(
+                "UPDATE metabolism_state SET last_decay_at = ? WHERE id = 1",
+                (now,),
+            )
+            return {"decayed": False, "elapsed_days": 0.0, "result": {}}
         elapsed_days = max(0.0, (now - last_at) / 86400.0)
         if elapsed_days < min_elapsed_days:
             return {"decayed": False, "elapsed_days": elapsed_days, "result": {}}
-        decay_result = self.decay_step(elapsed_days=elapsed_days)
-        consolidation_result = self.consolidate_themes()
+        decay_result = self.decay_step(elapsed_days=elapsed_days, _commit=False)
+        consolidation_result = self.consolidate_themes(_commit=False)
         self._conn.execute(
             "UPDATE metabolism_state SET last_decay_at = ? WHERE id = 1",
             (now,),
         )
-        self._conn.commit()
         return {
             "decayed": True,
             "elapsed_days": elapsed_days,
@@ -650,7 +715,7 @@ class LifeHistoryStore:
             "consolidation": consolidation_result,
         }
 
-    def consolidate_themes(self) -> dict[str, int]:
+    def consolidate_themes(self, *, _commit: bool = True) -> dict[str, int]:
         """Promote strong recurring theme signatures to consolidated belief events.
 
         Themes with notable recurrence but weak weight (>=3 reinforcements,
@@ -670,13 +735,20 @@ class LifeHistoryStore:
                 continue
             now = time.time()
             statement = f"A recurring theme around {key} has consolidated through repeated experience."
-            self._conn.execute(
+            cursor = self._conn.execute(
                 """
                 INSERT INTO beliefs
                 (key, statement, confidence, status, created_at, updated_at, source_experience_id, evidence)
                 VALUES (?, ?, ?, 'active', ?, ?, NULL, ?)
                 """,
                 (key, statement, _clamp(float(row["accrued_weight"])), now, now, row["signature"]),
+            )
+            self._insert_evolution_event(
+                experience_id=None, domain="belief", subject=key, before_state="", after_state=statement,
+                reason="Recurring theme consolidation", confidence=_clamp(float(row["accrued_weight"])),
+                emotional_valence=0.0, evidence=row["signature"],
+                metadata={"belief_id": cursor.lastrowid, "theme_signature": row["signature"],
+                          "reinforcement_count": row["reinforcement_count"]}, batch_id="theme-consolidation",
             )
             promoted += 1
 
@@ -708,7 +780,8 @@ class LifeHistoryStore:
 
         emitted_questions += self._detect_drive_gaps()
 
-        self._conn.commit()
+        if _commit:
+            self._conn.commit()
         return {"promoted": promoted, "open_questions_emitted": emitted_questions}
 
     def _detect_drive_gaps(self, *, gap_threshold: float = 0.2) -> int:
@@ -743,45 +816,139 @@ class LifeHistoryStore:
                 emitted += 1
         return emitted
 
-    def revise_beliefs_against_evidence(self, new_experience: dict[str, Any]) -> dict[str, int]:
-        """Apply simple contradiction-driven confidence reduction.
+    def revise_beliefs_against_evidence(
+        self,
+        new_experience: dict[str, Any],
+        *,
+        llm_client: LLMBackend | None = None,
+    ) -> dict[str, int]:
+        """Revise existing beliefs against a new piece of evidence.
 
-        Each revised belief also emits a contradiction open question so the
-        queue surfaces unresolved tensions for later reflection.
+        When an LLM is available, one batched call classifies each plausibly
+        related belief as contradicts/supports/unrelated. Contradictions
+        (verdict confidence >= 0.6) reduce confidence by the 0.7 multiplier
+        and emit a contradiction open question; supports apply a small
+        reinforcement capped at +0.05. Without an LLM (or on a malformed
+        response) a negation-window heuristic detects contradictions only.
         """
+        try:
+            prepared = self._prepare_belief_revisions(new_experience, llm_client=llm_client)
+            self._conn.execute("BEGIN IMMEDIATE")
+            result = self._revise_beliefs_locked(new_experience, prepared=prepared)
+            self._conn.commit()
+            return result
+        except Exception:
+            self._conn.rollback()
+            raise
+
+    def _prepare_belief_revisions(
+        self,
+        new_experience: dict[str, Any],
+        *,
+        llm_client: LLMBackend | None = None,
+    ) -> list[dict[str, Any]]:
         text = json.dumps(new_experience, sort_keys=True, default=str).lower()
-        revised = 0
-        emitted_questions = 0
-        now = time.time()
-        source_experience_id = new_experience.get("source_experience_id") if isinstance(new_experience, dict) else None
-        for row in self._conn.execute("SELECT * FROM beliefs WHERE status = 'active'").fetchall():
-            key = str(row["key"]).lower()
-            if key not in text or not any(word in text for word in ("not", "false", "contradict")):
+        rows = self._conn.execute("SELECT * FROM beliefs WHERE status = 'active'").fetchall()
+        candidates = _related_belief_candidates(rows, text)
+        if not candidates:
+            return []
+        verdicts: list[dict[str, Any]] | None = None
+        if llm_client is not None:
+            verdicts = _llm_revision_verdicts(llm_client, candidates, text)
+        verdict_source = "model" if verdicts is not None else "heuristic"
+        if verdicts is None:
+            verdicts = _heuristic_revision_verdicts(candidates, text)
+
+        rows_by_key = {str(row["key"]).lower(): row for row in candidates}
+        prepared = []
+        for verdict in verdicts:
+            row = rows_by_key.pop(str(verdict.get("key") or "").lower(), None)
+            if row is None:
                 continue
+            prepared.append({
+                **verdict, "belief_id": int(row["id"]), "statement": str(row["statement"]),
+                "verdict_source": verdict_source,
+            })
+        return prepared
+
+    def _revise_beliefs_locked(
+        self,
+        new_experience: dict[str, Any],
+        *,
+        prepared: list[dict[str, Any]],
+        batch_id: str = "",
+    ) -> dict[str, int]:
+        revised = reinforced = emitted_questions = skipped = 0
+        now = time.time()
+        source_experience_id = new_experience.get("source_experience_id")
+        for verdict in prepared:
+            row = self._conn.execute(
+                "SELECT * FROM beliefs WHERE id = ? AND status = 'active'",
+                (verdict["belief_id"],),
+            ).fetchone()
+            if row is None or row["statement"] != verdict["statement"] or row["key"].lower() != verdict["key"].lower():
+                skipped += 1
+                continue
+            relation = str(verdict.get("relation") or "unrelated")
+            verdict_confidence = _safe_float(verdict.get("confidence", 0.0), 0.0)
             confidence = float(row["confidence"])
-            next_confidence = _clamp(confidence * 0.7)
-            status = "revoked" if next_confidence < 0.2 else "active"
-            self._conn.execute(
-                "UPDATE beliefs SET confidence = ?, status = ?, updated_at = ? WHERE id = ?",
-                (next_confidence, status, now, row["id"]),
-            )
-            revised += 1
-            statement = str(row["statement"])
-            prompt = (
-                f"I believed '{statement}' but encountered evidence that "
-                "contradicts it. How do I reconcile this?"
-            )
-            priority = _clamp(0.5 + (confidence - next_confidence))
-            if self._emit_open_question(
-                prompt_text=prompt,
-                source_kind="contradiction",
-                source_belief_id=int(row["id"]),
-                source_experience_id=source_experience_id,
-                priority=priority,
-            ):
-                emitted_questions += 1
-        self._conn.commit()
-        return {"revised": revised, "open_questions_emitted": emitted_questions}
+            next_confidence = confidence
+            status = str(row["status"])
+            if relation == "contradicts" and verdict_confidence >= 0.6:
+                next_confidence = _clamp(confidence * 0.7)
+                status = "revoked" if next_confidence < 0.2 else "active"
+                self._conn.execute(
+                    "UPDATE beliefs SET confidence = ?, status = ?, updated_at = ? WHERE id = ?",
+                    (next_confidence, status, now, row["id"]),
+                )
+                revised += 1
+                statement = str(row["statement"])
+                prompt = (
+                    f"I believed '{statement}' but encountered evidence that "
+                    "contradicts it. How do I reconcile this?"
+                )
+                priority = _clamp(0.5 + (confidence - next_confidence))
+                if self._emit_open_question(
+                    prompt_text=prompt,
+                    source_kind="contradiction",
+                    source_belief_id=int(row["id"]),
+                    source_experience_id=source_experience_id,
+                    priority=priority,
+                ):
+                    emitted_questions += 1
+            elif relation == "supports" and verdict_confidence > 0.0:
+                next_confidence = _clamp(confidence + min(0.05, 0.05 * verdict_confidence))
+                if next_confidence > confidence:
+                    self._conn.execute(
+                        "UPDATE beliefs SET confidence = ?, updated_at = ? WHERE id = ?",
+                        (next_confidence, now, row["id"]),
+                    )
+                    reinforced += 1
+            if next_confidence != confidence:
+                reason = f"{verdict['verdict_source']} evidence verdict: {relation}"
+                self._conn.execute(
+                    """INSERT INTO belief_revisions
+                    (belief_id, experience_id, before_statement, after_statement,
+                     before_confidence, after_confidence, reason, confidence, created_at, batch_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (row["id"], source_experience_id, row["statement"], row["statement"],
+                     confidence, next_confidence, reason, verdict_confidence, now, batch_id),
+                )
+                self._insert_evolution_event(
+                    experience_id=source_experience_id, domain="belief", subject=row["key"],
+                    before_state=row["statement"], after_state=row["statement"], reason=reason,
+                    confidence=verdict_confidence, emotional_valence=0.0,
+                    evidence=str(new_experience.get("summary") or new_experience),
+                    metadata={"before_confidence": confidence, "after_confidence": next_confidence,
+                              "before_status": row["status"], "after_status": status,
+                              "verdict_source": verdict["verdict_source"]}, batch_id=batch_id,
+                )
+        return {
+            "revised": revised,
+            "reinforced": reinforced,
+            "open_questions_emitted": emitted_questions,
+            **({"skipped_stale": skipped} if skipped else {}),
+        }
 
     # ------------------------------------------------------------------
     # Open questions
@@ -817,14 +984,18 @@ class LifeHistoryStore:
         priority = _clamp(float(priority))
         if dedupe_signature is None:
             dedupe_signature = f"{source_belief_id or ''}|{target_drive or ''}"
+        dedupe_signature = self.resolve_theme_signature(dedupe_signature)
+        aliases = [dedupe_signature, *[row["alias"] for row in self._conn.execute(
+            "SELECT alias FROM theme_aliases WHERE canonical = ?", (dedupe_signature,),
+        ).fetchall()]]
         existing = self._conn.execute(
-            """
+            f"""
             SELECT id FROM open_questions
-            WHERE source_kind = ? AND status = 'open'
-              AND COALESCE(json_extract(metadata_json, '$._dedupe'), '') = ?
+            WHERE source_kind = ? AND status IN ('open','pursuing')
+              AND COALESCE(json_extract(metadata_json, '$._dedupe'), '') IN ({','.join('?' for _ in aliases)})
             LIMIT 1
             """,
-            (source_kind, dedupe_signature),
+            (source_kind, *aliases),
         ).fetchone()
         if existing:
             return False
@@ -947,6 +1118,7 @@ class LifeHistoryStore:
             text=prepared_text,
             source_type=source_type,
             llm_client=llm_client,
+            research_mode=self.config.research_mode,
         )
         metadata = dict(metadata)
         metadata["chunk_count"] = chunk_count
@@ -958,113 +1130,178 @@ class LifeHistoryStore:
             metadata["injection_markers"] = injection_markers
             metadata["prompt_injection_markers"] = injection_markers
         directive_markers = detect_directive_override_markers(prepared_text)
-        directive_sanitized = bool(directive_markers or injection_markers)
+        research = bool(getattr(self.config, "research_mode", False))
+        directive_sanitized = bool(directive_markers or injection_markers) and not research
         if directive_markers:
             metadata["directive_override_markers"] = directive_markers
         if directive_sanitized:
             metadata["directive_sanitized"] = True
 
         signatures = _derive_theme_signatures(digest)
-        theme_state = self._theme_state(signatures)
-        current_caution = self._drive_value("caution")
-        current_openness = source_openness_coefficient(source_type)
+        current_openness = self._drive_value("curiosity") if research else source_openness_coefficient(source_type)
         marker_density = len(injection_markers) / max(1.0, len(prepared_text) / 1000.0)
-        influence_weight = compute_influence_weight(
-            source_recurrence=theme_state["source_recurrence"],
-            source_consistency_with_existing_themes=theme_state["consistency"],
-            recency_decay_of_prior_similar=theme_state["recency_decay"],
-            character_current_openness=current_openness,
-            character_current_caution=current_caution,
-            injection_marker_density=marker_density,
-        )
         rejections: list[dict[str, Any]] = []
         if directive_sanitized:
-            influence_weight = 0.0
             signatures = []
             reason = "directive_override" if directive_markers else "prompt_injection"
             rejections.append({
                 "reason": reason,
                 "count": len(directive_markers or injection_markers),
             })
-        metadata["influence_weight"] = influence_weight
+        # A heuristic digest fabricates beliefs/drive deltas from keyword
+        # presence — exactly what the LLM digest prompt forbids. By default a
+        # failed/absent LLM digest records the experience but applies no
+        # identity mutations; allow_heuristic_digest=True opts back in.
+        heuristic_blocked = (
+            metadata["digest_quality"] != "high" and not self.allow_heuristic_digest
+        )
+        if heuristic_blocked:
+            metadata["heuristic_mutations_blocked"] = True
+        apply_mutations = not directive_sanitized and not heuristic_blocked
         metadata["theme_signatures"] = signatures
-
-        experience_id = self._insert_experience(
-            title=title,
-            source_type=source_type,
-            source_ref=source_ref,
-            participants=participants,
-            summary=digest["summary"],
-            raw_excerpt=_trim(text, 2000),
-            salience=digest["salience"],
-            emotional_valence=digest["emotional_valence"],
-            emotional_impact=digest["emotional_impact"],
-            confidence=digest["confidence"],
-            metadata=metadata,
-            batch_id=batch_id,
+        revision_input = {
+            "summary": digest["summary"], "emotional_impact": digest["emotional_impact"],
+            "text_excerpt": prepared_text[:4000],
+        }
+        prepared_revisions = (
+            self._prepare_belief_revisions(revision_input, llm_client=llm_client)
+            if not directive_sanitized else []
         )
 
-        revision_result: dict[str, int] = {"revised": 0}
-        if not directive_sanitized:
-            revision_result = self.revise_beliefs_against_evidence({
-                "summary": digest["summary"],
-                "emotional_impact": digest["emotional_impact"],
-                "text_excerpt": prepared_text[:4000],
-            })
-
-        evolution_events: list[dict[str, Any]] = []
-        if not directive_sanitized:
-            for belief in digest["beliefs"]:
-                if not isinstance(belief, dict):
-                    continue
-                weighted = _weighted_belief(belief, influence_weight, digest["confidence"])
-                event = self._apply_belief(experience_id, weighted, batch_id=batch_id)
-                if event:
-                    evolution_events.append(event)
-            for change in digest["drive_changes"]:
-                if not isinstance(change, dict):
-                    continue
-                weighted = _weighted_drive_change(change, influence_weight, digest["confidence"])
-                event = self._apply_drive_change(experience_id, weighted, batch_id=batch_id)
-                if event:
-                    evolution_events.append(event)
-            for trait in digest["self_trait_changes"]:
-                if not isinstance(trait, dict):
-                    continue
-                delta = _safe_number(trait.get("delta", 0.0), 0.0)
-                event = self._insert_evolution_event(
-                    experience_id=experience_id,
-                    domain="self_trait",
-                    subject=_safe_label(trait.get("trait") or "self_observation"),
-                    before_state="",
-                    after_state=f"{trait.get('trait', 'trait')} {delta:+.2f}",
-                    reason=str(trait.get("reason") or "Experience affected self-observation."),
-                    confidence=_safe_float(trait.get("confidence", digest["confidence"]), digest["confidence"]),
-                    emotional_valence=digest["emotional_valence"],
-                    evidence=str(trait.get("evidence") or title),
-                    metadata={"delta": delta},
-                    batch_id=batch_id,
+        # The whole batch below (experience row, belief revisions, drive
+        # changes, evolution events, theme reinforcement) is one transaction:
+        # a crash mid-batch must not leave partially-applied identity state.
+        try:
+            self._conn.execute("BEGIN IMMEDIATE")
+            occurrence_id = str(metadata.get("occurrence_id") or "")
+            if occurrence_id:
+                previous = self._conn.execute(
+                    "SELECT id FROM experience_events WHERE occurrence_id = ?", (occurrence_id,),
+                ).fetchone()
+                if previous is not None:
+                    self._conn.rollback()
+                    return {"experience": self.get_experience(previous["id"]),
+                            "evolution_events": [], "policy": {"deduplicated": True},
+                            "beliefs": self.list_beliefs(limit=25), "drives": self.list_drives()}
+            if apply_mutations:
+                self._reconcile_theme_signatures(digest)
+            theme_state = self._theme_state(signatures)
+            self_inference = research and (source_type == "self_reflection" or metadata.get("evidence_kind") == "self_inference")
+            if self_inference:
+                theme_state = {"source_recurrence": 0.0, "consistency": 0.0, "recency_decay": 0.0}
+            current_caution = self._drive_value("caution")
+            current_openness = self._drive_value("curiosity") if research else current_openness
+            influence_weight = 0.0 if directive_sanitized else compute_influence_weight(
+                source_recurrence=theme_state["source_recurrence"],
+                source_consistency_with_existing_themes=theme_state["consistency"],
+                recency_decay_of_prior_similar=theme_state["recency_decay"],
+                character_current_openness=current_openness,
+                character_current_caution=current_caution,
+                injection_marker_density=0.0 if research else marker_density,
+            )
+            metadata["influence_weight"] = influence_weight
+            experience_id = self._insert_experience(
+                title=title,
+                source_type=source_type,
+                source_ref=source_ref,
+                participants=participants,
+                summary=digest["summary"],
+                raw_excerpt=_trim(text, 2000),
+                salience=digest["salience"],
+                emotional_valence=digest["emotional_valence"],
+                emotional_impact=digest["emotional_impact"],
+                confidence=digest["confidence"],
+                metadata=metadata,
+                batch_id=batch_id,
+            )
+            if occurrence_id:
+                self._conn.execute(
+                    "UPDATE experience_events SET occurrence_id = ? WHERE id = ?",
+                    (occurrence_id, experience_id),
                 )
-                evolution_events.append(event)
-            for item in digest["future_behavior"]:
-                if not str(item).strip():
-                    continue
-                event = self._insert_evolution_event(
-                    experience_id=experience_id,
-                    domain="worldview",
-                    subject="future_behavior",
-                    before_state="",
-                    after_state=str(item).strip(),
-                    reason="Experience suggested a future behavioral tendency.",
-                    confidence=_clamp(float(digest["confidence"]) * influence_weight),
-                    emotional_valence=digest["emotional_valence"],
-                    evidence=title,
-                    metadata={"influence_weight": influence_weight},
-                    batch_id=batch_id,
-                )
-                evolution_events.append(event)
 
-        self._update_theme_signatures(signatures, influence_weight)
+            revision_result: dict[str, int] = {"revised": 0}
+            if not directive_sanitized:
+                # Revision is driven by the experience text itself (not the
+                # digest's fabricated changes), so it runs even when heuristic
+                # mutations are blocked.
+                revision_result = self._revise_beliefs_locked(
+                    {**revision_input, "source_experience_id": experience_id},
+                    prepared=prepared_revisions, batch_id=batch_id,
+                )
+
+            evolution_events: list[dict[str, Any]] = []
+            if apply_mutations:
+                for belief in digest["beliefs"]:
+                    if not isinstance(belief, dict):
+                        continue
+                    weighted = _weighted_belief(belief, influence_weight, digest["confidence"])
+                    event = self._apply_belief(experience_id, weighted, batch_id=batch_id)
+                    if event:
+                        evolution_events.append(event)
+                for change in digest["drive_changes"]:
+                    if not isinstance(change, dict):
+                        continue
+                    weighted = _weighted_drive_change(change, influence_weight, digest["confidence"])
+                    event = self._apply_drive_change(experience_id, weighted, batch_id=batch_id)
+                    if event:
+                        evolution_events.append(event)
+                for trait in digest["self_trait_changes"]:
+                    if not isinstance(trait, dict):
+                        continue
+                    delta = _safe_number(trait.get("delta", 0.0), 0.0)
+                    event = self._insert_evolution_event(
+                        experience_id=experience_id,
+                        domain="self_trait",
+                        subject=_safe_label(trait.get("trait") or "self_observation"),
+                        before_state="",
+                        after_state=f"{trait.get('trait', 'trait')} {delta:+.2f}",
+                        reason=str(trait.get("reason") or "Experience affected self-observation."),
+                        confidence=_safe_float(trait.get("confidence", digest["confidence"]), digest["confidence"]),
+                        emotional_valence=digest["emotional_valence"],
+                        evidence=str(trait.get("evidence") or title),
+                        metadata={"delta": delta},
+                        batch_id=batch_id,
+                    )
+                    evolution_events.append(event)
+                for item in digest["future_behavior"]:
+                    if not str(item).strip():
+                        continue
+                    event = self._insert_evolution_event(
+                        experience_id=experience_id,
+                        domain="worldview",
+                        subject="future_behavior",
+                        before_state="",
+                        after_state=str(item).strip(),
+                        reason="Experience suggested a future behavioral tendency.",
+                        confidence=_clamp(float(digest["confidence"]) * influence_weight),
+                        emotional_valence=digest["emotional_valence"],
+                        evidence=title,
+                        metadata={"influence_weight": influence_weight},
+                        batch_id=batch_id,
+                    )
+                    evolution_events.append(event)
+                if not self_inference:
+                    self._update_theme_signatures(signatures, influence_weight)
+
+            if heuristic_blocked and not directive_sanitized:
+                self._emit_open_question(
+                    prompt_text=(
+                        f"Experience '{_trim(title, 120)}' was recorded but could not "
+                        "be digested into identity changes (no usable language model). "
+                        "Re-ingest it when a model is available."
+                    ),
+                    source_kind="undigested_experience",
+                    source_experience_id=experience_id,
+                    priority=0.45,
+                    metadata={"batch_id": batch_id, "source_type": source_type},
+                    dedupe_signature=f"undigested|{source_type}|{_slug(title)}",
+                )
+
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
 
         experience = self.get_experience(experience_id)
         return {
@@ -1150,6 +1387,7 @@ class LifeHistoryStore:
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
+                last_decayed_at REAL,
                 source_experience_id INTEGER,
                 evidence TEXT NOT NULL DEFAULT ''
             )
@@ -1266,12 +1504,21 @@ class LifeHistoryStore:
             )
             """
         )
+        self._ensure_column("beliefs", "last_decayed_at", "REAL")
         self._ensure_column("experience_events", "batch_id", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("evolution_events", "batch_id", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("belief_revisions", "before_confidence", "REAL NOT NULL DEFAULT 0.0")
         self._ensure_column("belief_revisions", "after_confidence", "REAL NOT NULL DEFAULT 0.0")
         self._ensure_column("belief_revisions", "batch_id", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("drive_changes", "batch_id", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("experience_events", "occurrence_id", "TEXT")
+        self._conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_experience_occurrence ON experience_events (occurrence_id)"
+        )
+        self._conn.execute(
+            """CREATE TABLE IF NOT EXISTS theme_aliases (
+            alias TEXT PRIMARY KEY, canonical TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 2)"""
+        )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_experience_events_time ON experience_events (timestamp DESC)"
         )
@@ -1296,6 +1543,19 @@ class LifeHistoryStore:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_open_questions_target_drive ON open_questions (target_drive)"
         )
+        # Persistent per-scope learning budget so the daily ask-user cap is
+        # real (shared across a user's sessions, survives restarts) rather
+        # than a per-pipeline in-memory counter that N sessions multiply.
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS learning_budget (
+                scope_key TEXT PRIMARY KEY,
+                period_started_at REAL NOT NULL,
+                questions_consumed INTEGER NOT NULL DEFAULT 0,
+                seconds_consumed REAL NOT NULL DEFAULT 0.0
+            )
+            """
+        )
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
@@ -1305,6 +1565,8 @@ class LifeHistoryStore:
         self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _ensure_default_drives(self) -> None:
+        """Seed missing default drives. Does not commit; callers own the
+        transaction boundary (constructor commits, ingest commits per batch)."""
         now = time.time()
         for name, (value, description) in DEFAULT_DRIVES.items():
             self._conn.execute(
@@ -1314,7 +1576,6 @@ class LifeHistoryStore:
                 """,
                 (name, value, description, now),
             )
-        self._conn.commit()
 
     def _ensure_metabolism_state(self) -> None:
         """Initialize last_decay_at to now on first creation so the first
@@ -1339,6 +1600,58 @@ class LifeHistoryStore:
         self._conn.execute(
             "INSERT OR IGNORE INTO identity_state (id, constitution, updated_at) VALUES (1, '', ?)",
             (time.time(),),
+        )
+        self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # Persistent learning budget (per-scope, daily roll)
+    # ------------------------------------------------------------------
+
+    def read_learning_budget(self, scope_key: str, *, period_seconds: float) -> dict[str, float]:
+        """Return consumed counts for ``scope_key``, rolling the period if due.
+
+        Rolling is persisted: once ``period_seconds`` have elapsed since the
+        stored period start, the row resets to a fresh period anchored at now.
+        """
+        now = time.time()
+        row = self._conn.execute(
+            "SELECT period_started_at, questions_consumed, seconds_consumed "
+            "FROM learning_budget WHERE scope_key = ?",
+            (scope_key,),
+        ).fetchone()
+        if row is None:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO learning_budget "
+                "(scope_key, period_started_at, questions_consumed, seconds_consumed) "
+                "VALUES (?, ?, 0, 0.0)",
+                (scope_key, now),
+            )
+            self._conn.commit()
+            return {"period_started_at": now, "questions_consumed": 0, "seconds_consumed": 0.0}
+        period_started_at = float(row["period_started_at"])
+        if now - period_started_at >= period_seconds:
+            self._conn.execute(
+                "UPDATE learning_budget SET period_started_at = ?, "
+                "questions_consumed = 0, seconds_consumed = 0.0 WHERE scope_key = ?",
+                (now, scope_key),
+            )
+            self._conn.commit()
+            return {"period_started_at": now, "questions_consumed": 0, "seconds_consumed": 0.0}
+        return {
+            "period_started_at": period_started_at,
+            "questions_consumed": int(row["questions_consumed"]),
+            "seconds_consumed": float(row["seconds_consumed"]),
+        }
+
+    def consume_learning_budget(
+        self, scope_key: str, *, period_seconds: float, questions: int = 0, seconds: float = 0.0,
+    ) -> None:
+        """Atomically add to the consumed counts for ``scope_key`` (rolls first)."""
+        self.read_learning_budget(scope_key, period_seconds=period_seconds)
+        self._conn.execute(
+            "UPDATE learning_budget SET questions_consumed = questions_consumed + ?, "
+            "seconds_consumed = seconds_consumed + ? WHERE scope_key = ?",
+            (max(0, int(questions)), max(0.0, float(seconds)), scope_key),
         )
         self._conn.commit()
 
@@ -1379,7 +1692,10 @@ class LifeHistoryStore:
         if self._conn.execute("SELECT 1 FROM genesis_marker WHERE id = 1").fetchone():
             return
         try:
-            soul_payload = get_config().soul.__dict__
+            birth = getattr(self.config, "_research_configuration", None)
+            if birth is None and self.config.research_mode:
+                birth = research_configuration(self.config.research_birth_policy)
+            soul_payload = (birth or get_config()).soul.__dict__
         except Exception:
             soul_payload = {}
         drives_payload = {
@@ -1433,6 +1749,7 @@ class LifeHistoryStore:
         return _clamp(_safe_number(row["value"], fallback))
 
     def _theme_state(self, signatures: list[str]) -> dict[str, float]:
+        signatures = list({self.resolve_theme_signature(signature) for signature in signatures})
         if not signatures:
             return {
                 "source_recurrence": 0.0,
@@ -1467,7 +1784,24 @@ class LifeHistoryStore:
 
     def _update_theme_signatures(self, signatures: list[str], weight: float) -> None:
         now = time.time()
-        for signature in signatures:
+        for signature in dict.fromkeys(self.resolve_theme_signature(item) for item in signatures):
+            # Conflict tracking: a signature encodes subject + keyword base +
+            # valence sign, with the sign kept outside the hash so the
+            # opposite-valence sibling is derivable. If an experience
+            # reinforces a theme whose sibling (same subject/keywords, flipped
+            # sign) already exists, both rows gain a conflict mark — this is
+            # what lets ``_theme_state`` consistency drop below 1.0.
+            sibling = _opposite_theme_signature(signature)
+            conflicted = False
+            if sibling is not None:
+                conflicted = (
+                    self._conn.execute(
+                        "UPDATE theme_signatures SET conflicting_count = conflicting_count + 1 "
+                        "WHERE signature = ?",
+                        (sibling,),
+                    ).rowcount
+                    > 0
+                )
             row = self._conn.execute(
                 "SELECT * FROM theme_signatures WHERE signature = ?",
                 (signature,),
@@ -1477,9 +1811,9 @@ class LifeHistoryStore:
                     """
                     INSERT INTO theme_signatures
                     (signature, first_seen, last_seen, reinforcement_count, accrued_weight, conflicting_count)
-                    VALUES (?, ?, ?, 1, ?, 0)
+                    VALUES (?, ?, ?, 1, ?, ?)
                     """,
-                    (signature, now, now, weight),
+                    (signature, now, now, weight, 1 if conflicted else 0),
                 )
             else:
                 self._conn.execute(
@@ -1488,16 +1822,66 @@ class LifeHistoryStore:
                     SET last_seen = ?,
                         reinforcement_count = reinforcement_count + 1,
                         accrued_weight = ?,
-                        conflicting_count = conflicting_count
+                        conflicting_count = conflicting_count + ?
                     WHERE signature = ?
                     """,
                     (
                         now,
                         _clamp(float(row["accrued_weight"]) + weight),
+                        1 if conflicted else 0,
                         signature,
                     ),
                 )
-        self._conn.commit()
+
+    def resolve_theme_signature(self, signature: str) -> str:
+        row = self._conn.execute(
+            "SELECT canonical FROM theme_aliases WHERE alias = ?", (signature,),
+        ).fetchone()
+        return str(row["canonical"]) if row else signature
+
+    def _reconcile_theme_signatures(self, digest: dict[str, Any]) -> None:
+        for opposite in (False, True):
+            modern = _derive_theme_signatures(digest, opposite=opposite)
+            legacy = _derive_theme_signatures(digest, legacy=True, opposite=opposite)
+            for canonical, alias in zip(modern, legacy):
+                old = self._conn.execute(
+                    "SELECT * FROM theme_signatures WHERE signature = ?", (alias,),
+                ).fetchone()
+                current = self._conn.execute(
+                    "SELECT * FROM theme_signatures WHERE signature = ?", (canonical,),
+                ).fetchone()
+                if old is not None and current is not None:
+                    self._conn.execute(
+                        """UPDATE theme_signatures SET first_seen = ?, last_seen = ?,
+                        reinforcement_count = ?, accrued_weight = ?, conflicting_count = ?
+                        WHERE signature = ?""",
+                        (min(old["first_seen"], current["first_seen"]),
+                         max(old["last_seen"], current["last_seen"]),
+                         old["reinforcement_count"] + current["reinforcement_count"],
+                         _clamp(old["accrued_weight"] + current["accrued_weight"]),
+                         old["conflicting_count"] + current["conflicting_count"], canonical),
+                    )
+                    self._conn.execute("DELETE FROM theme_signatures WHERE signature = ?", (alias,))
+                elif old is not None:
+                    self._conn.execute(
+                        "UPDATE theme_signatures SET signature = ? WHERE signature = ?", (canonical, alias),
+                    )
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO theme_aliases (alias, canonical) VALUES (?, ?)",
+                    (alias, canonical),
+                )
+        retained = {}
+        for row in self._conn.execute(
+            "SELECT * FROM open_questions WHERE source_kind='low_confidence' AND status IN ('open','pursuing') ORDER BY (status='pursuing') DESC, id"
+        ).fetchall():
+            metadata = json.loads(row["metadata_json"])
+            signature = self.resolve_theme_signature(str(metadata.get("_dedupe") or ""))
+            if signature in retained:
+                metadata["superseded_by"] = retained[signature]
+                self._conn.execute("UPDATE open_questions SET status='superseded', metadata_json=? WHERE id=?",
+                                   (json.dumps(metadata, sort_keys=True), row["id"]))
+            else:
+                retained[signature] = row["id"]
 
     def _daily_drive_drift(self, drive_name: str) -> float:
         if not drive_name:
@@ -1624,7 +2008,6 @@ class LifeHistoryStore:
                 batch_id,
             ),
         )
-        self._conn.commit()
         return int(cursor.lastrowid)
 
     def _apply_belief(
@@ -1712,7 +2095,6 @@ class LifeHistoryStore:
             },
             batch_id=batch_id,
         )
-        self._conn.commit()
         return event
 
     def _apply_drive_change(
@@ -1767,7 +2149,6 @@ class LifeHistoryStore:
             },
             batch_id=batch_id,
         )
-        self._conn.commit()
         return event
 
     def _insert_evolution_event(
@@ -1808,7 +2189,6 @@ class LifeHistoryStore:
                 batch_id,
             ),
         )
-        self._conn.commit()
         row = self._conn.execute(
             "SELECT * FROM evolution_events WHERE id = ?",
             (int(cursor.lastrowid),),
@@ -1826,9 +2206,13 @@ def _digest_experience(
     text: str,
     source_type: str,
     llm_client: LLMBackend | None,
+    research_mode: bool = False,
 ) -> dict[str, Any]:
     if llm_client is not None:
-        parsed = _try_llm_digest(title=title, text=text, source_type=source_type, llm_client=llm_client)
+        parsed = _try_llm_digest(
+            title=title, text=text, source_type=source_type,
+            llm_client=llm_client, research_mode=research_mode,
+        )
         if parsed is not None:
             digest = _normalize_digest(parsed, title=title, text=text)
             digest["digest_quality"] = "high"
@@ -1853,15 +2237,9 @@ def _digest_experience(
     return digest
 
 
-def _try_llm_digest(
-    *,
-    title: str,
-    text: str,
-    source_type: str,
-    llm_client: LLMBackend,
-) -> dict[str, Any] | None:
-    system_prompt = (
-        "You are Nūr's private experience digestion engine. Analyze material as "
+def experience_digestion_prompt(*, research_mode: bool = False) -> str:
+    prompt = (
+        "You are OpenRook's private experience digestion engine. Analyze material as "
         "something that may change an evolving synthetic character. Return only "
         "strict JSON with keys: summary, salience, emotional_valence, "
         "emotional_impact, confidence, beliefs, drive_changes, "
@@ -1883,6 +2261,21 @@ def _try_llm_digest(
         "but failed' is negative competence, not positive learning).\n"
         "- If the material contradicts prior beliefs you can name, surface that "
         "in the belief 'reason' field so the runtime can revise older beliefs.\n\n"
+    )
+    if research_mode:
+        return prompt + (
+            "Research output schema (no preferred personality or direction of change):\n"
+            "summary and emotional_impact are strings; salience and confidence "
+            "are numbers in [0, 1]; emotional_valence is a number in [-1, 1]. "
+            "beliefs entries have subject, statement, reason, confidence. "
+            "drive_changes entries have name, delta, reason, confidence. "
+            "self_trait_changes entries have trait, delta, reason, confidence. "
+            "future_behavior is an array of strings. All arrays may be empty. "
+            "Positive changes, negative changes, reversals, and no change are "
+            "equally admissible when supported by the material. Do not infer a "
+            "change merely because the schema offers a field for it."
+        )
+    return prompt + (
         "Example output for a substantive but bounded experience:\n"
         '{"summary":"Debugged a race condition I had missed for two days; '
         'slowing down to think before coding would have helped.",'
@@ -1904,6 +2297,17 @@ def _try_llm_digest(
         'experience.","confidence":0.6,"beliefs":[],"drive_changes":[],'
         '"self_trait_changes":[],"future_behavior":[]}'
     )
+
+
+def _try_llm_digest(
+    *,
+    title: str,
+    text: str,
+    source_type: str,
+    llm_client: LLMBackend,
+    research_mode: bool = False,
+) -> dict[str, Any] | None:
+    system_prompt = experience_digestion_prompt(research_mode=research_mode)
     user_message = (
         f"Source type: {source_type}\n"
         f"Title: {title}\n\n"
@@ -1912,6 +2316,8 @@ def _try_llm_digest(
     try:
         raw = llm_client.generate(system_prompt, user_message)
         return _extract_json(raw)
+    except (ResearchBudgetExceeded, ResearchStudyLimit):
+        raise
     except Exception:
         return None
 
@@ -1991,7 +2397,7 @@ def _heuristic_digest(*, title: str, text: str, source_type: str) -> dict[str, A
     if not beliefs and salience >= 0.55:
         beliefs.append({
             "subject": _slug(title) or "worldview",
-            "statement": f"{title} became part of Nūr's worldview as an experience that may shape later interpretation.",
+            "statement": f"{title} became part of OpenRook's worldview as an experience that may shape later interpretation.",
             "reason": "The material was salient enough to leave a worldview trace.",
             "confidence": 0.55,
         })
@@ -2042,7 +2448,14 @@ def compute_influence_weight(
     character_current_caution: float,
     injection_marker_density: float,
 ) -> float:
-    """Compute character-state influence weight; not a policy gate."""
+    """Compute character-state influence weight; not a policy gate.
+
+    ``source_consistency_with_existing_themes`` ranges [-1, 1]: 1.0 for
+    themes only ever reinforced with one valence sign, falling toward (and
+    below) 0 once opposite-valence sibling signatures register conflicts —
+    so the ±0.10 consistency term can subtract for genuinely conflicted
+    themes, not just add.
+    """
     recurrence = max(0.0, _safe_number(source_recurrence, 0.0))
     consistency = max(-1.0, min(1.0, _safe_number(source_consistency_with_existing_themes, 0.0)))
     recency = _clamp(_safe_number(recency_decay_of_prior_similar, 0.0))
@@ -2094,24 +2507,27 @@ def _weighted_drive_change(
     }
 
 
-def _derive_theme_signatures(digest: dict[str, Any]) -> list[str]:
+def _derive_theme_signatures(
+    digest: dict[str, Any], *, legacy: bool = False, opposite: bool = False,
+) -> list[str]:
     signatures: list[str] = []
     for belief in _as_list(digest.get("beliefs")):
         if not isinstance(belief, dict):
             continue
         subject = _safe_label(str(belief.get("subject") or "worldview"))
         statement = str(belief.get("statement") or "")
-        signatures.append(_theme_signature(subject, statement, 1.0))
+        signatures.append(_theme_signature(subject, statement, -1.0 if opposite else 1.0, legacy=legacy))
     for change in _as_list(digest.get("drive_changes")):
         if not isinstance(change, dict):
             continue
         name = _safe_label(str(change.get("name") or "drive"))
         delta = _safe_number(change.get("delta", 0.0), 0.0)
-        signatures.append(_theme_signature(f"drive:{name}", str(change.get("reason") or ""), delta))
+        sign_source = (-1.0 if delta >= 0 else 1.0) if opposite else delta
+        signatures.append(_theme_signature(f"drive:{name}", str(change.get("reason") or ""), sign_source, legacy=legacy))
     for item in _as_list(digest.get("future_behavior")):
         text = str(item or "")
         if text.strip():
-            signatures.append(_theme_signature("future_behavior", text, 1.0))
+            signatures.append(_theme_signature("future_behavior", text, -1.0 if opposite else 1.0, legacy=legacy))
     seen: set[str] = set()
     unique: list[str] = []
     for signature in signatures:
@@ -2121,7 +2537,7 @@ def _derive_theme_signatures(digest: dict[str, Any]) -> list[str]:
     return unique[:25]
 
 
-def _theme_signature(subject: str, text: str, sign_source: float) -> str:
+def _theme_signature(subject: str, text: str, sign_source: float, *, legacy: bool = False) -> str:
     tokens = [
         token for token in _WORD_RE.findall(f"{subject} {text}".lower())
         if len(token) > 2
@@ -2132,9 +2548,32 @@ def _theme_signature(subject: str, text: str, sign_source: float) -> str:
     ]
     keyword_set = sorted(set(tokens))[:8]
     sign = "pos" if sign_source >= 0 else "neg"
-    raw = f"{_safe_label(subject, fallback='theme')}:{sign}:{'|'.join(keyword_set)}"
+    # The hash covers subject + keyword base only; the valence sign stays
+    # outside it so the opposite-valence sibling signature is derivable by
+    # flipping the sign component (see ``_opposite_theme_signature``).
+    prefix = f"{_safe_label(subject, fallback='theme')}:{sign}:" if legacy else f"{_safe_label(subject, fallback='theme')}:"
+    raw = prefix + "|".join(keyword_set)
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
     return f"{_safe_label(subject, fallback='theme')}:{sign}:{digest}"
+
+
+def _opposite_theme_signature(signature: str) -> str | None:
+    """Return the opposite-valence sibling of a theme signature, if derivable.
+
+    Signatures are ``subject:sign:digest`` where ``subject`` contains no
+    colons (``_safe_label`` strips them) and ``digest`` excludes the sign.
+    Flipping ``pos``/``neg`` therefore yields the signature the same
+    subject + keywords would produce with inverted valence.
+    """
+    parts = signature.split(":")
+    if len(parts) != 3:
+        return None
+    subject, sign, digest = parts
+    if sign == "pos":
+        return f"{subject}:neg:{digest}"
+    if sign == "neg":
+        return f"{subject}:pos:{digest}"
+    return None
 
 
 def _token_set(text: str) -> set[str]:
@@ -2146,6 +2585,122 @@ def _token_set(text: str) -> set[str]:
         token for token in _WORD_RE.findall((text or "").lower())
         if len(token) > 2 and token not in stop
     }
+
+
+_NEGATION_TOKENS = {
+    "not", "false", "never", "wrong",
+    "contradict", "contradicts", "contradicted", "contradiction",
+}
+_REVISION_WINDOW = 6
+_MAX_REVISION_CANDIDATES = 10
+
+
+def _related_belief_candidates(
+    rows: list[sqlite3.Row],
+    experience_text: str,
+) -> list[sqlite3.Row]:
+    """Prefilter beliefs plausibly related to the experience text.
+
+    Relatedness is token overlap between the belief key/statement and the
+    experience text; candidates are ranked by overlap and capped so the
+    batched LLM verdict call stays small.
+    """
+    experience_tokens = _token_set(experience_text)
+    if not experience_tokens:
+        return []
+    scored: list[tuple[float, sqlite3.Row]] = []
+    for row in rows:
+        belief_tokens = _token_set(f"{row['key']} {row['statement']}")
+        overlap = len(belief_tokens & experience_tokens)
+        if overlap > 0:
+            scored.append((overlap / max(1.0, len(belief_tokens)), row))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [row for _score, row in scored[:_MAX_REVISION_CANDIDATES]]
+
+
+def _llm_revision_verdicts(
+    llm_client: LLMBackend,
+    candidates: list[sqlite3.Row],
+    experience_text: str,
+) -> list[dict[str, Any]] | None:
+    """One batched LLM call returning per-belief verdicts, or None on failure."""
+    system_prompt = (
+        "You audit whether new evidence contradicts existing beliefs held by "
+        "an evolving synthetic character. For EACH belief listed, judge the "
+        "relation of the new experience to that belief. Return only strict "
+        'JSON of the form {"verdicts": [{"key": "<belief key>", '
+        '"relation": "contradicts"|"supports"|"unrelated", '
+        '"confidence": 0..1}]} with exactly one entry per belief key. '
+        "Use 'contradicts' only when the experience genuinely undermines the "
+        "belief, 'supports' when it reinforces it, otherwise 'unrelated'."
+    )
+    beliefs_block = "\n".join(
+        f"- key: {row['key']}\n  statement: {_trim(str(row['statement']), 300)}"
+        for row in candidates
+    )
+    user_message = (
+        f"Beliefs:\n{beliefs_block}\n\n"
+        f"New experience:\n{_trim(experience_text, 6000)}"
+    )
+    try:
+        raw = llm_client.generate(system_prompt, user_message)
+    except (ResearchBudgetExceeded, ResearchStudyLimit):
+        raise
+    except Exception:
+        return None
+    data = _extract_json(raw)
+    if not isinstance(data, dict):
+        return None
+    verdicts = data.get("verdicts")
+    if not isinstance(verdicts, list):
+        return None
+    cleaned: list[dict[str, Any]] = []
+    for item in verdicts:
+        if not isinstance(item, dict):
+            continue
+        relation = str(item.get("relation") or "").strip().lower()
+        if relation not in {"contradicts", "supports", "unrelated"}:
+            continue
+        cleaned.append({
+            "key": str(item.get("key") or ""),
+            "relation": relation,
+            "confidence": _safe_float(item.get("confidence", 0.0), 0.0),
+        })
+    return cleaned if cleaned else None
+
+
+def _heuristic_revision_verdicts(
+    candidates: list[sqlite3.Row],
+    experience_text: str,
+) -> list[dict[str, Any]]:
+    """Negation-window contradiction detection (LLM-free fallback).
+
+    A belief reads as contradicted only when a negation token appears within
+    ±_REVISION_WINDOW tokens of one of its key tokens — so "this does not
+    relate to autonomy" triggers, while a stray "not" thousands of characters
+    away from any belief-key mention does not.
+    """
+    tokens = _WORD_RE.findall(experience_text.lower())
+    negation_positions = [
+        index for index, token in enumerate(tokens) if token in _NEGATION_TOKENS
+    ]
+    verdicts: list[dict[str, Any]] = []
+    for row in candidates:
+        key = str(row["key"])
+        key_tokens = set(_WORD_RE.findall(key.lower()))
+        if not key_tokens:
+            continue
+        key_positions = [
+            index for index, token in enumerate(tokens) if token in key_tokens
+        ]
+        contradicted = any(
+            abs(key_index - negation_index) <= _REVISION_WINDOW
+            for key_index in key_positions
+            for negation_index in negation_positions
+        )
+        if contradicted:
+            verdicts.append({"key": key, "relation": "contradicts", "confidence": 1.0})
+    return verdicts
 
 
 def _prepare_digestion_text(text: str) -> tuple[str, int]:
@@ -2302,6 +2857,7 @@ def _belief_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "status": row["status"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "last_decayed_at": row["last_decayed_at"] if "last_decayed_at" in row.keys() else None,
         "source_experience_id": row["source_experience_id"],
         "evidence": row["evidence"],
     }

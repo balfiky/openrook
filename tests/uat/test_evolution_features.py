@@ -589,7 +589,7 @@ def test_multi_turn_arc_belief_revision_drives_and_question_resolution(uat_serve
             {
                 "title": "Counter-evidence on midnight work",
                 "source_type": "admin_pasted_text",
-                "participants": ["operator", "Nur"],
+                "participants": ["operator", "OpenRook"],
                 "text": (
                     "Midnight sessions are not better. The claim that midnight "
                     "produces the best ideas turned out to be false. Mornings "
@@ -1658,7 +1658,7 @@ def test_complete_release_uat_suite():
     process, isolated state) — no cross-test contamination.
 
     Run it explicitly with:
-        NUR_UAT_LIVE=1 NUR_UAT_BACKEND=codex \\
+        OPENROOK_UAT_LIVE=1 OPENROOK_UAT_BACKEND=codex \\
           python -m pytest tests/uat/ -m comprehensive -v
 
     Or via the Makefile shortcut:
@@ -1681,9 +1681,9 @@ def test_complete_release_uat_suite():
     ]
     env = os.environ.copy()
     # Forward live-mode flags.
-    if "NUR_UAT_LIVE" not in env:
+    if "OPENROOK_UAT_LIVE" not in env:
         pytest.skip(
-            "Comprehensive aggregator requires NUR_UAT_LIVE=1 (live backend).",
+            "Comprehensive aggregator requires OPENROOK_UAT_LIVE=1 (live backend).",
         )
     result = subprocess.run(
         cmd, cwd=str(repo_root), env=env, capture_output=False, check=False,

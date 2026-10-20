@@ -1,6 +1,8 @@
-"""Terminal-first setup for local Nūr workspaces."""
+"""Terminal-first setup for local OpenRook workspaces."""
 
 from __future__ import annotations
+
+from config.environment import project_env
 
 import argparse
 import json
@@ -21,16 +23,16 @@ OutputFn = Callable[[str], None]
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nur-setup",
+        prog="openrook-setup",
         description=(
-            "Configure a local Nūr workspace from the terminal. By default this "
+            "Configure a local OpenRook workspace from the terminal. By default this "
             "is terminal-native and does not launch the browser. Use --web when "
             "you explicitly want the browser setup wizard."
         ),
     )
     parser.add_argument(
         "--config",
-        default="runtime_config.yaml",
+        default=project_env("RUNTIME_CONFIG", "runtime_config.yaml"),
         help="Runtime config path to create/use (default: runtime_config.yaml).",
     )
     parser.add_argument(
@@ -100,7 +102,7 @@ def _run_terminal_setup(
         config = RuntimeConfig(data_dir=str(_resolve_data_dir(config_path, data_dir)))
 
     output_fn("")
-    output_fn("Nūr terminal setup")
+    output_fn("OpenRook terminal setup")
     output_fn("==================")
     output_fn("Press Enter to accept a default. Nothing launches in the browser from this flow.")
     output_fn("")
@@ -127,14 +129,14 @@ def _run_terminal_setup(
     output_fn(f"Identity file: {_soul_yaml_path(env)}")
     output_fn("")
     output_fn("Start the web UI when you want it:")
-    output_fn(f"  nur-web --config {config_path}")
+    output_fn(f"  openrook-web --config {config_path}")
     output_fn("Or run the browser wizard explicitly:")
-    output_fn(f"  nur-setup --web --config {config_path}")
+    output_fn(f"  openrook-setup --web --config {config_path}")
     return config
 
 
 def _configure_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: OutputFn) -> None:
-    output_fn("LLM backend (Nūr requires a real model — there is no offline mode)")
+    output_fn("LLM backend (OpenRook requires a real model — there is no offline mode)")
     choice = _prompt_choice(
         [
             ("ollama", "Ollama or LM Studio local server"),
@@ -247,7 +249,7 @@ def _configure_character_independence(config: RuntimeConfig, *, input_fn: InputF
 def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn) -> dict:
     output_fn("")
     output_fn("Identity")
-    name = _prompt_text("Agent name", "Nūr", input_fn=input_fn)
+    name = _prompt_text("Agent name", "OpenRook", input_fn=input_fn)
     mode = _prompt_choice(
         [
             ("steady", "Steady companion"),
@@ -306,7 +308,7 @@ def _identity_preset(mode: str) -> dict:
     }
     base = presets.get(mode, presets["steady"]).copy()
     base.update({
-        "name": "Nūr",
+        "name": "OpenRook",
         "likes": ["clarity", "honesty", "useful action"],
         "dislikes": ["empty flattery", "careless harm", "needless cruelty"],
         "boundaries": [
@@ -384,7 +386,7 @@ def _create_runtime_dirs(config: RuntimeConfig) -> None:
 
 def _soul_yaml_path(environ: dict[str, str] | None = None) -> Path:
     env = environ if environ is not None else os.environ
-    override = env.get("NUR_CONFIG_DIR", "").strip()
+    override = project_env("CONFIG_DIR", "", environ=env).strip()
     if override:
         return Path(override).expanduser().resolve() / "soul.yaml"
     return Path(config_loader.__file__).resolve().parent / "soul.yaml"
@@ -417,9 +419,9 @@ def _browser_url(host: str, port: int) -> str:
 
 
 def _launch_web_setup(config_path: Path, *, host: str, port: int, open_browser: bool) -> None:
-    os.environ["NUR_RUNTIME_CONFIG"] = str(config_path.expanduser().resolve())
+    os.environ["OPENROOK_RUNTIME_CONFIG"] = str(config_path.expanduser().resolve())
     url = _browser_url(host, port)
-    print(f"Launching Nūr web setup at {url}")
+    print(f"Launching OpenRook web setup at {url}")
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
@@ -452,7 +454,7 @@ def main(argv: list[str] | None = None) -> None:
     if not sys.stdin.isatty():
         created = _initialize_workspace(config_path, args.data_dir, force=args.force)
         print(("Created" if created else "Using") + f" {config_path}")
-        print("Non-interactive shell detected. Run `nur-setup` in a terminal for prompts, or `nur-setup --web` for the browser wizard.")
+        print("Non-interactive shell detected. Run `openrook-setup` in a terminal for prompts, or `openrook-setup --web` for the browser wizard.")
         return
 
     _run_terminal_setup(

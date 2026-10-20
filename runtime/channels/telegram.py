@@ -161,7 +161,7 @@ class TelegramChannel:
     Features:
     - Allowlist by numeric user ID (empty = allow all)
     - Per-update dedupe with TTL cache
-    - Typing indicators resent every 4 s while Nūr processes
+    - Typing indicators resent every 4 s while OpenRook processes
     - Commands: /help, /status, /mental, /mood, /new, /reset, /debug
     """
 
@@ -279,7 +279,8 @@ class TelegramChannel:
             response = await self._manager.handle_message(
                 "telegram", user_id, str(chat_id), text,
             )
-            await self._client.send_message(chat_id, response)
+            if response:
+                await self._client.send_message(chat_id, response)
         except RuntimeError as exc:
             await self._client.send_message(chat_id, f"[busy] {exc}")
         except Exception:
@@ -489,7 +490,7 @@ class TelegramChannel:
             open_loop_count = len(view.get("open_loops", []))
 
         lines = [
-            "Nūr state:",
+            "OpenRook state:",
             f"emotion: {label}",
         ]
         if strategy:

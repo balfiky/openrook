@@ -123,7 +123,7 @@ def test_execute_claim_is_grounded_by_shell_tool_result():
 def test_success_claim_requires_successful_shell_result():
     """A failed shell call must not ground a "command succeeded" claim.
 
-    Regression for the youtube-dl transcript where Nūr narrated a successful
+    Regression for the youtube-dl transcript where OpenRook narrated a successful
     download even though the underlying shell command exited non-zero.
     """
     failed_trace = ToolTrace(

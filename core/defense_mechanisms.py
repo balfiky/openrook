@@ -10,7 +10,7 @@ the system is hiding from itself.
 
 from __future__ import annotations
 
-import time
+from core.clock import clock as time
 
 from core.types import (
     DefenseActivation,

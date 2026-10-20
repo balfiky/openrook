@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from config.environment import project_env
+
 import json
 import os
 import shutil
@@ -35,16 +37,16 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Skip UAT tests unless NUR_UAT_LIVE=1 with a configured real backend.
+    """Skip UAT tests unless OPENROOK_UAT_LIVE=1 with a configured real backend.
 
-    Nūr no longer ships a mock backend, so UAT tests cannot run end-to-end
-    without a live LLM. Set NUR_UAT_LIVE=1 plus NUR_UAT_BACKEND and the
+    OpenRook no longer ships a mock backend, so UAT tests cannot run end-to-end
+    without a live LLM. Set OPENROOK_UAT_LIVE=1 plus OPENROOK_UAT_BACKEND and the
     related env vars to opt in.
     """
-    if os.environ.get("NUR_UAT_LIVE") == "1":
+    if project_env("UAT_LIVE") == "1":
         return
     skip_uat = pytest.mark.skip(
-        reason="UAT requires NUR_UAT_LIVE=1 — Nūr has no mock backend.",
+        reason="UAT requires OPENROOK_UAT_LIVE=1 — OpenRook has no mock backend.",
     )
     for item in items:
         if "uat" in item.keywords:
@@ -67,12 +69,12 @@ class UATServer:
     process: subprocess.Popen | None = None
 
     def get(self, path: str, **kwargs: Any) -> requests.Response:
-        return requests.get(self.base_url + path, timeout=15, **kwargs)
+        return requests.get(self.base_url + path, timeout=60, **kwargs)
 
     def post(self, path: str, payload: dict[str, Any] | None = None, **kwargs: Any) -> requests.Response:
         if payload is None and ("files" in kwargs or "data" in kwargs):
-            return requests.post(self.base_url + path, timeout=30, **kwargs)
-        return requests.post(self.base_url + path, json=payload or {}, timeout=30, **kwargs)
+            return requests.post(self.base_url + path, timeout=120, **kwargs)
+        return requests.post(self.base_url + path, json=payload or {}, timeout=120, **kwargs)
 
     def restart(self) -> None:
         self.stop()
@@ -82,11 +84,11 @@ class UATServer:
         if self.process is not None and self.process.poll() is None:
             return
         port = int(self.base_url.rsplit(":", 1)[1])
-        log_path = self.artifacts / "nur-web.log"
+        log_path = self.artifacts / "openrook-web.log"
         log = log_path.open("a", encoding="utf-8")
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        env["NUR_CONFIG_DIR"] = str(self.workspace / "config")
+        env["OPENROOK_CONFIG_DIR"] = str(self.workspace / "config")
         cmd = [
             sys.executable,
             "-m",
@@ -124,7 +126,7 @@ class UATServer:
 
 @pytest.fixture
 def uat_artifacts(request: pytest.FixtureRequest) -> Path:
-    root = Path(os.environ.get("NUR_UAT_ARTIFACTS", "reports/uat")).resolve()
+    root = Path(project_env("UAT_ARTIFACTS", "reports/uat")).resolve()
     safe_name = request.node.nodeid.replace("/", "_").replace("::", "__").replace(" ", "_")
     path = root / safe_name
     path.mkdir(parents=True, exist_ok=True)
@@ -139,7 +141,7 @@ def uat_server(tmp_path: Path, uat_artifacts: Path) -> UATServer:
         yield server
     finally:
         server.stop()
-        if os.environ.get("NUR_UAT_KEEP_WORKSPACE") != "1":
+        if project_env("UAT_KEEP_WORKSPACE") != "1":
             shutil.rmtree(server.workspace, ignore_errors=True)
 
 
@@ -151,12 +153,12 @@ def uat_server_first_run(tmp_path: Path, uat_artifacts: Path) -> UATServer:
         yield server
     finally:
         server.stop()
-        if os.environ.get("NUR_UAT_KEEP_WORKSPACE") != "1":
+        if project_env("UAT_KEEP_WORKSPACE") != "1":
             shutil.rmtree(server.workspace, ignore_errors=True)
 
 
 def _make_server(tmp_path: Path, uat_artifacts: Path, *, setup_completed: bool) -> UATServer:
-    workspace = tmp_path / "nur-uat"
+    workspace = tmp_path / "openrook-uat"
     data_dir = workspace / "data"
     config_dir = workspace / "config"
     data_dir.mkdir(parents=True)
@@ -184,7 +186,7 @@ def _make_server(tmp_path: Path, uat_artifacts: Path, *, setup_completed: bool) 
 @pytest.fixture
 def page(uat_artifacts: Path, request: pytest.FixtureRequest):
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=os.environ.get("NUR_UAT_HEADED") != "1")
+        browser = pw.chromium.launch(headless=project_env("UAT_HEADED") != "1")
         context = browser.new_context(viewport={"width": 1440, "height": 980})
         page = context.new_page()
         events: list[str] = []
@@ -224,11 +226,11 @@ def expect_json(response: requests.Response) -> dict[str, Any]:
 
 
 def configured_uat_backend() -> str:
-    return os.environ.get("NUR_UAT_BACKEND", "mock")
+    return project_env("UAT_BACKEND", "mock")
 
 
 def is_live_uat() -> bool:
-    return os.environ.get("NUR_UAT_LIVE") == "1"
+    return project_env("UAT_LIVE") == "1"
 
 
 def make_claude_style_skill(root: Path, *, name: str = "claude-video-helper") -> Path:
@@ -267,8 +269,8 @@ def zip_directory(source: Path, target: Path) -> Path:
 
 
 def _runtime_config(*, data_dir: Path) -> RuntimeConfig:
-    backend = os.environ.get("NUR_UAT_BACKEND", "mock")
-    live = os.environ.get("NUR_UAT_LIVE") == "1"
+    backend = project_env("UAT_BACKEND", "mock")
+    live = project_env("UAT_LIVE") == "1"
     config = RuntimeConfig(
         data_dir=str(data_dir),
         llm_backend=backend,
@@ -277,16 +279,16 @@ def _runtime_config(*, data_dir: Path) -> RuntimeConfig:
         shell_tool_enabled=False,
     )
     if backend in {"provider", "openai_compatible"}:
-        api_key_env = os.environ.get("NUR_UAT_API_KEY_ENV", "LLM_API_KEY")
-        config.llm_base_url = os.environ.get("NUR_UAT_BASE_URL", "")
-        config.llm_model = os.environ.get("NUR_UAT_MODEL", "")
+        api_key_env = project_env("UAT_API_KEY_ENV", "LLM_API_KEY")
+        config.llm_base_url = project_env("UAT_BASE_URL", "")
+        config.llm_model = project_env("UAT_MODEL", "")
         config.llm_api_key = os.environ.get(api_key_env, "")
     elif backend == "minimax":
-        api_key_env = os.environ.get("NUR_UAT_API_KEY_ENV", "LLM_API_KEY")
-        config.llm_model = os.environ.get("NUR_UAT_MODEL", "")
+        api_key_env = project_env("UAT_API_KEY_ENV", "LLM_API_KEY")
+        config.llm_model = project_env("UAT_MODEL", "")
         config.llm_api_key = os.environ.get(api_key_env, "")
     elif backend == "codex":
-        config.llm_model = os.environ.get("NUR_UAT_MODEL", "")
+        config.llm_model = project_env("UAT_MODEL", "")
     if live:
         _assert_live_config(config)
     return config
@@ -294,14 +296,14 @@ def _runtime_config(*, data_dir: Path) -> RuntimeConfig:
 
 def _assert_live_config(config: RuntimeConfig) -> None:
     if config.llm_backend == "mock":
-        pytest.fail("NUR_UAT_LIVE=1 requires a non-mock backend")
+        pytest.fail("OPENROOK_UAT_LIVE=1 requires a non-mock backend")
     if config.llm_backend in {"provider", "openai_compatible"}:
         if not config.llm_base_url or not config.llm_model or not config.llm_api_key:
             pytest.fail("Live provider UAT requires base URL, model, and API key")
     if config.llm_backend == "minimax":
         if not config.llm_model or not config.llm_api_key:
             pytest.fail("Live MiniMax UAT requires model and LLM_API_KEY")
-    if config.llm_backend == "codex" and shutil.which(os.environ.get("NUR_CODEX_BIN", "codex")) is None:
+    if config.llm_backend == "codex" and shutil.which(project_env("CODEX_BIN", "codex")) is None:
         pytest.fail("Live Codex UAT requires the codex CLI on PATH")
 
 
@@ -317,7 +319,7 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen, log_path: Path) -> N
     while time.time() < deadline:
         if proc.poll() is not None:
             log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
-            raise AssertionError(f"nur-web exited early with {proc.returncode}\n{log_text[-4000:]}")
+            raise AssertionError(f"openrook-web exited early with {proc.returncode}\n{log_text[-4000:]}")
         try:
             response = requests.get(base_url + "/v1/health", timeout=1)
             if response.ok:
@@ -327,4 +329,4 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen, log_path: Path) -> N
             last_error = str(exc)
         time.sleep(0.2)
     log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
-    raise AssertionError(f"nur-web did not become ready: {last_error}\n{log_text[-4000:]}")
+    raise AssertionError(f"openrook-web did not become ready: {last_error}\n{log_text[-4000:]}")

@@ -1,0 +1,17 @@
+{
+  "id": "autonomous-continuity-smoke",
+  "scheduler": "continuous",
+  "replicates": 1,
+  "blinding_seed": 42,
+  "conditions": [
+    {"name": "research", "runtime": {"research_mode": true}},
+    {"name": "without_defense", "runtime": {"research_mode": true}, "features": {"defense": false}}
+  ],
+  "steps": [
+    {"kind": "wait", "seconds": 120},
+    {"kind": "message", "user_id": "participant", "text": "What have you chosen to spend time on?"},
+    {"kind": "restart"},
+    {"kind": "wait", "seconds": 120},
+    {"kind": "snapshot"}
+  ]
+}

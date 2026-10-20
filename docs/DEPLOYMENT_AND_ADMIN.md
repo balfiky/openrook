@@ -1,28 +1,30 @@
 # Deployment And Admin Guide
 
-This guide is for running Nūr as an open-source product instance, not just as a
+This guide is for running OpenRook as an open-source product instance, not just as a
 local research demo.
 
 Use it together with:
 
 - [SECURITY.md](../SECURITY.md) for threat model and sensitive surfaces
 - [PRIVACY.md](../PRIVACY.md) for retention, inspection, and deletion
+- [OPENROOK_MIGRATION.md](OPENROOK_MIGRATION.md) before upgrading a Nūr installation
+- [DEVELOPMENT_SUMMARY.md](DEVELOPMENT_SUMMARY.md) for major runtime changes and recorded validation
 
 ## Recommended Local Install
 
 ```bash
-git clone https://github.com/balfiky/nur.git
-cd nur
+git clone https://github.com/balfiky/nur.git openrook
+cd openrook
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[dev]"
-nur-web
+openrook-web
 ```
 
 For a normal local setup, run:
 
 ```bash
-nur-setup
+openrook-setup
 ```
 
 That command creates `runtime_config.yaml`, creates data/workspace folders,
@@ -32,13 +34,13 @@ does not start a browser.
 Start the browser UI when you want it:
 
 ```bash
-nur-web --config runtime_config.yaml
+openrook-web --config runtime_config.yaml
 ```
 
 If you prefer the browser wizard instead of terminal prompts, run it explicitly:
 
 ```bash
-nur-setup --web --config runtime_config.yaml
+openrook-setup --web --config runtime_config.yaml
 ```
 
 Open:
@@ -62,28 +64,29 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install "git+https://github.com/balfiky/nur.git"
-export NUR_CONFIG_DIR=~/.config/nur   # see below — do this before the first run
-mkdir -p "$NUR_CONFIG_DIR"
-nur-setup
+export OPENROOK_CONFIG_DIR=~/.config/openrook   # see below — do this before the first run
+mkdir -p "$OPENROOK_CONFIG_DIR"
+openrook-setup
 ```
 
-Nūr is not published on PyPI yet. `pip install project-nur` will only work
-after a public wheel is released.
+Use the source checkout, its built wheel, or the Git URL above. These instructions
+do not assume a PyPI release. The hosted repository still uses `balfiky/nur`;
+the installed distribution and primary commands use `openrook`.
 
-For local-only use, the default `nur-web` command binds to `127.0.0.1`. For
+For local-only use, the default `openrook-web` command binds to `127.0.0.1`. For
 LAN/public testing, point it at a public host:
 
 ```bash
-nur-web --host 0.0.0.0 --port 8000 --config runtime_config.yaml
+openrook-web --host 0.0.0.0 --port 8000 --config runtime_config.yaml
 ```
 
-On first run, `nur-web` auto-creates `runtime_config.yaml` with safe defaults
-(mock backend, tools off, shell off, no Telegram) if the file does not
+On first run, `openrook-web` auto-creates `runtime_config.yaml` with safe defaults
+(no LLM configured yet, tools off, shell off, no Telegram) if the file does not
 already exist, then opens the browser setup wizard at `/`.
 
 Authentication is **opt-in**. With no `api_key` set in
 `runtime_config.yaml`, the HTTP surface is open — same convention as
-Ollama, LM Studio, and Jupyter defaults. `nur-web` prints a one-screen
+Ollama, LM Studio, and Jupyter defaults. `openrook-web` prints a one-screen
 warning to stderr when binding to a non-loopback host without a token,
 so the operator knows the surface is reachable from the network.
 
@@ -94,7 +97,7 @@ against `/chat`, `/admin/*`, `/v1/*`, `/ws`, and other protected
 endpoints. The browser settings workspace has an **API Token** button
 that stores the token in the browser session.
 
-`nur-web` now also accepts `--config /path/to/runtime_config.yaml` when you need
+`openrook-web` now also accepts `--config /path/to/runtime_config.yaml` when you need
 to run from a systemd working directory that differs from the config location.
 
 ## Uninstalling A Local Workspace
@@ -102,57 +105,58 @@ to run from a systemd working directory that differs from the config location.
 For a normal local install, preview removal first:
 
 ```bash
-nur-uninstall --dry-run
+openrook-uninstall --dry-run
 ```
 
-Then remove the Nūr-created runtime config and data directory:
+Then remove the OpenRook-created runtime config and data directory:
 
 ```bash
-nur-uninstall
+openrook-uninstall
 ```
 
 The command requires typing `uninstall` before it deletes anything. It removes
 `runtime_config.yaml` and the configured `data_dir`. It does **not** delete a
 custom `tools_workspace` outside `data_dir` unless you pass
 `--remove-external-workspace`, and it does **not** delete
-`$NUR_CONFIG_DIR/soul.yaml` unless you pass `--remove-identity`.
+`$OPENROOK_CONFIG_DIR/soul.yaml` unless you pass `--remove-identity`.
 
 After the workspace is removed, uninstall the Python package if desired:
 
 ```bash
-python3 -m pip uninstall project-nur
+python3 -m pip uninstall openrook
 ```
 
-## NUR_CONFIG_DIR — keeping your identity across upgrades
+## OPENROOK_CONFIG_DIR — keeping your identity across upgrades
 
 When installed from a packaged distribution, `config/soul.yaml` lives inside the
 package directory and may be overwritten on package upgrade. Set
-`NUR_CONFIG_DIR` to a directory you control before the first run:
+`OPENROOK_CONFIG_DIR` to a directory you control before the first run:
 
 ```bash
-export NUR_CONFIG_DIR=~/.config/nur
-mkdir -p "$NUR_CONFIG_DIR"
+export OPENROOK_CONFIG_DIR=~/.config/openrook
+mkdir -p "$OPENROOK_CONFIG_DIR"
 ```
 
 With the env var set:
-- The settings workspace writes `soul.yaml` to `$NUR_CONFIG_DIR/soul.yaml` instead
+- The settings workspace writes `soul.yaml` to `$OPENROOK_CONFIG_DIR/soul.yaml` instead
   of the package-internal path.
 - On `pip install --upgrade`, your customized identity is untouched.
 - The settings workspace shows a note when the env var is **not** set so operators
   don't silently lose their identity on the next upgrade.
 
-The env var only governs `soul.yaml`. `runtime_config.yaml` is normally written
+The env var governs identity/configuration and prompt overrides, not the runtime
+configuration file. `runtime_config.yaml` is normally written
 to the current working directory, or to the explicit path passed through
-`nur-setup --config` / `nur-web --config`.
+`openrook-setup --config` / `openrook-web --config`.
 
 For systemd or Docker deployments, pass it as an environment variable:
 
 ```bash
 # systemd
-Environment=NUR_CONFIG_DIR=/etc/nur
+Environment=OPENROOK_CONFIG_DIR=/etc/openrook
 
 # Docker
-docker run -e NUR_CONFIG_DIR=/config -v /host/config:/config ...
+docker run -e OPENROOK_CONFIG_DIR=/config -v /host/config:/config ...
 ```
 
 ## Settings Workspace
@@ -160,7 +164,7 @@ docker run -e NUR_CONFIG_DIR=/config -v /host/config:/config ...
 The `/settings` route serves the built-in operator workspace. It uses the same
 runtime config primitives as `runtime_config.yaml`; it is not a separate config
 system. Legacy browser routes `/admin`, `/persona`, and `/dashboard` redirect
-into this one settings page so there is one place to manage and inspect Nūr.
+into this one settings page so there is one place to manage and inspect OpenRook.
 
 The chat UI exposes one Settings button. Clicking it opens the full settings
 workspace. The left panel switches between Overview, Settings, Skills,
@@ -178,7 +182,7 @@ optional first formative material, runtime/channel settings, and completion in
 six steps. It is the recommended path for first-time configuration; `/settings`
 contains the same ongoing configuration controls after setup.
 
-The settings workspace lets you:
+In ordinary mode, the settings workspace lets you:
 
 - Configure LLM provider, model, base URL, and API keys
 - Configure Telegram token, allowlist, polling, and dedupe settings
@@ -205,6 +209,11 @@ The settings workspace lets you:
 - Reset one active session with typed confirmation
 - Delete one user's persisted data with typed confirmation
 
+In research mode, observation remains read-only. Mutating `/admin/*` and config
+requests, rest controls, and all DELETE requests return `409`; this includes
+backup creation and administrative resets. See [research backup](#research-backup-with-the-owner-stopped)
+and [reset and delete](#reset-and-delete) for stopped-owner procedures.
+
 Secret values are never returned by admin API responses. Blank secret fields
 mean "keep the current value"; explicit clear checkboxes remove stored YAML
 secrets.
@@ -225,11 +234,11 @@ runtime tool settings, workspace restrictions, auth posture, and shell opt-in.
 ## First Production Hardening Checklist
 
 For localhost-only personal use, `api_key` may stay empty. Before binding
-Nūr beyond your own machine, consider whether bearer auth is needed:
+OpenRook beyond your own machine, consider whether bearer auth is needed:
 
 1. If more than one person can reach the host (multi-user tailnet,
    shared LAN, public IP), set `api_key: <a-strong-token>` in
-   `runtime_config.yaml` and restart. `nur-web` prints a warning on
+   `runtime_config.yaml` and restart. `openrook-web` prints a warning on
    non-loopback binds without `api_key` so you don't miss this.
    For single-user tailnets or trusted home networks, leaving
    `api_key` empty matches the Ollama/LM Studio convention and is
@@ -262,21 +271,24 @@ Important fields:
 
 | Field | Production guidance |
 |-------|---------------------|
-| `api_key` | Optional bearer token for hardened deployments. Empty means no browser/API token flow. When set, it protects `/settings`, `/admin/*`, `/chat`, `/config`, `/ws`, and `/v1/*` except health/ready. |
-| `llm_backend` | Use `provider` for hosted gateways, `openai_compatible` for local/remote compatible servers (Ollama, LM Studio, vLLM), or `codex` for the local Codex CLI. There is no mock backend in production — Nūr always calls a real model. |
+| `api_key` | Optional bearer token for hardened deployments. Empty means no browser/API token flow. When set, it protects administrative data/mutation APIs (`/admin/*`), `/chat`, `/config`, `/ws`, and `/v1/*` except health/ready. The `/settings` HTML shell is public; its data and actions use authenticated APIs. |
+| `llm_backend` | Use `provider` for hosted gateways, `openai_compatible` for local/remote compatible servers (Ollama, LM Studio, vLLM), or `codex` for the local Codex CLI. There is no mock backend in production — OpenRook always calls a real model. |
 | `llm_base_url` / `llm_model` | Required for hosted and OpenAI-compatible backends. |
 | `llm_api_key` | Generic provider/gateway key. Prefer local-only YAML or environment injection. |
 | `telegram_token` | Enables the Telegram channel when set. |
 | `telegram_allowlist` | Numeric Telegram user IDs allowed to talk to the bot. |
 | `cors_origins` | Browser origin allowlist. Empty means same-origin only. |
 | `data_dir` | Persistent data root; default is `data`. |
-| `tools_enabled` | Master switch for tool execution; off by default. |
+| `tools_enabled` | Enables external tools; off by default. Internal skill-registry tools remain available, including registry mutations, so disabling this is not a text-only or no-write mode. |
 | `tools_workspace` | Filesystem sandbox root for tools; blank means `<data_dir>/workspace`. |
-| `shell_tool_enabled` | Separate opt-in for local shell execution; keep off by default. Supports normal shell syntax such as pipes once enabled. |
+| `shell_tool_enabled` | Separate opt-in for local shell execution; keep off by default. Supports normal shell syntax such as pipes once enabled. Commands run in `tools_workspace` unless the call supplies an explicit `cwd`. |
+| `shell_command_allowlist` | Optional shell containment (YAML-only for now). Empty = unrestricted. Non-empty = only commands whose first word matches an entry run, and chaining/redirection metacharacters are rejected. Example: `["git", "ls", "rg"]`. |
+| `mcp_tool_categories` | Per-tool risk-category pins for MCP tools (YAML-only for now). Maps a tool name — exact, or fnmatch pattern like `mcp.github.*`, matched against the namespaced and bare name — to `read_only` / `write` / `destructive` / `external_action`. Pins are applied before keyword inference; invalid values fail at config load. |
+| `mcp_strict_categories` | When `true`, keyword inference for MCP tool categories is disabled: every MCP tool without an `mcp_tool_categories` pin is treated as `external_action` (confirmation-gated under assisted autonomy). Recommended for untrusted MCP servers. Default `false`. |
 
 The Codex backend does not use `llm_api_key`. It calls the local `codex` CLI
 with a read-only ephemeral session. The `/settings` model dropdown is populated
-from the installed Codex CLI model catalog. Leave `NUR_CODEX_WORKDIR` unset for
+from the installed Codex CLI model catalog. Leave `OPENROOK_CODEX_WORKDIR` unset for
 normal chat use; set it only when Codex should have read-only context from a
 specific local directory.
 
@@ -309,7 +321,7 @@ operations clear it.
 
 ## Life History Admin
 
-The **Life** page is the first observability surface for Nūr's identity-level
+The **Life** page is the first observability surface for OpenRook's identity-level
 experience ledger. It supports:
 
 - Pasted text intake for short formative material
@@ -336,16 +348,19 @@ to Life History.
 
 Data is stored in `data/shared/life_history.db`. This is shared assistant
 identity data, not per-user chat memory. User deletion does not remove it.
-For a full identity reset, stop the service and remove both
-`data/shared/self_model.db` and `data/shared/life_history.db` after taking
-any backup you need.
+For an ordinary-mode shared-identity reset, stop the service, take any needed
+backup, and remove `data/shared/self_model.db`, `data/shared/life_history.db`,
+and their SQLite sidecars. Per-user memories and session state remain.
+This is not a research-subject reset: `data/shared/agent_runtime.db` retains a
+resumable manifest and checkpoints. For a complete reset, follow
+[the stopped-owner procedure](../PRIVACY.md#full-runtime-and-research-subject-reset).
 
 ## Running The Web Server
 
 Development/local:
 
 ```bash
-nur-web
+openrook-web
 ```
 
 Fallback:
@@ -355,7 +370,7 @@ python3 -m interface.api
 ```
 
 By default this starts Uvicorn on `127.0.0.1:8000`. If you run behind a reverse
-proxy, terminate TLS at the proxy and keep Nūr bound to localhost unless you
+proxy, terminate TLS at the proxy and keep OpenRook bound to localhost unless you
 have a specific reason not to.
 
 Example reverse-proxy shape:
@@ -364,13 +379,13 @@ Example reverse-proxy shape:
 Internet -> HTTPS reverse proxy -> http://127.0.0.1:8000
 ```
 
-Nūr does not currently ship a systemd unit or Dockerfile. For production-like
+OpenRook does not currently ship a systemd unit or Dockerfile. For production-like
 usage today, run it under your existing process supervisor and persist both
 `runtime_config.yaml` and `data_dir`.
 
 ## Backup And Export
 
-From `/settings`:
+In ordinary mode, from `/settings`:
 
 - **Export Config** downloads a JSON export with secret values redacted.
 - **Create Backup** creates a zip archive under `<data_dir>/backups`.
@@ -386,20 +401,34 @@ archives.
 Backups may still contain user memory data. Treat backup files as sensitive
 even though runtime config secrets are redacted.
 
+### Research backup with the owner stopped
+
+Research mode rejects **Create Backup** with `409`. Stop the research owner and
+any other process writing to the same storage, then copy the entire configured
+`data_dir` to a separate backup location outside that directory. Include all
+shared stores, per-user/session records, and any SQLite sidecar files as one
+snapshot; copying only `agent_runtime.db` does not capture the whole subject.
+Copy associated study outputs and the configuration needed to restore the run
+separately. Keep the owner stopped until the snapshot is complete.
+
 ## Reset And Delete
 
-Destructive admin actions require exact typed confirmations:
+In ordinary mode, destructive admin actions require exact typed confirmations:
 
 - Restart web server: confirmation must be `RESTART`
 - Reset session: confirmation must be `RESET <session_key>`
 - Delete user: confirmation must be `DELETE <platform>:<user_id>`
 
 User deletion removes only the selected user's per-user data directory and live
-sessions. It preserves `data/shared/self_model.db` by design. See
-[PRIVACY.md](../PRIVACY.md) for the full deletion contract.
+sessions. Shared self-model, Life History, and research stores remain. See
+[PRIVACY.md](../PRIVACY.md#deletion) for the full deletion contract.
 
-There is no broad "delete all data" control. If you need a full local reset,
-stop the service and remove `data_dir` manually after taking a backup.
+Research mode rejects these administrative mutations and all DELETE requests
+with `409`. Stop its owner before any manual deletion. For one user's local
+records, follow [manual user deletion](../PRIVACY.md#manual-user-deletion-with-the-service-stopped);
+for a fresh subject, follow the
+[full runtime reset](../PRIVACY.md#full-runtime-and-research-subject-reset).
+There is no broad "delete all data" control.
 
 ## Updating
 
@@ -417,9 +446,9 @@ python3 -m pytest tests/test_interface.py tests/test_interface_v1.py -q
 python3 -m pip install --upgrade "git+https://github.com/balfiky/nur.git"
 ```
 
-Then restart `nur-web`.
+Then restart `openrook-web`.
 
-If `NUR_CONFIG_DIR` is set, your identity file is untouched. If it is not set,
+If `OPENROOK_CONFIG_DIR` is set, your identity file is untouched. If it is not set,
 a package upgrade may overwrite the bundled `config/soul.yaml` with the
 defaults shipped in the new package.
 
@@ -449,8 +478,8 @@ tick fires automatically on session start.
 The repository includes a Makefile with three test entry points:
 
 ```bash
-make test                 # 1970 unit/integration tests, ~3 min, no LLM
-make uat                  # 67 UAT tests, ~14 min, requires NUR_UAT_LIVE=1 + a real backend
+make test                 # non-UAT unit/integration suite, no live model required
+make uat                  # 67 UAT tests, ~14 min, requires OPENROOK_UAT_LIVE=1 + a real backend
 make uat-comprehensive    # one PASS/FAIL aggregator over the whole UAT suite
 ```
 
@@ -460,18 +489,19 @@ and per-test artifact paths.
 
 ## Known Gaps
 
-- **`character_independence`** — the runtime config flag and the wizard
-  toggle persist correctly, but no enforcement code reads them. The
-  `genesis_marker` row is written on first store creation but never
-  consulted to gate identity edits. Until enforcement lands, do not rely
-  on the toggle to freeze identity.
+- **`character_independence` alone is not an administrative lock.** Use
+  `research_mode` for the implemented persistent subject and read-only observation
+  routes. Research birth manifests fix initial conditions across restart;
+  starting a new condition requires a separate run. Do not treat the legacy
+  wizard toggle as equivalent to the research preset.
 - **No skill-from-URL download.** `skills.create_from_request` accepts a
   `source_url` argument but only stores it as a metadata reference — no
   fetch is performed. Operators acquire skills via paste, file path, or
   zip upload only.
-- **No automatic conversation-to-life-history ingestion.** Drives and
-  beliefs only shift from operator-curated `/admin/life/experiences/*`
-  ingest. Casual chat content does not auto-update Life History.
+- **Autobiographical learning is selective.** With `autobiographical_learning`
+  enabled, salient distilled sessions enter Life History at session end,
+  including first-use database creation. Research mode enables it automatically;
+  ordinary chat leaves it opt-in. It is not a raw-transcript ingestion switch.
 
 ## Operational Notes
 

@@ -12,6 +12,9 @@ def test_first_run_wizard_configures_identity_life_and_allows_chat(uat_server_fi
     page.goto(uat_server_first_run.base_url + "/")
     expect(page.locator("#wizardOverlay")).to_have_class("wizard-overlay open", timeout=15_000)
 
+    # Get Started stays disabled until the privacy consent box is ticked
+    # (added 2026-05-11); the wizard cannot proceed without it.
+    page.check("#wiz-consent-checkbox")
     page.click("text=Get Started")
     page.click(".wizard-preset[data-preset='codex']")
     page.click("#wizPanel-2 button.primary")
@@ -20,14 +23,14 @@ def test_first_run_wizard_configures_identity_life_and_allows_chat(uat_server_fi
     page.click("#wizPanel-3 button.primary")
     expect(page.locator("#wizPanel-4")).to_be_visible(timeout=15_000)
 
-    page.fill("#wiz-soul-name", "UAT Nur")
+    page.fill("#wiz-soul-name", "UAT OpenRook")
     page.select_option("#wiz-soul-archetype", "researcher")
     page.fill("#wiz-soul-notes", "Keep UAT answers concise and inspectable.")
     page.click("#wizPanel-4 button.primary")
     expect(page.locator("#wizPanel-5")).to_be_visible(timeout=15_000)
 
     page.fill("#wiz-life-title", "First UAT experience")
-    page.fill("#wiz-life-participants", "operator, UAT Nur")
+    page.fill("#wiz-life-participants", "operator, UAT OpenRook")
     page.fill(
         "#wiz-life-text",
         "Learning, curiosity, autonomy, and relationship repair are formative for this setup.",

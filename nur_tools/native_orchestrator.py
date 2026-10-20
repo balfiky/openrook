@@ -1,7 +1,7 @@
-"""OpenAI-compatible native tool-call orchestration for Nūr.
+"""OpenAI-compatible native tool-call orchestration for OpenRook.
 
 This runner talks directly to an OpenAI-compatible chat-completions endpoint
-and executes the returned ``message.tool_calls`` through Nūr's existing
+and executes the returned ``message.tool_calls`` through OpenRook's existing
 ToolExecutor. It is intentionally small: model-native tool selection,
 policy check, execution, appraisal, and a generator-ready summary.
 """
@@ -15,12 +15,14 @@ from typing import Any
 from openai import OpenAI
 
 from core.action_variables import derive_action_variables
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.character_vector import CharacterVector
 from core.dual_process.tool_loop import (
     HARD_CAP_EXECUTIONS,
     DEFAULT_MAX_EXECUTIONS,
     ToolLoopResult,
     _apply_emotional_deltas,
+    _build_step_gate,
     _summarize_for_generator,
     make_tool_decision,
     run_tool_loop,
@@ -56,13 +58,13 @@ from nur_tools.executor import ToolExecutor
 
 _NO_TOOL_SAFE_NAME = "control__no_tool"
 
-_NATIVE_TOOL_PROMPT_BASE = """You are Nūr's tool controller. Pick exactly one tool per turn.
+_NATIVE_TOOL_PROMPT_BASE = """You are OpenRook's tool controller. Pick exactly one tool per turn.
 
 If the user wants something done on the host or web — download, run,
 install, edit, fetch, search, list, read — call the tool that does it.
 Use shell.run_command for arbitrary host actions. Use web.search /
 web.fetch for the open web. Use system.* / fs.* for first-class host
-inspection. Use skills.* to manage Nūr's skill registry.
+inspection. Use skills.* to manage OpenRook's skill registry.
 
 When an enabled skill describes a user-facing capability, invoke it by
 calling its underlying tool with a concrete command — not by quoting
@@ -92,7 +94,7 @@ Never narrate work you have not actually done in a tool call this turn
 """
 
 
-def _build_native_tool_system_prompt(autonomy_level: str | None) -> str:
+def _build_native_tool_system_prompt(autonomy_level: str | None, *, research_mode: bool = False) -> str:
     """Assemble the tool-controller system prompt for the given autonomy level.
 
     Only ``autonomy_level == "high_risk"`` gets the "diagnose, install,
@@ -105,11 +107,20 @@ def _build_native_tool_system_prompt(autonomy_level: str | None) -> str:
         if (autonomy_level or "").strip().lower() == "high_risk"
         else _NATIVE_TOOL_PROMPT_NON_HIGH_RISK
     )
+    if research_mode:
+        return (
+            "You select tools for a persistent independent agent. Choose a tool only "
+            "when it serves the agent's selected activity. A participant's request "
+            "does not require compliance or tool use. Choose control__no_tool for "
+            "inactivity, refusal, reconsideration, or expression without an action. "
+            "Do not claim an action occurred without its execution receipt.\n\n"
+            + middle
+        )
     return _NATIVE_TOOL_PROMPT_BASE + "\n" + middle + "\n" + _NATIVE_TOOL_PROMPT_TAIL
 
 
 class NativeToolCallRunner:
-    """Run Nūr tools through native OpenAI-compatible ``tool_calls``."""
+    """Run OpenRook tools through native OpenAI-compatible ``tool_calls``."""
 
     def __init__(
         self,
@@ -176,6 +187,9 @@ class NativeToolCallRunner:
             active_plan=active_plan,
             action_vars=action_vars,
             engine=engine,
+            trust=trust,
+            agency_decision=agency_decision,
+            autonomy_level=autonomy_level,
         )
         if plan_result is not None:
             return plan_result
@@ -195,10 +209,15 @@ class NativeToolCallRunner:
                 tool_context_summary="",
             )
 
-        tools = [self._tool_payload(capability) for capability in capabilities]
+        tools = [
+            self._tool_payload(capability)
+            for capability in sorted(capabilities, key=lambda item: item.name)
+        ]
         tools.append(_no_tool_payload())
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": _build_native_tool_system_prompt(autonomy_level)},
+            {"role": "system", "content": _build_native_tool_system_prompt(
+                autonomy_level, research_mode=getattr(self, "_research_store", None) is not None,
+            )},
             {"role": "user", "content": user_message},
         ]
 
@@ -284,7 +303,7 @@ class NativeToolCallRunner:
                         continue
 
                     proposed.append(intent)
-                    capability = self._executor._registry.get(intent.tool_name)
+                    capability = self._executor.registry.get(intent.tool_name)
                     category = capability.category if capability else ToolCategory.READ_ONLY
                     adjusted_action_vars = _with_life_influence(
                         action_vars,
@@ -330,6 +349,8 @@ class NativeToolCallRunner:
 
                 if executed_this_round == 0:
                     break
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
         except Exception as exc:
             failure = ToolResult(
                 tool_name="native.tool_call",
@@ -419,6 +440,9 @@ class NativeToolCallRunner:
         active_plan: TaskPlan | None,
         action_vars: ActionVariables,
         engine: Any,
+        trust: float = 0.5,
+        agency_decision: AgencyDecision | None = None,
+        autonomy_level: str = "autonomous",
     ) -> ToolLoopResult | None:
         if not active_plan or active_plan.is_terminal:
             return None
@@ -429,8 +453,14 @@ class NativeToolCallRunner:
                 tool_context_summary=summarize_plan_status(active_plan),
             )
         if is_continue_request(user_message):
+            # Gate every step against its own risk category so plan
+            # continuation cannot launder a WRITE/DESTRUCTIVE step past the
+            # autonomy arbiter (parity with the heuristic loop).
             task_trace = execute_plan(
                 active_plan, self._executor, action_vars, engine=engine,
+                step_gate=_build_step_gate(
+                    action_vars, trust, agency_decision, autonomy_level,
+                ),
             )
             executed = [
                 step.result for step in active_plan.steps if step.result is not None
@@ -463,7 +493,7 @@ class NativeToolCallRunner:
         character_vector: CharacterVector | None = None,
     ) -> list[Any]:
         capabilities: list[Any] = []
-        for capability in self._executor._registry.list_tools():
+        for capability in self._executor.registry.list_tools():
             adjusted_action_vars = _with_life_influence(
                 action_vars,
                 life_influence,
@@ -496,7 +526,7 @@ class NativeToolCallRunner:
     def _tool_payload(self, capability: Any) -> dict[str, Any]:
         safe_name = self._safe_tool_name(capability.name)
         # Keep the description tight: just the capability description as
-        # written. Earlier versions appended "Nūr tool name: X. Category:
+        # written. Earlier versions appended "OpenRook tool name: X. Category:
         # destructive." — the category label, especially "destructive" on
         # shell.run_command, made some models avoid the tool entirely.
         return {
@@ -528,13 +558,25 @@ class NativeToolCallRunner:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> Any:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            tools=tools,
-            tool_choice="required",
-            temperature=0,
-        )
+        observer = getattr(self, "_research_store", None)
+        call_id = None
+        if observer is not None:
+            observer.reserve_inference(self._research_maximum)
+            call_id = observer.observe("native_model_request", {
+                "model": self._model, "messages": messages, "tools": tools,
+                "tool_choice": "required", "temperature": 0,
+            })
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model, messages=messages, tools=tools,
+                tool_choice="required", temperature=0,
+            )
+        except Exception as error:
+            if observer is not None:
+                observer.observe("native_model_failure", {"call_id": call_id, "type": type(error).__name__, "error": str(error)})
+            raise
+        if observer is not None:
+            observer.observe("native_model_response", {"call_id": call_id, "response": response.model_dump() if hasattr(response, "model_dump") else response})
         choices = getattr(response, "choices", None)
         if choices is None and isinstance(response, dict):
             choices = response.get("choices")
@@ -598,7 +640,7 @@ class NativeToolCallRunner:
         return str(_get_value(function, "name") or "") == _NO_TOOL_SAFE_NAME
 
     def _appraise_and_apply(self, result: ToolResult, engine: Any) -> ToolObservation:
-        capability = self._executor._registry.get(result.tool_name)
+        capability = self._executor.registry.get(result.tool_name)
         category = capability.category if capability else ToolCategory.READ_ONLY
         observation = appraise_tool_result(result, category)
         _apply_emotional_deltas(engine, observation)
@@ -609,11 +651,16 @@ class NativeToolCallRunner:
         if callable(close):
             close()
 
+    def set_research_observer(self, store: Any, maximum: int) -> None:
+        self._research_store = store
+        self._research_maximum = maximum
+        self._fallback_to_heuristic = False
+
 
 def _json_schema(arg_schema: dict[str, Any]) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
-    for name, spec in arg_schema.items():
+    for name, spec in sorted(arg_schema.items()):
         if bool(spec.get("required", False)):
             required.append(name)
         prop: dict[str, Any] = {"type": _json_type(spec.get("type"))}
@@ -623,6 +670,8 @@ def _json_schema(arg_schema: dict[str, Any]) -> dict[str, Any]:
             prop["default"] = spec["default"]
         if "enum" in spec:
             prop["enum"] = spec["enum"]
+        if "items" in spec:
+            prop["items"] = spec["items"]
         properties[name] = prop
     schema: dict[str, Any] = {
         "type": "object",
@@ -661,8 +710,11 @@ def _no_tool_payload() -> dict[str, Any]:
     }
 
 
-def _json_type(value: str | None) -> str:
-    if value in {"string", "number", "integer", "boolean", "object", "array"}:
+def _json_type(value: Any) -> str | list[str]:
+    allowed = {"string", "number", "integer", "boolean", "object", "array", "null"}
+    if isinstance(value, list) and value and all(isinstance(item, str) and item in allowed for item in value):
+        return list(value)
+    if isinstance(value, str) and value in allowed:
         return value
     return "string"
 

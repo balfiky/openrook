@@ -1,6 +1,6 @@
-"""Startup behavior tests for the ``nur-web`` launcher.
+"""Startup behavior tests for the ``openrook-web`` launcher.
 
-Nūr follows the local-LLM convention (Ollama, LM Studio, Jupyter):
+OpenRook follows the local-LLM convention (Ollama, LM Studio, Jupyter):
 the HTTP surface is open by default, and bearer auth is opt-in by
 setting ``api_key`` in ``runtime_config.yaml``. The launcher is
 first-run friendly: it auto-creates ``runtime_config.yaml`` with safe
@@ -12,6 +12,7 @@ knows the surface is reachable from the network.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -43,18 +44,18 @@ def fake_uvicorn(monkeypatch):
 @pytest.fixture(autouse=True)
 def _restore_runtime_config_globals():
     """``nur_api.main()`` mutates ``RUNTIME_CONFIG_PATH`` and the
-    ``NUR_RUNTIME_CONFIG`` env var as a side effect of CLI arg parsing,
+    ``OPENROOK_RUNTIME_CONFIG`` env var as a side effect of CLI arg parsing,
     so subsequent tests that import the FastAPI app would otherwise pick
     up our tmp configs. Restore both after every test in this module.
     """
     original_path = nur_api.RUNTIME_CONFIG_PATH
-    original_env = os.environ.get("NUR_RUNTIME_CONFIG")
+    original_env = os.environ.get("OPENROOK_RUNTIME_CONFIG")
     yield
     nur_api.RUNTIME_CONFIG_PATH = original_path
     if original_env is None:
-        os.environ.pop("NUR_RUNTIME_CONFIG", None)
+        os.environ.pop("OPENROOK_RUNTIME_CONFIG", None)
     else:
-        os.environ["NUR_RUNTIME_CONFIG"] = original_env
+        os.environ["OPENROOK_RUNTIME_CONFIG"] = original_env
 
 
 class TestLoopbackBinds:
@@ -64,7 +65,7 @@ class TestLoopbackBinds:
     ):
         cfg_path = _write_config(tmp_path, api_key="")
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", loopback, "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", loopback, "--config", cfg_path],
         )
         nur_api.main()
         assert fake_uvicorn[-1]["host"] == loopback
@@ -76,7 +77,7 @@ class TestLoopbackBinds:
     ):
         cfg_path = _write_config(tmp_path, api_key="")
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", "127.0.0.1", "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", "127.0.0.1", "--config", cfg_path],
         )
         nur_api.main()
         reloaded = RuntimeConfig.from_yaml(cfg_path)
@@ -89,7 +90,7 @@ class TestNonLoopbackBinds:
     ):
         cfg_path = _write_config(tmp_path, api_key="")
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", "0.0.0.0", "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
         nur_api.main()
         # Server actually binds — no refusal, no exit.
@@ -108,7 +109,7 @@ class TestNonLoopbackBinds:
     ):
         cfg_path = _write_config(tmp_path, api_key="operator-set-token")
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", "0.0.0.0", "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
         nur_api.main()
         assert fake_uvicorn[-1]["host"] == "0.0.0.0"
@@ -127,7 +128,7 @@ class TestFirstRunBootstrap:
         cfg_path = str(tmp_path / "fresh" / "runtime_config.yaml")
         assert not Path(cfg_path).exists()
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", "127.0.0.1", "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", "127.0.0.1", "--config", cfg_path],
         )
         nur_api.main()
         # Config file exists after first run.
@@ -146,7 +147,7 @@ class TestFirstRunBootstrap:
     ):
         cfg_path = str(tmp_path / "fresh" / "runtime_config.yaml")
         monkeypatch.setattr(
-            sys, "argv", ["nur-web", "--host", "0.0.0.0", "--config", cfg_path],
+            sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
         nur_api.main()
         # File created; api_key not auto-generated.
@@ -157,3 +158,24 @@ class TestFirstRunBootstrap:
         err = capsys.readouterr().err
         assert "WARNING" in err
         assert fake_uvicorn[-1]["host"] == "0.0.0.0"
+
+
+class TestModuleExecution:
+    def test_python_dash_m_interface_api_imports_cleanly(self):
+        """Regression: ``python -m interface.api`` must not circular-import.
+
+        The api.py split imports route modules at the bottom of the file;
+        those modules import ``interface.api`` back. When the file runs as
+        ``__main__`` (the UAT server launch path), the module must alias
+        itself into ``sys.modules['interface.api']`` before those imports,
+        or the second import re-executes the file and crashes at startup.
+        ``--help`` exercises the full module body plus argparse, then exits 0.
+        """
+        result = subprocess.run(
+            [sys.executable, "-m", "interface.api", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stderr[-2000:]
+        assert "circular import" not in result.stderr

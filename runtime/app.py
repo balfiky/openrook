@@ -1,4 +1,4 @@
-"""NurApp — top-level runtime orchestrator."""
+"""OpenRookApp — top-level runtime orchestrator."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from runtime.tools import create_tool_executor
 log = logging.getLogger(__name__)
 
 
-class NurApp:
-    """Lifecycle manager for the Nūr Runtime.
+class OpenRookApp:
+    """Lifecycle manager for the OpenRook Runtime.
 
     Wires together the session manager, LLM backend, channels, and debug API.
     Handles graceful shutdown on SIGINT / SIGTERM.
@@ -218,7 +218,7 @@ class NurApp:
         platform, _, chat_id = parts
 
         if platform == "console" and self._console is not None:
-            print(f"Nūr: {message}", flush=True)
+            print(f"OpenRook: {message}", flush=True)
         elif platform == "telegram" and self._telegram is not None:
             try:
                 await self._telegram._client.send_message(int(chat_id), message)
@@ -243,3 +243,6 @@ class NurApp:
         self._shutdown_event.set()
         if self._console is not None:
             self._console._running = False
+
+
+NurApp = OpenRookApp

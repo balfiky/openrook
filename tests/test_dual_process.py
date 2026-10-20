@@ -251,7 +251,7 @@ class TestBuildSystemPrompt:
     def test_empty_context(self):
         ctx = PipelineContext()
         prompt = build_system_prompt(ctx)
-        assert "Nūr" in prompt
+        assert "OpenRook" in prompt
 
     def test_prompt_forbids_unverified_runtime_facts(self):
         prompt = build_system_prompt(PipelineContext())

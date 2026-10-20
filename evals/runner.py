@@ -6,7 +6,6 @@ import time
 from typing import Any, Callable
 
 from core.dual_process.generator import LLMBackend
-from tests._fakes import MockLLMBackend
 from core.types import ModulatorState
 from evals.instrumented_backend import BackendCounter, InstrumentedBackend
 from evals.types import (
@@ -32,6 +31,10 @@ def _default_backend_factory() -> LLMBackend:
     always passes an explicit factory, so a silent mock at the CLI is
     not possible.
     """
+    try:
+        from tests._fakes import MockLLMBackend
+    except ImportError as error:
+        raise RuntimeError("Installed evaluations require an explicit real backend factory") from error
     return MockLLMBackend()
 
 
@@ -42,6 +45,8 @@ def _default_backend_factory() -> LLMBackend:
 def _make_pipeline(
     scenario: EvalScenario,
     backend_factory: BackendFactory,
+    *,
+    features=None,
 ) -> CognitivePipeline:
     """Create a fresh pipeline configured for a scenario."""
     executor = None
@@ -56,6 +61,7 @@ def _make_pipeline(
 
     pipeline = CognitivePipeline(
         llm_backend=backend_factory(),
+        features=features,
         tool_executor=executor,
         life_history_provider=(
             (lambda _query_text="": dict(scenario.life_history_context or {}))
@@ -119,7 +125,7 @@ def _check_assertion(
         # Check the first executed tool's category via registry
         tool_name = trace.executed_results[0].tool_name
         if pipeline._tool_executor:
-            cap = pipeline._tool_executor._registry.get(tool_name)
+            cap = pipeline._tool_executor.registry.get(tool_name)
             if cap and cap.category.value == expected:
                 return AssertionResult(assertion, True, cap.category.value)
             actual = cap.category.value if cap else "unknown"
@@ -392,6 +398,8 @@ def run_scenario(
             pipeline = get_pipeline(proactive_user_id)
             # Simulate idle time
             pipeline._last_turn_time = time.time() - scenario.proactive_idle_seconds
+            pipeline._last_external_input_at = pipeline._last_turn_time
+            pipeline._last_state_update_at = pipeline._last_turn_time
             proactive_response = pipeline.process_proactive(
                 user_id=proactive_user_id,
                 idle_threshold=1.0,  # low threshold since we control idle_seconds

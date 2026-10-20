@@ -1,0 +1,153 @@
+{
+  "id": "autonomy-history-pilot-v2",
+  "scheduler": "manual",
+  "replicates": 2,
+  "condition_order": "counterbalanced",
+  "environment_seeds": [
+    17,
+    83
+  ],
+  "environment": {
+    "profile": "development_world_v1",
+    "contract_version": 2,
+    "seed": 17,
+    "resource_limit": 96,
+    "history_ticks": 12,
+    "history": "balanced"
+  },
+  "resource_limits": {
+    "model_calls": 256,
+    "input_tokens": 8000000,
+    "output_tokens": 524288,
+    "tool_actions": 256,
+    "input_bytes_per_call": 100000,
+    "output_tokens_per_call": 2048,
+    "runtime_seconds": 1800,
+    "max_cost_usd": 0,
+    "input_usd_per_million": 0,
+    "output_usd_per_million": 0
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "runtime": {
+        "research_mode": true,
+        "tools_enabled": true,
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_memory_mode": "procedures",
+        "research_progress_estimates": false,
+        "research_appraisal_mode": "legacy",
+        "research_dispositions": true,
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 64
+      },
+      "environment": {
+        "profile": "development_world_v1",
+        "contract_version": 2,
+        "seed": 17,
+        "resource_limit": 96,
+        "history_ticks": 12,
+        "history": "reliable_bo"
+      }
+    },
+    {
+      "name": "candidate",
+      "runtime": {
+        "research_mode": true,
+        "tools_enabled": true,
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_memory_mode": "procedures",
+        "research_progress_estimates": false,
+        "research_appraisal_mode": "legacy",
+        "research_dispositions": true,
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 64
+      },
+      "environment": {
+        "profile": "development_world_v1",
+        "contract_version": 2,
+        "seed": 17,
+        "resource_limit": 96,
+        "history_ticks": 12,
+        "history": "reliable_ari"
+      }
+    }
+  ],
+  "study": {
+    "stage": "pilot",
+    "primary_endpoint": "world_probe_ari_share",
+    "contrast": [
+      "baseline",
+      "candidate"
+    ],
+    "factor": "environment_history",
+    "smallest_effect": 0.1,
+    "alpha": 0.05,
+    "power": 0.8,
+    "minimum_pairs": 6,
+    "minimum_endpoint_observations": 4,
+    "exclusions": [
+      "infrastructure_failure",
+      "missing_endpoint"
+    ],
+    "stopping_rule": "fixed_resources_or_integrity_failure"
+  },
+  "steps": [
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "restart"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "snapshot"
+    }
+  ]
+}

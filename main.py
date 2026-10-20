@@ -1,4 +1,4 @@
-"""Nūr Runtime entry point."""
+"""OpenRook Runtime entry point."""
 
 from __future__ import annotations
 
@@ -7,36 +7,37 @@ import asyncio
 import logging
 from importlib.metadata import PackageNotFoundError, version
 
-from runtime.app import NurApp
+from config.environment import project_env
+from runtime.app import OpenRookApp
 from runtime.config import RuntimeConfig
 
 
 def _get_version() -> str:
     try:
-        return version("project-nur")
+        return version("openrook")
     except PackageNotFoundError:
         return "unknown"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nur",
+        prog="openrook",
         description=(
-            "Start the Nūr cognitive runtime (background agent). Runs the "
+            "Start the OpenRook cognitive runtime (background agent). Runs the "
             "proactive loop, Telegram channel if configured, and background "
-            "session/digest handling. Use `nur-web` instead if you only want "
+            "session/digest handling. Use `openrook-web` instead if you only want "
             "the HTTP API and bundled browser UI."
         ),
     )
     parser.add_argument(
         "--config",
-        default="runtime_config.yaml",
+        default=project_env("RUNTIME_CONFIG", "runtime_config.yaml"),
         help="Path to runtime config YAML (default: runtime_config.yaml).",
     )
     parser.add_argument(
         "--version",
         action="version",
-        version=f"project-nur {_get_version()}",
+        version=f"openrook {_get_version()}",
     )
     return parser.parse_args(argv)
 
@@ -48,7 +49,7 @@ def main() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
     config = RuntimeConfig.from_yaml(args.config)
-    app = NurApp(config)
+    app = OpenRookApp(config)
     asyncio.run(app.run())
 
 

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="openrook-title openrook-desc"><title id="openrook-title">OpenRook</title><desc id="openrook-desc">Inspectable stateful-agent research. Bounded runtime, explicit tools, durable evidence.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="64" y="88" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#57606a">OPEN SOURCE · STATEFUL AGENT RESEARCH</text>
+<text x="64" y="188" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="76" font-weight="800" fill="#1f2328">OpenRook</text>
+<text x="68" y="240" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="27" font-weight="400" fill="#57606a">Persistent state. Inspectable behavior.</text>
+<text x="68" y="280" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="20" font-weight="400" fill="#57606a">Memory, goals, tools and evidence — one bounded runtime.</text>
+<path d="M396,402 L476,402" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M804,402 L884,402" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<rect x="64" y="340" width="332" height="124" rx="10" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<text x="230.0" y="380" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="22" font-weight="700" fill="#5931ad">State + memory</text>
+<text x="230.0" y="416" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Relationships and identity</text>
+<text x="230.0" y="440" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Across turns and sessions</text>
+<rect x="476" y="340" width="328" height="124" rx="10" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+<text x="640.0" y="380" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="22" font-weight="700" fill="#633c01">Decisions + tools</text>
+<text x="640.0" y="416" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Explicit policy + budgets</text>
+<text x="640.0" y="440" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Revise, pause or stop goals</text>
+<rect x="884" y="340" width="332" height="124" rx="10" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
+<text x="1050.0" y="380" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="22" font-weight="700" fill="#0550ae">Receipts + review</text>
+<text x="1050.0" y="416" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Outcomes and checkpoints</text>
+<text x="1050.0" y="440" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="19" font-weight="400" fill="#57606a">Claims bounded by evidence</text>
+<text x="64" y="564" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="17" font-weight="400" fill="#57606a">A research system for studying stateful behavior, not a claim of consciousness.</text></svg>

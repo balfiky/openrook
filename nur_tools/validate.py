@@ -1,4 +1,4 @@
-"""Repository and release validation for Project Nūr."""
+"""Repository and release validation for OpenRook."""
 
 from __future__ import annotations
 
@@ -19,17 +19,22 @@ from pathlib import Path
 from runtime.config import RuntimeConfig
 
 
-PROJECT_NAME = "project-nur"
+PROJECT_NAME = "openrook"
 REQUIRED_PYTHONS = ("3.10", "3.11", "3.12")
 EXPECTED_CONSOLE_SCRIPTS = {
-    "nur": "main:main",
-    "nur-setup": "interface.setup:main",
-    "nur-uninstall": "interface.uninstall:main",
-    "nur-web": "interface.api:main",
-    "nur-emotional-qa": "evals.emotional_quality:main",
-    "nur-uat": "nur_tools.uat:main",
-    "nur-validate": "nur_tools.validate:main",
+    "openrook": "main:main",
+    "openrook-setup": "interface.setup:main",
+    "openrook-uninstall": "interface.uninstall:main",
+    "openrook-web": "interface.api:main",
+    "openrook-genesis-reset": "runtime.genesis_reset:main",
+    "openrook-emotional-qa": "evals.emotional_quality:main",
+    "openrook-uat": "nur_tools.uat:main",
+    "openrook-validate": "nur_tools.validate:main",
 }
+EXPECTED_CONSOLE_SCRIPTS.update({
+    name.replace("openrook", "nur", 1): target
+    for name, target in tuple(EXPECTED_CONSOLE_SCRIPTS.items())
+})
 EXPECTED_PACKAGE_FILES = {
     "interface/static/index.html",
     "interface/static/admin.html",
@@ -52,12 +57,14 @@ EXPECTED_DOCS = {
     "docs/STUDY_GUIDE.md",
     "docs/ARCHITECTURE.md",
     "docs/DEPLOYMENT_AND_ADMIN.md",
+    "docs/DEVELOPMENT_SUMMARY.md",
+    "docs/OPENROOK_MIGRATION.md",
 }
 STALE_PHRASES = {
     "five-modulator": ("CHANGELOG.md",),
     "v0.26.1": ("CHANGELOG.md",),
     "1383 tests": ("CHANGELOG.md",),
-    "pip install project-nur": ("CHANGELOG.md", "docs/DEPLOYMENT_AND_ADMIN.md"),
+    "pip install openrook": ("CHANGELOG.md", "docs/DEPLOYMENT_AND_ADMIN.md"),
 }
 DRIFT_CHECK_LIVE_FILES = {
     "README.md",
@@ -156,7 +163,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nur-validate",
+        prog="openrook-validate",
         description=(
             "Run neutral validation checks. In a source checkout this validates "
             "repository/release readiness; in an installed workspace it validates "
@@ -201,7 +208,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def _resolve_target(target: str, root: Path) -> str:
     if target == "repo":
         if not _looks_like_repo_root(root):
-            raise SystemExit(f"{root} does not look like a Project Nūr source checkout.")
+            raise SystemExit(f"{root} does not look like a OpenRook source checkout.")
         return "repo"
     if target == "install":
         return "install"
@@ -216,7 +223,7 @@ def _looks_like_repo_root(root: Path) -> bool:
         text = pyproject.read_text(encoding="utf-8")
     except OSError:
         return False
-    return 'name = "project-nur"' in text and (root / "runtime").is_dir()
+    return 'name = "openrook"' in text and (root / "runtime").is_dir()
 
 
 def _run_install_checks(root: Path) -> list[CheckResult]:
@@ -290,7 +297,7 @@ def _check_installed_console_scripts() -> str:
 def _check_workspace_runtime_config(root: Path) -> str:
     path = root / "runtime_config.yaml"
     if not path.exists():
-        return "runtime_config.yaml not found; run nur-setup if this is a new workspace"
+        return "runtime_config.yaml not found; run openrook-setup if this is a new workspace"
     cfg = RuntimeConfig.from_yaml(str(path))
     warnings = []
     if cfg.tools_enabled and not cfg.api_key:
@@ -325,7 +332,7 @@ def _check_runtime_safe_defaults(root: Path) -> str:
     cfg = RuntimeConfig.from_yaml(str(root / "runtime_config.example.yaml"))
     failures = []
     if cfg.llm_backend == "mock":
-        failures.append("example llm_backend must not be 'mock' — Nūr requires a real backend")
+        failures.append("example llm_backend must not be 'mock' — OpenRook requires a real backend")
     if cfg.api_key:
         failures.append("example api_key must be empty")
     if cfg.telegram_token:
@@ -338,7 +345,7 @@ def _check_runtime_safe_defaults(root: Path) -> str:
         failures.append("example cors_origins must be empty")
     if failures:
         raise ValidationFailure("; ".join(failures))
-    return "mock backend, no token, tools off, shell off"
+    return "no token, tools off, shell off"
 
 
 def _check_package_data_sources(root: Path) -> str:
@@ -522,14 +529,16 @@ def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
         _run([str(python), "-c", "import interface.api, runtime.learning_intake"], cwd=workspace)
         bin_dir = "Scripts" if os.name == "nt" else "bin"
         commands = [
+            [str(venv_dir / bin_dir / "openrook"), "--version"],
             [str(venv_dir / bin_dir / "nur"), "--version"],
             [str(venv_dir / bin_dir / "nur-web"), "--version"],
-            [str(venv_dir / bin_dir / "nur-setup"), "--help"],
-            [str(venv_dir / bin_dir / "nur-uninstall"), "--help"],
-            [str(venv_dir / bin_dir / "nur-emotional-qa"), "--help"],
-            [str(venv_dir / bin_dir / "nur-validate"), "--help"],
+            [str(venv_dir / bin_dir / "openrook-web"), "--version"],
+            [str(venv_dir / bin_dir / "openrook-setup"), "--help"],
+            [str(venv_dir / bin_dir / "openrook-uninstall"), "--help"],
+            [str(venv_dir / bin_dir / "openrook-emotional-qa"), "--help"],
+            [str(venv_dir / bin_dir / "openrook-validate"), "--help"],
             [
-                str(venv_dir / bin_dir / "nur-validate"),
+                str(venv_dir / bin_dir / "openrook-validate"),
                 "--mode",
                 "quick",
                 "--root",

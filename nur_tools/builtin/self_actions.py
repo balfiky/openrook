@@ -1,6 +1,6 @@
-"""Self-action tools — bounded actions Nūr can take for itself.
+"""Self-action tools — bounded actions OpenRook can take for itself.
 
-Unlike the other builtins, these are invoked by Nūr's own self-intent
+Unlike the other builtins, these are invoked by OpenRook's own self-intent
 stage (``pipeline.propose_self_intents``), not by user-facing tool
 routing. Each writes under a namespaced ``data/self/`` directory so
 self-actions are auditable and never collide with user content.
@@ -312,7 +312,7 @@ def _alert_owner(context: SelfActionContext, args: dict[str, Any]) -> ToolResult
     if not token:
         return ToolResult(tool_name=name, success=False, output="",
                           error="telegram_token not configured; cannot alert")
-    text = f"[Nūr alert] {reason}\n\n{detail}"
+    text = f"[OpenRook alert] {reason}\n\n{detail}"
     if len(text) > _MAX_ALERT_LEN:
         text = text[: _MAX_ALERT_LEN - 3] + "..."
     url = f"https://api.telegram.org/bot{token}/sendMessage"

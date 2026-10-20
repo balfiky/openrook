@@ -1,6 +1,6 @@
-# Contributing to Project Nūr
+# Contributing to OpenRook
 
-Nūr is a research-oriented hybrid cognitive architecture. Contributions
+OpenRook is a research-oriented hybrid cognitive architecture. Contributions
 that sharpen the architecture, improve inspectability, or strengthen
 empirical validation are especially welcome.
 
@@ -20,8 +20,8 @@ empirical validation are especially welcome.
 ## Development Setup
 
 ```bash
-git clone https://github.com/balfiky/nur.git
-cd nur
+git clone https://github.com/balfiky/nur.git openrook
+cd openrook
 python3 -m pip install -e ".[dev]"
 python3 -m pytest -q        # full suite; see CI for the current collected count
 ```
@@ -39,7 +39,7 @@ Code:
 | Change kind | Primary path |
 |---|---|
 | Cognitive logic | `core/` (emotional engine, memory, profiles, dual process, appraisal, defense) |
-| Turn orchestration | `pipeline.py` |
+| Turn orchestration | `pipeline/` (orchestrator in `pipeline/core.py`) |
 | Session / channel / runtime | `runtime/` |
 | HTTP surface | `interface/api.py`, `interface/v1.py` |
 | Web UI | `interface/static/index.html` |
@@ -50,33 +50,43 @@ Docs:
 
 | Change kind | Update |
 |---|---|
-| Pipeline stage order | `tools/build_diagrams.py::build_single_turn_flow` + `docs/ARCHITECTURE.md` Single-Turn section |
-| Storage / table changes | `tools/build_diagrams.py::build_memory_persistence` + `docs/ARCHITECTURE.md` + `PRIVACY.md` |
-| HTTP route or auth changes | `tools/build_diagrams.py::build_auth_tool_safety` + `docs/ARCHITECTURE.md` + `SECURITY.md` |
+| Pipeline stage order | `nur_tools/build_diagrams.py::build_single_turn_flow` + `docs/ARCHITECTURE.md` Single-Turn section |
+| Storage / table changes | `nur_tools/build_diagrams.py::build_memory_persistence` + `docs/ARCHITECTURE.md` + `PRIVACY.md` |
+| HTTP route or auth changes | `nur_tools/build_diagrams.py::build_auth_tool_safety` + `docs/ARCHITECTURE.md` + `SECURITY.md` |
 | Admin / wizard behavior | `docs/DEPLOYMENT_AND_ADMIN.md` |
-| New eval variant | `tools/build_diagrams.py::build_evaluation_harness` + `evals/ablation_hypotheses.py` **before** running the eval + `docs/ARCHITECTURE.md` Evaluation section + `docs/OVERVIEW.md §4` results table |
-| Component evidence status changes | `tools/build_diagrams.py::build_component_claim_map` + `docs/OVERVIEW.md §5` |
+| New eval variant | `nur_tools/build_diagrams.py::build_evaluation_harness` + `evals/ablation_hypotheses.py` **before** running the eval + `docs/ARCHITECTURE.md` Evaluation section + `docs/OVERVIEW.md §4` results table |
+| Component evidence status changes | `nur_tools/build_diagrams.py::build_component_claim_map` + `docs/OVERVIEW.md §5` |
 | Release notes | `CHANGELOG.md` under a new version header |
 
 ## Regenerating Diagrams
 
 Architecture diagrams are generated from Python by
-`tools/build_diagrams.py`, rendered to SVG by the toolkit in
-`tools/diagram_toolkit.py`, and rasterized to PNG by cairosvg. Both
-`.svg` and `.png` are tracked in `docs/diagrams/`.
+`nur_tools/build_diagrams.py`, rendered to SVG by the toolkit in
+`nur_tools/diagram_toolkit.py`, and rasterized to PNG by CairoSVG, included in
+the `dev` extra. Both `.svg` and `.png` are tracked in `docs/diagrams/`.
+The renderer also rasterizes hand-authored SVGs such as `feature-overview.svg`;
+edit those SVGs directly, then use the same command.
+
+Install **DejaVu Sans** before rendering (for example, the `fonts-dejavu-core`
+package on Debian/Ubuntu). The diagram font stack selects it first so CairoSVG
+uses the same font for text and arrow glyphs. Fonts are system dependencies,
+not installed by pip: substitutions can change text widths or produce missing
+glyph boxes even when the SVG is valid. Use `fc-match 'DejaVu Sans'` to check
+resolution on systems with fontconfig.
 
 After editing the generator, run:
 
 ```bash
-python3 tools/render_diagram_pngs.py
+python3 nur_tools/render_diagram_pngs.py
 ```
 
-Then commit the regenerated `.svg` and `.png` together so the rendered
-artifacts stay in lockstep with the source.
+Inspect every rendered PNG for missing glyphs, clipped text, and connector
+collisions. Then commit the regenerated `.svg` and `.png` together so the
+rendered artifacts stay in lockstep with the source.
 
 Design language for new diagrams:
 
-- palette and primitives live in `tools/diagram_toolkit.py`
+- palette and primitives live in `nur_tools/diagram_toolkit.py`
 - semantic colors: `process` (runtime), `storage` (data), `client`
   (channel), `external` (LLM), `danger` (side effects), `attention`
   (gate / decision), `neutral` (utility)
@@ -98,7 +108,7 @@ Design language for new diagrams:
    live-LLM run when relevant.
 4. If a new component becomes load-bearing or shifts category, update
    `docs/OVERVIEW.md §5` and
-   `tools/build_diagrams.py::build_component_claim_map`.
+   `nur_tools/build_diagrams.py::build_component_claim_map`.
 
 ## Writing A Regression Test
 

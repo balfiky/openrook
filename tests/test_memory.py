@@ -565,6 +565,7 @@ class TestDigestion:
         # Trust delta is negative because one conflict (-0.105) outweighs
         # four positive events (~+0.046 total). This is the asymmetry working.
         assert result.trust_delta < 0
-        # But valence drift should show improvement (session ended better than conflict)
-        assert result.valence_drift > 0 or result.valence_drift > -0.2
+        # But valence drift should show improvement (session ended better than
+        # it started: first snapshot 0.6, last 0.7 → drift +0.1).
+        assert result.valence_drift > 0
         ltm.close()

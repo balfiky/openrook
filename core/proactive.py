@@ -1,6 +1,6 @@
 """Proactive behavior evaluation — self-initiated action.
 
-Evaluates whether Nūr feels compelled to initiate something based on:
+Evaluates whether OpenRook feels compelled to initiate something based on:
   - Unresolved cognitive tension (items with sufficient intensity)
   - Pending task plans (incomplete multi-step work)
   - Commitments and follow-up obligations
@@ -14,7 +14,7 @@ not hard caps on whether a character may initiate.
 
 from __future__ import annotations
 
-import time
+from core.clock import clock as time
 from typing import Any
 
 from core.character_vector import CharacterVector
@@ -277,7 +277,7 @@ def evaluate_proactive(
     character_vector: CharacterVector | None = None,
     skill_want_triggers: list[ProactiveTrigger] | None = None,
 ) -> tuple[ProactiveAction | None, ProactiveTrace]:
-    """Evaluate whether Nūr should initiate proactive behavior.
+    """Evaluate whether OpenRook should initiate proactive behavior.
 
     Returns (action, trace) where action is None if no proactive behavior
     is warranted. The trace is always populated for debug visibility.

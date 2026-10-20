@@ -108,7 +108,7 @@ class TestNurConfigDefaults:
     def test_default_soul(self):
         cfg = NurConfig()
         assert isinstance(cfg.soul, SoulConfig)
-        assert cfg.soul.name == "Nūr"
+        assert cfg.soul.name == "OpenRook"
         assert "clarity" in cfg.soul.likes
         assert cfg.soul.initial_traits["calm"] == 0.8
 
@@ -152,7 +152,7 @@ class TestLoadConfig:
 
     def test_loads_soul(self):
         cfg = load_config()
-        assert cfg.soul.name == "Nūr"
+        assert cfg.soul.name == "OpenRook"
         assert "steady collaboration" in cfg.soul.likes
         assert cfg.soul.initial_traits["thoughtful"] == 0.78
 
@@ -165,7 +165,7 @@ class TestLoadConfig:
     def test_loads_prompts(self):
         cfg = load_config()
         # Agent name is now a placeholder filled from soul.name at request time,
-        # not a hardcoded "Nūr" string. Tests in test_interface.py cover the
+        # not a hardcoded "OpenRook" string. Tests in test_interface.py cover the
         # full substitution path.
         assert "{agent_name}" in cfg.generator_prompt
         assert "Tone Fit" in cfg.self_check_prompt

@@ -1,4 +1,4 @@
-"""Bounded multi-step task planner — Nūr-native.
+"""Bounded multi-step task planner — OpenRook-native.
 
 Converts compound user requests into short explicit plans (max 5 steps).
 All detection and planning is deterministic heuristic — zero LLM calls.
@@ -14,9 +14,9 @@ Responsibilities:
 from __future__ import annotations
 
 import re
-import time
-import uuid
-from typing import Any
+from core.clock import clock as time
+from core.clock import identifiers as uuid
+from typing import Any, Callable
 
 from core.types import (
     ActionVariables,
@@ -369,6 +369,7 @@ def execute_plan(
     action_vars: ActionVariables,
     engine: Any = None,
     max_steps_per_turn: int = DEFAULT_MAX_STEPS_PER_TURN,
+    step_gate: Callable[[TaskStep, ToolCategory], bool] | None = None,
 ) -> TaskTrace:
     """Execute pending steps of a plan sequentially.
 
@@ -376,6 +377,13 @@ def execute_plan(
     Failure handling is driven by persistence_drive:
       - persistence_drive >= 0.5 → continue after failure
       - persistence_drive < 0.5 → block the plan on first failure
+
+    ``step_gate`` is an authorization callback invoked *before* each step
+    executes, receiving the step and its own tool category. Returning False
+    blocks that step (and the rest of the plan). This closes the laundering
+    hole where a read-only first step would let a later WRITE/DESTRUCTIVE/
+    EXTERNAL_ACTION step bypass the autonomy arbiter: every step is gated
+    against its own risk category, not the plan's first.
 
     Returns a TaskTrace with execution details.
     """
@@ -395,6 +403,20 @@ def execute_plan(
             plan.current_step_index += 1
             continue
 
+        # Per-step authorization: gate each step against its own category so a
+        # benign leading step cannot launder a risky trailing step past the
+        # autonomy arbiter.
+        if step_gate is not None:
+            step_cap = executor.registry.get(step.tool_name)
+            step_category = (
+                step_cap.category if step_cap else ToolCategory.EXTERNAL_ACTION
+            )
+            if not step_gate(step, step_category):
+                step.status = TaskStatus.BLOCKED
+                plan.status = TaskStatus.BLOCKED
+                trace.plan_outcome = "blocked"
+                return trace
+
         # Execute step
         step.status = TaskStatus.IN_PROGRESS
         step.started_at = time.time()
@@ -404,7 +426,7 @@ def execute_plan(
         step.completed_at = time.time()
 
         # Appraise
-        cap = executor._registry.get(step.tool_name)
+        cap = executor.registry.get(step.tool_name)
         category = cap.category if cap else ToolCategory.READ_ONLY
         observation = appraise_tool_result(result, category)
         step.observation = observation

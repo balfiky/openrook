@@ -6,13 +6,16 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from functools import partial
+from dataclasses import asdict
 import logging
 import os
-import time
+from pathlib import Path
+from core.clock import clock as time
 from typing import Any, Callable
 
 from core.dual_process.generator import LLMBackend
 from core.types import UnresolvedItem
+from core.pipeline_features import PipelineFeatures
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.learning_intake import (
@@ -86,8 +89,16 @@ class SessionManager:
         backend_factory: Callable[[], LLMBackend] | None = None,
         tool_executor_factory: Callable[[], Any] | None = None,
         proactive_callback: Callable[[str, str, str], Any] | None = None,
+        features: PipelineFeatures | None = None,
     ) -> None:
+        if not config.research_mode and (Path(config.data_dir) / "shared" / "agent_runtime.db").is_file():
+            from runtime.research_store import ResearchStore
+
+            if ResearchStore(config, initialize=False).get("run", "manifest") is not None:
+                config.research_mode = True
         self.config = config
+        self._features = features or PipelineFeatures()
+        config._research_features = asdict(self._features)
         self._backend_factory = backend_factory
         self._tool_executor_factory = tool_executor_factory
         self._sessions: dict[str, UserSession] = {}
@@ -103,6 +114,14 @@ class SessionManager:
         self._executor_shutdown = False
         # Phase 8: proactive callback — async (session_key, user_id, message) -> None
         self._proactive_callback = proactive_callback
+        self._agent = None
+        self._proactive_task = None
+        if config.research_mode:
+            from runtime.agent import AgentRuntime
+
+            self._agent = AgentRuntime(config)
+            self._agent._session_factory = self._create_session
+            self._features = PipelineFeatures(**config._research_features)
 
     # ------------------------------------------------------------------
     # Public API
@@ -134,7 +153,7 @@ class SessionManager:
             try:
                 learning_note = (
                     await self._maybe_run_learning_intake(session, user_id, text)
-                    if _should_attempt_learning_intake(session, text)
+                    if not self.config.research_mode and _should_attempt_learning_intake(session, text)
                     else ""
                 )
                 if learning_note and not learning_note.startswith("Learning intake failed:"):
@@ -192,14 +211,14 @@ class SessionManager:
             name=f"session-send-{session_key}",
         )
         try:
-            while not send_task.done():
-                await asyncio.sleep(0.001)
+            return await send_task
         except asyncio.CancelledError:
+            # Outer cancellation interrupts the await but leaves the task
+            # running; cancel it and wait for it to unwind before re-raising.
             send_task.cancel()
             with suppress(asyncio.CancelledError):
                 await send_task
             raise
-        return send_task.result()
 
     async def _maybe_run_learning_intake(
         self,
@@ -394,14 +413,23 @@ class SessionManager:
         user_id: str,
     ) -> UserSession:
         """Build a UserSession with pipeline, restoring session state if available."""
+        if self._agent is not None:
+            return self._agent.recorded("session_create", {"session_key": session_key, "rel_key": rel_key, "user_id": user_id},
+                                       lambda: self._build_session(session_key, rel_key, user_id))
+        return self._build_session(session_key, rel_key, user_id)
+
+    def _build_session(self, session_key: str, rel_key: str, user_id: str) -> UserSession:
         data_dir = self.config.user_data_dir(rel_key)
         os.makedirs(data_dir, exist_ok=True)
         os.makedirs(os.path.dirname(self.config.shared_db_path), exist_ok=True)
 
-        self._run_wall_clock_decay()
+        if self._agent is None:
+            self._run_wall_clock_decay()
 
         # Create LLM backend (one per pipeline for thread safety)
         backend = self._backend_factory() if self._backend_factory else None
+        if self._agent is not None and backend is not None:
+            backend = self._agent.backend(backend)
         tool_executor = (
             self._tool_executor_factory()
             if self._tool_executor_factory is not None
@@ -421,6 +449,7 @@ class SessionManager:
             life_history_snapshot_provider=self._life_history_snapshot_provider,
             skill_provider=self._skill_context_provider,
             runtime_config=self.config,
+            features=self._features,
         )
 
         # Restore per-session engine state from disk if present. Fall back to the
@@ -429,7 +458,7 @@ class SessionManager:
         saved = load_engine_state(state_path)
         if saved is None:
             saved = load_engine_state(self.config.user_state_path(rel_key))
-        if saved is not None:
+        if saved is not None and self._agent is None:
             pipeline.restore_state(
                 saved["modulator_snapshot"],
                 saved_at=saved.get("saved_at"),
@@ -460,6 +489,8 @@ class SessionManager:
         )
         if saved is not None:
             session.restore_session_extra_state(saved)
+        if self._agent is not None:
+            self._agent.attach(pipeline, session_key, rel_key, user_id)
         return session
 
     def _run_wall_clock_decay(self) -> None:
@@ -581,6 +612,10 @@ class SessionManager:
         """Gracefully shut down: stop intake → cancel timers → drain all sessions."""
         # 1. Stop accepting new messages
         self._accepting = False
+        if self._proactive_task is not None and self._proactive_task is not asyncio.current_task():
+            self._proactive_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._proactive_task
 
         # 2. Cancel all idle timers (we're evicting everything now)
         self._cancel_all_idle_timers()
@@ -592,6 +627,8 @@ class SessionManager:
         log.info("Shutting down %d active session(s)", len(keys))
         for session_key in keys:
             await self.evict_session(session_key, end_conversation=False)
+        if self._agent is not None:
+            await self._run_blocking(self._agent.close)
         if not self._executor_shutdown:
             self._executor.shutdown(wait=True, cancel_futures=False)
             self._executor_shutdown = True
@@ -605,17 +642,52 @@ class SessionManager:
 
         Bounded: runs at config.proactive_check_interval, respects per-session
         limits (density_reference, recovery_seconds, idle_threshold). Does not bypass the
-        cognitive pipeline — responses are generated through Nūr.
+        cognitive pipeline — responses are generated through OpenRook.
         """
+        current = asyncio.current_task()
+        if self._proactive_task is not None and self._proactive_task is not current and not self._proactive_task.done():
+            return
+        self._proactive_task = current
         interval = self.config.proactive_check_interval
+        if self._agent is not None:
+            try:
+                await self._proactive_sweep()
+            except Exception:
+                log.exception("Background activation failed; retrying at the next interval")
+
         while self._accepting:
             await asyncio.sleep(interval)
             if not self._accepting:
                 break
-            await self._proactive_sweep()
+            try:
+                await self._proactive_sweep()
+            except Exception:
+                log.exception("Background activation failed; retrying at the next interval")
+
+    def start_background(self) -> None:
+        if self.config.proactive_enabled and (self._proactive_task is None or self._proactive_task.done()):
+            self._proactive_task = asyncio.create_task(self.run_proactive_loop(), name="nur-agent-background")
 
     async def _proactive_sweep(self) -> None:
         """Check all active sessions for proactive opportunities."""
+        if self._agent is not None:
+            deliveries = await self._run_blocking(self._agent.tick)
+            for delivery in deliveries:
+                if self._proactive_callback is not None and delivery["session_key"]:
+                    delivery["status"] = "sending"
+                    self._agent.store.put("delivery", delivery["id"], delivery)
+                    self._agent.store.observe("delivery_started", delivery)
+                    try:
+                        user_id = delivery["session_key"].split(":", 2)[1]
+                        result = self._proactive_callback(delivery["session_key"], user_id, delivery["message"])
+                        if asyncio.iscoroutine(result):
+                            await result
+                        delivery["status"] = "delivered"
+                    except Exception as error:
+                        delivery.update(status="unknown", error=str(error))
+                    self._agent.store.put("delivery", delivery["id"], delivery)
+                    self._agent.store.observe("delivery_completed", delivery)
+            return
         async with self._lock:
             snapshot = list(self._sessions.items())
 

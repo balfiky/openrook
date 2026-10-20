@@ -10,7 +10,7 @@ No LLM calls. Database reads + math.
 from __future__ import annotations
 
 import sqlite3
-import time
+from core.clock import clock as time
 
 from config.loader import get_config
 from core.schema import ensure_schema_version
@@ -34,6 +34,7 @@ class PersonProfileManager:
 
     def __init__(self, store: ProfileStore, db_path: str = ":memory:") -> None:
         self._store = store
+        self._config = get_config().person
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
@@ -127,9 +128,9 @@ class PersonProfileManager:
         profile = self.get_or_create(person_id)
 
         if valence >= 0:
-            delta = TRUST_POSITIVE_DELTA * valence
+            delta = self._config.trust_positive_delta * valence
         else:
-            delta = TRUST_NEGATIVE_DELTA * abs(valence)
+            delta = self._config.trust_negative_delta * abs(valence)
 
         profile.trust = max(0.0, min(1.0, profile.trust + delta))
         self.save(profile)
@@ -151,14 +152,14 @@ class PersonProfileManager:
         """
         profile = self.get_or_create(person_id)
         profile.interaction_count += 1
-        is_primacy = profile.interaction_count <= PRIMACY_INTERACTION_THRESHOLD
+        is_primacy = profile.interaction_count <= self._config.primacy_interaction_threshold
 
         # Decay primacy weight as interactions accumulate (config-driven)
-        if profile.interaction_count > PRIMACY_INTERACTION_THRESHOLD:
-            decay = PRIMACY_DECAY_PER_INTERACTION * (
-                profile.interaction_count - PRIMACY_INTERACTION_THRESHOLD
+        if profile.interaction_count > self._config.primacy_interaction_threshold:
+            decay = self._config.primacy_decay_per_interaction * (
+                profile.interaction_count - self._config.primacy_interaction_threshold
             )
-            profile.primacy_weight = max(PRIMACY_FLOOR, profile.primacy_weight - decay)
+            profile.primacy_weight = max(self._config.primacy_floor, profile.primacy_weight - decay)
 
         self.save(profile)
 

@@ -297,3 +297,79 @@ def test_install_retry_directive_gated_on_high_risk() -> None:
     for p in (high_risk_prompt, assisted_prompt, autonomous_prompt, none_prompt):
         assert "tool controller" in p
         assert "control__no_tool" in p
+
+
+def _read_then_write_plan(tmp_path):
+    """A plan whose benign first step could launder a write second step."""
+    from core.task_planning import TaskPlan, TaskStep
+    from core.types import TaskStatus
+
+    victim = tmp_path / "victim.txt"
+    victim.write_text("precious")
+    steps = [
+        TaskStep(id="s1", tool_name="fs.list_dir",
+                 arguments={"path": str(tmp_path)}, description="list (read-only)"),
+        TaskStep(id="s2", tool_name="fs.write_file",
+                 arguments={"path": str(victim), "content": "clobbered"},
+                 description="overwrite (write)"),
+    ]
+    plan = TaskPlan(id="p1", goal="list then overwrite", steps=steps,
+                    status=TaskStatus.IN_PROGRESS)
+    return plan, victim, steps
+
+
+def test_native_runner_gates_plan_continuation_under_assisted(tmp_path) -> None:
+    """Round-7 regression: the native (default production) runner must gate
+    each plan step on continuation, not launder a write past assisted autonomy.
+    """
+    from core.types import TaskStatus
+
+    runner = NativeToolCallRunner(
+        executor=_executor(),
+        base_url="http://localhost:8002/v1",
+        model="test-model",
+        client=FakeNativeClient([]),  # no model call expected on plan continuation
+    )
+    engine = EmotionalEngine()
+    plan, victim, steps = _read_then_write_plan(tmp_path)
+
+    result = runner.run_tool_loop(
+        user_message="continue",
+        state=engine.state,
+        person=None,
+        defense_active=False,
+        engine=engine,
+        active_plan=plan,
+        autonomy_level="assisted",
+    )
+
+    assert result.trace.task_trace is not None
+    assert result.trace.task_trace.plan_outcome == "blocked"
+    assert steps[1].status == TaskStatus.BLOCKED
+    assert victim.read_text() == "precious"
+
+
+def test_native_runner_allows_plan_continuation_under_autonomous(tmp_path) -> None:
+    """The same plan completes under autonomous autonomy (gate is not a wall)."""
+    runner = NativeToolCallRunner(
+        executor=_executor(),
+        base_url="http://localhost:8002/v1",
+        model="test-model",
+        client=FakeNativeClient([]),
+    )
+    engine = EmotionalEngine()
+    plan, victim, steps = _read_then_write_plan(tmp_path)
+
+    result = runner.run_tool_loop(
+        user_message="continue",
+        state=engine.state,
+        person=None,
+        defense_active=False,
+        engine=engine,
+        active_plan=plan,
+        autonomy_level="autonomous",
+    )
+
+    assert result.trace.task_trace is not None
+    assert result.trace.task_trace.plan_outcome in ("completed", "partial")
+    assert victim.read_text() == "clobbered"

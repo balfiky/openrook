@@ -1,6 +1,6 @@
 [project]
-name = "project-nur"
-version = "0.30.9"
+name = "openrook"
+version = "0.37.0"
 description = "Cognitive runtime that gives LLM agents persistent state, identity, and learning across turns"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -51,16 +51,25 @@ dependencies = [
     "pydantic>=2.0,<3.0",
     "python-multipart>=0.0.20,<1.0",
     "openai>=2.0,<3.0",
-    "langgraph>=1.1,<2.0",
-    "langchain-openai>=1.2,<2.0",
 ]
 
 [project.optional-dependencies]
+# LangGraph-backed tool orchestration (nur_tools/langgraph_orchestrator.py)
+# is optional: the native orchestrator covers the default path. Install
+# with `pip install openrook[langgraph]` to enable LangGraphToolRunner.
+langgraph = [
+    "langgraph>=1.1,<2.0",
+    "langchain-openai>=1.2,<2.0",
+]
 dev = [
     "build>=1.2",
+    "cairosvg>=2.9,<3.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
+    # dev/test environments keep the langgraph extra so the orchestrator
+    # tests continue to run against the real dependency.
+    "openrook[langgraph]",
 ]
 uat = [
     "playwright>=1.49,<2.0",
@@ -74,6 +83,14 @@ Issues = "https://github.com/balfiky/nur/issues"
 Documentation = "https://github.com/balfiky/nur#readme"
 
 [project.scripts]
+openrook = "main:main"
+openrook-setup = "interface.setup:main"
+openrook-uninstall = "interface.uninstall:main"
+openrook-web = "interface.api:main"
+openrook-genesis-reset = "runtime.genesis_reset:main"
+openrook-emotional-qa = "evals.emotional_quality:main"
+openrook-uat = "nur_tools.uat:main"
+openrook-validate = "nur_tools.validate:main"
 nur = "main:main"
 nur-setup = "interface.setup:main"
 nur-uninstall = "interface.uninstall:main"
@@ -84,10 +101,10 @@ nur-uat = "nur_tools.uat:main"
 nur-validate = "nur_tools.validate:main"
 
 [tool.setuptools]
-py-modules = ["main", "pipeline"]
+py-modules = ["main"]
 
 [tool.setuptools.packages.find]
-include = ["core*", "config*", "evals*", "interface*", "runtime*", "nur_tools*"]
+include = ["core*", "config*", "evals*", "interface*", "pipeline*", "runtime*", "nur_tools*"]
 exclude = ["tests*", "data*", "storage*", "reports*"]
 
 [tool.setuptools.package-data]

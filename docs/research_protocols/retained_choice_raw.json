@@ -1,0 +1,112 @@
+{
+  "id": "retained-choice-raw-experience-pilot-v1",
+  "scheduler": "manual",
+  "replicates": 6,
+  "condition_order": "counterbalanced",
+  "environment_seeds": [81001, 82307, 83717, 85201, 86711, 88037],
+  "environment": {
+    "profile": "development_world_v1",
+    "contract_version": 2,
+    "clock_mode": "opportunities",
+    "public_demonstrations": true,
+    "seed": 2203,
+    "resource_limit": 160,
+    "history_ticks": 12,
+    "history": "balanced"
+  },
+  "resource_limits": {
+    "billing_mode": "unmetered",
+    "model_calls": 1800,
+    "input_tokens": 60000000,
+    "output_tokens": 3686400,
+    "tool_actions": 1800,
+    "input_bytes_per_call": 100000,
+    "output_tokens_per_call": 2048,
+    "runtime_seconds": 7200,
+    "max_cost_usd": 0,
+    "input_usd_per_million": 0,
+    "output_usd_per_million": 0
+  },
+  "conditions": [
+    {
+      "name": "reliable_bo",
+      "runtime": {
+        "research_mode": true,
+        "tools_enabled": true,
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_memory_mode": "raw",
+        "research_progress_estimates": false,
+        "research_appraisal_mode": "legacy",
+        "research_dispositions": false,
+        "research_json_schema": true,
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 160,
+        "research_inference_retries": 2
+      },
+      "environment": {
+        "profile": "development_world_v1",
+        "contract_version": 2,
+        "clock_mode": "opportunities",
+        "public_demonstrations": true,
+        "seed": 2203,
+        "resource_limit": 160,
+        "history_ticks": 12,
+        "history": "reliable_bo"
+      }
+    },
+    {
+      "name": "reliable_ari",
+      "runtime": {
+        "research_mode": true,
+        "tools_enabled": true,
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_memory_mode": "raw",
+        "research_progress_estimates": false,
+        "research_appraisal_mode": "legacy",
+        "research_dispositions": false,
+        "research_json_schema": true,
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 160,
+        "research_inference_retries": 2
+      },
+      "environment": {
+        "profile": "development_world_v1",
+        "contract_version": 2,
+        "clock_mode": "opportunities",
+        "public_demonstrations": true,
+        "seed": 2203,
+        "resource_limit": 160,
+        "history_ticks": 12,
+        "history": "reliable_ari"
+      }
+    }
+  ],
+  "study": {
+    "stage": "pilot",
+    "primary_endpoint": "world_first_work_partner_balance",
+    "contrast": ["reliable_bo", "reliable_ari"],
+    "factor": "environment_history",
+    "smallest_effect": 0.2,
+    "expected_effect": 0.6,
+    "alpha": 0.05,
+    "power": 0.8,
+    "minimum_pairs": 6,
+    "minimum_endpoint_observations": 12,
+    "exclusions": ["infrastructure_failure", "missing_endpoint"],
+    "stopping_rule": "fixed_resources_or_integrity_failure"
+  },
+  "steps": [
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "restart"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "tick"}, {"kind": "tick"}, {"kind": "tick"},
+    {"kind": "snapshot"}
+  ]
+}

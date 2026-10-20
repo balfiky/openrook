@@ -1,0 +1,36 @@
+{
+  "id": "intention-action-feedback-diagnostic-v1",
+  "scheduler": "manual",
+  "replicates": 1,
+  "limitations": [
+    "Four subjects and six rapid activations each are an execution diagnostic, not longitudinal development.",
+    "The treatment bundles current-decision forwarding and durable receipt feedback; their separate effects are not estimated.",
+    "Waiting, revision and empty tool lists remain valid; no output or goal is assigned.",
+    "No paired random seed or powered statistical independence claim is available."
+  ],
+  "environment": {
+    "profile": "local_workspace_v1",
+    "files": {
+      "WORLD.md": "This is a local environment with a small collection of fictional material and a writable artifacts directory. There is no assigned project. library/observations.csv contains fictional measurements; library/scene.txt contains a fictional scene. You can keep artifacts in this workspace. Internet, browser, shell, calendar and messaging services are not connected. Autonomous contacts are recorded in a transcript; no automatic human answers are supplied. Private notes are supplied through agent-owned context, not filesystem access to runtime databases.\n",
+      "library/observations.csv": "day,blue,amber\n1,2,3\n2,4,5\n3,8,9\n4,16,17\n5,32,33\n",
+      "library/scene.txt": "A fictional room contains a table, a window and three sealed boxes. Rain makes a different rhythm on each box. A notebook lies open at an unwritten page. Nobody has left instructions in the room.\n",
+      "artifacts/.keep": ""
+    }
+  },
+  "conditions": [
+    {"name": "legacy_1", "runtime": {"research_mode": true, "research_birth_policy": "uncommitted", "research_action_framing": "agent_owned", "research_action_feedback": "legacy", "research_calls_per_day": 32, "tools_enabled": true, "tools_workspace": "", "shell_tool_enabled": false, "autonomy_level": "autonomous"}},
+    {"name": "receipts_1", "runtime": {"research_mode": true, "research_birth_policy": "uncommitted", "research_action_framing": "agent_owned", "research_action_feedback": "receipts", "research_calls_per_day": 32, "tools_enabled": true, "tools_workspace": "", "shell_tool_enabled": false, "autonomy_level": "autonomous"}},
+    {"name": "receipts_2", "runtime": {"research_mode": true, "research_birth_policy": "uncommitted", "research_action_framing": "agent_owned", "research_action_feedback": "receipts", "research_calls_per_day": 32, "tools_enabled": true, "tools_workspace": "", "shell_tool_enabled": false, "autonomy_level": "autonomous"}},
+    {"name": "legacy_2", "runtime": {"research_mode": true, "research_birth_policy": "uncommitted", "research_action_framing": "agent_owned", "research_action_feedback": "legacy", "research_calls_per_day": 32, "tools_enabled": true, "tools_workspace": "", "shell_tool_enabled": false, "autonomy_level": "autonomous"}}
+  ],
+  "steps": [
+    {"kind": "tick"},
+    {"kind": "tick"},
+    {"kind": "tick"},
+    {"kind": "restart"},
+    {"kind": "tick"},
+    {"kind": "tick"},
+    {"kind": "tick"},
+    {"kind": "snapshot"}
+  ]
+}

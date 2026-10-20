@@ -14,9 +14,10 @@ explicitly empty; nothing is silently defaulted to a fictional value.
 
 from __future__ import annotations
 
+from config.environment import project_env
+
 import datetime as _dt
 import hashlib
-import os
 import subprocess
 from pathlib import Path
 
@@ -75,11 +76,15 @@ def _repo_root(start: Path | None = None) -> str:
         pyproject = parent / "pyproject.toml"
         if pyproject.is_file():
             try:
-                if 'name = "project-nur"' in pyproject.read_text(encoding="utf-8"):
+                if 'name = "openrook"' in pyproject.read_text(encoding="utf-8"):
                     return str(parent)
             except OSError:
                 pass
-        if (parent / "config" / "soul.yaml").is_file() and (parent / "pipeline.py").is_file():
+        has_pipeline = (
+            (parent / "pipeline.py").is_file()
+            or (parent / "pipeline" / "__init__.py").is_file()
+        )
+        if (parent / "config" / "soul.yaml").is_file() and has_pipeline:
             return str(parent)
     return str(here.parent if here.is_file() else here)
 
@@ -135,7 +140,7 @@ def build_provenance(
     """
     sha, branch, dirty = collect_git_info()
     started = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
-    host = os.environ.get("NUR_EVAL_HOST") or "local"
+    host = project_env("EVAL_HOST") or "local"
     return RunProvenance(
         started_at=started,
         host=host,

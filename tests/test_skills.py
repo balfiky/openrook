@@ -179,7 +179,7 @@ def test_skill_registry_tools_available_when_external_tools_disabled(tmp_path):
     executor = create_tool_executor(config)
     assert executor is not None
 
-    names = set(executor._registry.names())
+    names = set(executor.registry.names())
     assert "skills.create_from_request" in names
     assert "skills.audit" in names
     assert "web.search" not in names
@@ -301,3 +301,26 @@ def test_skill_registry_tool_reaudits_existing_before_reuse(tmp_path):
     assert second.metadata["skill_id"] != original["id"]
     assert second.metadata["enabled"] is True
     assert second.metadata["status"] == "enabled"
+
+
+def test_executor_redacts_secrets_in_error_text():
+    from nur_tools.executor import ToolExecutor
+    from nur_tools.registry import ToolRegistry
+    from core.types import ToolCapability, ToolCategory
+
+    registry = ToolRegistry()
+    registry.register(ToolCapability(
+        name="boom.tool", description="raises", category=ToolCategory.READ_ONLY,
+        arg_schema={},
+    ))
+    executor = ToolExecutor(registry)
+    executor.set_error_secrets(["sk-supersecret"])
+
+    def _boom(args):
+        raise RuntimeError("auth failed for key sk-supersecret on host x")
+
+    executor.register_handler("boom.tool", _boom)
+    result = executor.execute("boom.tool", {})
+    assert not result.success
+    assert "sk-supersecret" not in result.error
+    assert "[redacted]" in result.error

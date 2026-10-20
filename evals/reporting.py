@@ -17,7 +17,7 @@ def text_report(report: EvalReport) -> str:
     """Produce a human-readable text summary of an eval report."""
     lines: list[str] = []
     lines.append("=" * 70)
-    lines.append("Nūr Evaluation Report")
+    lines.append("OpenRook Evaluation Report")
     lines.append("=" * 70)
     lines.append(
         f"Scenarios: {report.passed_scenarios}/{report.total_scenarios} passed"

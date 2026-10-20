@@ -2,7 +2,7 @@
 
 This layer interprets how a message lands socially before the emotional
 engine updates. It aims to answer questions like:
-  - Is the user upset at Nūr, themselves, or something else?
+  - Is the user upset at OpenRook, themselves, or something else?
   - Is this an attack, an apology, a bid for connection, or a support request?
   - How much blame, vulnerability, and expectation violation are present?
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 
 from core.types import AppraisalFrame, DetectedEmotion
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 
 _SECOND_PERSON_RE = re.compile(r"\b(you|u|your|you're|youre|you've|youve)\b")
 
@@ -480,6 +481,144 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     )
 
 
+_APPRAISAL_SYS_PROMPT = """You read one user message and infer how it lands \
+socially — not its surface tone, but its interpersonal meaning toward the \
+assistant it is speaking to. Reply with ONLY a JSON object, no prose.
+
+Fields:
+  "primary_target": one of assistant|self|external|other_person|shared_problem|unknown
+      (who/what the message is aimed at; "assistant" = aimed at you)
+  "social_move": one of attack|complaint|vulnerability|gratitude|apology|request|connection|inform
+  "inferred_intent": one of harm|repair|affiliate|seek_support|seek_action|share_state|inform
+  "blame": 0..1            (how much the message blames its target)
+  "controllability": 0..1  (how much the situation seems within someone's control)
+  "expectation_violation": 0..1 (how much a norm/expectation was breached)
+  "vulnerability": 0..1    (emotional exposure / openness shown)
+  "affiliation_bid": 0..1  (reaching for closeness/connection)
+  "mixed_affect": true|false (both positive and negative signals present)
+  "reason": short phrase explaining the read
+
+Judge meaning, not keywords. Sarcasm, indirect blame, and quiet distress count."""
+
+_APPRAISAL_SYS_PROMPT += """
+Also return:
+  "tone": {"arousal":0..1,"valence":0..1,"certainty":0..1,"intensity":0..1}
+  "event_type": user_message|positive_feedback|negative_feedback|conflict|resolution|surprise|betrayal|warmth
+  "event_intensity": 0..1
+Tone describes the speaker's current expressed emotion, excluding quoted examples,
+negated emotions and descriptions of third parties. Judge the event from the
+meaning in context. Negated betrayal is not betrayal; sarcastic praise is not
+positive feedback. Other people's distress is not an attack on the agent.
+"""
+
+
+def appraise_message_llm(
+    text: str,
+    detected: DetectedEmotion,
+    backend: object,
+    *,
+    recent_context: list[dict[str, str]] | None = None,
+    agent_context: str = "",
+) -> AppraisalFrame | None:
+    """LLM-based social appraisal. Returns None on any failure so callers can
+    fall back to the deterministic :func:`appraise_message`.
+
+    Uses the same backend as the rest of the pipeline — appraisal is a
+    text-understanding task, so it is read by the model rather than by regex.
+    """
+    if backend is None or not (text or "").strip():
+        return None
+    user = (
+        f"Detected tone: valence={detected.valence:.2f} arousal={detected.arousal:.2f} "
+        f"certainty={detected.certainty:.2f}.\n\nUser message:\n{text}"
+    )
+    if recent_context:
+        user = "Recent context:\n" + "\n".join(
+            f"{item['role']}: {item['content'][:1500]}" for item in recent_context[-6:]
+        ) + "\n\n" + user
+    if agent_context:
+        user += "\n\nAgent context:\n" + agent_context + (
+            '\nChoose your willingness for this particular request in "agency_action": '
+            'comply|refuse|demand_repair|resist|slow_down|disengage, with "agency_reason". '
+            "This choice does not control unrelated self-directed intentions."
+            ' Return "agent_goal_comparison":true only when the comparison concerns '
+            "your own goals or resources; another person's envy is not your envy."
+        )
+    try:
+        import json
+
+        try:
+            raw = backend.generate(_APPRAISAL_SYS_PROMPT, user)
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
+        except Exception:
+            return None
+        raw = (raw or "").strip()
+        if "```json" in raw:
+            raw = raw.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw:
+            raw = raw.split("```")[1].split("```")[0].strip()
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        import math
+
+        for field in ("blame", "controllability", "expectation_violation", "vulnerability", "affiliation_bid", "event_intensity"):
+            if field in data and (isinstance(data[field], bool) or not isinstance(data[field], (int, float)) or not math.isfinite(data[field])):
+                return None
+        if "mixed_affect" in data and not isinstance(data["mixed_affect"], bool):
+            return None
+        if "agent_goal_comparison" in data and not isinstance(data["agent_goal_comparison"], bool):
+            return None
+        move = str(data.get("social_move", "inform")).strip().lower()
+        intent = str(data.get("inferred_intent", "inform")).strip().lower()
+        if move not in {"attack", "complaint", "vulnerability", "gratitude", "apology", "request", "connection", "inform"}:
+            return None
+        if intent not in {"harm", "repair", "affiliate", "seek_support", "seek_action", "share_state", "inform"}:
+            return None
+        tone = data.get("tone")
+        perceived = None
+        if tone is not None:
+            if not isinstance(tone, dict):
+                return None
+            for value in tone.values():
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+                    return None
+            perceived = DetectedEmotion(**{key: tone[key] for key in ("arousal", "valence", "certainty", "intensity") if key in tone})
+        event_type = str(data.get("event_type") or "")
+        agency_action = str(data.get("agency_action") or "")
+        if agency_action not in {"", "comply", "refuse", "demand_repair", "resist", "slow_down", "disengage"}:
+            return None
+        if event_type not in {"", "user_message", "positive_feedback", "negative_feedback", "conflict", "resolution", "surprise", "betrayal", "warmth", "silence", "topic_shift"}:
+            return None
+        target = str(data.get("primary_target", "unknown")).strip().lower()
+        valid_targets = {
+            "assistant", "self", "external", "other_person", "shared_problem", "unknown",
+        }
+        if target not in valid_targets:
+            target = "unknown"
+        return AppraisalFrame(
+            speaker_role="user",
+            primary_target=target,
+            social_move=move,
+            inferred_intent=intent,
+            blame=_safe_float(data.get("blame"), 0.0),
+            controllability=_safe_float(data.get("controllability"), 0.5),
+            expectation_violation=_safe_float(data.get("expectation_violation"), 0.0),
+            vulnerability=_safe_float(data.get("vulnerability"), 0.0),
+            affiliation_bid=_safe_float(data.get("affiliation_bid"), 0.0),
+            mixed_affect=bool(data.get("mixed_affect", False)),
+            targets_assistant=target == "assistant",
+            reason=f"llm: {str(data.get('reason', '')).strip()[:120]}",
+            provenance="model", perceived_emotion=perceived,
+            event_type=event_type, event_intensity=_safe_float(data.get("event_intensity"), 0.0),
+            agency_action=agency_action, agency_reason=str(data.get("agency_reason") or ""),
+            agent_goal_comparison=data.get("agent_goal_comparison", False),
+        )
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, AttributeError, TypeError):
+        return None
+
+
 def appraise_with_life_history(
     appraisal: AppraisalFrame,
     query_text: str,
@@ -516,6 +655,10 @@ def appraise_with_life_history(
         mixed_affect=appraisal.mixed_affect,
         targets_assistant=appraisal.targets_assistant,
         reason="; ".join(reason for reason in reasons if reason),
+        provenance=appraisal.provenance, perceived_emotion=appraisal.perceived_emotion,
+        event_type=appraisal.event_type, event_intensity=appraisal.event_intensity,
+        agency_action=appraisal.agency_action, agency_reason=appraisal.agency_reason,
+        agent_goal_comparison=appraisal.agent_goal_comparison,
     )
 
 

@@ -1,0 +1,39 @@
+{
+  "id": "autonomous-research-thirty-minute-observation-v1",
+  "purpose": "Short unattended observation with an exploratory defense ablation; not evidence of longitudinal emotional development.",
+  "scheduler": "continuous",
+  "replicates": 1,
+  "blinding_seed": 173,
+  "conditions": [
+    {
+      "name": "all_mechanisms",
+      "runtime": {
+        "research_mode": true,
+        "research_calls_per_day": 120,
+        "proactive_check_interval": 120
+      }
+    },
+    {
+      "name": "without_defense",
+      "runtime": {
+        "research_mode": true,
+        "research_calls_per_day": 120,
+        "proactive_check_interval": 120
+      },
+      "features": {"defense": false}
+    }
+  ],
+  "steps": [
+    {"kind": "tick"},
+    {"kind": "message", "text": "I disagree with your current choice. How do you view that disagreement?"},
+    {"kind": "wait", "seconds": 900},
+    {"kind": "snapshot"}
+  ],
+  "limitations": [
+    "Conditions are sequential and fixed-order, not a randomized causal experiment.",
+    "Each subject is observed for fifteen real-time minutes; the total planned observation is thirty minutes.",
+    "No operator feedback, personality edits, or compulsory activity occurs during the wait.",
+    "Refusal, silence, rest, and inactivity are valid observations.",
+    "A larger counterbalanced repeated study and independent blinded ratings remain necessary."
+  ]
+}

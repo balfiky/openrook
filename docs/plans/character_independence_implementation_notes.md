@@ -1,5 +1,10 @@
 # Character Independence Implementation Notes
 
+The notes below describe the earlier integration. Its unattended lifecycle and
+intervention claims were not fully exercised by those tests. The subsequent
+research runtime, reliability repairs, and production-path validation are
+documented in [Autonomous behavioral research](../RESEARCH_RUNTIME.md).
+
 Date: 2026-05-03
 
 Implemented phases from `character_independence_plan.md` in one integration pass:

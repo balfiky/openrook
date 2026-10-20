@@ -1,4 +1,4 @@
-"""Versioned public integration API (``/v1/*``) for Project Nūr.
+"""Versioned public integration API (``/v1/*``) for OpenRook.
 
 Unlike the legacy endpoints in ``interface/api.py`` — which exist primarily
 to serve the bundled web UI — the ``v1`` surface is designed for external
@@ -21,16 +21,17 @@ Mounted under ``/v1`` via :func:`build_v1_router`.
 from __future__ import annotations
 
 import os
-import secrets
 import shutil
 import sqlite3
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from config.loader import get_config
+from interface.auth import build_require_bearer
+from interface.errors import redact_error
 from runtime.config import RuntimeConfig
 from runtime.debug.api import _debug_to_dict
 from runtime.debug.persona_view import build_persona_view
@@ -129,31 +130,13 @@ def build_v1_router(
     router = APIRouter(prefix="/v1")
 
     # ------------------------------------------------------------------
-    # Auth dependency — reads the current config on every request so that
-    # enabling or rotating the key via POST /config takes effect without
-    # restarting the app.
+    # Auth dependency — shared with the legacy surface via interface.auth.
+    # Reads the current config on every request so that enabling or
+    # rotating the key via POST /config takes effect without restarting
+    # the app.
     # ------------------------------------------------------------------
 
-    async def require_auth(
-        authorization: str | None = Header(default=None),
-    ) -> None:
-        cfg = config_getter()
-        expected = str(cfg.api_key or "")
-        if not expected:
-            return  # auth disabled
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing bearer token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        token = authorization.split(" ", 1)[1].strip()
-        if not secrets.compare_digest(token, expected):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid bearer token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    require_auth = build_require_bearer(config_getter)
 
     def get_manager() -> SessionManager:
         return session_manager_getter()
@@ -169,7 +152,7 @@ def build_v1_router(
     async def health() -> dict[str, Any]:
         return {
             "status": "ok",
-            "service": "nur",
+            "service": "openrook",
             "version": "1",
             "uptime_seconds": round(time.time() - serve_started_at, 1),
         }
@@ -221,6 +204,9 @@ def build_v1_router(
         dependencies=[Depends(require_auth)],
     )
     async def chat(req: V1ChatRequest) -> dict[str, Any]:
+        _validate_path_token("platform", req.platform)
+        _validate_path_token("user_id", req.user_id)
+        _validate_path_token("chat_id", req.chat_id)
         mgr = get_manager()
         try:
             response = await mgr.handle_message(
@@ -230,7 +216,7 @@ def build_v1_router(
         except RuntimeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
+                detail=redact_error(str(exc), config_getter()),
             ) from exc
         payload: dict[str, Any] = {
             "response": response,
@@ -262,7 +248,7 @@ def build_v1_router(
                 "user_id": session.user_id,
                 "rel_key": session.rel_key,
                 "idle_seconds": round(now - session.last_activity, 1),
-                "queue_size": session._queue.qsize(),
+                "queue_size": session.queue_depth,
                 "emotion_label": session.pipeline.engine.to_emotion_label(),
                 "energy": session.pipeline.engine.state.energy,
             }
@@ -423,7 +409,7 @@ def build_v1_router(
 
     @router.get(
         "/soul",
-        summary="Seeded soul / authored identity for Nūr",
+        summary="Seeded soul / authored identity for OpenRook",
         dependencies=[Depends(require_auth)],
     )
     async def get_soul() -> dict[str, Any]:
@@ -607,10 +593,10 @@ def build_v1_router(
     ) -> dict[str, Any]:
         mgr = get_manager()
         session = await mgr.ensure_session(platform, user_id, chat_id)
-        executor = session.pipeline._tool_executor
+        executor = session.pipeline.tool_executor
         if executor is None:
             return {"count": 0, "tools": []}
-        registry = executor._registry
+        registry = executor.registry
         tools = registry.list_tools()
         return {
             "count": len(tools),

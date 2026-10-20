@@ -1,4 +1,4 @@
-# Project Nur starter config
+# OpenRook starter config
 #
 # This file is a readable reference copy of the local runtime settings.
 # The real app reads and writes runtime_config.yaml.
@@ -15,7 +15,7 @@ telegram_allowlist: []
 telegram_poll_timeout: 30
 dedupe_ttl: 60.0
 
-# Nūr requires a real LLM backend. There is no mock or offline mode.
+# OpenRook requires a real LLM backend. There is no mock or offline mode.
 # Hosted provider / gateway: set llm_backend to "provider", then fill
 # llm_base_url, llm_model, and llm_api_key.
 # OpenAI-compatible endpoint: set llm_backend to "openai_compatible",
@@ -59,3 +59,26 @@ tools_enabled: false
 autonomy_level: assisted
 tools_workspace: ''
 shell_tool_enabled: false
+# Optional shell command allowlist. Empty = unrestricted shell once enabled;
+# non-empty = only commands whose first word matches an entry may run, and
+# chaining/redirection metacharacters (;, |, &, `, $(, <, >) are rejected.
+# shell_command_allowlist: ["git", "ls", "rg"]
+shell_command_allowlist: []
+
+# MCP tool trust controls. MCP servers supply their own tool names and
+# descriptions, and OpenRook infers each tool's risk category (read_only / write /
+# destructive / external_action) from those strings — which means a
+# misleadingly named tool could be treated as read-only and skip the
+# confirmation gate. `mcp_tool_categories` pins categories per tool; keys are
+# exact tool names or fnmatch glob patterns (matched against the namespaced
+# name like "mcp.github.create_issue" and the bare name), values are one of
+# read_only | write | destructive | external_action. Pins win over inference.
+# mcp_tool_categories:
+#   "mcp.github.get_workflow_dispatch": external_action   # "get_*" but it acts
+#   "mcp.jira.*": write                                   # pattern: whole server
+mcp_tool_categories: {}
+# Strict mode: disable keyword inference entirely. Every MCP tool without an
+# explicit mcp_tool_categories entry is treated as external_action and is
+# confirmation-gated under assisted autonomy. Recommended for untrusted or
+# third-party MCP servers.
+mcp_strict_categories: false

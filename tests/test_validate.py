@@ -8,7 +8,7 @@ from nur_tools import validate
 def test_auto_target_uses_repo_when_root_has_project_files(tmp_path):
     (tmp_path / "runtime").mkdir()
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "project-nur"\n',
+        '[project]\nname = "openrook"\n',
         encoding="utf-8",
     )
 
@@ -47,7 +47,7 @@ def test_docs_drift_check_allows_historical_changelog(tmp_path):
 def _write_repo(tmp_path: Path, *, version: str, badge_color: str, changelog_body: str,
                 pyproject_extra: str = "") -> None:
     (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "project-nur"\nversion = "{version}"\n\n'
+        f'[project]\nname = "openrook"\nversion = "{version}"\n\n'
         "[tool.setuptools.package-data]\n"
         f'interface = ["static/*"{pyproject_extra}]\n'
         'config = ["*.yaml", "prompts/*.md"]\n',
@@ -96,7 +96,7 @@ def test_version_consistency_accepts_released_heading(tmp_path):
 
 def test_version_consistency_rejects_missing_badge(tmp_path):
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "project-nur"\nversion = "0.28.13"\n',
+        '[project]\nname = "openrook"\nversion = "0.28.13"\n',
         encoding="utf-8",
     )
     (tmp_path / "README.md").write_text("Version `0.28.13`.\n", encoding="utf-8")

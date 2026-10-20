@@ -29,7 +29,7 @@ def create_debug_app(
 ) -> FastAPI:
     """Build a FastAPI application wired to a live SessionManager."""
 
-    app = FastAPI(title="Nūr Runtime Debug", version="0.9.0")
+    app = FastAPI(title="OpenRook Runtime Debug", version="0.9.0")
 
     async def require_auth(authorization: str | None = Header(default=None)) -> None:
         expected = str(api_key_getter() if api_key_getter is not None else "")
@@ -135,7 +135,7 @@ def create_debug_app(
 
 
 # ---------------------------------------------------------------------------
-# Debug-state serialization (preserves existing Nur debug fields)
+# Debug-state serialization (preserves existing OpenRook debug fields)
 # ---------------------------------------------------------------------------
 
 def _debug_to_dict(debug) -> dict:

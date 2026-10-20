@@ -255,7 +255,7 @@ class TestIndexPage:
         resp = index()
         html = resp.body.decode()
         assert resp.status_code == 200
-        assert "Nūr" in html
+        assert "OpenRook" in html
         assert "<!DOCTYPE html>" in html
 
     async def test_markdown_renderer_avoids_invalid_lookbehind_regex(self):
@@ -272,7 +272,7 @@ class TestIndexPage:
         assert "Resolution" in html
         assert "Relationship State" in html
         assert "Why This Response?" in html
-        assert "What Nūr Remembers" in html
+        assert "What OpenRook Remembers" in html
         assert 'id="personaPanel"' in html
         assert "updatePersonaPanel" in js
         assert 'href="/settings" title="Settings"' in html
@@ -312,7 +312,7 @@ class TestIndexPage:
         assert "renderCodexModelControl" in js
         assert "loadSettings({ loadSoul: false })" in js
         assert "Character Mode" in html
-        assert 'id="wiz-soul-name" type="text" value="Nūr"' in html
+        assert 'id="wiz-soul-name" type="text" value="OpenRook"' in html
         assert "First Experience" in html
         assert "wizardBuildSoulPayload" in js
         assert "/admin/life/experiences/text" in js
@@ -470,6 +470,9 @@ class TestConfigEndpoint:
             autonomy_level="high_risk",
             tools_workspace="/tmp/nur_ws",
             shell_tool_enabled=True,
+            shell_command_allowlist=["git", "ls"],
+            mcp_tool_categories={"mcp.github.*": "external_action"},
+            mcp_strict_categories=True,
         ).write_yaml(str(path))
         monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
 
@@ -480,6 +483,9 @@ class TestConfigEndpoint:
         assert saved.autonomy_level == "high_risk"
         assert saved.tools_workspace == "/tmp/nur_ws"
         assert saved.shell_tool_enabled is True
+        assert saved.shell_command_allowlist == ["git", "ls"]
+        assert saved.mcp_tool_categories == {"mcp.github.*": "external_action"}
+        assert saved.mcp_strict_categories is True
 
     async def test_update_config_can_toggle_tool_settings(self, monkeypatch, tmp_path):
         """An explicit value in the request does take effect."""
@@ -492,14 +498,40 @@ class TestConfigEndpoint:
             tools_enabled=True,
             autonomy_level="autonomous",
             tools_workspace="/tmp/nur_ws2",
+            shell_command_allowlist=["git", "  rg  ", ""],
+            mcp_tool_categories={"mcp.cal.get_hook": "  EXTERNAL_ACTION  "},
+            mcp_strict_categories=True,
         ))
 
         saved = RuntimeConfig.from_yaml(str(path))
         assert saved.tools_enabled is True
         assert saved.autonomy_level == "autonomous"
         assert saved.tools_workspace == "/tmp/nur_ws2"
+        assert saved.shell_command_allowlist == ["git", "rg"]
         # shell_tool_enabled was not specified → remains default False.
         assert saved.shell_tool_enabled is False
+        # mcp category values are normalized to lowercase
+        assert saved.mcp_tool_categories == {"mcp.cal.get_hook": "external_action"}
+        assert saved.mcp_strict_categories is True
+
+    async def test_update_config_rejects_invalid_mcp_category(self, monkeypatch, tmp_path):
+        """An invalid mcp_tool_categories value is a 400, not a silent save."""
+        from fastapi import HTTPException
+
+        path = tmp_path / "runtime_config.yaml"
+        RuntimeConfig(llm_backend="mock").write_yaml(str(path))
+        monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_config(ConfigUpdateRequest(
+                llm_backend="mock",
+                mcp_tool_categories={"tool_x": "harmless"},
+            ))
+        assert exc_info.value.status_code == 400
+        assert "invalid category" in exc_info.value.detail
+        # Nothing was persisted
+        saved = RuntimeConfig.from_yaml(str(path))
+        assert saved.mcp_tool_categories == {}
 
     async def test_update_config_reloads_web_session_manager(self, monkeypatch, tmp_path):
         path = tmp_path / "runtime_config.yaml"
@@ -544,6 +576,120 @@ class TestConfigEndpoint:
         assert apply_state["restart_required"] is True
         assert apply_state["restart_required_fields"] == ["debug_port"]
         assert "llm_model" not in apply_state["restart_required_fields"]
+
+    @pytest.mark.parametrize("execution_mode,feedback_mode", [("batch", "legacy"), ("closed_loop", "receipts")])
+    async def test_update_config_preserves_every_runtime_config_field(
+        self, monkeypatch, tmp_path, execution_mode, feedback_mode
+    ):
+        """Dynamic completeness guard for the field-by-field reconstruction.
+
+        ``update_config`` rebuilds ``RuntimeConfig`` field-by-field; any
+        field added to ``RuntimeConfig`` but forgotten in the handler is
+        silently reset to its default on every save. This test iterates the
+        live dataclass fields, gives every one a distinctive non-default
+        value, sends an *empty* update (everything = "leave unchanged"),
+        and asserts each value survives the YAML round trip — so it
+        automatically covers fields added in the future without edits here.
+        Coupled execution/feedback settings exercise both valid combinations.
+        """
+        import dataclasses
+
+        # Fields whose values are constrained by validators on the load or
+        # save path — hardcode a VALID non-default instead of a synthetic
+        # "x_<name>" value.
+        constrained: dict[str, object] = {
+            # _normalize_autonomy_level: off|assisted|autonomous|high_risk
+            # (default "assisted").
+            "autonomy_level": "autonomous",
+            "research_birth_policy": "configured",
+            "research_action_framing": "conversational",
+            "research_action_feedback": feedback_mode,
+            "research_execution_mode": execution_mode,
+            "research_context_mode": "task_only",
+            "research_memory_mode": "procedures",
+            "research_appraisal_mode": "attention",
+            "research_inference_retries": 2,
+            # create_llm_backend kinds; "mock" is the test backend
+            # (default "auto").
+            "llm_backend": "mock",
+            # runtime.learning_budget.from_config: local|cloud
+            # (default "local").
+            "learning_budget_kind": "cloud",
+            # normalize_mcp_tool_categories: values must be in
+            # VALID_MCP_TOOL_CATEGORIES (default {}).
+            "mcp_tool_categories": {"mcp.x.*": "read_only"},
+        }
+        # Fields update_config intentionally clears/transforms on save.
+        # Currently EMPTY on purpose: even the secrets (telegram_token,
+        # llm_api_key, api_key) are preserved on an empty request — their
+        # clear_* flags default to False and blank strings mean "keep
+        # existing" — so they must survive and are asserted like everything
+        # else. Add a field here ONLY if the handler deliberately
+        # drops/rewrites it on an empty update.
+        intentionally_transformed: set[str] = set()
+
+        expected: dict[str, object] = {}
+        for f in dataclasses.fields(RuntimeConfig):
+            default = (
+                f.default
+                if f.default is not dataclasses.MISSING
+                else f.default_factory()
+            )
+            if f.name in constrained:
+                value = constrained[f.name]
+            elif isinstance(default, bool):
+                value = not default
+            elif isinstance(default, str):
+                value = "x_" + f.name
+            elif isinstance(default, (int, float)):
+                value = default + 7
+            elif isinstance(default, list):
+                value = ["x_" + f.name]
+            elif isinstance(default, set):
+                value = {"x_" + f.name}
+            elif isinstance(default, dict):
+                value = {"x_" + f.name: "x"}
+            else:
+                pytest.fail(
+                    f"RuntimeConfig.{f.name} has unsupported default type "
+                    f"{type(default).__name__}; teach this guard test how to "
+                    "build a distinctive non-default value for it"
+                )
+            assert value != default or f.name in {"research_execution_mode", "research_action_feedback"}, (
+                f"guard test bug: value for RuntimeConfig.{f.name} must "
+                "differ from the field default to detect resets"
+            )
+            expected[f.name] = value
+
+        path = tmp_path / "runtime_config.yaml"
+        RuntimeConfig(**expected).write_yaml(str(path))
+        monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
+
+        async def fake_restart(_config: RuntimeConfig) -> None:
+            return None
+
+        monkeypatch.setattr(
+            interface_api, "_restart_telegram_channel", fake_restart
+        )
+
+        await update_config(ConfigUpdateRequest())
+
+        saved = RuntimeConfig.from_yaml(str(path))
+        dropped = {
+            f.name: (getattr(saved, f.name), expected[f.name])
+            for f in dataclasses.fields(RuntimeConfig)
+            if f.name not in intentionally_transformed
+            and getattr(saved, f.name) != expected[f.name]
+        }
+        assert not dropped, (
+            "update_config reset these RuntimeConfig fields on an empty "
+            "save — wire each through ConfigUpdateRequest and the handler "
+            "in interface/api.py: "
+            + "; ".join(
+                f"{name}: saved={got!r}, expected={want!r}"
+                for name, (got, want) in sorted(dropped.items())
+            )
+        )
 
     async def test_update_config_restarts_telegram_polling(self, monkeypatch, tmp_path):
         path = tmp_path / "runtime_config.yaml"
@@ -632,7 +778,7 @@ class TestConfigEndpoint:
 
         def fake_schedule() -> list[str]:
             scheduled.append(True)
-            return ["python", "nur-web"]
+            return ["python", "openrook-web"]
 
         monkeypatch.setattr(interface_api, "_schedule_process_restart", fake_schedule)
 
@@ -642,7 +788,7 @@ class TestConfigEndpoint:
 
         assert result["scheduled"] is True
         assert result["runtime_drain"]["telegram_stopped"] is True
-        assert result["argv"] == ["python", "nur-web"]
+        assert result["argv"] == ["python", "openrook-web"]
         assert scheduled == [True]
 
 
@@ -815,11 +961,11 @@ class TestAdminSetupDefaultSoul:
     async def test_default_soul_reason_surfaces_when_name_is_nur(
         self, monkeypatch, tmp_path
     ):
-        """Setup flagged default_soul when soul.name is still the built-in 'Nūr'."""
+        """Setup flagged default_soul when soul.name is still the built-in 'OpenRook'."""
         runtime_cfg_path = tmp_path / "runtime_config.yaml"
         monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(runtime_cfg_path))
         RuntimeConfig(data_dir=str(tmp_path / "data")).write_yaml(str(runtime_cfg_path))
-        # The real config/soul.yaml ships with name "Nūr", so default_soul should fire.
+        # The real config/soul.yaml ships with name "OpenRook", so default_soul should fire.
         data = await interface_api.admin_status()
         assert "default_soul" in data["setup"]["reasons"]
 
@@ -1088,13 +1234,13 @@ class TestAgentNamePropagation:
         reset_config()
         base_soul = get_config().soul
         default_prompt = build_system_prompt(PipelineContext(soul_profile=base_soul))
-        assert "You are Nūr" in default_prompt
+        assert "You are OpenRook" in default_prompt
         assert "{agent_name}" not in default_prompt
 
         iris_soul = replace(base_soul, name="Iris")
         iris_prompt = build_system_prompt(PipelineContext(soul_profile=iris_soul))
         assert "You are Iris" in iris_prompt
-        assert "You are Nūr" not in iris_prompt
+        assert "You are OpenRook" not in iris_prompt
         assert "{agent_name}" not in iris_prompt
 
     def test_generator_template_has_no_hardcoded_nur_directive(self):
@@ -1114,8 +1260,8 @@ class TestAgentNamePropagation:
         reset_config()
         template = get_config().self_check_prompt
         assert "{agent_name}" in template
-        # And must not hardcode "Nūr" next to "quality checker"
-        assert "quality checker for Nūr" not in template
+        # And must not hardcode "OpenRook" next to "quality checker"
+        assert "quality checker for OpenRook" not in template
 
     def test_digestion_prompt_uses_placeholder(self):
         from config.loader import get_config, reset_config
@@ -1123,7 +1269,7 @@ class TestAgentNamePropagation:
         reset_config()
         template = get_config().digestion_prompt
         assert "{agent_name}" in template
-        assert "consolidation system for Nūr" not in template
+        assert "consolidation system for OpenRook" not in template
 
 
 class TestSoulSaveReloadsSessionManager:
@@ -1196,11 +1342,11 @@ class TestConfigLoaderOverride:
         import config.loader as _loader
 
         monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path))
-        # No soul.yaml written — should fall through to packaged "Nūr"
+        # No soul.yaml written — should fall through to packaged "OpenRook"
         importlib.reload(_loader)
         try:
             cfg = _loader.load_config()
-            assert cfg.soul.name == "Nūr"
+            assert cfg.soul.name == "OpenRook"
         finally:
             monkeypatch.delenv("NUR_CONFIG_DIR", raising=False)
             importlib.reload(_loader)
@@ -1214,7 +1360,7 @@ class TestConfigLoaderOverride:
         importlib.reload(_loader)
         try:
             cfg = _loader.load_config()
-            assert cfg.soul.name == "Nūr"
+            assert cfg.soul.name == "OpenRook"
         finally:
             monkeypatch.delenv("NUR_CONFIG_DIR", raising=False)
             importlib.reload(_loader)
@@ -1230,7 +1376,7 @@ class TestEntryPoints:
             captured["port"] = port
 
         monkeypatch.setattr("uvicorn.run", fake_run)
-        monkeypatch.setattr("sys.argv", ["nur-web"])
+        monkeypatch.setattr("sys.argv", ["openrook-web"])
 
         interface_api.main()
 
@@ -1253,7 +1399,7 @@ class TestEntryPoints:
         monkeypatch.setattr(
             "sys.argv",
             [
-                "nur-web", "--host", "0.0.0.0", "--port", "9001",
+                "openrook-web", "--host", "0.0.0.0", "--port", "9001",
                 "--config", str(config_path),
             ],
         )
@@ -1262,3 +1408,29 @@ class TestEntryPoints:
         interface_api.main()
 
         assert captured == {"host": "0.0.0.0", "port": 9001}
+
+
+class TestBrandAssetTraversal:
+    """Regression: /assets/*.svg must not escape docs/diagrams."""
+
+    @staticmethod
+    def _client():
+        from fastapi.testclient import TestClient
+        from interface.api import app
+        return TestClient(app)
+
+    def test_traversal_to_parent_svg_rejected(self):
+        client = self._client()
+        resp = client.get("/assets/../diagrams-escape-probe.svg")
+        assert resp.status_code == 404
+
+    def test_deep_traversal_rejected(self):
+        client = self._client()
+        resp = client.get("/assets/..%2f..%2f..%2fetc%2fpasswd.svg")
+        assert resp.status_code == 404
+
+    def test_legitimate_svg_still_served(self):
+        client = self._client()
+        resp = client.get("/assets/wordmark-light.svg")
+        assert resp.status_code == 200
+        assert "svg" in resp.headers["content-type"]

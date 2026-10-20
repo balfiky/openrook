@@ -106,7 +106,7 @@ ABLATIONS: list[Ablation] = [
 
     # Negative control: all cognitive enrichment disabled (prompt-only baseline).
     # Constitution + conversation window only — no memory retrieval, no inner
-    # dialogue, no defense, no life history. Quantifies the Nūr value-add vs
+    # dialogue, no defense, no life history. Quantifies the OpenRook value-add vs
     # a bare LLM call.  Modulator-based assertions (adversarial, tool_recovery,
     # long_horizon) are expected to hold since the emotional engine is always
     # active. Scenarios that depend on any memory layer should fail.

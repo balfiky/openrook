@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from config.environment import project_env
+
 import argparse
-import os
 import shutil
 from pathlib import Path
 
@@ -12,8 +13,8 @@ from runtime.life_history import life_history_db_path
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="nur-genesis-reset")
-    parser.add_argument("--config", default=os.environ.get("NUR_RUNTIME_CONFIG", "runtime_config.yaml"))
+    parser = argparse.ArgumentParser(prog="openrook-genesis-reset")
+    parser.add_argument("--config", default=project_env("RUNTIME_CONFIG", "runtime_config.yaml"))
     parser.add_argument("--yes", action="store_true", help="Skip interactive confirmation.")
     args = parser.parse_args(argv)
 

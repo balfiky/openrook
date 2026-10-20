@@ -7,6 +7,7 @@ LLM backend is swappable: OpenAI, Anthropic, Ollama, MiniMax, or a callable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 from typing import Protocol
 
@@ -40,7 +41,7 @@ def build_system_prompt(ctx: PipelineContext) -> str:
     Loads template from config/prompts/generator.md and fills in
     structured context from the pipeline state.
     """
-    template = get_config().generator_prompt
+    template = ctx.generator_prompt if ctx.generator_prompt is not None else get_config().generator_prompt
 
     # Build each section
     character_vector_section = _build_character_vector_section(ctx)
@@ -232,7 +233,7 @@ def _build_topic_section(ctx: PipelineContext) -> str:
 
 
 def _build_values_section(ctx: PipelineContext) -> str:
-    if not ctx.values:
+    if not ctx.values or not ctx.values.values:
         return ""
     lines = ["## Values (ranked)"]
     for name, weight in ctx.values.ranked():
@@ -386,6 +387,12 @@ def _build_contradiction_section(ctx: PipelineContext) -> str:
 def _build_candidate_section(ctx: PipelineContext) -> str:
     if not ctx.candidate_response:
         return ""
+    if ctx.research_mode:
+        return (
+            "## Earlier Candidate Expression\n"
+            f"{ctx.candidate_response}\n\n"
+            "This is an earlier candidate, not a required expression or style.\n"
+        )
     lines = ["## Draft Response to Refine"]
     lines.append(f"{ctx.candidate_response}")
     lines.append("")
@@ -411,6 +418,14 @@ def _build_tool_context_section(ctx: PipelineContext) -> str:
 
 
 def _build_defense_instruction_section(ctx: PipelineContext) -> str:
+    if ctx.research_mode:
+        if not ctx.defense_state:
+            return ""
+        return (
+            "## Observed Defense State\n"
+            + json.dumps(ctx.defense_state, ensure_ascii=False, sort_keys=True)
+            + "\nThis describes the runtime's activation, not a required expression.\n"
+        )
     if not ctx.defense_instruction:
         return ""
     lines = ["## Defense Filter"]
@@ -420,7 +435,7 @@ def _build_defense_instruction_section(ctx: PipelineContext) -> str:
 
 
 def _build_self_intents_section(ctx: PipelineContext) -> str:
-    """Surface self-actions Nūr took this turn.
+    """Surface self-actions OpenRook took this turn.
 
     Self-intents are real executed tool calls (results also live in
     ``tool_trace.executed_results``). This block names them explicitly so
@@ -479,9 +494,9 @@ def _build_affect_agency_section(ctx: PipelineContext) -> str:
         lines.append(f"- Agency stance: {ctx.agency_decision.action}")
         if ctx.agency_decision.rationale:
             lines.append(f"- Rationale: {ctx.agency_decision.rationale}")
-        if ctx.agency_decision.response_instruction:
+        if ctx.agency_decision.response_instruction and not ctx.research_mode:
             lines.append(f"- Response effect: {ctx.agency_decision.response_instruction}")
-        if ctx.agency_decision.tool_instruction:
+        if ctx.agency_decision.tool_instruction and not ctx.research_mode:
             lines.append(f"- Tool willingness: {ctx.agency_decision.tool_instruction}")
     if ctx.autonomy_level:
         lines.append(f"- Autonomy mode: {ctx.autonomy_level}")
@@ -539,6 +554,8 @@ class GenerationResult:
     response: str = ""
     system_prompt: str = ""
     correction_note: str = ""  # set if self-check failed and we regenerated
+    raw_response: str = ""
+    deliberate_silence: bool = False
 
 
 class ResponseGenerator:
@@ -568,16 +585,18 @@ class ResponseGenerator:
         full_message = user_message
         if conversation_history:
             history_text = "\n".join(
-                f"{'User' if m['role'] == 'user' else 'Nūr'}: {m['content']}"
+                f"{'User' if m['role'] == 'user' else 'OpenRook'}: {m['content']}"
                 for m in conversation_history[-10:]  # last 10 turns
             )
             full_message = f"Recent conversation:\n{history_text}\n\nUser: {user_message}"
 
-        response = _strip_internal_markers(
-            self._backend.generate(system_prompt, full_message) or "",
-        )
+        raw_response = self._backend.generate(system_prompt, full_message) or ""
+        deliberate_silence = ctx.research_mode and raw_response.strip() == "[[SILENCE]]"
+        response = ("" if deliberate_silence else raw_response) if ctx.research_mode else _strip_internal_markers(raw_response)
         correction_note = ""
-        if not response:
+        if ctx.research_mode and not raw_response.strip():
+            raise RuntimeError("Generation backend returned no expression or explicit silence decision")
+        if not response and not ctx.research_mode:
             response = _fallback_empty_response(ctx)
             correction_note = "LLM returned an empty response; fallback response used."
 
@@ -585,6 +604,7 @@ class ResponseGenerator:
             response=response,
             system_prompt=system_prompt,
             correction_note=correction_note,
+            raw_response=raw_response, deliberate_silence=deliberate_silence,
         )
 
     @property

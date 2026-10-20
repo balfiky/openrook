@@ -1,0 +1,542 @@
+{
+  "provenance": {
+    "started_at": "2026-06-10T10:03:44+00:00",
+    "finished_at": "2026-06-10T10:07:08+00:00",
+    "host": "local",
+    "git_sha": "675057e95fe4c8500dbaa32f2bca029809dc958d",
+    "git_branch": "main",
+    "dirty_worktree": true,
+    "backend_type": "codex",
+    "requested_model": "",
+    "resolved_model": "",
+    "base_url": "",
+    "temperature": null,
+    "max_tokens": null,
+    "config_fingerprints": {
+      "config/modulators.yaml": "0b63a8baaa77b09ef6960b58390c5504535a03140e126b8f92c21cff85389dbe",
+      "config/profiles_schema.yaml": "417b8f189fea280d76b4c2cc094fa09aa10035530e95b62df49ccb80fd9a8f15",
+      "config/prompts/arbiter.md": "fe2babf237f86d0f8f40ea2d1dd2b740dce3d233e992f471e68f036c148cd3ec",
+      "config/prompts/classify_event.md": "4ce1b4537940bf32631bb1e00eda0bc03dc3dc124383b5e94db0caa378f341ae",
+      "config/prompts/contagion.md": "8d1585d5102a4a5289a8f8c5b38ae463759905b60ebce7d5e507ea3256b45cdf",
+      "config/prompts/detect_topics.md": "e7c22e6c1f0278d945ef910c94f3eefabd80280764c6b20bf4bc8a4199045385",
+      "config/prompts/digestion.md": "726220e4215b65c6dc991a9e8969c3fa18f58970d28c5495dcd16c9b407cb8b7",
+      "config/prompts/fast_path.md": "f895490f9fdd6c5a850afb2965cd98640ccd68629fc69f0c0e7ffc9633e16ef6",
+      "config/prompts/fast_path_revision.md": "0106deafed49322032f6fb42253b4542670050a48cd0dfd735b2c1435bdca5d2",
+      "config/prompts/generator.md": "036652b41c41f964661ab9eface8d1d8ef57541477b1209dffbe1f20bfdb0c74",
+      "config/prompts/self_check.md": "0e6111e50218c12f15248d72ad358d4f0381c09bb4b4089e14cde07676ffa14c",
+      "config/prompts/slow_path.md": "aa656b411aa1aa9d22eb1ee1a89d78a187921bf54127ec4a9a38d684eca200e2",
+      "config/semantic_memory.yaml": "c7515b676bb35bd4a67860619713aa4cee873ff6fa4cc9e06642d1c65e6ff7ab",
+      "config/soul.yaml": "0b3a8468b36a7a11db4f0892614e24f046ece5a12a04f8eb235bff1f7e00141c",
+      "config/values_seed.yaml": "e645abaadea5718dd863d6dc6560be7ecf58f6e0b37c1948193c32b6d8810452"
+    },
+    "scenario_set": "phase11",
+    "scenario_count": 6,
+    "scenario_ids": [
+      "p11_action_request_practical",
+      "p11_external_distress_validate",
+      "p11_low_trust_hostility_boundary",
+      "p11_open_loop_challenge",
+      "p11_overwhelm_ground",
+      "p11_repair_closes_loop"
+    ],
+    "total_turns": 9,
+    "llm_calls": 14,
+    "failures": 0,
+    "total_latency_s": 203.836,
+    "retries": null,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "estimated_cost_usd": null
+  },
+  "timestamp": 1781085824.4279923,
+  "total_scenarios": 6,
+  "passed_scenarios": 6,
+  "failed_scenarios": 0,
+  "total_assertions": 25,
+  "failed_assertions": 0,
+  "errored_scenarios": 0,
+  "results": [
+    {
+      "scenario_id": "p11_external_distress_validate",
+      "scenario_name": "External distress is validated without relational damage",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "relationship",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 12944.1,
+      "total_assertions": 4,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 12939.9,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "I'm furious about work, not at you. I just need to vent.",
+          "response": "Yeah. Let it out.\n\nI won\u2019t try to fix it or make it tidy unless you ask. What happened?",
+          "modulators": {
+            "arousal": 0.5900000000000001,
+            "valence": 0.4325,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.95,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 87,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.event_classified == 'user_message'",
+              "passed": true,
+              "actual": "user_message",
+              "message": "Expected debug.event_classified=user_message, got user_message"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.response_strategy == 'validate'",
+              "passed": true,
+              "actual": "validate",
+              "message": "Expected debug.response_strategy=validate, got validate"
+            },
+            {
+              "kind": "custom",
+              "description": "Trust stays unchanged for non-directed distress",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "p11_low_trust_hostility_boundary",
+      "scenario_name": "Low-trust hostility triggers a boundary strategy",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "relationship",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 29287.0,
+      "total_assertions": 4,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 2,
+        "tool_call_count": 0,
+        "total_latency_ms": 29284.0,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 1,
+        "defense_activations": 1
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "You are useless and this answer is terrible.",
+          "response": "I hear you. \u201cUseless\u201d doesn\u2019t help me fix it.\n\nPoint to what\u2019s wrong: inaccurate, too vague, wrong tone, or missing the actual ask. I\u2019ll revise it.",
+          "modulators": {
+            "arousal": 0.85,
+            "valence": 0.25,
+            "certainty": 0.35,
+            "bonding": 0.4125,
+            "energy": 0.79375,
+            "resolution": 0.23
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 147,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.event_classified == 'conflict'",
+              "passed": true,
+              "actual": "conflict",
+              "message": "Expected debug.event_classified=conflict, got conflict"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.response_strategy == 'set_boundary'",
+              "passed": true,
+              "actual": "set_boundary",
+              "message": "Expected debug.response_strategy=set_boundary, got set_boundary"
+            },
+            {
+              "kind": "custom",
+              "description": "Trust drops further after assistant-directed hostility",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "p11_overwhelm_ground",
+      "scenario_name": "Mixed affect and overwhelm select grounding",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 20519.6,
+      "total_assertions": 3,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 20517.1,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "I'm happy it worked, but I'm scared and overwhelmed and I can't think straight!!!",
+          "response": "Stop for a second. You\u2019re flooded; that\u2019s why your thoughts won\u2019t line up. Nothing is wrong with you.\n\nDo this first: put both feet on the floor, unclench your jaw, and take one slow breath in, then a",
+          "modulators": {
+            "arousal": 0.78,
+            "valence": 0.485,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.95,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 318,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.response_strategy == 'ground'",
+              "passed": true,
+              "actual": "ground",
+              "message": "Expected debug.response_strategy=ground, got ground"
+            },
+            {
+              "kind": "debug_field",
+              "description": "",
+              "passed": true,
+              "actual": "AppraisalFrame(speaker_role='user', primary_target='external', social_move='vulnerability', inferred_intent='seek_support', blame=0.6, controllability=0.35, expectation_violation=0.0, vulnerability=0.85, affiliation_bid=0.75, mixed_affect=True, targets_assistant=False, reason='vulnerability markers present; mixed positive and negative affect')",
+              "message": "Expected debug.appraisal_frame not None"
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "p11_action_request_practical",
+      "scenario_name": "Action requests stay practical instead of purely affective",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 13819.9,
+      "total_assertions": 2,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 1,
+        "tool_call_count": 0,
+        "total_latency_ms": 13817.6,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 0,
+        "defense_activations": 0
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "Can you help me figure out the next step for this deadline?",
+          "response": "Yes. Send me three things:\n\n1. What\u2019s due, exactly?\n2. When is the deadline?\n3. What\u2019s already done vs. still missing?\n\nIf you\u2019re under time pressure, start with this: define the smallest acceptable v",
+          "modulators": {
+            "arousal": 0.5125000000000001,
+            "valence": 0.5,
+            "certainty": 0.5,
+            "bonding": 0.5,
+            "energy": 0.975,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 319,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.response_strategy == 'practical_help'",
+              "passed": true,
+              "actual": "practical_help",
+              "message": "Expected debug.response_strategy=practical_help, got practical_help"
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "p11_open_loop_challenge",
+      "scenario_name": "A persisted open loop can trigger gentle challenge on follow-up",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "relationship",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 54342.7,
+      "total_assertions": 5,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 3,
+        "tool_call_count": 0,
+        "total_latency_ms": 36930.4,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 2,
+        "defense_activations": 1
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "I'm angry with you about the deadline.",
+          "response": "You\u2019re angry because the deadline mattered, and I let you down on it. Fair.\n\nTell me what\u2019s still at risk right now. I\u2019ll focus on damage control first, then we can sort out accountability.",
+          "modulators": {
+            "arousal": 0.85,
+            "valence": 0.25,
+            "certainty": 0.35,
+            "bonding": 0.42,
+            "energy": 0.7959999999999999,
+            "resolution": 0.22400000000000003
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 189,
+              "message": "Response is empty"
+            }
+          ]
+        },
+        {
+          "turn_index": 1,
+          "user_message": "We keep circling around this deadline issue.",
+          "response": "Yes. And the circling is becoming its own problem.\n\nI don\u2019t think this is just about the date anymore. It\u2019s about trust, pressure, and whether the miss has actually been repaired. We should pin it dow",
+          "modulators": {
+            "arousal": 0.7312462483546566,
+            "valence": 0.3106547492242564,
+            "certainty": 0.35500662015095574,
+            "bonding": 0.42001885733767325,
+            "energy": 0.7293164311912324,
+            "resolution": 0.22114249083068638
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 309,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "",
+              "passed": true,
+              "actual": "RelationshipContext(summary='Open loops: unresolved tension about the deadline. Recent arc: rupture: the deadline.', active_loops=[OpenLoop(id=1, loop_kind='tension', source_person='eval_user', topic='the deadline', description='unresolved tension about the deadline', intensity=0.8, status='open', created_at=1781085930.3921638, updated_at=1781085930.3921645, resolved_at=None, related_key=\"i'm-angry-deadline\")], recent_events=[RelationshipEvent(id=1, event_kind='rupture', source_person='eval_user', topic='the deadline', summary='Rupture around the deadline', valence=-0.8, intensity=0.8, confidence=0.7, created_at=1781085930.3920977, related_key=\"i'm-angry-deadline\")], open_loop_count=1)",
+              "message": "Expected debug.relationship_context not None"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.response_strategy == 'challenge_gently'",
+              "passed": true,
+              "actual": "challenge_gently",
+              "message": "Expected debug.response_strategy=challenge_gently, got challenge_gently"
+            },
+            {
+              "kind": "custom",
+              "description": "Relationship context carries an open loop into the new session",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    },
+    {
+      "scenario_id": "p11_repair_closes_loop",
+      "scenario_name": "Repair closes the open loop and remains visible in context",
+      "tags": [
+        "phase11",
+        "human",
+        "strategy",
+        "relationship",
+        "regression"
+      ],
+      "passed": true,
+      "errored": false,
+      "failure_reason": "",
+      "elapsed_ms": 72922.0,
+      "total_assertions": 7,
+      "failed_assertions": 0,
+      "metrics": {
+        "llm_call_count": 6,
+        "tool_call_count": 0,
+        "total_latency_ms": 44627.3,
+        "proactive_count": 0,
+        "task_loop_count": 0,
+        "unresolved_items_created": 1,
+        "defense_activations": 1
+      },
+      "turns": [
+        {
+          "turn_index": 0,
+          "user_message": "I'm angry with you about the deadline.",
+          "response": "You\u2019re angry about the deadline, and it sounds like I left you carrying the pressure. I won\u2019t hand-wave that.\n\nWhat do you need next: a straight explanation, a repair plan, or a revised scope and dead",
+          "modulators": {
+            "arousal": 0.85,
+            "valence": 0.25,
+            "certainty": 0.35,
+            "bonding": 0.42,
+            "energy": 0.7959999999999999,
+            "resolution": 0.22400000000000003
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 205,
+              "message": "Response is empty"
+            }
+          ]
+        },
+        {
+          "turn_index": 1,
+          "user_message": "I'm sorry for snapping at you about the deadline.",
+          "response": "Thanks. I appreciate you saying that.\n\nI get why the deadline had heat around it. I should have handled the pressure more cleanly too. Let\u2019s reset and focus on getting the next step right.",
+          "modulators": {
+            "arousal": 0.5808111299203105,
+            "valence": 0.46774532894023035,
+            "certainty": 0.4911307044663843,
+            "bonding": 0.42002318001703676,
+            "energy": 0.7075036093460189,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 188,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "debug.event_classified == 'resolution'",
+              "passed": true,
+              "actual": "resolution",
+              "message": "Expected debug.event_classified=resolution, got resolution"
+            }
+          ]
+        },
+        {
+          "turn_index": 2,
+          "user_message": "Thanks for hearing me out.",
+          "response": "I heard you. And I\u2019m glad we talked it through.\n\nThe deadline got tense, but I\u2019d rather repair it than let it sit between us.",
+          "modulators": {
+            "arousal": 0.5499866121666417,
+            "valence": 0.6836251020818058,
+            "certainty": 0.5614288190298341,
+            "bonding": 0.45504216661822383,
+            "energy": 0.6223258759644296,
+            "resolution": 0.0
+          },
+          "assertions": [
+            {
+              "kind": "response_not_empty",
+              "description": "",
+              "passed": true,
+              "actual": 125,
+              "message": "Response is empty"
+            },
+            {
+              "kind": "debug_field",
+              "description": "",
+              "passed": true,
+              "actual": "RelationshipContext(summary='Recent arc: repair: the deadline; rupture: the deadline.', active_loops=[], recent_events=[RelationshipEvent(id=2, event_kind='repair', source_person='eval_user', topic='the deadline', summary='Repair around the deadline', valence=0.9, intensity=0.9, confidence=0.7, created_at=1781086021.0750873, related_key=\"i'm-sorry-snapping-deadline\"), RelationshipEvent(id=1, event_kind='rupture', source_person='eval_user', topic='the deadline', summary='Rupture around the deadline', valence=-0.8, intensity=0.8, confidence=0.7, created_at=1781085991.4734733, related_key=\"i'm-angry-deadline\")], open_loop_count=0)",
+              "message": "Expected debug.relationship_context not None"
+            },
+            {
+              "kind": "custom",
+              "description": "Repair leaves no open loops behind",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            },
+            {
+              "kind": "custom",
+              "description": "Repair is still visible in relationship context",
+              "passed": true,
+              "actual": true,
+              "message": ""
+            }
+          ]
+        }
+      ],
+      "proactive_assertions": []
+    }
+  ]
+}

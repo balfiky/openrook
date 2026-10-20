@@ -1,6 +1,8 @@
-"""Run Nūr user-acceptance tests against the installed web runtime."""
+"""Run OpenRook user-acceptance tests against the installed web runtime."""
 
 from __future__ import annotations
+
+from config.environment import project_env
 
 import argparse
 import os
@@ -11,7 +13,7 @@ from pathlib import Path
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nur-uat",
+        prog="openrook-uat",
         description=(
             "Run clean-setup UAT checks that start the real web server and "
             "drive the browser/admin surfaces. Install with .[uat] first."
@@ -24,28 +26,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--backend",
-        default=os.environ.get("NUR_UAT_BACKEND", "mock"),
+        default=project_env("UAT_BACKEND", "mock"),
         choices=["mock", "provider", "openai_compatible", "minimax", "codex"],
         help="Backend for the temporary runtime config.",
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("NUR_UAT_MODEL", ""),
+        default=project_env("UAT_MODEL", ""),
         help="Model name for provider/openai_compatible/minimax/codex live UAT.",
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("NUR_UAT_BASE_URL", ""),
+        default=project_env("UAT_BASE_URL", ""),
         help="OpenAI-compatible base URL for provider/openai_compatible live UAT.",
     )
     parser.add_argument(
         "--api-key-env",
-        default=os.environ.get("NUR_UAT_API_KEY_ENV", ""),
+        default=project_env("UAT_API_KEY_ENV", ""),
         help="Environment variable that contains the live backend API key.",
     )
     parser.add_argument(
         "--artifacts",
-        default=os.environ.get("NUR_UAT_ARTIFACTS", "reports/uat"),
+        default=project_env("UAT_ARTIFACTS", "reports/uat"),
         help="Directory for screenshots, logs, and UAT reports.",
     )
     parser.add_argument(
@@ -81,9 +83,9 @@ def _validate_live_config(args: argparse.Namespace) -> str:
     if not os.environ.get(api_key_env):
         raise SystemExit(f"--live requires ${api_key_env} to be set")
     if backend in {"provider", "openai_compatible"} and not args.base_url:
-        raise SystemExit(f"--live --backend {backend} requires --base-url or $NUR_UAT_BASE_URL")
+        raise SystemExit(f"--live --backend {backend} requires --base-url or $OPENROOK_UAT_BASE_URL")
     if not args.model:
-        raise SystemExit(f"--live --backend {backend} requires --model or $NUR_UAT_MODEL")
+        raise SystemExit(f"--live --backend {backend} requires --model or $OPENROOK_UAT_MODEL")
     return api_key_env
 
 
@@ -93,24 +95,24 @@ def main(argv: list[str] | None = None) -> int:
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
-    env["NUR_UAT_ARTIFACTS"] = str(artifact_dir)
-    env["NUR_UAT_KEEP_WORKSPACE"] = "1" if args.keep_workspace else "0"
-    env["NUR_UAT_HEADED"] = "1" if args.headed else "0"
+    env["OPENROOK_UAT_ARTIFACTS"] = str(artifact_dir)
+    env["OPENROOK_UAT_KEEP_WORKSPACE"] = "1" if args.keep_workspace else "0"
+    env["OPENROOK_UAT_HEADED"] = "1" if args.headed else "0"
 
     if args.live:
         api_key_env = _validate_live_config(args)
-        env["NUR_UAT_LIVE"] = "1"
-        env["NUR_UAT_BACKEND"] = args.backend
-        env["NUR_UAT_MODEL"] = args.model
-        env["NUR_UAT_BASE_URL"] = args.base_url
-        env["NUR_UAT_API_KEY_ENV"] = api_key_env
+        env["OPENROOK_UAT_LIVE"] = "1"
+        env["OPENROOK_UAT_BACKEND"] = args.backend
+        env["OPENROOK_UAT_MODEL"] = args.model
+        env["OPENROOK_UAT_BASE_URL"] = args.base_url
+        env["OPENROOK_UAT_API_KEY_ENV"] = api_key_env
     else:
-        env["NUR_UAT_LIVE"] = "0"
-        env["NUR_UAT_BACKEND"] = args.backend
+        env["OPENROOK_UAT_LIVE"] = "0"
+        env["OPENROOK_UAT_BACKEND"] = args.backend
         if args.backend != "mock":
-            env["NUR_UAT_MODEL"] = args.model
-            env["NUR_UAT_BASE_URL"] = args.base_url
-            env["NUR_UAT_API_KEY_ENV"] = args.api_key_env or _default_api_key_env(args.backend)
+            env["OPENROOK_UAT_MODEL"] = args.model
+            env["OPENROOK_UAT_BASE_URL"] = args.base_url
+            env["OPENROOK_UAT_API_KEY_ENV"] = args.api_key_env or _default_api_key_env(args.backend)
 
     cmd = [sys.executable, "-m", "pytest", "tests/uat", "-q"]
     cmd.extend(args.pytest_args)

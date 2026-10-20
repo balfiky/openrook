@@ -10,8 +10,9 @@ No pure math here — this is where LLM calls live.
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import datetime, timezone
+from core.clock import identifiers as uuid
+from core.clock import datetime
+from datetime import timezone
 from typing import TYPE_CHECKING
 
 from config.loader import get_config

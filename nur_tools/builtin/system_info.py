@@ -21,19 +21,19 @@ from nur_tools.executor import ToolHandler
 CAPABILITIES: list[ToolCapability] = [
     ToolCapability(
         name="system.hostname",
-        description="Return the hostname of the machine running Nūr",
+        description="Return the hostname of the machine running OpenRook",
         category=ToolCategory.READ_ONLY,
         arg_schema={},
     ),
     ToolCapability(
         name="system.uname",
-        description="Return operating system and kernel information for the machine running Nūr",
+        description="Return operating system and kernel information for the machine running OpenRook",
         category=ToolCategory.READ_ONLY,
         arg_schema={},
     ),
     ToolCapability(
         name="system.disk_usage",
-        description="Return disk usage for a filesystem path on the machine running Nūr",
+        description="Return disk usage for a filesystem path on the machine running OpenRook",
         category=ToolCategory.READ_ONLY,
         arg_schema={
             "path": {
@@ -46,7 +46,7 @@ CAPABILITIES: list[ToolCapability] = [
     ),
     ToolCapability(
         name="system.memory_usage",
-        description="Return total, used, free, and available RAM for the machine running Nūr",
+        description="Return total, used, free, and available RAM for the machine running OpenRook",
         category=ToolCategory.READ_ONLY,
         arg_schema={},
     ),

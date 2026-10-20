@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from interface import api as interface_api
+from runtime.config import RuntimeConfig
 
 
 class TestAdminConsoleStatic:
@@ -12,7 +16,7 @@ class TestAdminConsoleStatic:
         html = resp.body.decode()
 
         assert resp.status_code == 200
-        assert "Nūr Settings" in html
+        assert "OpenRook Settings" in html
         assert 'href="/admin/assets/admin.css"' in html
         assert 'src="/admin/assets/admin.js"' in html
         assert "Instance Workspace" in html
@@ -98,3 +102,52 @@ class TestAdminConsoleStatic:
             interface_api.admin_asset("index.html")
 
         assert exc.value.status_code == 404
+
+
+class TestHtmlSecurityHeaders:
+    """CSP hardening — script-src has no 'unsafe-inline' and no served HTML
+    relies on inline scripts or inline event handlers that it would block."""
+
+    _INLINE_HANDLER = re.compile(
+        r"\son(click|load|error|change|submit|input|keydown|focus|blur)\s*=",
+        re.IGNORECASE,
+    )
+    # <script> without a src= attribute (i.e. an inline script block).
+    _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>", re.IGNORECASE)
+
+    def _client(self, monkeypatch, tmp_path):
+        path = tmp_path / "runtime_config.yaml"
+        RuntimeConfig(data_dir=str(tmp_path / "data")).write_yaml(str(path))
+        monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
+        return TestClient(interface_api.app)
+
+    def test_csp_script_src_has_no_unsafe_inline(self, monkeypatch, tmp_path):
+        csp = interface_api._HTML_SECURITY_HEADERS["Content-Security-Policy"]
+        script_src = next(
+            d for d in csp.split(";") if d.strip().startswith("script-src")
+        )
+        assert "'unsafe-inline'" not in script_src
+        assert "'self'" in script_src
+
+        with self._client(monkeypatch, tmp_path) as client:
+            for route in ("/", "/settings", "/persona"):
+                resp = client.get(route, follow_redirects=True)
+                assert resp.status_code == 200, route
+                assert (
+                    resp.headers["Content-Security-Policy"] == csp
+                ), route
+
+    def test_served_html_needs_no_inline_script_allowance(
+        self, monkeypatch, tmp_path
+    ):
+        with self._client(monkeypatch, tmp_path) as client:
+            for route in ("/", "/settings", "/persona"):
+                html = client.get(route, follow_redirects=True).text
+                assert not self._INLINE_SCRIPT.search(html), (
+                    f"{route} serves an inline <script> block that the CSP "
+                    "(script-src 'self') would block"
+                )
+                assert not self._INLINE_HANDLER.search(html), (
+                    f"{route} uses an inline event handler that the CSP "
+                    "(script-src 'self') would block"
+                )

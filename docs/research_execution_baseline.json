@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-10-19",
+  "purpose": "Pre-implementation source identification for the batch execution comparator. Hashes do not archive a runnable historical checkout.",
+  "source_sha256": {
+    "config/prompts/autonomous_intent.md": "8f1faf398a351d41a217ccb16c2a66503f48868b23d5ff9e2bc1d274a61b822f",
+    "core/self_intent.py": "08aa7af7559776faa3db3179437b8fae68a90cec5faa7a083128ecfb69de0dda",
+    "evals/replay.py": "99d6ac25a443c7bb4040ba531a281ddeb20fd4ace5adc3c9177e13aeb4006b1b",
+    "evals/research.py": "c63efc87ab78af10e874c5f188054ca1df29719d618c2f6cb9eef24ea0c3c631",
+    "evals/research_environment.py": "730904e9050d5ea107d298bee36cdbf3bbb73b1cb649f267474b152bada1383d",
+    "pipeline/core.py": "9fc11402852e7d67c87be4ad923c64ede6d4eb96622be6607b51c41caa930938",
+    "runtime/agent.py": "e156c4ace200a1d717b30bc8c3005fc11f62cde3a2dacda3c321014363c173f7",
+    "runtime/config.py": "c60c4bfb3e2d9c4f5b0ba018f109f5c79752df053a239e7eb5a70fe7495913ed",
+    "runtime/research_store.py": "cbc55b45c8897413ad3b5bf8744eb6b66b416c8630dc52c0046c5e09773b0411"
+  },
+  "regression_before_change": {
+    "passed": 117,
+    "failed": 0,
+    "command": "pytest -q tests/test_research_action_feedback.py tests/test_research_runtime.py tests/test_research_evaluation.py tests/test_research_reliability.py tests/test_autobiographical_learning.py tests/test_appraisal.py tests/test_life_history.py"
+  },
+  "comparator": {
+    "research_execution_mode": "batch",
+    "research_context_mode": "full",
+    "research_action_feedback": "receipts",
+    "research_action_framing": "agent_owned"
+  }
+}

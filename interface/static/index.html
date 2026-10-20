@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Project Nur web chat and settings workspace for an AI assistant with persistent emotional state.">
-<title>Nūr</title>
+<meta name="description" content="OpenRook: a cognitive runtime for persistent identity, self-directed activity, memory, and learning.">
+<title>OpenRook</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/chat.css">
@@ -17,7 +17,7 @@
 
 <header class="header">
   <div class="header-left">
-    <span class="logo" id="headerLogo"><span class="logo-orb" aria-hidden="true"></span>Nūr</span>
+    <span class="logo" id="headerLogo"><span class="logo-orb" aria-hidden="true"></span>OpenRook</span>
     <div class="mood-indicator">
       <div class="mood-orb" id="moodOrb"></div>
       <span class="mood-label" id="moodLabel">neutral</span>
@@ -54,8 +54,8 @@
       <p class="wizard-sub">You're about to run an AI with persistent emotional state.</p>
       <p class="wizard-body">Before your first conversation, set the response model, runtime channels, tool execution level, seed identity, and optionally one formative experience. The identity is the authored character. Life History is what the character begins having encountered.</p>
       <div class="wizard-consent">
-        <p class="wizard-consent-text">Nūr stores persistent memory and relationship state across conversations. No data is sent to third parties by default. See <a href="/PRIVACY.md" target="_blank" rel="noopener">PRIVACY.md</a> for full details on what is stored, retained, and deleted.</p>
-        <label class="wizard-consent-label"><input type="checkbox" id="wiz-consent-checkbox"> I understand that Nūr persists memory and relationship state.</label>
+        <p class="wizard-consent-text">OpenRook stores persistent memory and relationship state across conversations. No data is sent to third parties by default. See <a href="/PRIVACY.md" target="_blank" rel="noopener">PRIVACY.md</a> for full details on what is stored, retained, and deleted.</p>
+        <label class="wizard-consent-label"><input type="checkbox" id="wiz-consent-checkbox"> I understand that OpenRook persists memory and relationship state.</label>
       </div>
       <div class="wizard-actions">
         <button class="secondary" data-action="wizard-dismiss">Skip for now</button>
@@ -118,7 +118,7 @@
       <p class="wizard-sub">Choose the base character. These are starting weights, not a permanent cage.</p>
       <div class="wizard-fields">
         <div class="wizard-grid">
-          <div><label for="wiz-soul-name">Name</label><input id="wiz-soul-name" type="text" value="Nūr" placeholder="Jarvis"></div>
+          <div><label for="wiz-soul-name">Name</label><input id="wiz-soul-name" type="text" value="OpenRook" placeholder="Jarvis"></div>
           <div><label for="wiz-soul-archetype">Character Mode</label><select id="wiz-soul-archetype">
             <option value="steady">Steady Companion</option>
             <option value="operator">Sharp Operator</option>
@@ -163,7 +163,7 @@
       <div class="wizard-fields">
         <div class="wizard-grid">
           <div><label for="wiz-life-title">Title</label><input id="wiz-life-title" type="text" value="Initial formative context"></div>
-          <div><label for="wiz-life-participants">Participants</label><input id="wiz-life-participants" type="text" placeholder="You, Nūr"></div>
+          <div><label for="wiz-life-participants">Participants</label><input id="wiz-life-participants" type="text" placeholder="You, OpenRook"></div>
           <div class="full"><label for="wiz-life-upload">Upload Formative Material</label><input id="wiz-life-upload" type="file" accept=".txt,.md,.markdown,.rst,.text"></div>
           <div class="full"><label for="wiz-life-text">Or Paste Formative Material</label><textarea id="wiz-life-text" rows="8" placeholder="Paste something that should shift worldview, drives, or future behavior. Leave blank to skip."></textarea></div>
         </div>
@@ -197,7 +197,7 @@
       <button class="settings-close" data-action="close-settings">&times;</button>
     </div>
     <div class="settings-body">
-      <div class="settings-status" id="settingsStatus">Runtime configuration for Nūr.</div>
+      <div class="settings-status" id="settingsStatus">Runtime configuration for OpenRook.</div>
       <div class="admin-overview" id="adminOverview">
         <div class="admin-stat"><div class="k">Backend</div><div class="v" id="adminBackend">—</div></div>
         <div class="admin-stat"><div class="k">Auth</div><div class="v" id="adminAuth">—</div></div>
@@ -209,7 +209,7 @@
         <label class="settings-inline"><input id="cfg-setup_completed" type="checkbox"> Mark first-run setup complete</label>
       </div>
       <div class="settings-section"><h3>Identity</h3>
-        <div class="settings-mini">Who your agent is. One text box is enough; Nūr parses it into the internal soul fields when you save.</div>
+        <div class="settings-mini">Who your agent is. One text box is enough; OpenRook parses it into the internal soul fields when you save.</div>
         <div class="settings-grid">
           <div class="settings-field full"><label for="soul-text">Identity Text</label><textarea id="soul-text" rows="14" placeholder="Name: Jarvis&#10;&#10;You are Jarvis. Sharp, opinionated, concise.&#10;&#10;Core tone: Sarcastic, warm underneath the bite.&#10;&#10;Boundaries: Never say as an AI. Never use the word delve."></textarea></div>
         </div>
@@ -307,19 +307,19 @@
     <div class="messages" id="messages">
       <div class="empty-state" id="emptyState">
         <div class="empty-orb"></div>
-        <h1 class="empty-title" id="emptyTitle">Nūr</h1>
-        <div class="empty-sub">An assistant that remembers what we meant to each other.</div>
+        <h1 class="empty-title" id="emptyTitle">OpenRook</h1>
+        <div class="empty-sub">An agent with a history of its own.</div>
       </div>
     </div>
-    <div class="typing-row" id="typingRow" role="status" aria-label="Nūr is thinking" aria-live="polite">
+    <div class="typing-row" id="typingRow" role="status" aria-label="OpenRook is thinking" aria-live="polite">
       <div class="typing-inner">
-        <div class="msg-avatar nur-av">N</div>
+        <div class="msg-avatar nur-av">O</div>
         <div class="typing-dots"><span></span><span></span><span></span></div>
       </div>
     </div>
     <div class="input-container">
       <div class="input-box">
-        <textarea id="msgInput" placeholder="Message Nūr..." rows="1" aria-label="Message composer"></textarea>
+        <textarea id="msgInput" placeholder="Message OpenRook..." rows="1" aria-label="Message composer"></textarea>
         <button class="send-btn" id="sendBtn" data-action="send-message" aria-label="Send message" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
@@ -363,7 +363,7 @@
       <div class="debug-item"><span class="dl">Dissonance</span> <span id="selfDissonance">&mdash;</span></div>
     </div>
     <div class="debug-section"><h3>Contradictions</h3><div id="contradictions"><span class="debug-none">None</span></div></div>
-    <div class="debug-section"><h3>What Nūr Remembers</h3><div id="memoryInspector"><span class="debug-none">None</span></div></div>
+    <div class="debug-section"><h3>What OpenRook Remembers</h3><div id="memoryInspector"><span class="debug-none">None</span></div></div>
     <div class="debug-section"><h3>Retrieved Memories</h3><div id="memories"><span class="debug-none">None</span></div></div>
     <div class="debug-section"><h3>Self-Check</h3>
       <div class="debug-item"><span class="dl">Passed</span> <span id="selfCheckPassed">&mdash;</span></div>

@@ -1,8 +1,8 @@
 cff-version: 1.2.0
-message: "If you use Project Nūr in academic work, please cite it as below."
-title: "Project Nūr: A Hybrid Cognitive Architecture for Relational Continuity in AI Assistants"
+message: "If you use OpenRook in academic work, please cite it as below."
+title: "OpenRook: A Cognitive Runtime for Persistent, Experience-Grounded Agents"
 abstract: >-
-  Project Nūr is an experimental cognitive runtime that gives LLM agents
+  OpenRook is an experimental cognitive runtime that gives LLM agents
   persistent state outside the model: memory, identity, relational
   continuity, affective state, and accumulated learning. It treats
   emotion as persistent internal state rather than a stylistic prompt
@@ -10,13 +10,17 @@ abstract: >-
   certainty, bonding, energy, resolution) with a multi-layer memory
   system (short-term, long-term, relationship arc, semantic memory,
   and a shared Life History store for identity-level experiences),
-  unified self/other profiling, deterministic social appraisal,
-  response-strategy selection, bounded dual-process deliberation,
-  defense-mechanism-based expression shaping, a self-evolution
+  unified self/other profiling, model-based appraisal with deterministic
+  fallback, response-strategy selection, bounded dual-process deliberation,
+  optional expression shaping in conversational mode, a self-evolution
   metabolism (belief decay, theme-to-belief promotion, drive-gap
   detection), trigger-time skill loading, and a gated agentic tool
   layer (off by default; filesystem sandboxed; shell as a separate
-  opt-in). The implementation is inspired by PSI Theory, ACT-R, and
+  opt-in). An opt-in research runtime adds persistent self-selected goals,
+  evidence-verified actions, outcome learning, functional appraisal controls,
+  preregistered paired studies, and recorded transition replay. Controlled-world
+  retained-choice evidence is distinct from human equivalence or subjective
+  emotion. The implementation is inspired by PSI Theory, ACT-R, and
   CLARION, but is presented as engineering-oriented synthesis rather
   than a faithful implementation of any one framework.
 authors:

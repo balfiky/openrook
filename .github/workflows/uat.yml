@@ -16,8 +16,15 @@ permissions:
   contents: read
 
 jobs:
-  mock-uat:
-    name: Browser/Admin UAT (mock)
+  uat-collect-smoke:
+    # The UAT suite is live-LLM by design (OpenRook has no mock backend), so it
+    # cannot run end-to-end on every push. This gate verifies what CAN be
+    # verified without a model: the 67-test suite still collects cleanly
+    # (imports, fixtures, markers), and a fresh `openrook-web` install boots,
+    # self-bootstraps its config, and serves /v1/health and the setup
+    # wizard. The full suite runs in the opt-in live-uat job below or
+    # locally via `make uat-comprehensive`.
+    name: UAT collection + server boot smoke
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -34,29 +41,48 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,uat]"
-          python -m playwright install --with-deps chromium
 
-      - name: Run mock UAT
-        run: python -m nur_tools.uat --artifacts reports/uat/mock
+      - name: UAT suite collects cleanly
+        run: |
+          python -m pytest tests/uat --collect-only -q | tee collect.log
+          count=$(grep -oE '^[0-9]+ tests collected' collect.log | grep -oE '^[0-9]+' || echo 0)
+          echo "collected: $count"
+          if [ "$count" -lt 60 ]; then
+            echo "::error::UAT collection gate expects >=60 tests, got $count"
+            exit 1
+          fi
 
-      - name: Upload mock UAT artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nur-uat-mock
-          path: reports/uat/mock
+      - name: Server boots and serves health + setup wizard
+        run: |
+          workdir=$(mktemp -d)
+          cd "$workdir"
+          openrook-web --host 127.0.0.1 --port 8123 >server.log 2>&1 &
+          server_pid=$!
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8123/v1/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8123/v1/health
+          status=$(curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:8123/)
+          echo "root: $status"
+          kill "$server_pid" || true
+          if [ "$status" != "200" ]; then
+            echo "::error::Setup wizard page returned $status"
+            cat server.log
+            exit 1
+          fi
 
   live-uat:
     name: Browser/Admin UAT (live backend)
     runs-on: ubuntu-latest
-    # Live UAT is intentionally opt-in. Mock UAT is the required push/PR gate;
-    # live UAT depends on repository secrets and should not fail every push when
-    # those secrets are absent.
+    # Live UAT is intentionally opt-in: it depends on repository secrets and
+    # should not fail every push when those secrets are absent. The
+    # collection + boot smoke job above is the required push/PR gate.
     if: >-
       (
         (github.event_name == 'workflow_dispatch' && inputs.run_live) ||
-        vars.NUR_RUN_LIVE_UAT == '1' ||
-        vars.NUR_RUN_LIVE_UAT == 'true'
+        (vars.OPENROOK_RUN_LIVE_UAT || vars.NUR_RUN_LIVE_UAT) == '1' ||
+        (vars.OPENROOK_RUN_LIVE_UAT || vars.NUR_RUN_LIVE_UAT) == 'true'
       ) &&
       (
         github.event_name != 'pull_request' ||
@@ -64,10 +90,10 @@ jobs:
       )
     env:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      NUR_UAT_BACKEND: ${{ vars.NUR_UAT_BACKEND }}
-      NUR_UAT_MODEL: ${{ vars.NUR_UAT_MODEL }}
-      NUR_UAT_BASE_URL: ${{ vars.NUR_UAT_BASE_URL }}
-      NUR_UAT_API_KEY_ENV: ${{ vars.NUR_UAT_API_KEY_ENV }}
+      OPENROOK_UAT_BACKEND: ${{ vars.OPENROOK_UAT_BACKEND || vars.NUR_UAT_BACKEND }}
+      OPENROOK_UAT_MODEL: ${{ vars.OPENROOK_UAT_MODEL || vars.NUR_UAT_MODEL }}
+      OPENROOK_UAT_BASE_URL: ${{ vars.OPENROOK_UAT_BASE_URL || vars.NUR_UAT_BASE_URL }}
+      OPENROOK_UAT_API_KEY_ENV: ${{ vars.OPENROOK_UAT_API_KEY_ENV || vars.NUR_UAT_API_KEY_ENV }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -87,8 +113,8 @@ jobs:
 
       - name: Run live UAT without mock fallback
         run: |
-          backend="${NUR_UAT_BACKEND:-openai_compatible}"
-          key_env="${NUR_UAT_API_KEY_ENV:-}"
+          backend="${OPENROOK_UAT_BACKEND:-openai_compatible}"
+          key_env="${OPENROOK_UAT_API_KEY_ENV:-}"
           if [ -z "$key_env" ]; then
             key_env="LLM_API_KEY"
           fi
@@ -99,8 +125,8 @@ jobs:
           python -m nur_tools.uat \
             --live \
             --backend "$backend" \
-            --model "${NUR_UAT_MODEL:-}" \
-            --base-url "${NUR_UAT_BASE_URL:-}" \
+            --model "${OPENROOK_UAT_MODEL:-}" \
+            --base-url "${OPENROOK_UAT_BASE_URL:-}" \
             --api-key-env "$key_env" \
             --artifacts reports/uat/live
 
@@ -108,5 +134,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nur-uat-live
+          name: openrook-uat-live
           path: reports/uat/live

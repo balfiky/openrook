@@ -3,10 +3,10 @@
 Sprint 5 stage 1.5. The mechanic:
 
   1. Drive thresholds gate "now": only surface a question whose target_drive
-     is currently above its baseline (Nur is "moved to ask" about it).
+     is currently above its baseline (OpenRook is "moved to ask" about it).
   2. Budget gates "how often": ``LearningBudget.can_pursue()`` must return
      True before any surfacing happens.
-  3. Throttle: ``max_per_session`` ensures Nur doesn't pile multiple
+  3. Throttle: ``max_per_session`` ensures OpenRook doesn't pile multiple
      follow-up questions onto a single response.
 
 When ``should_surface_question`` returns a non-None question, the caller
@@ -50,7 +50,7 @@ def should_surface_question(
 
     drives = {drive["name"]: float(drive["value"]) for drive in store.list_drives()}
 
-    # Tier 1: question whose target_drive is currently elevated (Nur is
+    # Tier 1: question whose target_drive is currently elevated (OpenRook is
     # actively moved to ask about it). Drive_gap questions are kept regardless
     # of drive level — the gap itself is the signal.
     elevated: list[dict[str, Any]] = []

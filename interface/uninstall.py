@@ -1,6 +1,8 @@
-"""Local data uninstaller for Nūr workspaces."""
+"""Local data uninstaller for OpenRook workspaces."""
 
 from __future__ import annotations
+
+from config.environment import project_env
 
 import argparse
 import os
@@ -26,16 +28,16 @@ class UninstallPlan:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nur-uninstall",
+        prog="openrook-uninstall",
         description=(
-            "Remove a local Nūr workspace created by nur-setup or nur-web. "
+            "Remove a local OpenRook workspace created by openrook-setup or openrook-web. "
             "This cleans runtime_config.yaml and local data; uninstall the Python "
             "package separately with pip if you also want to remove the command."
         ),
     )
     parser.add_argument(
         "--config",
-        default=os.environ.get("NUR_RUNTIME_CONFIG", "runtime_config.yaml"),
+        default=project_env("RUNTIME_CONFIG", "runtime_config.yaml"),
         help="Runtime config path to inspect/remove (default: runtime_config.yaml).",
     )
     parser.add_argument(
@@ -67,7 +69,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--remove-identity",
         action="store_true",
-        help="Remove $NUR_CONFIG_DIR/soul.yaml when NUR_CONFIG_DIR is set.",
+        help="Remove $OPENROOK_CONFIG_DIR/soul.yaml when OPENROOK_CONFIG_DIR is set.",
     )
     return parser.parse_args(argv)
 
@@ -109,11 +111,11 @@ def build_uninstall_plan(
         else:
             skipped.append(item)
 
-    identity_dir = env.get("NUR_CONFIG_DIR", "").strip()
+    identity_dir = project_env("CONFIG_DIR", "", environ=env).strip()
     if identity_dir:
         identity_path = (Path(identity_dir).expanduser() / "soul.yaml").resolve()
         if identity_path.exists():
-            item = RemovalItem("identity", identity_path, "$NUR_CONFIG_DIR identity file")
+            item = RemovalItem("identity", identity_path, "$OPENROOK_CONFIG_DIR identity file")
             (remove if remove_identity else skipped).append(item)
         else:
             skipped.append(RemovalItem("identity", identity_path, "identity file not found"))
@@ -156,7 +158,7 @@ def _refuse_dangerous_path(path: Path, kind: str) -> None:
 
 
 def _format_plan(plan: UninstallPlan) -> str:
-    lines = ["Nūr uninstall plan:"]
+    lines = ["OpenRook uninstall plan:"]
     if plan.remove:
         lines.append("Will remove:")
         for item in plan.remove:
@@ -193,7 +195,7 @@ def main(argv: list[str] | None = None) -> None:
         return
     removed = execute_plan(plan)
     print(f"Removed {len(removed)} item(s).")
-    print("To remove the installed Python package too, run: python3 -m pip uninstall project-nur")
+    print("To remove the installed Python package too, run: python3 -m pip uninstall openrook")
 
 
 if __name__ == "__main__":

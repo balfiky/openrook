@@ -8,7 +8,7 @@ No LLM calls. No persistence.
 
 from __future__ import annotations
 
-from core.types import EmotionalEvent, ModulatorState, ShortTermEntry
+from core.types import EmotionalEvent, EventType, ModulatorState, ShortTermEntry
 
 
 class ShortTermMemory:
@@ -69,6 +69,22 @@ class ShortTermMemory:
     def clear(self) -> None:
         """Clear all entries. Called at session end after digestion."""
         self._entries.clear()
+
+    def export_state(self) -> list[dict]:
+        return [{"timestamp": entry.timestamp,
+                 "event": {"event_type": entry.event.event_type.value, "intensity": entry.event.intensity,
+                           "source": entry.event.source, "metadata": entry.event.metadata,
+                           "timestamp": entry.event.timestamp},
+                 "snapshot": entry.emotion_snapshot.to_dict()} for entry in self._entries]
+
+    def restore_state(self, entries: list[dict]) -> None:
+        restored = []
+        for entry in entries[-self._max_entries:]:
+            event = dict(entry["event"])
+            event["event_type"] = EventType(event["event_type"])
+            restored.append(ShortTermEntry(timestamp=entry["timestamp"], event=EmotionalEvent(**event),
+                                           emotion_snapshot=ModulatorState(**entry["snapshot"])))
+        self._entries = restored
 
     def __len__(self) -> int:
         return len(self._entries)

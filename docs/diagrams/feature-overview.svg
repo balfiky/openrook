@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" font-family="-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Helvetica,Arial,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 950" role="img" aria-labelledby="feature-overview-title feature-overview-desc" font-family="DejaVu Sans,Arial,sans-serif">
+  <title id="feature-overview-title">OpenRook at a glance</title>
+  <desc id="feature-overview-desc">Conversation channels connect to persistent cognitive state and policy-gated tools; the research loop is documented separately.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F8FAFC"/>
@@ -72,7 +74,7 @@
   </defs>
 
   <!-- background -->
-  <rect x="0" y="0" width="1400" height="900" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1400" height="950" fill="url(#bg)"/>
   <!-- corner dot patterns for texture -->
   <rect x="0" y="0" width="240" height="240" fill="url(#dotgrid)"/>
   <rect x="1160" y="660" width="240" height="240" fill="url(#dotgrid)"/>
@@ -81,17 +83,14 @@
   <path d="M 1400 460 Q 1200 540, 1400 640" fill="none" stroke="#6366F1" stroke-opacity="0.12" stroke-width="2"/>
 
   <!-- ============ TITLE ============ -->
-  <text x="700" y="60" text-anchor="middle" class="h1">Nūr at a glance</text>
-  <text x="700" y="84" text-anchor="middle" class="h2">Channels speak in. A persistent cognitive core evolves between turns. Capabilities act, gated by intent.</text>
+  <text x="700" y="60" text-anchor="middle" class="h1">OpenRook at a glance</text>
+  <text x="700" y="84" text-anchor="middle" class="h2">Conversation channels, persistent state, and policy-gated tools. See the research diagram for background autonomy.</text>
 
-  <!-- decorative dot beside title -->
-  <circle cx="608" cy="55" r="4" fill="#3B82F6"/>
-  <circle cx="792" cy="55" r="4" fill="#2A8F6E"/>
 
   <!-- ============ 01 CHANNELS ============ -->
   <text x="100" y="140" class="section-num">01</text>
   <text x="138" y="140" class="section-label">CHANNELS</text>
-  <text x="248" y="140" class="section-detail">how people reach Nūr</text>
+  <text x="248" y="140" class="section-detail">how people reach OpenRook</text>
   <line x1="100" y1="152" x2="1300" y2="152" stroke="#1A1428" stroke-opacity="0.08" stroke-width="1"/>
 
   <!-- channel: Web UI -->
@@ -134,7 +133,7 @@
   </g>
   <text x="796" y="208" class="channel-name">Console</text>
   <text x="796" y="227" class="channel-detail">terminal runtime · debug</text>
-  <text x="796" y="243" class="channel-detail">nur · nur-setup · nur-validate</text>
+  <text x="796" y="243" class="channel-detail">openrook · openrook-setup</text>
 
   <!-- channel: REST API -->
   <g filter="url(#cardShadow)">
@@ -152,10 +151,7 @@
 
   <!-- flow lines: channels → core -->
   <g stroke="#7A6A7A" stroke-opacity="0.45" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#arrowhead)">
-    <path d="M 245 258 Q 245 290, 700 312" />
-    <path d="M 551 258 Q 551 290, 700 312" />
-    <path d="M 857 258 Q 857 290, 700 312" />
-    <path d="M 1159 258 Q 1159 290, 700 312" />
+    <path d="M 700 270 L 700 344"/>
   </g>
 
   <!-- ============ 02 COGNITIVE CORE ============ -->
@@ -168,19 +164,6 @@
   <g filter="url(#coreShadow)">
     <rect x="100" y="354" width="1200" height="290" rx="24" fill="url(#coreBg)" stroke="#1A1428" stroke-opacity="0.05"/>
   </g>
-  <!-- decorative center brand mark -->
-  <circle cx="700" cy="499" r="80" fill="url(#brandMark)"/>
-  <text x="700" y="503" text-anchor="middle" class="brandMarkText">N Ū R</text>
-  <!-- subtle radial dots near center -->
-  <g fill="#1A1428" fill-opacity="0.05">
-    <circle cx="640" cy="430" r="2"/>
-    <circle cx="760" cy="430" r="2"/>
-    <circle cx="640" cy="568" r="2"/>
-    <circle cx="760" cy="568" r="2"/>
-    <circle cx="580" cy="499" r="2"/>
-    <circle cx="820" cy="499" r="2"/>
-  </g>
-
   <!-- Emotions card (top-left of core, but we'll do 4 in row) -->
   <g filter="url(#cardShadow)">
     <rect x="124" y="378" width="276" height="242" rx="18" fill="url(#emotionFill)"/>
@@ -207,10 +190,10 @@
     <rect x="302" y="510" width="80" height="22" rx="11" fill="#FFFFFF" fill-opacity="0.92"/>
     <text x="342" y="525" text-anchor="middle">resolution</text>
   </g>
-  <text x="148" y="558" class="feature-line">Drives appraisal · weights memory retrieval</text>
+  <text x="148" y="558" class="feature-line">State informs appraisal and retrieval</text>
   <line x1="148" y1="572" x2="376" y2="572" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="1"/>
   <text x="148" y="590" class="feature-foot">PER-SESSION JSON</text>
-  <text x="148" y="608" class="feature-line">Survives restarts · resets only on /new</text>
+  <text x="148" y="608" class="feature-line">Restored on session resume</text>
 
   <!-- Memory card -->
   <g filter="url(#cardShadow)">
@@ -246,14 +229,14 @@
     <line x1="9" y1="23" x2="20" y2="23"/>
   </g>
   <text x="770" y="418" class="feature-name">Identity</text>
-  <text x="724" y="450" class="feature-line">Who Nūr is and is becoming:</text>
+  <text x="724" y="450" class="feature-line">Who OpenRook is and is becoming:</text>
   <text x="724" y="476" class="feature-line-bold">Constitution <tspan font-weight="400" opacity="0.86">— operator-set</tspan></text>
   <text x="724" y="492" class="feature-line" style="opacity:0.86">orientation rendered above beliefs</text>
   <text x="724" y="514" class="feature-line-bold">Beliefs <tspan font-weight="400" opacity="0.86">— confidence-weighted,</tspan></text>
   <text x="724" y="530" class="feature-line" style="opacity:0.86">decay-prone, theme-promoted</text>
   <text x="724" y="552" class="feature-line-bold">Drives <tspan font-weight="400" opacity="0.86">— motivational drift</tspan></text>
   <line x1="724" y1="572" x2="952" y2="572" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="1"/>
-  <text x="724" y="590" class="feature-foot">SOUL.YAML SEEDS · LIFE HISTORY SHIFTS</text>
+  <text x="724" y="590" class="feature-foot">SOUL SEEDS · LIFE HISTORY SHIFTS</text>
   <text x="724" y="608" class="feature-line">Inspectable in /settings → Life History</text>
 
   <!-- Evolution card -->
@@ -267,22 +250,19 @@
     <path d="M 16 14 C 22 14, 28 10, 28 4 C 22 4, 16 8, 16 14 Z" fill="#FFFFFF" fill-opacity="0.95"/>
   </g>
   <text x="1058" y="418" class="feature-name">Evolution</text>
-  <text x="1012" y="450" class="feature-line">How Nūr learns over wall-clock time:</text>
+  <text x="1012" y="450" class="feature-line">Identity updates and skill loading:</text>
   <text x="1012" y="476" class="feature-line-bold">Metabolism <tspan font-weight="400" opacity="0.86">— decay,</tspan></text>
   <text x="1012" y="492" class="feature-line" style="opacity:0.86">theme→belief promotion</text>
   <text x="1012" y="514" class="feature-line-bold">Open questions <tspan font-weight="400" opacity="0.86">— gaps</tspan></text>
   <text x="1012" y="530" class="feature-line" style="opacity:0.86">surfaced for review</text>
-  <text x="1012" y="552" class="feature-line-bold">Skills <tspan font-weight="400" opacity="0.86">— trigger-time loaded</tspan></text>
+  <text x="1012" y="552" class="feature-line-bold">Skills <tspan font-weight="400" opacity="0.86">— optional trigger filters</tspan></text>
   <line x1="1012" y1="572" x2="1252" y2="572" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="1"/>
   <text x="1012" y="590" class="feature-foot">TUNABLE FROM /SETTINGS</text>
-  <text x="1012" y="608" class="feature-line">LearningBudget caps · daily metabolism</text>
+  <text x="1012" y="608" class="feature-line">Metabolism on session open / research tick</text>
 
   <!-- flow lines: core → capabilities -->
   <g stroke="#7A6A7A" stroke-opacity="0.45" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#arrowhead)">
-    <path d="M 700 644 Q 700 668, 280 696" />
-    <path d="M 700 644 Q 700 668, 552 696" />
-    <path d="M 700 644 Q 700 668, 850 696" />
-    <path d="M 700 644 Q 700 668, 1144 696" />
+    <path d="M 700 654 L 700 726"/>
   </g>
 
   <!-- ============ 03 CAPABILITIES ============ -->
@@ -291,67 +271,32 @@
   <text x="266" y="704" class="section-detail">gated by intent &amp; autonomy level</text>
   <line x1="100" y1="716" x2="1300" y2="716" stroke="#1A1428" stroke-opacity="0.08" stroke-width="1"/>
 
-  <!-- capability: Skills -->
-  <g filter="url(#cardShadow)">
-    <rect x="120" y="736" width="300" height="110" rx="14" fill="#FFFFFF" stroke="#2A8F6E" stroke-width="1.6"/>
-  </g>
-  <rect x="120" y="736" width="6" height="110" rx="3" fill="#2A8F6E"/>
-  <circle cx="162" cy="772" r="20" fill="#2A8F6E" fill-opacity="0.10"/>
-  <g transform="translate(146,756)" stroke="#2A8F6E" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M 4 4 L 16 4 L 16 12 L 28 12 L 28 28 L 4 28 Z"/>
-    <line x1="9" y1="20" x2="22" y2="20"/>
-  </g>
-  <text x="200" y="770" class="cap-name">Skills</text>
-  <text x="200" y="790" class="cap-detail">Imported via paste · file · zip</text>
-  <text x="200" y="806" class="cap-detail">Loaded only when applies_when matches</text>
-  <text x="200" y="828" class="cap-source">runtime/skills.py</text>
-
-  <!-- capability: Web search -->
-  <g filter="url(#cardShadow)">
-    <rect x="440" y="736" width="300" height="110" rx="14" fill="#FFFFFF" stroke="#2A8F6E" stroke-width="1.6"/>
-  </g>
-  <rect x="440" y="736" width="6" height="110" rx="3" fill="#2A8F6E"/>
-  <circle cx="482" cy="772" r="20" fill="#2A8F6E" fill-opacity="0.10"/>
-  <g transform="translate(466,758)" stroke="#2A8F6E" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
-    <circle cx="13" cy="13" r="9"/>
-    <line x1="20" y1="20" x2="29" y2="29"/>
-  </g>
-  <text x="520" y="770" class="cap-name">Web search</text>
-  <text x="520" y="790" class="cap-detail">DuckDuckGo provider · read-only</text>
-  <text x="520" y="806" class="cap-detail">Routes from explicit search verbs</text>
-  <text x="520" y="828" class="cap-source">core/dual_process/tool_loop.py</text>
-
-  <!-- capability: File ops -->
-  <g filter="url(#cardShadow)">
-    <rect x="760" y="736" width="300" height="110" rx="14" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6"/>
-  </g>
-  <rect x="760" y="736" width="6" height="110" rx="3" fill="#2563EB"/>
-  <circle cx="802" cy="772" r="20" fill="#2563EB" fill-opacity="0.10"/>
-  <g transform="translate(786,758)" stroke="#2563EB" stroke-width="2.2" fill="none" stroke-linejoin="round">
-    <path d="M 4 8 L 4 26 L 28 26 L 28 12 L 14 12 L 11 8 Z"/>
-  </g>
-  <text x="840" y="770" class="cap-name">File ops</text>
-  <text x="840" y="790" class="cap-detail">Workspace-scoped · sandbox</text>
-  <text x="840" y="806" class="cap-detail">Assisted autonomy = clarify before write</text>
-  <text x="840" y="828" class="cap-source">runtime/tools/filesystem.py</text>
-
-  <!-- capability: Shell -->
-  <g filter="url(#cardShadow)">
-    <rect x="1080" y="736" width="220" height="110" rx="14" fill="#FFFFFF" stroke="#1A1428" stroke-width="1.6"/>
-  </g>
-  <rect x="1080" y="736" width="6" height="110" rx="3" fill="#1A1428"/>
-  <circle cx="1122" cy="772" r="20" fill="#1A1428" fill-opacity="0.08"/>
-  <g transform="translate(1106,758)" stroke="#1A1428" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
-    <rect x="2" y="4" width="28" height="22" rx="3"/>
-    <path d="M 8 12 L 13 16 L 8 20"/>
-    <line x1="16" y1="20" x2="22" y2="20"/>
-  </g>
-  <text x="1160" y="770" class="cap-name">Shell</text>
-  <text x="1160" y="790" class="cap-detail">Separate opt-in flag</text>
-  <text x="1160" y="806" class="cap-detail">Read-only sys facts default</text>
-  <text x="1160" y="828" class="cap-source">tool_loop.py</text>
+  <rect x="100" y="736" width="285" height="142" rx="14" fill="#FFFFFF" stroke="#2A8F6E" stroke-width="1.6"/>
+  <text x="120" y="765" class="cap-name">Skills</text>
+  <text x="120" y="790" class="cap-detail">Paste, file, or zip import</text>
+  <text x="120" y="808" class="cap-detail">applies_when filters declared triggers;</text>
+  <text x="120" y="826" class="cap-detail">enabled skills without it stay loaded.</text>
+  <text x="120" y="857" class="cap-source">runtime/skills.py</text>
+  <rect x="405" y="736" width="285" height="142" rx="14" fill="#FFFFFF" stroke="#2A8F6E" stroke-width="1.6"/>
+  <text x="425" y="765" class="cap-name">Web search</text>
+  <text x="425" y="790" class="cap-detail">Read-only web provider</text>
+  <text x="425" y="808" class="cap-detail">Native tool selection or regex fallback</text>
+  <text x="425" y="826" class="cap-detail">shares the executor and policy checks.</text>
+  <text x="425" y="857" class="cap-source">nur_tools/builtin/web_provider.py</text>
+  <rect x="710" y="736" width="285" height="142" rx="14" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6"/>
+  <text x="730" y="765" class="cap-name">File ops</text>
+  <text x="730" y="790" class="cap-detail">Workspace-scoped filesystem</text>
+  <text x="730" y="808" class="cap-detail">Writes depend on autonomy policy</text>
+  <text x="730" y="826" class="cap-detail">and explicit intent checks.</text>
+  <text x="730" y="857" class="cap-source">nur_tools/builtin/filesystem.py</text>
+  <rect x="1015" y="736" width="285" height="142" rx="14" fill="#FFFFFF" stroke="#1A1428" stroke-width="1.6"/>
+  <text x="1035" y="765" class="cap-name">Shell</text>
+  <text x="1035" y="790" class="cap-detail">Separate opt-in flag</text>
+  <text x="1035" y="808" class="cap-detail">Optional command allowlist</text>
+  <text x="1035" y="826" class="cap-detail">System facts do not require shell.</text>
+  <text x="1035" y="857" class="cap-source">nur_tools/builtin/shell.py</text>
 
   <!-- footer note -->
-  <text x="700" y="876" text-anchor="middle" class="footer">Every layer above is inspectable in /settings · GET /admin/diagnostics · OpenAPI at /docs</text>
+  <text x="700" y="918" text-anchor="middle" class="footer">Inspect state in /settings and authenticated admin APIs · OpenAPI at /docs</text>
 
 </svg>

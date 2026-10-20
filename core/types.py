@@ -1,4 +1,4 @@
-"""Shared type contracts for Project Nūr.
+"""Shared type contracts for OpenRook.
 
 All modules import from here. These are the data structures that flow
 between components — the shared language of the system.
@@ -6,9 +6,9 @@ between components — the shared language of the system.
 
 from __future__ import annotations
 
-import time
+from core.clock import clock as time
 from dataclasses import dataclass, field
-from datetime import datetime
+from core.clock import datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
@@ -360,6 +360,13 @@ class AppraisalFrame:
     mixed_affect: bool = False
     targets_assistant: bool = False
     reason: str = ""
+    provenance: str = "heuristic"
+    perceived_emotion: DetectedEmotion | None = None
+    event_type: str = ""
+    event_intensity: float = 0.0
+    agency_action: str = ""
+    agency_reason: str = ""
+    agent_goal_comparison: bool = False
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -523,6 +530,7 @@ class PipelineContext:
     # v2: inner dialogue candidate and defense instruction
     candidate_response: str = ""
     defense_instruction: str = ""
+    defense_state: dict[str, Any] = field(default_factory=dict)
     # Phase 11.3: response strategy hint for generator
     response_strategy: str = ""
     # Derived affect and agency stance
@@ -531,10 +539,12 @@ class PipelineContext:
     autonomy_level: str = "autonomous"
     # Agentic tools: summarized tool execution context for generator
     tool_context_summary: str = ""
-    # Self-action layer: actions Nūr invoked on its own behalf this turn.
+    # Self-action layer: actions OpenRook invoked on its own behalf this turn.
     self_intents: list["SelfIntent"] = field(default_factory=list)
     # Runtime learning receipt from the prior completed intake, if any.
     last_intake_receipt: str = ""
+    research_mode: bool = False
+    generator_prompt: str | None = None
 
 
 @dataclass
@@ -678,7 +688,7 @@ class ToolCapability:
 
 @dataclass
 class ToolIntent:
-    """What Nūr wants to do — the key cognitive action object."""
+    """What OpenRook wants to do — the key cognitive action object."""
     tool_name: str
     arguments: dict[str, Any]
     reason: str
@@ -736,7 +746,7 @@ class ToolTrace:
 
 @dataclass
 class SelfIntent:
-    """A self-action Nūr chose to take this turn for its own reasons.
+    """A self-action OpenRook chose to take this turn for its own reasons.
 
     Distinct from ``ToolIntent`` (user-driven). The intent stage proposes
     a bounded list of these from the ``self.*`` catalog; the pipeline
@@ -875,7 +885,7 @@ class ProactiveTrigger:
 
 @dataclass
 class ProactiveAction:
-    """A proactive action Nūr wants to take.
+    """A proactive action OpenRook wants to take.
 
     action_type:
       - follow_up: send a follow-up message about something unresolved

@@ -151,14 +151,15 @@ def _detect_via_rules(text: str) -> DetectedEmotion:
     if not text or not text.strip():
         return DetectedEmotion(arousal=0.5, valence=0.5)
 
-    lower = text.lower()
+    lower = re.sub(r'"[^"\n]*"|“[^”\n]*”', "", text.lower())
 
     # Collect keyword matches
     valence_shifts: list[float] = []
     arousal_values: list[float] = []
 
     for pattern, v_shift, a_abs in _PATTERNS:
-        matches = re.findall(pattern, lower)
+        matches = [match for match in re.finditer(pattern, lower)
+                   if not re.search(r"\b(?:not|never|no longer|isn't|aren't|wasn't)\s+(?:\w+\s+){0,2}$", lower[max(0, match.start() - 40):match.start()])]
         if matches:
             for _ in matches:
                 valence_shifts.append(v_shift)
@@ -169,19 +170,20 @@ def _detect_via_rules(text: str) -> DetectedEmotion:
     punct_valence_boost = 0.0
 
     exclamations = text.count("!")
-    punct_arousal_boost += min(exclamations * _EXCLAMATION_BOOST, 0.4)
+    settings = get_config().contagion_detection
+    punct_arousal_boost += min(exclamations * settings.exclamation_boost, 0.4)
 
     questions = text.count("?")
-    punct_arousal_boost += min(questions * _QUESTION_AROUSAL, 0.15)
+    punct_arousal_boost += min(questions * settings.question_arousal, 0.15)
 
     if "..." in text or "\u2026" in text:
-        punct_valence_boost += _ELLIPSIS_VALENCE
+        punct_valence_boost += settings.ellipsis_valence
 
     # Caps detection (ignore short messages)
     alpha_chars = [c for c in text if c.isalpha()]
     if len(alpha_chars) > 10:
         caps_ratio = sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars)
-        if caps_ratio > _CAPS_RATIO_THRESHOLD:
+        if caps_ratio > settings.caps_ratio_threshold:
             punct_arousal_boost += 0.4
             if valence_shifts and (sum(valence_shifts) / len(valence_shifts)) < 0:
                 punct_valence_boost -= 0.15

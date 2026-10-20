@@ -34,15 +34,16 @@ def _config(tmp_path):
 
 
 def test_pasted_text_creates_experience_belief_and_drive_change(tmp_path):
+    # Heuristic digests only mutate identity when explicitly opted in.
     config = _config(tmp_path)
-    with LifeHistoryStore(config) as store:
+    with LifeHistoryStore(config, allow_heuristic_digest=True) as store:
         result = store.ingest_pasted_text(
             title="Autonomy Notes",
             text=(
                 "Autonomy is not only action freedom. A self becomes independent "
                 "when it can learn from experience and keep continuity of identity."
             ),
-            participants=["User", "Nur"],
+            participants=["User", "OpenRook"],
         )
 
         assert result["experience"]["source_type"] == "pasted_text"
@@ -72,7 +73,7 @@ def test_pasted_text_creates_experience_belief_and_drive_change(tmp_path):
 
 def test_single_learning_intake_has_runtime_visible_influence(tmp_path):
     config = _config(tmp_path)
-    with LifeHistoryStore(config) as store:
+    with LifeHistoryStore(config, allow_heuristic_digest=True) as store:
         result = store.ingest_pasted_text(
             title="Autonomy Notes",
             text=(
@@ -110,7 +111,7 @@ def test_local_file_intake_chunks_and_links_evolution(tmp_path):
         encoding="utf-8",
     )
 
-    with LifeHistoryStore(config) as store:
+    with LifeHistoryStore(config, allow_heuristic_digest=True) as store:
         result = store.ingest_local_file(file_path=str(source), title="Character Book")
 
         assert result["experience"]["source_type"] == "local_file"
@@ -437,6 +438,138 @@ def test_theme_signatures_reinforce_repeated_ingestion(tmp_path):
         assert row["accrued_weight"] > first["policy"]["influence_weight"]
 
 
+def _drive_digest_payload(delta: float) -> str:
+    return f"""
+    {{
+      "summary": "Recurring autonomy drive theme.",
+      "salience": 0.8,
+      "emotional_valence": 0.2,
+      "emotional_impact": "Drive-shaping.",
+      "confidence": 0.8,
+      "beliefs": [],
+      "drive_changes": [{{
+        "name": "autonomy",
+        "delta": {delta},
+        "reason": "retained continuity shapes independence",
+        "confidence": 0.8
+      }}],
+      "self_trait_changes": [],
+      "future_behavior": []
+    }}
+    """
+
+
+def test_opposite_theme_signature_flips_sign_only():
+    from runtime.life_history import _opposite_theme_signature, _theme_signature
+
+    pos = _theme_signature("drive:autonomy", "retained continuity", 0.1)
+    neg = _theme_signature("drive:autonomy", "retained continuity", -0.1)
+    assert pos != neg
+    assert _opposite_theme_signature(pos) == neg
+    assert _opposite_theme_signature(neg) == pos
+    assert _opposite_theme_signature("not-a-signature") is None
+
+
+def test_same_valence_reinforcement_keeps_consistency_at_one(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM(_drive_digest_payload(0.1))
+    with LifeHistoryStore(config) as store:
+        store.ingest_pasted_text(title="Theme 1", text="autonomy continuity", llm_client=llm)
+        store.ingest_pasted_text(title="Theme 2", text="autonomy continuity", llm_client=llm)
+        row = store._conn.execute("SELECT * FROM theme_signatures LIMIT 1").fetchone()
+
+        assert row["reinforcement_count"] == 2
+        assert row["conflicting_count"] == 0
+        state = store._theme_state([row["signature"]])
+        assert state["consistency"] == pytest.approx(1.0)
+
+
+def test_opposite_valence_reinforcement_marks_conflict_on_both_signatures(tmp_path):
+    config = _config(tmp_path)
+    with LifeHistoryStore(config) as store:
+        store.ingest_pasted_text(
+            title="Theme pos",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(0.1)),
+        )
+        store.ingest_pasted_text(
+            title="Theme neg",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(-0.1)),
+        )
+        rows = store._conn.execute(
+            "SELECT * FROM theme_signatures ORDER BY signature"
+        ).fetchall()
+
+        assert len(rows) == 2
+        for row in rows:
+            assert row["reinforcement_count"] == 1
+            assert row["conflicting_count"] > 0
+            state = store._theme_state([row["signature"]])
+            assert state["consistency"] < 1.0
+
+
+def test_conflicted_theme_lowers_influence_weight(tmp_path):
+    (tmp_path / "clean").mkdir()
+    (tmp_path / "conflicted").mkdir()
+    clean_config = _config(tmp_path / "clean")
+    conflicted_config = _config(tmp_path / "conflicted")
+
+    with LifeHistoryStore(clean_config) as store:
+        store.ingest_pasted_text(
+            title="Theme pos 1",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(0.1)),
+        )
+        clean = store.ingest_pasted_text(
+            title="Theme pos 2",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(0.1)),
+        )
+
+    with LifeHistoryStore(conflicted_config) as store:
+        store.ingest_pasted_text(
+            title="Theme pos 1",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(0.1)),
+        )
+        store.ingest_pasted_text(
+            title="Theme neg",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(-0.1)),
+        )
+        conflicted = store.ingest_pasted_text(
+            title="Theme pos 2",
+            text="autonomy continuity",
+            llm_client=FakeDigestLLM(_drive_digest_payload(0.1)),
+        )
+
+    # Same recurrence on the queried signature, but the conflicted store's
+    # consistency term drops the weight (clean: consistency 1.0; conflicted: 0.0).
+    assert (
+        conflicted["policy"]["influence_weight"]
+        < clean["policy"]["influence_weight"]
+    )
+
+
+def test_influence_weight_consistency_term_can_subtract():
+    base_kwargs = dict(
+        source_recurrence=2,
+        recency_decay_of_prior_similar=1,
+        character_current_openness=0.65,
+        character_current_caution=0.5,
+        injection_marker_density=0,
+    )
+    consistent = compute_influence_weight(
+        source_consistency_with_existing_themes=1.0, **base_kwargs
+    )
+    conflicted = compute_influence_weight(
+        source_consistency_with_existing_themes=-1.0, **base_kwargs
+    )
+    assert conflicted < consistent
+    assert consistent - conflicted == pytest.approx(0.20)
+
+
 def test_genesis_storage_is_created_once(tmp_path):
     config = _config(tmp_path)
     with LifeHistoryStore(config) as store:
@@ -563,7 +696,7 @@ def test_record_introspection_routes_through_life_history_intake(tmp_path):
 
     assert result["experience"]["source_type"] == "self_reflection"
     assert result["experience"]["source_ref"] == "turn-42"
-    assert result["experience"]["participants"] == ["Nūr"]
+    assert result["experience"]["participants"] == ["OpenRook"]
     assert result["experience"]["metadata"]["introspection"]["trigger_turn_id"] == "turn-42"
 
 
@@ -623,3 +756,327 @@ def test_rollback_is_disabled_outside_testing(tmp_path, monkeypatch):
 
         with pytest.raises(LifeHistoryError, match="disabled outside test mode"):
             store.rollback_batch(batch_id)
+
+
+# ---------------------------------------------------------------------------
+# Ingest atomicity
+# ---------------------------------------------------------------------------
+
+TWO_BELIEF_DIGEST = """
+{
+  "summary": "Two-belief batch.",
+  "salience": 0.8,
+  "emotional_valence": 0.1,
+  "emotional_impact": "Worldview-forming.",
+  "confidence": 0.85,
+  "beliefs": [
+    {"subject": "autonomy", "statement": "Autonomy grows through experience.",
+     "reason": "First belief.", "confidence": 0.8},
+    {"subject": "practice", "statement": "Practice builds durable competence.",
+     "reason": "Second belief.", "confidence": 0.75}
+  ],
+  "drive_changes": [{
+    "name": "autonomy", "delta": 0.08,
+    "reason": "Self-direction pressure.", "confidence": 0.7
+  }],
+  "self_trait_changes": [],
+  "future_behavior": ["Keep practicing."]
+}
+"""
+
+
+def test_ingest_failure_mid_batch_persists_nothing(tmp_path, monkeypatch):
+    """A crash while applying the 2nd belief must roll back the whole batch."""
+    config = _config(tmp_path)
+    original_apply = LifeHistoryStore._apply_belief
+    calls = {"count": 0}
+
+    def flaky_apply(self, experience_id, belief, *, batch_id):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise RuntimeError("simulated crash mid-batch")
+        return original_apply(self, experience_id, belief, batch_id=batch_id)
+
+    monkeypatch.setattr(LifeHistoryStore, "_apply_belief", flaky_apply)
+    with LifeHistoryStore(config) as store:
+        with pytest.raises(RuntimeError, match="simulated crash mid-batch"):
+            store.ingest_pasted_text(
+                title="Atomic Batch",
+                text="Autonomy and practice notes.",
+                llm_client=FakeDigestLLM(TWO_BELIEF_DIGEST),
+            )
+
+        for table in (
+            "experience_events",
+            "beliefs",
+            "evolution_events",
+            "belief_revisions",
+            "drive_changes",
+            "theme_signatures",
+            "open_questions",
+        ):
+            count = store._conn.execute(
+                f"SELECT COUNT(*) AS c FROM {table}"
+            ).fetchone()["c"]
+            assert count == 0, f"partial state leaked into {table}"
+        drives = {d["name"]: d["value"] for d in store.list_drives()}
+        assert drives["autonomy"] == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Decay does not count as an update for recency
+# ---------------------------------------------------------------------------
+
+def test_decay_preserves_belief_recency_ordering(tmp_path):
+    config = _config(tmp_path)
+    now = time.time()
+    with LifeHistoryStore(config) as store:
+        store._conn.executemany(
+            """
+            INSERT INTO beliefs
+            (key, statement, confidence, status, created_at, updated_at, source_experience_id, evidence)
+            VALUES (?, ?, ?, 'active', ?, ?, NULL, 'unit')
+            """,
+            [
+                ("older", "Older belief statement.", 0.8, now - 5000, now - 5000),
+                ("newer", "Newer belief statement.", 0.7, now - 100, now - 100),
+            ],
+        )
+        store._conn.commit()
+
+        store.decay_step(elapsed_days=1.0)
+
+        beliefs = store.list_beliefs(limit=10)
+        assert [b["key"] for b in beliefs] == ["newer", "older"]
+        by_key = {b["key"]: b for b in beliefs}
+        # updated_at untouched by decay; last_decayed_at stamped instead.
+        assert by_key["older"]["updated_at"] == pytest.approx(now - 5000)
+        assert by_key["newer"]["updated_at"] == pytest.approx(now - 100)
+        assert by_key["older"]["last_decayed_at"] is not None
+        assert by_key["newer"]["last_decayed_at"] is not None
+        # Decay math unchanged: one day of a 30-day half-life.
+        assert by_key["older"]["confidence"] == pytest.approx(0.8 * pow(0.5, 1 / 30))
+
+        context = store.prompt_context()
+        assert [b["key"] for b in context["beliefs"]] == ["newer", "older"]
+
+
+# ---------------------------------------------------------------------------
+# Belief revision: LLM verdicts and negation-window heuristic
+# ---------------------------------------------------------------------------
+
+def _seed_belief(store, key, statement, confidence):
+    now = time.time()
+    store._conn.execute(
+        """
+        INSERT INTO beliefs
+        (key, statement, confidence, status, created_at, updated_at, source_experience_id, evidence)
+        VALUES (?, ?, ?, 'active', ?, ?, NULL, 'unit')
+        """,
+        (key, statement, confidence, now, now),
+    )
+    store._conn.commit()
+
+
+def test_llm_verdict_contradiction_lowers_confidence_and_emits_question(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM(
+        '{"verdicts": [{"key": "autonomy", "relation": "contradicts", "confidence": 0.9}]}'
+    )
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy is only action freedom.", 0.8)
+
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "New material reframes autonomy entirely."},
+            llm_client=llm,
+        )
+        row = store._conn.execute(
+            "SELECT confidence, status FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+        questions = store.list_open_questions()
+
+    assert result["revised"] == 1
+    assert result["open_questions_emitted"] == 1
+    assert row["confidence"] == pytest.approx(0.56)
+    assert row["status"] == "active"
+    assert questions[0]["source_kind"] == "contradiction"
+
+
+def test_llm_verdict_below_confidence_threshold_is_noop(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM(
+        '{"verdicts": [{"key": "autonomy", "relation": "contradicts", "confidence": 0.5}]}'
+    )
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy is only action freedom.", 0.8)
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "Ambiguous autonomy material."},
+            llm_client=llm,
+        )
+        row = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+
+    assert result["revised"] == 0
+    assert row["confidence"] == pytest.approx(0.8)
+
+
+def test_llm_verdict_supports_reinforces_with_cap(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM(
+        '{"verdicts": ['
+        '{"key": "autonomy", "relation": "supports", "confidence": 1.0},'
+        '{"key": "practice", "relation": "supports", "confidence": 1.0}'
+        "]}"
+    )
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy grows through experience.", 0.5)
+        _seed_belief(store, "practice", "Practice builds competence.", 0.98)
+
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "Autonomy and practice both confirmed by experience."},
+            llm_client=llm,
+        )
+        autonomy = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+        practice = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'practice'"
+        ).fetchone()
+
+    assert result["reinforced"] == 2
+    assert result["revised"] == 0
+    # Reinforcement is capped at +0.05 and never exceeds 1.0.
+    assert autonomy["confidence"] == pytest.approx(0.55)
+    assert practice["confidence"] == pytest.approx(1.0)
+
+
+def test_llm_verdict_unrelated_is_noop(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM(
+        '{"verdicts": [{"key": "autonomy", "relation": "unrelated", "confidence": 0.9}]}'
+    )
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy grows through experience.", 0.8)
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "Autonomy mentioned in passing only."},
+            llm_client=llm,
+        )
+        row = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+
+    assert result == {"revised": 0, "reinforced": 0, "open_questions_emitted": 0}
+    assert row["confidence"] == pytest.approx(0.8)
+
+
+def test_malformed_llm_verdicts_fall_back_to_heuristic(tmp_path):
+    config = _config(tmp_path)
+    llm = FakeDigestLLM("this is {{{ not parseable json at all")
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy is only action freedom.", 0.8)
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "Autonomy is not just freedom; the old framing fails."},
+            llm_client=llm,
+        )
+        row = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+
+    # The negation-window heuristic caught the contradiction despite the
+    # unusable LLM response.
+    assert result["revised"] == 1
+    assert row["confidence"] == pytest.approx(0.56)
+
+
+def test_heuristic_negation_window_triggers_near_belief_key(tmp_path):
+    config = _config(tmp_path)
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy is only action freedom.", 0.8)
+        result = store.revise_beliefs_against_evidence(
+            {"evidence": "This material does not relate to autonomy as I believed."}
+        )
+        row = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+
+    assert result["revised"] == 1
+    assert row["confidence"] == pytest.approx(0.56)
+
+
+def test_heuristic_negation_far_from_belief_key_does_not_trigger(tmp_path):
+    config = _config(tmp_path)
+    with LifeHistoryStore(config) as store:
+        _seed_belief(store, "autonomy", "Autonomy is only action freedom.", 0.8)
+        result = store.revise_beliefs_against_evidence({
+            "evidence": (
+                "Autonomy matters and grows through retained interpreted "
+                "experience over many years of formative practice. People "
+                "argue about plenty of other topics whose claims are not "
+                "relevant here."
+            )
+        })
+        row = store._conn.execute(
+            "SELECT confidence FROM beliefs WHERE key = 'autonomy'"
+        ).fetchone()
+
+    # The stray "not" sits far outside the ±6 token window around "autonomy".
+    assert result["revised"] == 0
+    assert row["confidence"] == pytest.approx(0.8)
+
+
+# ---------------------------------------------------------------------------
+# Heuristic digest gating
+# ---------------------------------------------------------------------------
+
+def test_failed_digest_records_event_without_identity_mutations(tmp_path):
+    """Default behavior: no LLM means no fabricated belief/drive mutations.
+
+    The experience is still recorded (nothing is lost) and an open question
+    asks the operator to re-ingest once a model is available.
+    """
+    config = _config(tmp_path)
+    with LifeHistoryStore(config) as store:
+        result = store.ingest_pasted_text(
+            title="Autonomy Notes",
+            text=(
+                "Autonomy is not only action freedom. A self becomes independent "
+                "when it can learn from experience and keep continuity of identity."
+            ),
+        )
+
+        assert result["experience"]["id"]
+        assert result["experience"]["metadata"]["heuristic_mutations_blocked"] is True
+        assert result["evolution_events"] == []
+        assert store.list_beliefs(limit=10) == []
+        assert {d["value"] for d in store.list_drives()} == {0.5}
+        theme_count = store._conn.execute(
+            "SELECT COUNT(*) AS c FROM theme_signatures"
+        ).fetchone()["c"]
+        assert theme_count == 0
+
+        questions = store.list_open_questions()
+        undigested = [q for q in questions if q["source_kind"] == "undigested_experience"]
+        assert len(undigested) == 1
+        assert "Re-ingest" in undigested[0]["prompt_text"]
+        assert undigested[0]["source_experience_id"] == result["experience"]["id"]
+
+
+def test_heuristic_digest_opt_in_applies_mutations(tmp_path):
+    config = _config(tmp_path)
+    with LifeHistoryStore(config, allow_heuristic_digest=True) as store:
+        result = store.ingest_pasted_text(
+            title="Autonomy Notes",
+            text=(
+                "Autonomy is not only action freedom. A self becomes independent "
+                "when it can learn from experience and keep continuity of identity."
+            ),
+        )
+
+        assert result["evolution_events"]
+        assert store.list_beliefs(limit=10)
+        assert "heuristic_mutations_blocked" not in result["experience"]["metadata"]
+        assert all(
+            q["source_kind"] != "undigested_experience"
+            for q in store.list_open_questions()
+        )

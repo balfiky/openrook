@@ -12,14 +12,15 @@ from __future__ import annotations
 
 import json
 import re
-import time
+from core.clock import clock as time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from config.loader import get_config
 from core.types import EmotionalEvent, EventType, LongTermEntry, ModulatorState
 from core.memory.short_term import ShortTermMemory
-from core.memory.long_term import LongTermMemory, CONFIDENCE_THRESHOLD
+from core.memory import long_term as _long_term
+from core.memory.long_term import LongTermMemory
 from core.memory.relationship import RelationshipMemory
 from core.types import OpenLoop, RelationshipEvent
 
@@ -28,9 +29,23 @@ if TYPE_CHECKING:
 
 # ---------------------------------------------------------------------------
 # Config-driven spike threshold (matches emotional_engine)
+#
+# Read lazily — importing this module performs no config I/O. The
+# historical module-level name ``SPIKE_INTENSITY_THRESHOLD`` keeps
+# working via module ``__getattr__`` and always reflects the current
+# ``get_config()`` singleton.
 # ---------------------------------------------------------------------------
 
-SPIKE_INTENSITY_THRESHOLD = get_config().spike_threshold
+
+def _spike_threshold() -> float:
+    return get_config().spike_threshold
+
+
+def __getattr__(name: str):
+    """Lazy module attributes for config-driven constants (PEP 562)."""
+    if name == "SPIKE_INTENSITY_THRESHOLD":
+        return _spike_threshold()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +229,7 @@ def digest_session(
     )
 
     # ---- Spike events: bypass gradual, write heavy ----
-    spike_events = [e for e in events if e.intensity >= SPIKE_INTENSITY_THRESHOLD]
+    spike_events = [e for e in events if e.intensity >= _spike_threshold()]
     result.spike_events = spike_events
 
     if not spikes_already_stored:
@@ -405,7 +420,7 @@ def _write_relationship_updates(
                     summary=summary,
                     valence=-event.intensity,
                     intensity=event.intensity,
-                    confidence=max(CONFIDENCE_THRESHOLD, 0.7),
+                    confidence=max(_long_term._constants().confidence_threshold, 0.7),
                     related_key=related_key,
                 )
             )
@@ -447,7 +462,7 @@ def _write_relationship_updates(
                     summary=summary,
                     valence=event.intensity,
                     intensity=max(0.4, event.intensity),
-                    confidence=max(CONFIDENCE_THRESHOLD, 0.7),
+                    confidence=max(_long_term._constants().confidence_threshold, 0.7),
                     related_key=related_key,
                 )
             )
@@ -505,7 +520,7 @@ def _extract_commitment(text: str, source_person: str) -> RelationshipEvent | No
         summary=_relationship_summary("commitment", topic),
         valence=0.35,
         intensity=0.55,
-        confidence=max(CONFIDENCE_THRESHOLD, 0.7),
+        confidence=max(_long_term._constants().confidence_threshold, 0.7),
         related_key=related_key,
     )
 

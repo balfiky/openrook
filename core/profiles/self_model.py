@@ -10,8 +10,6 @@ No LLM calls. Database reads + math.
 
 from __future__ import annotations
 
-import time
-
 from config.loader import get_config
 from core.types import DefenseEvent, SelfProfile
 from core.profiles.base import Observation, ProfileStore
@@ -33,7 +31,8 @@ class SelfProfileManager:
 
     def __init__(self, store: ProfileStore) -> None:
         self._store = store
-        self._entity_id = SELF_ENTITY_ID
+        self._config = get_config().self_model
+        self._entity_id = self._config.entity_id
 
     # ------------------------------------------------------------------
     # Observation recording
@@ -73,7 +72,7 @@ class SelfProfileManager:
             return SelfProfile()
 
         observed_traits = list(trait_scores.keys())
-        strengths = [t for t, s in trait_scores.items() if s >= STRENGTH_THRESHOLD]
+        strengths = [t for t, s in trait_scores.items() if s >= self._config.strength_threshold]
         flaws = [t for t, s in trait_scores.items() if self._is_flaw(t, s)]
         triggers = self._extract_triggers()
         dissonance = self._compute_dissonance(trait_scores)
@@ -114,7 +113,7 @@ class SelfProfileManager:
         "I'm not acting like myself."
         """
         recent = self._store.get_observations(
-            self._entity_id, limit=DISSONANCE_WINDOW
+            self._entity_id, limit=self._config.dissonance_window
         )
         if not recent or not model_traits:
             return 0.0
@@ -132,14 +131,13 @@ class SelfProfileManager:
     # Trait classification helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _is_flaw(trait: str, score: float) -> bool:
+    def _is_flaw(self, trait: str, score: float) -> bool:
         """Determine if a trait at this score constitutes a flaw.
 
         Negative traits (blunt, impatient, avoidant) with high scores = flaws.
         Positive traits with low scores are NOT flaws — they're just not strengths.
         """
-        if trait in _cfg.negative_traits and score >= FLAW_THRESHOLD:
+        if trait in self._config.negative_traits and score >= self._config.flaw_threshold:
             return True
         return False
 
@@ -159,7 +157,7 @@ class SelfProfileManager:
         for context, values in context_intensities.items():
             if len(values) >= 3:  # need repeated pattern
                 avg = sum(values) / len(values)
-                if avg >= TRIGGER_THRESHOLD:
+                if avg >= self._config.trigger_threshold:
                     triggers.append(context)
 
         return triggers

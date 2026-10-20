@@ -208,6 +208,39 @@ class TestNullBrowserProvider:
             handlers["browser.open_url"]({"url": "https://example.com"})
 
 
+class TestBrowserUrlValidation:
+    """The SSRF guard runs at the tool boundary, before any provider call."""
+
+    def test_open_url_blocks_loopback_before_provider(self):
+        prov = FakeBrowserProvider()
+        handlers = create_browser_handlers(prov)
+        with pytest.raises(ValueError, match="blocked|local"):
+            handlers["browser.open_url"]({"url": "http://127.0.0.1:8080/admin"})
+        assert prov.calls == []
+
+    def test_get_page_text_blocks_metadata_ip(self):
+        prov = FakeBrowserProvider()
+        handlers = create_browser_handlers(prov)
+        with pytest.raises(ValueError, match="blocked"):
+            handlers["browser.get_page_text"](
+                {"url": "http://169.254.169.254/latest/meta-data/"}
+            )
+        assert prov.calls == []
+
+    def test_screenshot_blocks_private_url(self):
+        prov = FakeBrowserProvider()
+        handlers = create_browser_handlers(prov)
+        with pytest.raises(ValueError, match="blocked"):
+            handlers["browser.screenshot"]({"url": "http://10.0.0.5/"})
+        assert prov.calls == []
+
+    def test_screenshot_without_url_skips_validation(self):
+        prov = FakeBrowserProvider()
+        handlers = create_browser_handlers(prov)
+        result = handlers["browser.screenshot"]({})
+        assert result.success is True
+
+
 # ===================================================================
 # 2. Calendar tool
 # ===================================================================

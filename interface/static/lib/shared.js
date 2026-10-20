@@ -1,5 +1,7 @@
-import { marked } from "https://cdn.jsdelivr.net/npm/marked@12.0.2/+esm";
-import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/+esm";
+// Vendored jsDelivr +esm bundles (marked@12.0.2, dompurify@3.1.6) so the
+// UI works offline and pulls no third-party script at runtime.
+import { marked } from "./marked.esm.js";
+import DOMPurify from "./dompurify.esm.js";
 
 marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
 

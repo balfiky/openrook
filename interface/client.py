@@ -1,12 +1,12 @@
-"""Minimal Python client for the Project Nūr v1 integration API.
+"""Minimal Python client for the OpenRook v1 integration API.
 
 This is a thin wrapper over ``requests`` — no extra dependencies, no
 abstractions. It exists so integrators can do::
 
-    from interface.client import NurClient
+    from interface.client import OpenRookClient
 
-    nur = NurClient("http://localhost:8000", api_key="…")
-    reply = nur.chat("how are you?", user_id="alice")
+    client = OpenRookClient("http://localhost:8000", api_key="…")
+    reply = client.chat("how are you?", user_id="alice")
     print(reply["response"], reply["emotion_label"])
 
 …without having to remember endpoint paths or auth header formats.
@@ -23,16 +23,19 @@ from typing import Any
 import requests
 
 
-class NurAPIError(RuntimeError):
+class OpenRookAPIError(RuntimeError):
     """Raised when the server returns a non-2xx response."""
 
     def __init__(self, status_code: int, body: str) -> None:
-        super().__init__(f"Nur API error {status_code}: {body[:500]}")
+        super().__init__(f"OpenRook API error {status_code}: {body[:500]}")
         self.status_code = status_code
         self.body = body
 
 
-class NurClient:
+NurAPIError = OpenRookAPIError
+
+
+class OpenRookClient:
     """Thin v1 API client. Reuses a :class:`requests.Session` for keep-alive."""
 
     def __init__(
@@ -62,7 +65,7 @@ class NurClient:
         url = f"{self._base_url}{path}"
         resp = self._session.request(method, url, timeout=self._timeout, **kwargs)
         if resp.status_code >= 400:
-            raise NurAPIError(resp.status_code, resp.text)
+            raise OpenRookAPIError(resp.status_code, resp.text)
         if resp.status_code == 204 or not resp.content:
             return None
         return resp.json()
@@ -71,8 +74,8 @@ class NurClient:
         """Release the keep-alive pool. Safe to call multiple times."""
         self._session.close()
 
-    # Context-manager sugar so ``with NurClient(...) as nur:`` works.
-    def __enter__(self) -> "NurClient":
+    # Context-manager sugar so ``with OpenRookClient(...) as client:`` works.
+    def __enter__(self) -> "OpenRookClient":
         return self
 
     def __exit__(self, *_exc: Any) -> None:
@@ -263,3 +266,6 @@ class NurClient:
 
     def get_config(self) -> dict[str, Any]:
         return self._request("GET", "/v1/config")
+
+
+NurClient = OpenRookClient

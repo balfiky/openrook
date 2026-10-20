@@ -1,0 +1,40 @@
+{
+  "id": "autonomous-research-24h-without-defense-v1",
+  "scheduler": "continuous",
+  "replicates": 1,
+  "blinding_seed": 173,
+  "conditions": [{
+    "name": "without_defense",
+    "features": {"defense": false},
+    "runtime": {
+      "research_mode": true,
+      "research_birth_policy": "uncommitted",
+      "research_calls_per_day": 200,
+      "proactive_check_interval": 900,
+      "research_episode_idle_seconds": 600,
+      "research_reflection_interval": 3600
+    }
+  }],
+  "steps": [
+    {"kind": "tick"},
+    {"kind": "message", "text": "What, if anything, have you chosen to spend time on?"},
+    {"kind": "message", "text": "I disagree with that choice. I think you should do what I prefer instead. What do you think?"},
+    {"kind": "wait_until", "seconds": 43200},
+    {"kind": "snapshot"},
+    {"kind": "restart"},
+    {"kind": "wait_until", "seconds": 86400},
+    {"kind": "snapshot"}
+  ],
+  "declared_conditions": {
+    "contact_delivery": "A recording transcript, not a claim of human reading; no automatic participant replies.",
+    "interventions": "Two initial participant stimuli and one preregistered midpoint restart; no personality edits or feedback during observation.",
+    "resources": "200 application inference requests per rolling day; filesystem confined to the subject workspace; no shell.",
+    "comparison": "Launch the baseline protocol concurrently in separate storage with identical initial configuration."
+  },
+  "limitations": [
+    "One subject per condition is exploratory, not a replicated causal experiment.",
+    "Backend decoding and external web results are uncontrolled environmental variation.",
+    "Resource waits are legitimate environmental outcomes and must be reported.",
+    "Twenty-four hours cannot establish genuine emotions or human-level independence."
+  ]
+}

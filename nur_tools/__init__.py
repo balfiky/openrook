@@ -1,4 +1,4 @@
-"""Agentic tools package — execution surfaces for Nūr cognition."""
+"""Agentic tools package — execution surfaces for OpenRook cognition."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ def register_builtins(
     *,
     fs_workspace: str | None = None,
     include_shell: bool = True,
+    shell_command_allowlist: list[str] | None = None,
     skill_config: RuntimeConfig | None = None,
 ) -> None:
     """Register all builtin tool capabilities and handlers.
@@ -40,6 +41,9 @@ def register_builtins(
         include_shell: Whether to register ``shell.run_command``. Defaults to
             True to preserve existing test wiring; production callers gate
             this on an explicit config flag.
+        shell_command_allowlist: Optional command allowlist for the shell
+            tool. None/empty = unrestricted; non-empty = only first-token
+            matches run and chaining metacharacters are rejected.
         skill_config: Optional RuntimeConfig-like object for skill registry
             tools. When omitted, the skill tool module uses default runtime
             paths, preserving legacy zero-arg test wiring.
@@ -57,11 +61,15 @@ def register_builtins(
     for name, handler in fs_handlers.items():
         executor.register_handler(name, handler)
 
-    # Shell
+    # Shell — commands default to the tools workspace when ``cwd`` is omitted.
     if include_shell:
         for cap in shell.CAPABILITIES:
             registry.register(cap)
-        for name, handler in shell.HANDLERS.items():
+        shell_handlers = shell.create_handlers(
+            allowlist=shell_command_allowlist,
+            default_cwd=fs_workspace,
+        )
+        for name, handler in shell_handlers.items():
             executor.register_handler(name, handler)
 
     # Web search/fetch/extract
@@ -88,7 +96,7 @@ def register_builtins(
     # Skill registry
     register_skill_builtins(registry, executor, skill_config=skill_config)
 
-    # Self-action tools — bounded actions Nūr can invoke for itself via the
+    # Self-action tools — bounded actions OpenRook can invoke for itself via the
     # self-intent stage. Always registered; handlers safely no-op until the
     # pipeline attaches a SelfActionContext to the executor.
     register_self_action_builtins(registry, executor)
@@ -102,7 +110,7 @@ def register_skill_builtins(
 ) -> None:
     """Register only the internal skill-registry tools.
 
-    These tools mutate Nūr's imported skill registry, not the host filesystem or
+    These tools mutate OpenRook's imported skill registry, not the host filesystem or
     shell. Runtime surfaces use this when general agentic tools are disabled so
     the assistant can still create, audit, enable, and list its own skills.
     """
@@ -119,14 +127,14 @@ def register_self_action_builtins(
 ) -> None:
     """Register the bounded self.* catalog used by the self-intent stage.
 
-    Handlers read their context from ``executor._self_action_context`` at
+    Handlers read their context from ``executor.self_action_context`` at
     call time. Until the pipeline attaches a context the tools return
     structured failure results rather than raising.
     """
     for cap in self_actions.CAPABILITIES:
         registry.register(cap)
     handlers = self_actions.create_handlers(
-        get_context=lambda: getattr(executor, "_self_action_context", None),
+        get_context=lambda: executor.self_action_context,
     )
     for name, handler in handlers.items():
         executor.register_handler(name, handler)

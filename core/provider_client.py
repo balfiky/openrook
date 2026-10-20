@@ -32,7 +32,7 @@ class ChatCompletionsClient:
         safe_base_url = validate_http_url(
             base_url,
             allow_loopback=True,
-            allow_private_env="NUR_ALLOW_PRIVATE_LLM_URLS",
+            allow_private_env="OPENROOK_ALLOW_PRIVATE_LLM_URLS",
         )
         self._base_url = safe_base_url.rstrip("/").removesuffix("/chat/completions")
         self._model = model

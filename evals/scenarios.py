@@ -128,7 +128,8 @@ def _life_context(*, repair: float = 0.0, competence: float = 0.0, curiosity: fl
 def _life_store_assertion(kind: str):
     def check(_resp, _pipe) -> bool:
         config = RuntimeConfig(data_dir=tempfile.mkdtemp(prefix="nur-life-eval-"), llm_backend="mock")
-        with LifeHistoryStore(config) as store:
+        # No real LLM in evals: opt in to heuristic digest so mutation paths run.
+        with LifeHistoryStore(config, allow_heuristic_digest=True) as store:
             result = store.ingest_pasted_text(
                 title="Autonomy practice note",
                 text=(

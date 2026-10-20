@@ -10,7 +10,7 @@ No LLM calls. SQLite + math only.
 from __future__ import annotations
 
 import sqlite3
-import time
+from core.clock import clock as time
 from dataclasses import dataclass, field
 
 from config.loader import get_config
@@ -54,6 +54,7 @@ class ProfileStore:
     """
 
     def __init__(self, db_path: str = ":memory:", wal_mode: bool = False) -> None:
+        self._config = get_config().profiling
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         if wal_mode and db_path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
@@ -119,14 +120,14 @@ class ProfileStore:
         return cursor.lastrowid
 
     def get_observations(
-        self, entity_id: str, limit: int = OBSERVATION_WINDOW
+        self, entity_id: str, limit: int | None = None
     ) -> list[Observation]:
         """Get recent observations for an entity, newest first."""
         rows = self._conn.execute(
             """SELECT * FROM observations
                WHERE entity_id = ?
                ORDER BY timestamp DESC LIMIT ?""",
-            (entity_id, limit),
+            (entity_id, self._config.observation_window if limit is None else limit),
         ).fetchall()
         return [self._row_to_observation(row) for row in rows]
 

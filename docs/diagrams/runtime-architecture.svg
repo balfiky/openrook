@@ -1,107 +1,70 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc"><title id="title">Project Nūr — Runtime Architecture</title><desc id="desc">Two runtime hosts share one session and cognition core. Persistence, LLM, and tool execution live at the edges.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">Project Nūr — Runtime Architecture</text><text x="48" y="78" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Two runtime hosts share one session and cognition core. Persistence, LLM, and tool execution live at the edges.</text><rect x="40" y="120" width="240" height="700" rx="18" fill="none" stroke="#2da44e" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="56" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#116329">Clients</text>
-<rect x="300" y="120" width="250" height="700" rx="18" fill="none" stroke="#218bff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="316" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#0550ae">Runtime hosts</text>
-<rect x="570" y="120" width="380" height="700" rx="18" fill="none" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="586" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#164e63">Shared session + cognition</text>
-<rect x="970" y="120" width="590" height="700" rx="18" fill="none" stroke="#8250df" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="986" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#5931ad">External &amp; persistence</text>
-<rect x="60" y="165" width="200" height="60" rx="10" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
-<text x="160.0" y="188" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#116329">Terminal</text>
-<text x="160.0" y="210" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">stdin / stdout</text>
-<rect x="60" y="245" width="200" height="60" rx="10" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
-<text x="160.0" y="268" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#116329">Telegram user</text>
-<text x="160.0" y="290" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">optional channel</text>
-<rect x="60" y="370" width="200" height="60" rx="10" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
-<text x="160.0" y="393" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#116329">Browser</text>
-<text x="160.0" y="415" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">chat UI, /admin, /docs</text>
-<rect x="60" y="450" width="200" height="60" rx="10" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
-<text x="160.0" y="473" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#116329">API client</text>
-<text x="160.0" y="495" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">curl, NurClient, dashboards</text>
-<rect x="320" y="220" width="210" height="90" rx="10" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
-<text x="425.0" y="243" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="17" font-weight="700" fill="#0550ae">nur</text>
-<text x="425.0" y="265" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">console runtime,</text>
-<text x="425.0" y="282" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Telegram, debug API</text>
-<rect x="320" y="420" width="210" height="90" rx="10" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
-<text x="425.0" y="443" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="17" font-weight="700" fill="#0550ae">nur-web</text>
-<text x="425.0" y="465" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">FastAPI: chat UI, /admin,</text>
-<text x="425.0" y="482" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">/v1, legacy endpoints</text>
-<rect x="600" y="175" width="320" height="70" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
-<text x="760.0" y="198" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#164e63">SessionManager</text>
-<text x="760.0" y="220" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">per-user locks, backpressure, eviction</text>
-<rect x="600" y="275" width="320" height="70" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
-<text x="760.0" y="298" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#164e63">UserSession</text>
-<text x="760.0" y="320" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">serialized turns per platform:user:chat</text>
-<rect x="600" y="375" width="320" height="90" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
-<text x="760.0" y="398" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="16" font-weight="700" fill="#164e63">CognitivePipeline</text>
-<text x="760.0" y="420" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">synchronous stateful turn processor</text>
-<text x="760.0" y="437" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">(see Single-Turn Cognitive Flow)</text>
-<rect x="600" y="505" width="320" height="70" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="760.0" y="528" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#a40e26">Tool executor</text>
-<text x="760.0" y="550" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">only active when tools_enabled: true</text>
-<rect x="1000" y="165" width="540" height="70" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
-<text x="1270.0" y="188" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#9a5700">LLM backend</text>
-<text x="1270.0" y="210" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">mock / provider / openai_compatible / codex / minimax</text>
-<path d="M1000,275 C1000,259.0 1540,259.0 1540,275 L1540,345 C1540,361.0 1000,361.0 1000,345 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<ellipse cx="1270.0" cy="275" rx="270.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
-<text x="1270.0" y="295" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Per-user nur.db</text>
-<text x="1270.0" y="315" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">memory, relationships, profiles, semantic</text>
-<path d="M1000,400 C1000,384.0 1540,384.0 1540,400 L1540,460 C1540,476.0 1000,476.0 1000,460 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<ellipse cx="1270.0" cy="400" rx="270.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
-<text x="1270.0" y="420" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Session JSON</text>
-<text x="1270.0" y="440" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">engine snapshot per platform:user:chat</text>
-<path d="M1000,510 C1000,494.0 1540,494.0 1540,510 L1540,570 C1540,586.0 1000,586.0 1000,570 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<ellipse cx="1270.0" cy="510" rx="270.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
-<text x="1270.0" y="530" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Shared self_model.db</text>
-<text x="1270.0" y="550" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">assistant self observations, defense events</text>
-<rect x="1000" y="615" width="540" height="70" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="1270.0" y="638" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="15" font-weight="700" fill="#a40e26">Filesystem workspace</text>
-<text x="1270.0" y="660" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sandbox root, default &lt;data_dir&gt;/workspace</text>
-<path d="M260,195 L320,255" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="268.5" y="215.0" width="43" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="290.0" y="227.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">stdin</text>
-<path d="M260,275 L320,275" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="275.5" y="265.0" width="29" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="290.0" y="277.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">bot</text>
-<path d="M260,400 L320,450" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="261.5" y="415.0" width="57" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="290.0" y="427.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">HTTP/WS</text>
-<path d="M260,480 L320,470" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="258.0" y="465.0" width="64" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="290.0" y="477.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">HTTP API</text>
-<path d="M530,265 L600,205" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<path d="M530,465 L600,215" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<path d="M760,245 L760,275" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<path d="M760,345 L760,375" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<path d="M760,465 L760,505" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
-<rect x="728.0" y="475.0" width="64" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="760.0" y="487.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">optional</text>
-<path d="M920,390 L1000,200" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="928.0" y="285.0" width="64" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="960.0" y="297.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">generate</text>
-<path d="M920,410 L1000,305" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="921.0" y="347.5" width="78" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="960.0" y="359.5" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">read/write</text>
-<path d="M920,430 L1000,430" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="942.0" y="420.0" width="36" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="960.0" y="432.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">save</text>
-<path d="M920,450 L1000,540" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
-<rect x="921.0" y="485.0" width="78" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="960.0" y="497.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">self-model</text>
-<path d="M920,540 L1000,650" fill="none" stroke="#cf222e" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
-<rect x="924.5" y="585.0" width="71" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="960.0" y="597.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">sandboxed</text>
-<text x="60" y="760" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a">Legend</text>
-<rect x="60" y="768" width="16" height="12" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="1.25"/>
-<text x="84" y="778" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">client channel</text>
-<rect x="60" y="786" width="16" height="12" rx="3" fill="#ddf4ff" stroke="#218bff" stroke-width="1.25"/>
-<text x="84" y="796" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">runtime host</text>
-<rect x="60" y="804" width="16" height="12" rx="3" fill="#cffafe" stroke="#0891b2" stroke-width="1.25"/>
-<text x="84" y="814" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">session + cognition</text>
-<rect x="60" y="822" width="16" height="12" rx="3" fill="#eae6ff" stroke="#8250df" stroke-width="1.25"/>
-<text x="84" y="832" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">persistent store</text>
-<rect x="60" y="840" width="16" height="12" rx="3" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.25"/>
-<text x="84" y="850" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">external LLM</text>
-<rect x="60" y="858" width="16" height="12" rx="3" fill="#ffebe9" stroke="#cf222e" stroke-width="1.25"/>
-<text x="84" y="868" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">side-effect gate</text>
-<text x="720" y="860" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Config read at startup by both hosts: runtime_config.yaml (cwd) · config/soul.yaml or $NUR_CONFIG_DIR/soul.yaml</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="openrook-runtime-architecture-title openrook-runtime-architecture-desc"><title id="openrook-runtime-architecture-title">OpenRook — Runtime Architecture</title><desc id="openrook-runtime-architecture-desc">Conversation hosts share a session core. Research mode adds one persistent subject owner.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">OpenRook — Runtime Architecture</text><text x="48" y="78" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Conversation hosts share a session core. Research mode adds one persistent subject owner.</text><rect x="40" y="116" width="1520" height="164" rx="18" fill="none" stroke="#218bff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="138" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#0550ae">Channels → hosts → shared cognition → model</text>
+<rect x="40" y="324" width="1520" height="184" rx="18" fill="none" stroke="#8250df" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="346" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#5931ad">Tools and durable state</text>
+<path d="M328,204 L376,204" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M676,204 L724,204" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M1084,204 L1132,204" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M840,256 L840.0,276.0 Q840,284 832.0,284.0 L288.0,284.0 Q280,284 280.0,292.0 L280,364" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
+<path d="M872,256 L872.0,288.0 Q872,296 864.0,296.0 L608.0,296.0 Q600,296 600.0,304.0 L600,364" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M904,256 L904,364" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+<path d="M936,256 L936.0,304.0 Q936,312 944.0,312.0 L1368.0,312.0 Q1376,312 1376.0,320.0 L1376,364" fill="none" stroke="#57606a" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
+<rect x="56" y="152" width="272" height="104" rx="10" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
+<text x="192.0" y="175" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#116329">Client channels</text>
+<text x="192.0" y="197" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Terminal + optional Telegram</text>
+<text x="192.0" y="214" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Browser chat / admin UI</text>
+<text x="192.0" y="231" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">HTTP API clients</text>
+<rect x="376" y="152" width="300" height="104" rx="10" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
+<text x="526.0" y="175" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#0550ae">Runtime hosts</text>
+<text x="526.0" y="197" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">openrook: console + Telegram</text>
+<text x="526.0" y="214" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">openrook-web: FastAPI + WebSocket</text>
+<text x="526.0" y="231" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">HTTP authentication at the host</text>
+<rect x="724" y="152" width="360" height="104" rx="10" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+<text x="904.0" y="175" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#633c01">Session + cognition core</text>
+<text x="904.0" y="197" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">SessionManager → UserSession</text>
+<text x="904.0" y="214" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">per-user locking / backpressure</text>
+<text x="904.0" y="231" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">CognitivePipeline processes each turn</text>
+<rect x="1132" y="152" width="412" height="104" rx="10" fill="#fff1e5" stroke="#fb8f44" stroke-width="1.5"/>
+<text x="1338.0" y="175" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#9a5700">Runtime LLM backend</text>
+<text x="1338.0" y="197" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">auto · provider · openai_compatible</text>
+<text x="1338.0" y="214" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">codex · minimax</text>
+<text x="1338.0" y="231" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Ollama uses openai_compatible</text>
+<rect x="56" y="364" width="320" height="120" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
+<text x="216.0" y="387" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#a40e26">Tool executor</text>
+<text x="216.0" y="409" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Internal skill tools remain available</text>
+<text x="216.0" y="426" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">External tools: tools_enabled</text>
+<text x="216.0" y="443" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Shell: separate explicit opt-in</text>
+<text x="216.0" y="460" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Native + regex selection; same policy</text>
+<path d="M424,374 C424,358.0 776,358.0 776,374 L776,474 C776,490.0 424,490.0 424,474 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="600.0" cy="374" rx="176.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="600.0" y="404" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Per-user storage</text>
+<text x="600.0" y="426" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">nur.db: memory, profiles, relationships</text>
+<text x="600.0" y="442" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sessions/&lt;chat_id&gt;.json</text>
+<text x="600.0" y="458" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sessions/&lt;chat_id&gt;.history.json</text>
+<path d="M824,374 C824,358.0 1144,358.0 1144,374 L1144,474 C1144,490.0 824,490.0 824,474 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="984.0" cy="374" rx="160.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="984.0" y="404" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Shared identity storage</text>
+<text x="984.0" y="426" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">shared/self_model.db</text>
+<text x="984.0" y="442" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">shared/life_history.db</text>
+<text x="984.0" y="458" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">retained across user deletion</text>
+<path d="M1192,374 C1192,358.0 1544,358.0 1544,374 L1544,474 C1544,490.0 1192,490.0 1192,474 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="1368.0" cy="374" rx="176.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="1368.0" y="404" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Research subject owner</text>
+<text x="1368.0" y="426" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">single owner lock + background loop</text>
+<text x="1368.0" y="442" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">shared/agent_runtime.db</text>
+<text x="1368.0" y="458" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">manifest, goals, receipts, checkpoints</text>
+<text x="56" y="536" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Configuration: runtime_config.yaml · Identity: $OPENROOK_CONFIG_DIR/soul.yaml</text>
+<rect x="40" y="552" width="1520" height="68" rx="18" fill="none" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="574" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328">Legend</text>
+<rect x="56.0" y="590" width="16" height="12" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="1.25"/>
+<text x="80.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">channels</text>
+<rect x="304.0" y="590" width="16" height="12" rx="3" fill="#ddf4ff" stroke="#218bff" stroke-width="1.25"/>
+<text x="328.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">runtime</text>
+<rect x="552.0" y="590" width="16" height="12" rx="3" fill="#fff8c5" stroke="#bf8700" stroke-width="1.25"/>
+<text x="576.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">cognition</text>
+<rect x="800.0" y="590" width="16" height="12" rx="3" fill="#fff1e5" stroke="#fb8f44" stroke-width="1.25"/>
+<text x="824.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">real LLM</text>
+<rect x="1048.0" y="590" width="16" height="12" rx="3" fill="#eae6ff" stroke="#8250df" stroke-width="1.25"/>
+<text x="1072.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">durable state</text>
+<rect x="1296.0" y="590" width="16" height="12" rx="3" fill="#ffebe9" stroke="#cf222e" stroke-width="1.25"/>
+<text x="1320.0" y="600" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">tool policy</text></svg>

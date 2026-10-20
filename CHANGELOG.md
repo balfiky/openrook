@@ -1,6 +1,790 @@
 # Changelog
 
-All notable changes to Project Nur are documented here.
+All notable changes to OpenRook (formerly Nūr) are documented here.
+
+## Unreleased — OpenRook and experience-grounded autonomy
+
+### Documentation review
+
+- Correct storage/deletion boundaries, backend and tool routing, conditional
+  inference costs, session-end consolidation, and research administration guidance.
+- Identify the checked-in structural ablations as evaluation-only mock runs;
+  distinguish their all-features-off variant from a separate prompt-only agent.
+  Label historical evidence and illustrative dialogue, and qualify replay claims.
+- Rebuild diagram previews with DejaVu Sans, add the research-runtime loop and an
+  OpenRook social cover, remove unused legacy artwork, and document reproducible
+  rendering with CairoSVG. Record D1–D16 and B1–B12 in the
+  [documentation review](docs/REVIEW_FIXES.md#documentation-review).
+
+### Research review corrections
+
+- Scope retained-choice evidence to runtime-run, task-specific learning with
+  computed assistance and same-process manager restarts; preserve historical reports.
+- Add a raw-experience memory condition that retains public observations while
+  withholding estimates/procedures and rejecting indirect summary channels.
+  Declare a fresh history-comparison pilot; validate it offline only, not live.
+- Compare complete linked requests during text and native replay, report request
+  mismatches independently, and test mutated prompts, inputs, messages and tools.
+  Sort native schema properties and required arguments so multi-argument tool
+  calls replay after JSON persistence; cover a fake `fs.write_file` call offline.
+- Replace research defense directives and tone-polishing requirements with
+  descriptive state; use schema-only research digestion and hash the exact prompt.
+- Preserve daily-budget pauses and permanent study stops through optional inference,
+  learning, native fallback and execution boundaries instead of retrying or falling back.
+  Cover artifact drafting too: propagate both resource stops and retain ordinary error refusals, with three regression cases.
+  Checkpoint conversation-end resource state and session records before resilient
+  teardown; verify failed-frame replay. Preserve both signals through optional
+  LangGraph graph and structured-router fallbacks, with offline regression tests.
+- Record protocol message/end-session daily-budget pauses as `resource_wait` with
+  reason and resume time. Keep them out of infrastructure-failure totals and the
+  three-failure stop while preserving incomplete endpoint scoring and study stops;
+  cover repeated pauses and genuine backend failures with offline regressions.
+- Classify internally caught tick pauses and permanent stops from checkpoints and
+  persisted state, including early returns after restart. Keep paused opportunities
+  unobserved and normal resting/nonactivation scores at zero; add offline regressions
+  and a read-only historical audit (no pause/stop checkpoints in the v4 studies).
+- Fingerprint installed distribution-owned files rather than neighboring packages.
+- Add real two-process persistence coverage, distinct from historical study restarts.
+- Validate the corrections with 2,769 non-UAT passes and 11 existing expected
+  failures on Python 3.13; all 49 new cases also pass on Python 3.10. Build/install,
+  owned-file fingerprints, and all ten offline protocol preflights pass. Document
+  the two intentionally updated existing tests; no replay assertion is weakened.
+- Validate the F2/F5 follow-up with 2,782 non-UAT passes, 11 existing expected
+  failures and two existing warnings, including ten new end-session/LangGraph
+  cases and the strengthened native replay fixture.
+
+See [review fixes and test-change audit](docs/REVIEW_FIXES.md).
+
+### Project rename
+
+- Rename the distribution to `openrook`, the default identity and public surfaces
+  to OpenRook, and primary commands to `openrook` / `openrook-*`.
+- Keep `nur` / `nur-*` command aliases, `NurConfig`, `NurApp`, `NurClient`,
+  `NurAPIError`, the `nur_tools` module namespace, and legacy `NUR_*` settings.
+  `OPENROOK_*` settings take precedence, including explicitly empty values.
+- Preserve existing databases, browser identity/token keys, configured agent
+  names, export schema identifiers, and research evidence. New backups use
+  `openrook-backup-*`; existing `nur-backup-*` archives remain accessible.
+- Refresh public documentation, wordmarks, and generated diagrams. Keep the
+  actual GitHub URL until the hosted repository is renamed separately.
+- Fix an installed evaluation CLI startup failure: test-only fake backends are
+  imported only when explicitly requested, never when launching live evaluation
+  or asking an installed command for help.
+- Verify the rename with 2,720 non-UAT passes and 11 existing expected failures
+  on Python 3.13, a clean Python 3.10 wheel install, all 16 command aliases,
+  and browser branding checks. Interpreter-specific test limitations are recorded
+  in the [development summary](docs/DEVELOPMENT_SUMMARY.md#rename-verification).
+
+### Autonomous runtime and reliability
+
+- Add an opt-in research runtime with one persistent subject, background deliberation,
+  durable goals and episodic learning, passive observations, resource accounting,
+  and model/tool provenance across restarts.
+- Preserve selected research expression and deliberate silence; remove automatic
+  tone correction, emotional restoration, and source-keyword learning vetoes in
+  that condition. Record intrinsic mechanisms as explicit experimental assumptions.
+- Fix first autobiographical storage creation, optional appraisal inference fallback,
+  inference-held SQLite transactions, legacy theme continuity, atomic metabolism,
+  incomplete revision provenance, and loss of short-term events on suspension.
+- Validate contextual perception and event attribution; distinguish action decision
+  snapshots and refresh affect after tool outcomes. Polling no longer resets idle time.
+- Add production-runtime study protocols, isolated ablations, blinded samples,
+  and recorded clock/identifier/model/tool replay with state comparisons.
+
+### Experience-grounded milestones
+
+- Add resumable closed-loop goals, dependencies, revision provenance, validated
+  action arguments, durable receipts, and evidence-checked completion.
+- Add public-outcome prediction scoring, counterexample-aware procedures,
+  contextual social expectations, bounded retrieval, and progress estimates.
+- Add expression-only, retrieval-connected, and label-free appraisal controls,
+  plus optional descriptive behavioral dispositions without prescribed traits.
+- Add persistent development environments, delayed outcomes, scheduled learning
+  histories, common probes, restart checks, and preregistered paired comparisons.
+- Enforce study-wide budgets, bounded transport retries, strict response
+  contracts, replayable resource stops, and process-identity-aware job monitoring.
+
+### Recorded validation
+
+- Complete the fixed retained-choice confirmation: 28 subjects, 14 pairs,
+  672 opportunities; mean difference 0.7143, paired 95% interval
+  [0.2857, 1.1429], exceeding the declared 0.2 threshold.
+- Independently reconstruct the result from raw ledgers; replay 1,344 transitions
+  with zero mismatches and no external tool execution. Record 18 supported goal
+  revisions across 14 subjects and 1,107 successful backend requests.
+- Preserve unsuccessful actions and earlier interrupted studies as evidence;
+  neither is relabeled as successful work. The pre-rename regression closeout
+  records 2,687 passes and 11 pre-existing expected failures.
+
+See [major implementation changes](docs/DEVELOPMENT_SUMMARY.md),
+[upgrade instructions](docs/OPENROOK_MIGRATION.md), and the
+[completed behavioral validation](docs/plans/behavioral_validation_v4.md#completed-confirmation-and-closeout).
+
+See [research runtime documentation](docs/RESEARCH_RUNTIME.md) for configuration,
+observation, migration, evaluation, and the limits of mechanical verification.
+
+---
+
+## v0.37.0 — 2026-06-13
+
+### Autobiographical learning — the agent forms identity from living
+
+Step 2 of closing the perception→emotion→action loop. Until now the identity
+ledger (beliefs/drives) only changed from operator-fed material; lived
+conversation updated relationship memory but never identity. Now an
+emotionally salient session is digested into the life-history ledger at
+session end, so Nūr's beliefs and drives can evolve from what it actually
+experiences.
+
+### Added
+
+- **`autobiographical_learning`** runtime config flag (default **False** —
+  opt-in, because it lets lived conversation mutate identity). When on,
+  `CognitivePipeline.end_session` ingests the session's *distilled summary*
+  into the identity ledger via `ingest_external_text` under the
+  `conversation_learning_text` source (the lowest openness tier, 0.45).
+- **Salience gate** (`_is_session_salient`): only sessions with an emotional
+  spike, peak intensity ≥ 0.6, trust movement ≥ 0.08, or an unresolved flag
+  are ingested — small-talk never touches identity.
+
+### Safety / drift bounds
+
+- Distilled summary, not raw transcript; ingested at the lowest source-trust
+  weight so beliefs move slowly.
+- Existing prompt-injection sanitization (`directive_sanitized`) applies, and
+  heuristic (non-LLM) digests remain blocked from mutating beliefs/drives.
+- Ingest failures are caught and logged — they never break session teardown.
+
+### Notes
+
+- Off by default; existing behavior unchanged unless an operator enables it.
+- Remaining loop work (step 3): self-authored inhibition — routing the
+  autonomy decision through the agent's own beliefs/drives, not just operator
+  rule flags.
+
+---
+
+## v0.36.0 — 2026-06-13
+
+### LLM-based social appraisal (no regex)
+
+The first step of closing the perception→emotion→action loop with real
+understanding instead of keyword matching. Social appraisal — how a message
+lands interpersonally (target, social move, blame, vulnerability, etc.) — is
+now read by the same backend LLM rather than by regex/marker heuristics.
+
+### Added
+
+- **`appraise_message_llm(text, detected, backend)`** in `core/appraisal.py`:
+  asks the backend to infer the `AppraisalFrame` fields as JSON (judging
+  meaning — sarcasm, indirect blame, quiet distress — not keywords). Reuses
+  the pipeline's fast backend; no extra dependency.
+- **`appraisal_use_llm`** runtime config flag (default **True**). The pipeline
+  uses LLM appraisal when a `RuntimeConfig` is present; the deterministic
+  `appraise_message` remains the **fallback** whenever there is no backend or
+  the model's output won't parse — so the offline path and the suite's
+  exact-value appraisal assertions are preserved.
+
+### Notes
+
+- Unit pipelines built without a `RuntimeConfig` keep the deterministic path
+  (the flag reads False without config), so existing tests are unaffected.
+- This is perception only. The larger loop-closing work (auto-ingesting
+  conversation into the belief/drive ledger, self-authored inhibition) remains
+  open.
+
+---
+
+## v0.35.2 — 2026-06-11
+
+### Self-evolution / learning audit: budget, clock-skew, migration trust
+
+A focused review of the self-evolution subsystem (and its boundary with the
+Skills system) confirmed the core mechanics are correct — decay half-life,
+theme→belief promotion thresholds, revocation-threshold consistency,
+idempotent open-question emission, transactional ingest, and prompt-injection
+defense all hold. It also found four real defects, now fixed. The learning
+and Skills subsystems are otherwise cleanly separated (distinct storage,
+models, routes, and prompt sections).
+
+### Fixed
+
+- **Ask-user daily cap was per-session, not per-user.** `LocalBudget` kept its
+  consumed counts in memory, one budget per pipeline (per session), so N
+  concurrent sessions each got the full "3 questions/day" quota and the
+  counter reset on every restart/eviction. Added `PersistentLocalBudget`
+  backed by a new `learning_budget` table in the shared life-history store
+  (keyed per user, daily roll persisted); `_maybe_surface_open_question` now
+  uses it. The cap is now real across sessions and restarts.
+- **Migration trust-weight inversion.** `migrate_skill_to_life` ingests as
+  `source_type="operator_directive"`, but `source_openness_coefficient` had no
+  branch for it, so an operator deliberately promoting a curated skill into
+  identity got the *lowest* openness (0.40 default) — below pasted text.
+  Added an explicit `operator_directive → 0.80` branch (most-trusted source).
+- **Clock-skew could stall metabolism.** A `last_decay_at` left in the future
+  (backward clock jump / NTP correction) suppressed all decay until wall-clock
+  caught up. `wall_clock_decay` now re-anchors a future timestamp to now (still
+  never over-decays).
+- **Shared `life_history.db` lacked WAL/busy_timeout.** The DB is opened
+  concurrently by per-session decay ticks, context reads, and ingest writes;
+  it now opens with `journal_mode=WAL` + `busy_timeout=5000` so concurrent
+  access waits for the lock instead of raising "database is locked".
+
+---
+
+## v0.35.1 — 2026-06-11
+
+### Round-7 re-review: complete the plan-step gate across ALL runners
+
+A second neutral re-review (with a dedicated adversary) found the v0.35.0
+plan-step gate fix was **incomplete**: it covered the heuristic tool loop but
+not the two model-native orchestrators, which call `execute_plan` on their
+own continuation paths. The adversary proved the bypass live — a write tool
+executed on plan continuation under both `assisted` and `off` autonomy.
+
+### Security
+
+- **Plan-step laundering still reachable via the native and LangGraph
+  runners (critical).** `nur_tools/native_orchestrator.py` (the *default*
+  production path when an OpenAI-compatible backend is configured) and
+  `nur_tools/langgraph_orchestrator.py` both called `execute_plan` on the
+  "continue" branch without the `step_gate`, so a plan whose first step was
+  read-only let a later WRITE/DESTRUCTIVE step run unchecked on continuation.
+  Both now build and pass `_build_step_gate(...)`, threading
+  `trust`/`agency_decision`/`autonomy_level` through. Verified: the exact
+  adversary payload now blocks under `assisted` and `off`.
+- **Proactive plan continuation ran at default autonomy.** The proactive
+  fallback `run_tool_loop` call in `pipeline/core.py` omitted
+  `autonomy_level`, so idle-driven plan continuation defaulted to
+  `autonomous` even when the session was `assisted`/`off`. Now passes the
+  session's autonomy level.
+- **Unknown-tool gating fallback now fails closed.** The new-plan arbiter in
+  `core/dual_process/tool_loop.py` treated a tool missing from the registry
+  as READ_ONLY for its gating decision; it now falls back to EXTERNAL_ACTION,
+  matching the per-step gate.
+
+### Tests
+
+- Continuation-gating regression tests for both the native and LangGraph
+  runners (`tests/test_native_orchestrator.py`,
+  `tests/test_langgraph_orchestrator.py`): a read-only step cannot launder a
+  write step past `assisted` autonomy, and the same plan completes under
+  `autonomous`.
+
+---
+
+## v0.35.0 — 2026-06-10
+
+### Round-5 neutral re-review: autonomy-gate and path-traversal fixes
+
+A fresh independent review (five reviewers with no prior context) re-graded
+the v0.34.0 tree and found that several dimensions sat below the claimed A−.
+This release closes every confirmed finding with regression tests.
+
+### Security
+
+- **Plan-step laundering past the autonomy gate (critical).** The
+  deterministic multi-step planner (`core/task_planning.py`) gated an entire
+  plan on only its *first* step's risk category, so a read-only leading step
+  let a later WRITE/DESTRUCTIVE/EXTERNAL_ACTION step execute without
+  arbiter approval (e.g. "list /tmp **and then** delete /tmp/secret.txt" ran
+  the delete under assisted autonomy). `execute_plan` now takes a
+  `step_gate` callback and authorizes **each** step against its own
+  category; `run_tool_loop` wires it through `make_tool_decision` on both the
+  new-plan and continuation paths. A blocked step marks the plan BLOCKED and
+  halts execution.
+- **`self.*` tools bypassed `autonomy = off` (high).** `_self_intent_blocked_reason`
+  (`pipeline/core.py`) returned "allowed" for any `self.*` tool *before* the
+  off-check, so `self.verify` (web search) and `self.alert_owner` (Telegram)
+  fired even with tools turned off. Outward EXTERNAL_ACTION self tools now
+  respect `off`; internal self-bookkeeping (private-log WRITE) stays allowed
+  as the stage's purpose.
+- **Path traversal via `user_id`/`chat_id` (medium).** `user_data_dir`
+  (`runtime/config.py`) only stripped `:`, so a `user_id` of `../../tmp/x`
+  reaching `/v1/chat` or legacy `/chat` (which, unlike the persona/delete
+  endpoints, did not validate the token) created directories outside
+  `data_dir`. Fixed at two layers: `user_data_dir` now sanitizes
+  `/ \ ..` as a filesystem backstop covering every transport, and the chat
+  request models plus the `/debug` endpoint reject path-dangerous
+  identifiers with a 4xx.
+
+### Fixed
+
+- **Trust-valence sign disagreement.** `pipeline/core.py`'s `_event_valence`
+  defaulted `targets_assistant` to False while `core/memory/digestion.py`
+  defaulted it to True, so the same event could move trust in opposite
+  directions on the spike vs. digested paths. Both now default True.
+- **README eval command.** `--backend openai_compatible` is not a valid
+  evals choice (it is `openai_compat`); corrected in README.
+
+### Changed
+
+- **Live eval packs are now tracked.** `reports/live/phase11_codex.json` and
+  `life_history_codex.json` were gitignored (`reports/*`), so the live-LLM
+  evidence could not be committed. They are now un-ignored and tracked. The
+  `dirty_worktree: true` flag in them is truthful while this work is
+  uncommitted; a re-run after commit stamps clean provenance. (Live UAT in
+  CI and an IP-pinned SSRF transport remain open infrastructure items.)
+
+---
+
+## v0.34.0 — 2026-06-10
+
+### Security hardening, MCP trust controls, and the first live-LLM evidence
+
+Fourth round of the due-diligence-driven hardening. Closes the security
+findings from an independent re-review (DNS-blind SSRF, redirect
+bypass, asset traversal, secret file permissions), adds operator trust
+controls for MCP, makes langgraph optional, and — for the first time —
+verifies the product against a real LLM backend: live eval packs
+committed under `reports/live/`, and a comprehensive live UAT run that
+caught two shipped regressions no unit test could see. Full suite:
+2166 unit/integration tests green.
+
+### Added
+
+- **Operator trust controls for MCP tool categorization.** MCP servers
+  supply their own tool names/descriptions, and Nūr's keyword inference
+  (`nur_tools/mcp/adapter.py`) trusts those strings — a misleadingly
+  named `get_*` tool with side effects landed in READ_ONLY and skipped
+  the confirmation gate. Two new runtime config fields close this:
+  `mcp_tool_categories` (map of tool name — exact or fnmatch pattern,
+  matched against the namespaced `mcp.<server>.<tool>` name and the
+  bare name — to `read_only`/`write`/`destructive`/`external_action`,
+  applied **before** keyword inference; invalid values fail at config
+  load and return 400 from `/config`) and `mcp_strict_categories`
+  (when true, keyword inference is disabled and every unpinned MCP
+  tool is `external_action`, confirmation-gated under assisted
+  autonomy; default false preserves current behavior). Both round-trip
+  through YAML and `update_config` (omitted fields are preserved) and
+  thread through `MCPAdapter` / `register_mcp_tools` kwargs. SECURITY.md
+  and DEPLOYMENT_AND_ADMIN.md document the trust model.
+
+- **Dynamic completeness guard for `POST /config`.**
+  `update_config` reconstructs `RuntimeConfig` field-by-field, so a new
+  config field that is not wired through the handler is silently reset
+  to its default on every save. A new regression test
+  (`tests/test_interface.py::TestConfigEndpoint::test_update_config_preserves_every_runtime_config_field`)
+  iterates the live `dataclasses.fields(RuntimeConfig)`, gives every
+  field a distinctive non-default value, posts an empty update, and
+  asserts every field survives — automatically covering fields added in
+  the future.
+
+### Changed
+
+- **CSP no longer allows inline scripts.** All served HTML loads only
+  external ES modules — no inline `<script>` blocks or `on*=` handlers
+  exist — so `'unsafe-inline'` was dropped from `script-src` in
+  `interface/api.py` (`style-src` keeps it; the UI sets inline style
+  custom properties). Regression tests in
+  `tests/test_admin_console_static.py` assert the header and that no
+  served page would be broken by it.
+- **Admin status sink sanitized.** `interface/static/admin-overlay.js`
+  passed status strings to `innerHTML` unescaped; the sink now runs
+  DOMPurify with the shared `PURIFY_CONFIG` (one caller passes trusted
+  note markup, so `textContent` was not an option).
+- **`/v1` no longer reaches into private attributes.**
+  `interface/v1.py` uses the public `UserSession.queue_depth` and
+  `CognitivePipeline.tool_executor` accessors instead of
+  `session._queue.qsize()` and `pipeline._tool_executor`.
+- **`langgraph` is now an optional extra.** `langgraph` and
+  `langchain-openai` moved from required dependencies to
+  `pip install project-nur[langgraph]` (the `dev` extra includes it so
+  test environments are unchanged). `nur_tools/langgraph_orchestrator.py`
+  is not imported by any production code path — only tests — and now
+  imports langgraph lazily: the module imports cleanly without the
+  extra, and constructing `LangGraphToolRunner` raises a clear
+  ImportError with install guidance when it is absent.
+
+### Security
+
+- **DNS-blind SSRF closed in `validate_http_url`.** The guard previously
+  blocked only *literal* private/loopback/link-local IPs — any hostname
+  (e.g. `attacker.example` resolving to `169.254.169.254`) passed
+  unchecked. `runtime/security.py` now resolves non-literal hostnames
+  via `socket.getaddrinfo` (A + AAAA) and rejects the URL if **any**
+  resolved address is loopback/link-local/private/multicast/reserved/
+  unspecified. DNS failure rejects (an unresolvable target cannot be
+  validated). Opt-ins are unchanged: `allow_loopback` still permits
+  loopback targets (including resolved ones) and `localhost` short-
+  circuits without DNS, so local LLM backends (ollama) keep working
+  offline; the `allow_private_env` trust opt-in permits every category
+  and therefore skips resolution. Known limitation documented in the
+  docstring: validate-then-fetch retains a TOCTOU/DNS-rebinding window
+  (resolution at check time vs connect time); full IP pinning needs a
+  custom transport adapter, which requests does not make easy.
+- **Web fetch redirects are now validated hop-by-hop.**
+  `RequestsWebProvider` followed redirects automatically with only the
+  initial URL validated, so a public URL could 302 into loopback or
+  cloud-metadata space. `fetch()` (and `search()`) now request with
+  `allow_redirects=False` and follow redirects manually: each hop's
+  target (Location resolved against the current URL) is re-validated
+  with `validate_http_url` before being requested, capped at 5 hops,
+  with the 2 MB streaming cap and timeout applied on every hop.
+- **Browser tool gained an SSRF guard at the tool boundary.**
+  `nur_tools/builtin/browser.py` had no URL validation (the default
+  provider is a no-op); `browser.open_url`, `browser.get_page_text`,
+  and `browser.screenshot` now run `validate_http_url` before
+  delegating, so any real automation provider plugged in later inherits
+  the guard. Shares the `NUR_ALLOW_PRIVATE_WEB_FETCH` opt-in.
+- **Shell allowlist also rejects `${`.** Env-var expansion can smuggle
+  content into arguments even without command substitution; `${` joins
+  the rejected metacharacter set alongside backticks and `$(`.
+- Tests are DNS-independent: `tests/conftest.py` stubs hostname
+  resolution to a public address suite-wide, and
+  `tests/test_url_security.py` exercises the resolution policy with
+  crafted `getaddrinfo` answers (loopback/private/link-local/IPv6/
+  mixed records, DNS failure, opt-ins, backend constructor callers).
+- **Path traversal closed in `GET /assets/*.svg`.** The brand-asset
+  route joined the caller path onto `docs/diagrams` with `normpath`
+  and no containment check, so `/assets/../../<file>.svg` could read
+  `.svg` files outside the diagrams directory. The handler now applies
+  the same realpath-containment check as the static-asset sibling.
+  Regression tests cover traversal, encoded traversal, and the
+  legitimate path.
+- **`runtime_config.yaml` is written owner-only (0600).** The file can
+  hold `api_key`, `llm_api_key`, and `telegram_token`; `write_yaml`
+  previously created it with the default umask (typically
+  world-readable). New files are created 0600 and pre-existing files
+  are tightened on every save.
+- **Tool error text is secret-redacted.** `ToolExecutor` normalizes
+  handler exceptions into the tool trace; a credential embedded in an
+  exception message (e.g. an auth error echoing a key) previously
+  surfaced raw. The runtime now wires the config's secret values into
+  the executor, which scrubs them from error text before it can reach
+  traces or the UI.
+
+### Fixed
+
+- **Settings workspace was dead in v0.30.9 — caught by live UAT.** The
+  v0.30.9 bfcache/refocus patch declared a second
+  `refreshStatusOnly()` in the same module scope of
+  `interface/static/admin.js` — a module-scope SyntaxError that killed
+  the entire settings workspace JS (all buttons hidden, no handlers).
+  It shipped because the last live UAT run predated v0.30.9 and the
+  then-CI gate executed zero test bodies. The duplicate is renamed
+  `refreshStatusBestEffort` (its semantics — never throws, skips the
+  persona reload — were intentionally different). Guarded forever by a
+  new parse-check suite (`tests/test_static_js_syntax.py`) that runs
+  `node --check` over every bundled UI module in plain CI — a
+  module-scope SyntaxError can no longer ship silently.
+- **`python -m interface.api` crashed at startup — caught by live
+  UAT.** The v0.32.0 api.py split imports route modules at the bottom
+  of the file; run as `__main__` (the UAT server launch path), the
+  module was not registered as `interface.api`, so the route modules'
+  `from interface import api` re-executed the file and hit a circular
+  import. The module now aliases itself into
+  `sys.modules["interface.api"]` before the bottom imports. Covered by
+  a subprocess regression test in `tests/test_nur_web_launcher.py`.
+
+- **Self-intent no longer bypasses the autonomy gate — caught by live
+  UAT.** The self-intent stage executed any registered tool with no
+  decision layer; a live run showed `fs.write_file` executing under
+  assisted autonomy through it. Non-`self.*` tools proposed by
+  self-intent now obey the same category rule as user-driven intents
+  (READ_ONLY/COGNITIVE execute; WRITE/DESTRUCTIVE/EXTERNAL_ACTION are
+  blocked below `autonomous`, with the block recorded in the tool
+  trace). `self.*` actions — Nūr's own state, the point of the stage —
+  remain ungated. Unit tests cover blocked-write, allowed-self, and
+  allowed-read-only under assisted autonomy.
+- **`cors_origins` from `--config` were silently ignored — caught by
+  live UAT.** The CORS middleware captured origins at module import,
+  before `main()` parsed `--config`, so only a config file in the
+  process CWD ever took effect. `main()` now re-applies the configured
+  origins to the middleware before the app starts serving. Verified
+  end-to-end (allowed origin echoed, other origins refused).
+- **UAT client timeouts raised for live backends.** Chat turns that
+  stack digestion + belief revision + self-check against a slow CLI
+  backend can exceed the old 30s read timeout; the UAT fixture now
+  allows 120s for POSTs and 60s for GETs.
+- **First-run wizard UAT updated for the consent gate.** The privacy
+  consent checkbox added 2026-05-11 disables "Get Started" until
+  ticked, but the wizard test was never updated — it had been failing
+  on every live run since. The test now checks the consent box first.
+
+### Live evidence
+
+- **Live behavioral eval artifacts committed.** `reports/live/`
+  now holds `phase11_codex.json` (relationship memory, 6/6 scenarios)
+  and `life_history_codex.json` (Phase 13 life history, 11/11
+  scenarios), both run against the real Codex CLI backend with full
+  provenance (git SHA, dirty-worktree flag, config fingerprints) —
+  the first non-mock eval evidence in the repository.
+- **Comprehensive live UAT exercised against Codex CLI** as part of
+  this release's verification; it caught the two shipped regressions
+  above that 2,100+ unit tests could not see.
+
+---
+
+## v0.33.0 — 2026-06-10
+
+### Core & interface structure — declarative routing fallback, pipeline package, shell allowlist
+
+Third round of the due-diligence-driven hardening (after v0.31.0 core
+and v0.32.0 interface/tools). Closes the remaining structural findings:
+the regex intent fallback is declarative and coverage-tested, `pipeline`
+is a package, the admin router is fully decomposed, and shell gains an
+opt-in command allowlist with workspace-scoped cwd. Full suite: 2073
+unit/integration tests green.
+
+### Added
+
+- **Opt-in shell command allowlist.** New
+  `shell_command_allowlist: []` runtime config. When non-empty,
+  `shell.run_command` shlex-splits the command, requires the first
+  token to exactly match an allowlist entry, and rejects
+  shell-chaining metacharacters (`;`, `|`, `&`, backticks, `$(`,
+  redirection, newlines) with a clean policy-naming tool error.
+  Empty list (default) = today's unrestricted behavior. Round-trips
+  through YAML and `/admin/config` (a save without the field preserves
+  the YAML value — covered by regression tests).
+- **Shell `cwd` defaults to the tools workspace.** When the tool call
+  omits `cwd`, commands run in `resolved_tools_workspace` (created on
+  demand) instead of the server process cwd. An explicit `cwd` is
+  honored as before; a nonexistent one now returns a clean tool error
+  instead of a raw `OSError`. SECURITY.md documents the full layered
+  model: two opt-in flags → autonomy confirmation gate → 600s timeout
+  cap → optional allowlist + workspace cwd — and states plainly that
+  an empty allowlist at high autonomy is full RCE by design.
+
+### Changed
+
+- **`routes_admin.py` decomposed.** The 1,377-line admin router is now
+  a 101-line aggregator over `routes_admin_config.py` (status, config,
+  codex models, connectivity tests), `routes_admin_identity.py` (soul
+  endpoints + parsing helpers), and `routes_admin_runtime.py` (persona,
+  diagnostics, runtime reload/restart, session reset, user deletion).
+  OpenAPI schema verified byte-identical; the late-binding
+  patchability pattern is preserved, so no tests changed.
+- **`pipeline.py` is now the `pipeline/` package.** The ~2,500-line root
+  module is split along its existing seams with no logic changes:
+  `pipeline/core.py` (`CognitivePipeline` with all five stage methods
+  together), `pipeline/types.py` (`DebugState`, `PipelineResponse`,
+  `_TurnState`), `pipeline/heuristics.py` (regex tables, repair/identity
+  detection, tool-routing message builders), and `pipeline/__init__.py`
+  re-exporting every previously module-level name — `import pipeline`
+  and all `from pipeline import X` call sites (including the
+  `_message_for_*` helpers used by tests) work unchanged. Packaging:
+  `py-modules` drops `pipeline`; the package ships via
+  `packages.find`. `docs/ARCHITECTURE.md` step anchors, the Makefile
+  lint target, CONTRIBUTING's path table, and `evals/provenance.py`
+  repo-root detection updated to the new layout.
+- **Memory modules no longer load config at import time.**
+  `core/memory/long_term.py` and `core/memory/digestion.py` read their
+  config-driven constants lazily via a `_constants()` /
+  `_spike_threshold()` accessor backed by the `get_config()` singleton;
+  the historical module-level names (`CONFIDENCE_THRESHOLD`,
+  `POSITIVE_DELTA`, `SPIKE_INTENSITY_THRESHOLD`, …) keep working through
+  module `__getattr__` and now honor `reset_config()` instead of
+  freezing at first import. No test changes required.
+
+- **Heuristic tool routing is now a declarative rule table.** The ~70
+  hand-tuned regexes in `core/dual_process/tool_loop.py` (the fallback
+  router used when the backend has no tool-call API) are restructured
+  into `INTENT_RULES`: an ordered tuple of 65 frozen `IntentRule`
+  dataclasses (`name`, `tool`, `extractor`, `patterns`) matched
+  first-hit-wins by one small engine (`match_intent_rule`). Behavior
+  preserving — every regex and its precedence is unchanged. Each rule
+  has a stable name, and a new coverage test
+  (`tests/test_intent_rules.py`) asserts every rule is reachable by a
+  canonical example utterance, catching dead or shadowed rules.
+- **Follow-up tool-routing patches moved out of `pipeline.py`.** The
+  QA-grown "now check again"/"run it" context-rewriting regexes now
+  live next to the intent rules as `FOLLOWUP_REWRITE_RULES` +
+  `attach_followup_context()` in `tool_loop.py`; the pipeline
+  delegates. Two-tier routing (native model tool-calls primary,
+  heuristic table fallback) is now documented in ARCHITECTURE.md.
+
+### CI
+
+- **The vacuous mock-UAT job is gone.** `uat.yml`'s "Browser/Admin UAT
+  (mock)" job ran the launcher without `--live`, so all 67 UAT tests
+  skipped and the job passed green having executed nothing (while
+  installing a browser it never used). Replaced with an honest
+  "UAT collection + server boot smoke" gate: the suite must collect
+  cleanly (≥60 tests), and a fresh `nur-web` install must boot,
+  self-bootstrap its config, and serve `/v1/health` and the setup
+  wizard. README and docs/UAT.md now describe exactly what the gate
+  does and does not verify; the live job remains the only CI path
+  that runs UAT bodies.
+
+### Tests
+
+- 93 new tests: 68 intent-rule coverage tests (one canonical utterance
+  per rule, table invariants, dead-rule detection), 22 shell
+  allowlist/cwd tests, and 3 runtime-config round-trip tests for
+  `shell_command_allowlist`.
+
+---
+
+## v0.32.0 — 2026-06-10
+
+### Interface & tool-layer hardening — api.py split, unified auth, vendored UI libs
+
+Companion to the v0.31.0 core hardening, same due-diligence review.
+The legacy/admin API surface is restructured and the tool layer closes
+its remaining gating gaps. Route table and OpenAPI schema are
+byte-identical to before the split. Full suite: 1980 unit/integration
+tests green.
+
+### Changed
+
+- **`interface/api.py` split into focused route modules.** The
+  3,340-line monolith is now a 1,371-line assembly module (app
+  creation, lifecycle, auth wiring, `/chat`, `/ws`, UI serving) plus
+  `routes_admin.py` (config/status/identity/telegram/runtime),
+  `routes_life.py` (`/admin/life/*` + constitution),
+  `routes_skills.py`, and `routes_backup.py` — mirroring how `/v1`
+  was already factored. `interface.api` keeps re-exporting every
+  previously public name, and moved handlers resolve patchable
+  helpers late through the module object, so external code and test
+  monkeypatching are unaffected.
+- **One bearer-auth implementation.** New `interface/auth.py`
+  (`verify_bearer` + `build_require_bearer`) replaces the duplicated
+  near-identical logic in `api.py` and `v1.py`. Semantics preserved:
+  opt-in (no `api_key` = open), constant-time compare, per-request
+  config re-read, same 401 details and `WWW-Authenticate` header.
+- **Web UI libraries vendored.** `marked@12.0.2` and
+  `dompurify@3.1.6` now ship in `interface/static/lib/` instead of
+  loading from `cdn.jsdelivr.net`; `https://cdn.jsdelivr.net` is
+  removed from the CSP `script-src`. The UI works offline and pulls
+  no third-party script at runtime.
+- **MCP category inference is risk-ordered.** `infer_category` now
+  checks keyword sets from most to least risky (DESTRUCTIVE → WRITE →
+  EXTERNAL_ACTION → READ_ONLY), so a mixed-verb tool name like
+  `getOrDeleteRecords` is classified DESTRUCTIVE instead of matching
+  "get" first and bypassing the WRITE/DESTRUCTIVE confirmation gate.
+  Unknown names still default to EXTERNAL_ACTION.
+- **Shell timeout is validated and capped.** `shell.run_command`
+  coerces `timeout_seconds` to a number (non-numeric → clean tool
+  error), falls back to the 30s default for non-positive/NaN values,
+  and clamps everything at a 600s hard maximum before reaching
+  `subprocess.run`.
+
+### Fixed
+
+- **Error redaction is consistent.** `chat()` no longer returns raw
+  exception text in 500 bodies; it and the remaining unredacted sites
+  (`/v1/chat` 503, soul-draft 502s) route through the shared
+  redaction helper (`interface/errors.py`). Full exceptions are still
+  logged server-side.
+- **WebSocket closes cleanly on malformed frames.** A non-JSON (or
+  non-object) first frame or loop frame now closes with policy
+  violation (1008) instead of raising an unhandled
+  `JSONDecodeError`. Size cap (1009) and existing close codes
+  unchanged.
+- **Filesystem write cap.** `fs.write_file` rejects content larger
+  than 1 MB (mirrors the existing 1 MB read cap) with a clean tool
+  error instead of writing unbounded data.
+- **Sandbox refusal no longer advertises escaping.** The
+  out-of-workspace error names the workspace root but no longer
+  suggests setting `tools_workspace: /` for full host access.
+- **Zero-arg `create_tool_executor()` is sandboxed.** The legacy
+  no-config path (tests/dev wiring only; every production call site
+  passes a `RuntimeConfig`) now scopes filesystem tools to the current
+  working directory. Unsandboxed handlers require an explicit opt-in
+  (`filesystem.HANDLERS` import or `create_handlers(workspace=None)`).
+
+### Tests
+
+- 10 new tool-layer tests: risk-ordered MCP category precedence (name
+  and description), shell timeout validation/clamping/default
+  fallback, oversized `fs.write_file` rejection, sandbox refusal
+  wording, relative-path resolution, and zero-arg executor cwd
+  sandboxing. `search_messages` now expects EXTERNAL_ACTION ("message"
+  outranks "search" under risk-first ordering).
+- No interface tests changed for the split — all 126 existing test
+  references into `interface.api` work unmodified.
+
+---
+
+## v0.31.0 — 2026-06-10
+
+### Core hardening — persistence atomicity, semantic belief revision, pipeline decomposition
+
+Driven by an external-style due-diligence review of the cognitive core.
+No new features; every change is correctness, semantics-depth, or
+structure in `runtime/life_history.py`, `pipeline.py`, and the
+emotional/tool layers. Full suite: 1970 unit/integration tests green.
+
+### Fixed
+
+- **Life History ingest is now atomic.** `_ingest_text` applies the
+  whole evolution batch (experience row, belief/drive/trait/future
+  mutations, theme reinforcement, open questions) inside a single
+  transaction with rollback on failure. Previously each `_apply_*`
+  helper committed individually, so a crash mid-batch left partially
+  applied identity state. New regression test simulates a mid-batch
+  failure and asserts zero persisted rows across all seven tables.
+- **Metabolism decay no longer clobbers belief recency.** `decay_step`
+  used to rewrite `updated_at` on every belief every tick, making all
+  beliefs look equally fresh to the `list_beliefs`/`prompt_context`
+  recency ordering. Decay now stamps a new additive-migrated
+  `last_decayed_at` column and leaves `updated_at` untouched. Decay
+  math (30-day half-life, 0.2 revocation floor) is unchanged.
+
+### Changed
+
+- **Belief revision is LLM-backed, heuristic only as fallback.**
+  `revise_beliefs_against_evidence` now prefilters plausibly related
+  beliefs by token overlap (cap 10) and, when an LLM is available,
+  makes one batched strict-JSON call classifying each belief as
+  contradicts / supports / unrelated. Contradictions (verdict
+  confidence ≥ 0.6) apply the existing 0.7 multiplier and emit a
+  contradiction open question; supports reinforce confidence by up to
+  +0.05 (clamped at 1.0). Without an LLM — or on a malformed response —
+  a negation-window heuristic (negation token within ±6 tokens of a
+  belief-key token) replaces the old global-substring check, so a
+  stray "not" thousands of characters away no longer revises beliefs.
+- **Heuristic digest no longer fabricates identity state by default.**
+  When the LLM digest fails, the experience event is still recorded
+  but keyword-derived belief/drive mutations are skipped; an
+  `undigested_experience` open question asks the operator to re-ingest
+  when a model is available. The old behavior remains available via
+  the explicit `LifeHistoryStore(..., allow_heuristic_digest=True)`
+  opt-in.
+- **`pipeline.process()` decomposed.** The single ~750-line method is
+  now a 41-line orchestrator over five stage methods matching the
+  documented turn flow (pre-pass → deliberation → generation →
+  self-check → post-processing), with per-turn state carried in a
+  `_TurnState` dataclass. `PipelineContext` is built in exactly one
+  place (correction retry uses `dataclasses.replace`). Behavior,
+  debug-trace shape, timing keys, and memory-write ordering are
+  unchanged.
+- **`ToolExecutor` has a public API.** `registry`, `tool_runner` /
+  `set_tool_runner`, `self_action_context` / `set_self_action_context`,
+  and `owned_resources` / `own_resource` replace the private-attribute
+  reach-through previously scattered across `pipeline.py`, the tool
+  loop, task planning, both orchestrators, `runtime/tools.py`,
+  `interface/v1.py`, and the eval runner.
+- **Hot conversation transcript bounded.** `_conversation_history` is
+  trimmed to the newest 400 entries (~200 turns); every reader uses a
+  far smaller recent window, so observable behavior is unchanged while
+  long-lived sessions stop growing without bound.
+- **Emotional engine constants are a frozen dataclass.**
+  `_load_constants()` returns `EngineConstants` instead of a
+  positional 10-tuple; module-level constant aliases are preserved.
+- **Resolved unresolved-items are pruned.** The emotional engine keeps
+  a bounded tail of the 20 most recently resolved items instead of
+  retaining every resolved item for the engine's lifetime.
+
+### Removed
+
+- `apply_context_shift` legacy wrapper (zero callers) and the
+  unreachable `demand_repair` entry in `affect.severity_rank`.
+- Runtime `assert` in spike-memory insertion replaced with an explicit
+  `RuntimeError` so the invariant survives `python -O`.
+
+### Tests
+
+- 11 new tests: ingest atomicity, decay recency ordering and
+  `last_decayed_at` stamping, LLM revision verdicts (contradict /
+  support with cap / unrelated / low-confidence / malformed-JSON
+  fallback), negation-window positive and negative cases, and both
+  heuristic-digest modes.
+- Updated expectations where behavior intentionally changed: heuristic
+  digest tests now opt in explicitly; learning-intake and admin-life
+  API tests inject a deterministic fake digest LLM.
 
 ---
 

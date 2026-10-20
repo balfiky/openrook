@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Project Nur settings workspace for runtime, tools, memory, channels, and observability.">
-<title>Nūr Settings</title>
+<meta name="description" content="OpenRook settings workspace for runtime, tools, memory, channels, and observability.">
+<title>OpenRook Settings</title>
 <link rel="stylesheet" href="/admin/assets/admin.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
     <a class="brand" href="/">
       <span class="brand-mark" aria-hidden="true"></span>
       <span>
-        <strong>Nūr</strong>
+        <strong>OpenRook</strong>
         <small>Settings</small>
       </span>
     </a>
@@ -34,7 +34,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Instance Workspace</p>
-        <h1 id="pageTitle">Nūr Settings</h1>
+        <h1 id="pageTitle">OpenRook Settings</h1>
       </div>
       <div class="topbar-actions">
         <span class="status-pill" id="statusPill">Loading</span>
@@ -111,7 +111,7 @@
           </summary>
           <form class="form-grid" id="learningForm"></form>
           <p class="muted">
-            <strong>Ask-user budget</strong> caps how often Nūr surfaces an open question
+            <strong>Ask-user budget</strong> caps how often OpenRook surfaces an open question
             during chat. <strong>Metabolism min elapsed days</strong> is the rate limit on
             the wall-clock reflection tick (decay, theme→belief promotion, drive-gap and
             low-confidence emission). Lower values reflect more often; raise them for
@@ -142,7 +142,7 @@
               <h3>Tool Inventory</h3>
               <button class="secondary" id="refreshToolsBtn" type="button">Refresh Tools</button>
             </div>
-            <p class="settings-mini">Every registered tool is available to Nūr. The chip on each tool describes what that tool does (Observes, Writes, Destructive, etc.) — not a permission you've withheld. Whether Nūr actually calls a tool is decided per turn by the autonomy level and Nūr's own agency stance.</p>
+            <p class="settings-mini">Every registered tool is available to OpenRook. The chip on each tool describes what that tool does (Observes, Writes, Destructive, etc.) — not a permission you've withheld. Whether OpenRook actually calls a tool is decided per turn by the autonomy level and OpenRook's own agency stance.</p>
             <div class="tool-summary" id="toolsSummary"></div>
             <div class="tool-toolbar">
               <input id="toolSearch" type="search" placeholder="Filter tools..." aria-label="Filter tools">
@@ -245,7 +245,7 @@
           <label class="field-card wide">
             <span>Upload Skill</span>
             <input id="skillUpload" type="file" accept=".md,.markdown,.zip">
-            <small class="field-help">Choose SKILL.md, a Markdown skill file, or a zipped skill folder. Nūr imports it disabled for review.</small>
+            <small class="field-help">Choose SKILL.md, a Markdown skill file, or a zipped skill folder. OpenRook imports it disabled for review.</small>
           </label>
           <label class="field-card">
             <span>Name hint</span>
@@ -283,7 +283,7 @@
       <div class="section-heading">
         <div>
           <h2 id="observability-heading">Observability</h2>
-          <p>Unified monitoring for Nūr's mental state, emotion, relationship memory, Life influence, skills, and tools across every active channel.</p>
+          <p>Unified monitoring for OpenRook's mental state, emotion, relationship memory, Life influence, skills, and tools across every active channel.</p>
         </div>
         <button class="secondary" id="refreshPersonaBtn" type="button">Refresh Observability</button>
       </div>
@@ -352,7 +352,7 @@
           </label>
           <label class="field-card wide">
             <span>Participants</span>
-            <input id="lifeParticipants" type="text" placeholder="You, Nūr">
+            <input id="lifeParticipants" type="text" placeholder="You, OpenRook">
           </label>
           <label class="field-card wide">
             <span>Text</span>
@@ -379,7 +379,7 @@
           </label>
           <label class="field-card">
             <span>Participants</span>
-            <input id="lifeUploadParticipants" type="text" placeholder="You, Nūr">
+            <input id="lifeUploadParticipants" type="text" placeholder="You, OpenRook">
           </label>
           <details class="advanced-settings wide">
             <summary>Advanced: digest a server-side file path</summary>
@@ -444,7 +444,7 @@
   <form method="dialog">
     <h2>API Token</h2>
     <p>
-      This Nūr server has <code>api_key</code> set in
+      This OpenRook server has <code>api_key</code> set in
       <code>runtime_config.yaml</code>, so admin and chat endpoints
       require a bearer token. Paste it below to use this browser
       session. Tokens are stored in <code>sessionStorage</code> and

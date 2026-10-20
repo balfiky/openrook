@@ -142,6 +142,86 @@ class TestConfigFromYaml:
             config = RuntimeConfig.from_yaml(path)
             assert config.telegram_allowlist == set()
 
+    def test_shell_command_allowlist_defaults_empty(self):
+        cfg = RuntimeConfig()
+        assert cfg.shell_command_allowlist == []
+
+    def test_shell_command_allowlist_loads_as_list_of_strings(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.yaml")
+            with open(path, "w") as f:
+                f.write('shell_command_allowlist: ["git", "ls", 7]\n')
+            config = RuntimeConfig.from_yaml(path)
+            assert config.shell_command_allowlist == ["git", "ls", "7"]
+
+    def test_shell_command_allowlist_round_trips_through_yaml(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "rc.yaml")
+            cfg = RuntimeConfig(shell_command_allowlist=["git", "rg"])
+            cfg.write_yaml(path)
+            loaded = RuntimeConfig.from_yaml(path)
+            assert loaded.shell_command_allowlist == ["git", "rg"]
+
+    def test_mcp_trust_controls_default(self):
+        cfg = RuntimeConfig()
+        assert cfg.mcp_tool_categories == {}
+        assert cfg.mcp_strict_categories is False
+
+    def test_mcp_tool_categories_loads_and_normalizes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.yaml")
+            with open(path, "w") as f:
+                f.write(
+                    "mcp_tool_categories:\n"
+                    '  "mcp.github.get_dispatch": EXTERNAL_ACTION\n'
+                    '  "mcp.jira.*": write\n'
+                    "mcp_strict_categories: true\n"
+                )
+            config = RuntimeConfig.from_yaml(path)
+            # Category values are normalized to lowercase
+            assert config.mcp_tool_categories == {
+                "mcp.github.get_dispatch": "external_action",
+                "mcp.jira.*": "write",
+            }
+            assert config.mcp_strict_categories is True
+
+    def test_mcp_tool_categories_invalid_value_fails_at_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.yaml")
+            with open(path, "w") as f:
+                f.write('mcp_tool_categories:\n  "tool_x": readonly\n')
+            with pytest.raises(ValueError, match="invalid category 'readonly'"):
+                RuntimeConfig.from_yaml(path)
+
+    def test_mcp_tool_categories_cognitive_rejected(self):
+        # "cognitive" is reserved for OpenRook-internal tools.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.yaml")
+            with open(path, "w") as f:
+                f.write('mcp_tool_categories:\n  "tool_x": cognitive\n')
+            with pytest.raises(ValueError, match="invalid category"):
+                RuntimeConfig.from_yaml(path)
+
+    def test_mcp_tool_categories_non_mapping_rejected(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.yaml")
+            with open(path, "w") as f:
+                f.write('mcp_tool_categories: ["tool_x"]\n')
+            with pytest.raises(ValueError, match="must be a mapping"):
+                RuntimeConfig.from_yaml(path)
+
+    def test_mcp_trust_controls_round_trip_through_yaml(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "rc.yaml")
+            cfg = RuntimeConfig(
+                mcp_tool_categories={"mcp.cal.*": "destructive"},
+                mcp_strict_categories=True,
+            )
+            cfg.write_yaml(path)
+            loaded = RuntimeConfig.from_yaml(path)
+            assert loaded.mcp_tool_categories == {"mcp.cal.*": "destructive"}
+            assert loaded.mcp_strict_categories is True
+
 
 # =========================================================================
 # Learning schedule
@@ -434,3 +514,40 @@ class TestChannelConfig:
             config = RuntimeConfig.from_yaml(path)
             assert config.console_enabled is False
             assert config.telegram_token == "bot123:abc"
+
+
+class TestConfigFilePermissions:
+    def test_write_yaml_creates_owner_only_file(self, tmp_path):
+        import stat
+
+        path = str(tmp_path / "rc.yaml")
+        RuntimeConfig(api_key="sekret").write_yaml(path)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        assert mode == 0o600
+
+    def test_write_yaml_tightens_existing_file(self, tmp_path):
+        import stat
+
+        path = tmp_path / "rc.yaml"
+        path.write_text("llm_backend: mock\n")
+        os.chmod(path, 0o644)
+        RuntimeConfig().write_yaml(str(path))
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        assert mode == 0o600
+
+
+class TestUserDataDirSanitization:
+    """user_data_dir is the filesystem backstop against a hostile user_id."""
+
+    def test_normal_key_unchanged(self, tmp_path):
+        cfg = RuntimeConfig(data_dir=str(tmp_path))
+        got = cfg.user_data_dir("web:alice")
+        assert got == os.path.join(str(tmp_path), "web_alice")
+
+    def test_traversal_key_cannot_escape_data_dir(self, tmp_path):
+        cfg = RuntimeConfig(data_dir=str(tmp_path))
+        for rel_key in ("web:../../etc", "web:../escape", "web:a/b", "web:a\\b"):
+            got = os.path.realpath(cfg.user_data_dir(rel_key))
+            root = os.path.realpath(str(tmp_path))
+            assert got == root or got.startswith(root + os.sep), (rel_key, got)
+            assert ".." not in os.path.relpath(got, root)

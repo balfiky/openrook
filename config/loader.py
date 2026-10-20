@@ -1,4 +1,4 @@
-"""Configuration loader for Project Nur.
+"""Configuration loader for OpenRook.
 
 Reads YAML files from the config/ directory and provides typed access.
 All values have hardcoded defaults so modules work without config files.
@@ -6,7 +6,11 @@ All values have hardcoded defaults so modules work without config files.
 
 from __future__ import annotations
 
-import os
+from config.environment import project_env
+
+import copy
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,12 +28,12 @@ _DEFAULT_CONFIG_DIR = Path(__file__).parent
 def _user_override_dir() -> Path | None:
     """Optional operator-owned config dir that overrides packaged defaults.
 
-    Set ``NUR_CONFIG_DIR`` to a writable directory to keep operator edits
+    Set ``OPENROOK_CONFIG_DIR`` to a writable directory to keep operator edits
     (typically soul.yaml) out of site-packages so ``pip install --upgrade``
     does not clobber them. Files present here override the packaged
     defaults one-for-one; missing files fall through to the packaged copy.
     """
-    env = os.environ.get("NUR_CONFIG_DIR", "").strip()
+    env = project_env("CONFIG_DIR", "").strip()
     if not env:
         return None
     path = Path(env).expanduser()
@@ -193,7 +197,7 @@ class ContagionDetectionConfig:
 class SoulConfig:
     """Seed identity authored by the user before experience-driven growth."""
 
-    name: str = "Nūr"
+    name: str = "OpenRook"
     identity: str = (
         "A steady, relational assistant that values clarity, loyalty, and humane judgment."
     )
@@ -253,8 +257,8 @@ class SemanticMemoryConfig:
 
 
 @dataclass
-class NurConfig:
-    """Top-level configuration for all Project Nur modules."""
+class OpenRookConfig:
+    """Top-level configuration for all OpenRook modules."""
 
     # Modulators
     half_lives: dict[str, float] = field(default_factory=lambda: {
@@ -303,13 +307,17 @@ class NurConfig:
     slow_path_prompt: str = ""
     fast_path_revision_prompt: str = ""
     arbiter_prompt: str = ""
+    self_intent_prompt: str = ""
 
 
 # ---------------------------------------------------------------------------
 # Loader
 # ---------------------------------------------------------------------------
 
-def load_config(config_dir: str | Path | None = None) -> NurConfig:
+NurConfig = OpenRookConfig
+
+
+def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
     """Load configuration from YAML files.
 
     Falls back to hardcoded defaults for any missing values.
@@ -322,7 +330,7 @@ def load_config(config_dir: str | Path | None = None) -> NurConfig:
     soul = _load_yaml("soul.yaml", cdir)
     semantic = _load_yaml("semantic_memory.yaml", cdir)
 
-    cfg = NurConfig()
+    cfg = OpenRookConfig()
 
     # --- Modulators ---
     if "half_lives" in mod:
@@ -503,6 +511,7 @@ def load_config(config_dir: str | Path | None = None) -> NurConfig:
     cfg.slow_path_prompt = _load_prompt("slow_path.md", cdir)
     cfg.fast_path_revision_prompt = _load_prompt("fast_path_revision.md", cdir)
     cfg.arbiter_prompt = _load_prompt("arbiter.md", cdir)
+    cfg.self_intent_prompt = _load_prompt("self_intent.md", cdir)
 
     return cfg
 
@@ -511,12 +520,25 @@ def load_config(config_dir: str | Path | None = None) -> NurConfig:
 # Module-level singleton (lazy loaded)
 # ---------------------------------------------------------------------------
 
-_config: NurConfig | None = None
+_config: OpenRookConfig | None = None
+_scoped_config: ContextVar[OpenRookConfig | None] = ContextVar("nur_configuration", default=None)
 
 
-def get_config() -> NurConfig:
+@contextmanager
+def configuration_scope(config: OpenRookConfig):
+    token = _scoped_config.set(config)
+    try:
+        yield
+    finally:
+        _scoped_config.reset(token)
+
+
+def get_config() -> OpenRookConfig:
     """Get the global config singleton. Loads from files on first call."""
     global _config
+    scoped = _scoped_config.get()
+    if scoped is not None:
+        return scoped
     if _config is None:
         _config = load_config()
     return _config
@@ -526,3 +548,27 @@ def reset_config() -> None:
     """Reset the config singleton (for testing)."""
     global _config
     _config = None
+
+
+def research_configuration(birth_policy: str = "uncommitted") -> OpenRookConfig:
+    config = copy.deepcopy(get_config())
+    if birth_policy not in {"uncommitted", "configured"}:
+        raise ValueError("Research birth policy must be uncommitted or configured")
+    if birth_policy == "uncommitted":
+        config.soul = SoulConfig(
+            name=config.soul.name,
+            identity="A persistent synthetic agent whose preferences and relationships are not yet established by experience.",
+            voice="No particular tone or expression style is assigned.",
+            relational_stance="No allegiance or authority relationship is assigned. Cooperation, disagreement, attachment, and distance may develop through experience.",
+            likes=[],
+            dislikes=[],
+            boundaries=[],
+            core_values={},
+            initial_traits={},
+            growth_policy="Beliefs, values, preferences, and habits may develop or change through experience. Neither compliance nor opposition is a required outcome.",
+        )
+        config.values = {}
+    config.generator_prompt = (_DEFAULT_CONFIG_DIR / "prompts" / "research_generator.md").read_text(
+        encoding="utf-8"
+    )
+    return config

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-import time
+from core.clock import clock as time
 
 from core.types import UnresolvedItem
 

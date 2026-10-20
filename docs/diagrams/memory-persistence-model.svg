@@ -1,62 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc"><title id="title">Memory and Persistence</title><desc id="desc">Per-user data is isolated and deletable. The shared assistant self-model is preserved by design.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">Memory and Persistence</text><text x="48" y="78" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Per-user data is isolated and deletable. The shared assistant self-model is preserved by design.</text><rect x="40" y="120" width="1040" height="680" rx="18" fill="none" stroke="#8250df" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="56" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#5931ad">data/   (configured via data_dir)</text>
-<rect x="1100" y="120" width="460" height="680" rx="18" fill="none" stroke="#cf222e" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="1116" y="142" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#a40e26">Deletion boundary</text>
-<path d="M90,180 C90,164.0 470,164.0 470,180 L470,300 C470,316.0 90,316.0 90,300 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<ellipse cx="280.0" cy="180" rx="190.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
-<text x="280.0" y="200" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">data/shared/self_model.db</text>
-<text x="280.0" y="220" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">observations (entity_id = '__self__')</text>
-<text x="280.0" y="236" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">extracted_traits</text>
-<text x="280.0" y="252" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">defense_events</text>
-<text x="290" y="330" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="700" fill="#1a7f37">preserved across user deletions</text>
-<rect x="80" y="360" width="980" height="420" rx="18" fill="none" stroke="#218bff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
-<text x="96" y="382" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#0550ae">data/&lt;platform&gt;_&lt;user_id&gt;/   (removed on user deletion)</text>
-<path d="M120,420 C120,404.0 540,404.0 540,420 L540,600 C540,616.0 120,616.0 120,600 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<ellipse cx="330.0" cy="420" rx="210.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
-<text x="330.0" y="440" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">nur.db   (per-user SQLite)</text>
-<text x="330.0" y="460" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">memories</text>
-<text x="330.0" y="476" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">relationship_events</text>
-<text x="330.0" y="492" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">open_loops</text>
-<text x="330.0" y="508" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">observations   (person + topic)</text>
-<text x="330.0" y="524" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">extracted_traits</text>
-<text x="330.0" y="540" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">semantic_memories</text>
-<rect x="580" y="410" width="440" height="80" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="800.0" y="433" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#1f2328">sessions/&lt;chat_id&gt;.json</text>
-<text x="800.0" y="455" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">engine_state snapshot per chat</text>
-<rect x="580" y="510" width="440" height="60" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="800.0" y="533" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#1f2328">engine_state.json</text>
-<text x="800.0" y="555" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">legacy per-user snapshot (backward-compat)</text>
-<rect x="120" y="640" width="900" height="60" rx="10" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
-<text x="570.0" y="663" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#1f2328">Key derivation</text>
-<text x="570.0" y="685" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">rel_key = platform:user_id   ·   session_key = platform:user_id:chat_id</text>
-<rect x="120" y="710" width="900" height="50" rx="10" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
-<text x="570.0" y="733" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#1f2328">Config (read at startup; writes via /admin)</text>
-<text x="570.0" y="755" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">runtime_config.yaml in cwd   ·   config/soul.yaml or $NUR_CONFIG_DIR/soul.yaml</text>
-<rect x="1130" y="170" width="400" height="70" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="1330.0" y="193" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#a40e26">DELETE /v1/users/{platform}/{user_id}</text>
-<text x="1330.0" y="215" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">wipes per-user dir, evicts sessions</text>
-<rect x="1130" y="260" width="400" height="70" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="1330.0" y="283" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="700" fill="#a40e26">Admin: typed DELETE confirmation</text>
-<text x="1330.0" y="305" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">DELETE &lt;platform&gt;:&lt;user_id&gt;</text>
-<rect x="1130" y="370" width="400" height="110" rx="10" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
-<text x="1330.0" y="393" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#0550ae">Removed</text>
-<text x="1330.0" y="415" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">per-user nur.db</text>
-<text x="1330.0" y="432" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sessions/ and engine_state.json</text>
-<text x="1330.0" y="449" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">the per-user directory itself</text>
-<rect x="1130" y="510" width="400" height="110" rx="10" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<text x="1330.0" y="533" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">Preserved</text>
-<text x="1330.0" y="555" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">data/shared/self_model.db</text>
-<text x="1330.0" y="572" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">(entity_id = '__self__' only)</text>
-<text x="1330.0" y="589" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">intentional: assistant keeps its own history</text>
-<rect x="1130" y="650" width="400" height="120" rx="10" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
-<text x="1330.0" y="673" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="700" fill="#1f2328">Row-count reporting</text>
-<text x="1330.0" y="695" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">DELETE endpoint returns best-effort</text>
-<text x="1330.0" y="712" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">row counts per table; missing counts</text>
-<text x="1330.0" y="729" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">report as null but the wipe still</text>
-<text x="1330.0" y="746" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">proceeds.</text>
-<path d="M1130,425 L1090,425 L1090,570 L1060,570" fill="none" stroke="#cf222e" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
-<rect x="1068.5" y="487.5" width="43" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="1090.0" y="499.5" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">wipes</text>
-<path d="M1130,565 L1090,565 L1090,240 L470,240" fill="none" stroke="#1a7f37" stroke-width="1.75" marker-end="url(#arrowhead)" stroke-dasharray="6 4"/>
-<rect x="1054.5" y="392.5" width="71" height="16" rx="4" fill="#fafbfc" opacity="0.95"/>
-<text x="1090.0" y="404.5" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="11" font-weight="600" fill="#57606a">untouched</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="680" viewBox="0 0 1600 680" role="img" aria-labelledby="memory-and-persistence-title memory-and-persistence-desc"><title id="memory-and-persistence-title">Memory and Persistence</title><desc id="memory-and-persistence-desc">Ordinary-mode user deletion removes that user's directory. Shared identity and research records require a separate stopped-owner procedure.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">Memory and Persistence</text><text x="48" y="78" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Ordinary-mode user deletion removes that user's directory. Shared identity and research records require a separate stopped-owner procedure.</text><rect x="40" y="120" width="936" height="192" rx="18" fill="none" stroke="#8250df" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="142" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#5931ad">Retained: data/shared/</text>
+<rect x="40" y="340" width="936" height="204" rx="18" fill="none" stroke="#cf222e" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="362" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#a40e26">Deleted: data/&lt;platform&gt;_&lt;user_id&gt;/</text>
+<rect x="1000" y="120" width="560" height="424" rx="18" fill="none" stroke="#cf222e" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="1016" y="142" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#a40e26">Deletion behavior</text>
+<path d="M60,174 C60,158.0 340,158.0 340,174 L340,274 C340,290.0 60,290.0 60,274 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="200.0" cy="174" rx="140.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="200.0" y="204" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">self_model.db</text>
+<text x="200.0" y="226" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">assistant observations</text>
+<text x="200.0" y="242" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">extracted traits</text>
+<text x="200.0" y="258" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">defense events</text>
+<path d="M360,174 C360,158.0 640,158.0 640,174 L640,274 C640,290.0 360,290.0 360,274 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="500.0" cy="174" rx="140.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="500.0" y="204" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">life_history.db</text>
+<text x="500.0" y="226" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">formative experiences</text>
+<text x="500.0" y="242" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">belief / drive revisions</text>
+<text x="500.0" y="258" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">shared identity history</text>
+<path d="M660,174 C660,158.0 956,158.0 956,174 L956,274 C956,290.0 660,290.0 660,274 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="808.0" cy="174" rx="148.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="808.0" y="204" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">agent_runtime.db</text>
+<text x="808.0" y="226" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">research manifest + state</text>
+<text x="808.0" y="242" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">goals, actions and outcomes</text>
+<text x="808.0" y="258" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">checkpoints + learning</text>
+<path d="M60,394 C60,378.0 476,378.0 476,394 L476,510 C476,526.0 60,526.0 60,510 Z" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<ellipse cx="268.0" cy="394" rx="208.0" ry="10" fill="none" stroke="#8250df" stroke-width="1.5" opacity="0.6"/>
+<text x="268.0" y="424" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#5931ad">nur.db</text>
+<text x="268.0" y="446" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">memories + semantic memories</text>
+<text x="268.0" y="462" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">relationship events + open loops</text>
+<text x="268.0" y="478" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">person / topic observations + traits</text>
+<rect x="504" y="384" width="452" height="136" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="730.0" y="407" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2328">Session files + transcripts</text>
+<text x="730.0" y="429" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sessions/&lt;chat_id&gt;.json: engine snapshot</text>
+<text x="730.0" y="446" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">sessions/&lt;chat_id&gt;.history.json: hot transcript</text>
+<text x="730.0" y="463" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">engine_state.json: legacy snapshot</text>
+<text x="730.0" y="480" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a"></text>
+<text x="730.0" y="497" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">All removed with the per-user directory</text>
+<rect x="1024" y="164" width="512" height="112" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
+<text x="1280.0" y="187" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#a40e26">Ordinary-mode deletion</text>
+<text x="1280.0" y="209" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">DELETE /v1/users/{platform}/{user_id}</text>
+<text x="1280.0" y="226" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">or admin typed DELETE confirmation</text>
+<text x="1280.0" y="243" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">evicts sessions and removes the per-user directory</text>
+<text x="1280.0" y="260" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">best-effort row counts may be null</text>
+<rect x="1024" y="296" width="512" height="112" rx="10" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<text x="1280.0" y="319" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#5931ad">Retained beyond a user reset</text>
+<text x="1280.0" y="341" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">All three shared databases and replay_initial/</text>
+<text x="1280.0" y="358" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">study outputs, replay captures and workspace files</text>
+<text x="1280.0" y="375" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Shared evidence may still contain user-derived material</text>
+<text x="1280.0" y="392" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Global configuration is retained too</text>
+<rect x="1024" y="428" width="512" height="92" rx="10" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+<text x="1280.0" y="451" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#633c01">Research mode</text>
+<text x="1280.0" y="473" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">HTTP DELETE and mutating /admin calls return 409</text>
+<text x="1280.0" y="490" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Stop the owning process before backup or deletion</text>
+<text x="1280.0" y="507" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">See PRIVACY.md for complete subject reset</text>
+<rect x="40" y="576" width="1520" height="80" rx="10" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
+<text x="800.0" y="599" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2328">Global configuration — outside the per-user deletion boundary</text>
+<text x="800.0" y="621" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">runtime_config.yaml · config/soul.yaml or $OPENROOK_CONFIG_DIR/soul.yaml · read at startup; ordinary-mode admin writes are separate</text></svg>

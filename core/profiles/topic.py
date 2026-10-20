@@ -9,7 +9,7 @@ No LLM calls. Database reads + math.
 from __future__ import annotations
 
 import sqlite3
-import time
+from core.clock import clock as time
 
 from config.loader import get_config
 from core.schema import ensure_schema_version
@@ -30,6 +30,7 @@ class TopicProfileManager:
     """Manages emotional charge associated with topics."""
 
     def __init__(self, db_path: str = ":memory:") -> None:
+        self._config = get_config().topic
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
@@ -91,7 +92,7 @@ class TopicProfileManager:
     def record_positive(self, topic: str, intensity: float = 1.0) -> TopicProfile:
         """Record a positive association with a topic."""
         profile = self.get_or_create(topic)
-        delta = CHARGE_POSITIVE_DELTA * intensity
+        delta = self._config.charge_positive_delta * intensity
         # Positive associations reduce charge (toward neutral)
         new_charge = max(0.0, profile.emotional_charge - delta)
         self._update_charge(topic, new_charge, positive_inc=1)
@@ -102,7 +103,7 @@ class TopicProfileManager:
     def record_negative(self, topic: str, intensity: float = 1.0) -> TopicProfile:
         """Record a negative association with a topic."""
         profile = self.get_or_create(topic)
-        delta = CHARGE_NEGATIVE_DELTA * intensity
+        delta = self._config.charge_negative_delta * intensity
         new_charge = min(1.0, profile.emotional_charge + delta)
         self._update_charge(topic, new_charge, negative_inc=1)
         profile.emotional_charge = new_charge
@@ -113,7 +114,7 @@ class TopicProfileManager:
         """Record a conflict event associated with a topic."""
         profile = self.get_or_create(topic)
         new_conflict_count = profile.conflict_count + 1
-        new_charge = min(1.0, profile.emotional_charge + CHARGE_NEGATIVE_DELTA)
+        new_charge = min(1.0, profile.emotional_charge + self._config.charge_negative_delta)
         avoidance = self._should_avoid(new_charge, new_conflict_count)
         now = time.time()
         self._conn.execute(
@@ -133,12 +134,11 @@ class TopicProfileManager:
     # Avoidance
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _should_avoid(charge: float, conflict_count: int) -> bool:
+    def _should_avoid(self, charge: float, conflict_count: int) -> bool:
         """Determine if a topic should be flagged for avoidance."""
         return (
-            charge >= AVOIDANCE_CHARGE_THRESHOLD
-            or conflict_count >= CONFLICT_AVOIDANCE_THRESHOLD
+            charge >= self._config.avoidance_charge_threshold
+            or conflict_count >= self._config.conflict_avoidance_threshold
         )
 
     # ------------------------------------------------------------------

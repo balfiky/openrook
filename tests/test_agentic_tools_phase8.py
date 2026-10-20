@@ -1024,13 +1024,13 @@ class TestProactiveElapsedDecay:
         initial_arousal = p.engine.state.arousal
 
         # Fake elapsed time (simulate 600s idle)
-        p._last_turn_time = time.time() - 600
+        p._last_state_update_at = time.time() - 600
 
         # Run proactive — should apply decay before evaluation
         result = p.process_proactive("user1", idle_threshold=1.0)
 
-        # _last_turn_time should have been updated
-        assert p._last_turn_time > old_time
+        assert p._last_turn_time == old_time
+        assert p._last_state_update_at > old_time
 
     def test_elapsed_decay_changes_modulators(self):
         """Modulators should be decayed by elapsed time before proactive eval."""
@@ -1044,7 +1044,8 @@ class TestProactiveElapsedDecay:
             arousal=0.9, valence=0.3, certainty=0.5,
             bonding=0.5, energy=0.7, resolution=0.0,
         )
-        p._last_turn_time = time.time() - 3600  # 1 hour ago
+        p._last_state_update_at = time.time() - 3600
+        p._last_external_input_at = p._last_state_update_at
 
         arousal_before = p.engine.state.arousal
         p.process_proactive("user1", idle_threshold=1.0)
@@ -1055,8 +1056,8 @@ class TestProactiveElapsedDecay:
             f"Expected arousal to decay: {arousal_before} → {arousal_after}"
         )
 
-    def test_last_turn_time_updated_on_proactive(self):
-        """_last_turn_time is set even when no action is taken."""
+    def test_only_state_clock_updates_on_suppressed_proactive_check(self):
+        """Polling preserves the external idle clock."""
         from pipeline import CognitivePipeline
 
         p = CognitivePipeline(llm_backend=MockLLMBackend())
@@ -1064,7 +1065,8 @@ class TestProactiveElapsedDecay:
         old = p._last_turn_time
 
         p.process_proactive("user1", idle_threshold=1.0)
-        assert p._last_turn_time > old
+        assert p._last_turn_time == old
+        assert p._last_state_update_at > old
 
     def test_first_proactive_no_decay_crash(self):
         """No crash if _last_turn_time is None (no prior turns)."""
@@ -1074,5 +1076,29 @@ class TestProactiveElapsedDecay:
         assert p._last_turn_time is None
         # Should not raise
         result = p.process_proactive("user1", idle_threshold=0.0)
-        # _last_turn_time should now be set
-        assert p._last_turn_time is not None
+        assert p._last_turn_time is None
+        assert p._last_state_update_at is not None
+
+    def test_repeated_suppressed_checks_preserve_idle_duration(self, monkeypatch):
+        import pipeline.core as pipeline_core
+        from pipeline import CognitivePipeline
+
+        pipeline = CognitivePipeline(llm_backend=MockLLMBackend())
+        pipeline._last_turn_time = 1000.0
+        pipeline._last_state_update_at = 1000.0
+        pipeline.engine.state.energy = 0.01
+        observed_idle = []
+        original = pipeline_core.evaluate_proactive
+
+        def evaluate(**kwargs):
+            observed_idle.append(kwargs["idle_seconds"])
+            return original(**kwargs)
+
+        monkeypatch.setattr(pipeline_core, "evaluate_proactive", evaluate)
+        try:
+            for current in (1301.0, 1361.0, 1421.0, 1481.0):
+                monkeypatch.setattr(pipeline_core.time, "time", lambda current=current: current)
+                assert pipeline.process_proactive("user1") is None
+            assert observed_idle == [301.0, 361.0, 421.0, 481.0]
+        finally:
+            pipeline.close()

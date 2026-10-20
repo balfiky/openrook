@@ -1,4 +1,4 @@
-"""Deep emotional-quality runner for Project Nūr.
+"""Deep emotional-quality runner for OpenRook.
 
 This is not a generic smoke test. It exercises the project's core claim:
 emotion-like state should move coherently across turns and should be visible
@@ -662,7 +662,7 @@ def report_to_dict(report: EmotionalQualityReport) -> dict:
 
 def markdown_report(report: EmotionalQualityReport) -> str:
     lines = [
-        "# Project Nur Emotional Quality Report",
+        "# OpenRook Emotional Quality Report",
         "",
         f"- Backend: `{report.backend}`",
         f"- Model: `{report.model}`",

@@ -10,8 +10,10 @@ No LLM calls. Pure math.
 from __future__ import annotations
 
 import math
-import time
-from datetime import datetime, timezone
+from core.clock import clock as time
+from dataclasses import dataclass
+from core.clock import datetime
+from datetime import timezone
 
 from config.loader import get_config
 from core.tool_failures import is_operational_unresolved_item
@@ -41,53 +43,63 @@ def _build_event_impacts(cfg_impacts: dict[str, dict[str, float]]) -> dict[Event
     return result
 
 
-def _load_constants() -> tuple[
-    dict[str, float],  # half_lives
-    dict[EventType, dict[str, float]],  # event_impacts
-    dict[str, dict[str, float]],  # event_delta_caps
-    float,  # drain_per_message
-    float,  # drain_per_spike
-    float,  # recovery_rate
-    float,  # spike_threshold
-    float,  # contagion_factor
-    float,  # contagion_cap
-    dict[str, float],  # resolution_decay_rates
-]:
-    cfg = get_config()
+@dataclass(frozen=True)
+class EngineConstants:
+    """Tuning constants for the emotional engine, loaded from config."""
+
+    half_lives: dict[str, float]
+    event_impacts: dict[EventType, dict[str, float]]
+    event_delta_caps: dict[str, dict[str, float]]
+    drain_per_message: float
+    drain_per_spike: float
+    recovery_rate: float
+    spike_threshold: float
+    contagion_factor: float
+    contagion_cap: float
+    resolution_decay_rates: dict[str, float]
+
+
+def _load_constants(config: object | None = None) -> EngineConstants:
+    cfg = config or get_config()
     half_lives = dict(cfg.half_lives)
     if cfg.event_impacts:
         event_impacts = _build_event_impacts(cfg.event_impacts)
     else:
         event_impacts = {}
-    return (
-        half_lives,
-        event_impacts,
-        {
+    return EngineConstants(
+        half_lives=half_lives,
+        event_impacts=event_impacts,
+        event_delta_caps={
             "normal": dict(cfg.event_delta_caps.normal),
             "spike": dict(cfg.event_delta_caps.spike),
         },
-        cfg.energy.drain_per_message,
-        cfg.energy.drain_per_spike,
-        cfg.energy.recovery_rate_per_hour,
-        cfg.spike_threshold,
-        cfg.contagion_engine.factor,
-        cfg.contagion_engine.cap,
-        dict(cfg.resolution.decay_rates),
+        drain_per_message=cfg.energy.drain_per_message,
+        drain_per_spike=cfg.energy.drain_per_spike,
+        recovery_rate=cfg.energy.recovery_rate_per_hour,
+        spike_threshold=cfg.spike_threshold,
+        contagion_factor=cfg.contagion_engine.factor,
+        contagion_cap=cfg.contagion_engine.cap,
+        resolution_decay_rates=dict(cfg.resolution.decay_rates),
     )
 
 
-(
-    DEFAULT_HALF_LIVES,
-    EVENT_IMPACTS,
-    EVENT_DELTA_CAPS,
-    ENERGY_DRAIN_PER_MESSAGE,
-    ENERGY_DRAIN_PER_SPIKE,
-    ENERGY_RECOVERY_RATE,
-    SPIKE_INTENSITY_THRESHOLD,
-    _CONTAGION_FACTOR,
-    _CONTAGION_CAP,
-    RESOLUTION_DECAY_RATES,
-) = _load_constants()
+_CONSTANTS = _load_constants()
+
+# Named module-level aliases preserved for existing importers (pipeline, tests).
+DEFAULT_HALF_LIVES = _CONSTANTS.half_lives
+EVENT_IMPACTS = _CONSTANTS.event_impacts
+EVENT_DELTA_CAPS = _CONSTANTS.event_delta_caps
+ENERGY_DRAIN_PER_MESSAGE = _CONSTANTS.drain_per_message
+ENERGY_DRAIN_PER_SPIKE = _CONSTANTS.drain_per_spike
+ENERGY_RECOVERY_RATE = _CONSTANTS.recovery_rate
+SPIKE_INTENSITY_THRESHOLD = _CONSTANTS.spike_threshold
+_CONTAGION_FACTOR = _CONSTANTS.contagion_factor
+_CONTAGION_CAP = _CONSTANTS.contagion_cap
+RESOLUTION_DECAY_RATES = _CONSTANTS.resolution_decay_rates
+
+# Resolved items are pruned from ``unresolved_items``; a small tail of the
+# most recently resolved items is retained for observability/persistence.
+_MAX_RESOLVED_RETAINED = 20
 
 
 class EmotionalEngine:
@@ -97,17 +109,19 @@ class EmotionalEngine:
         self,
         baseline: ModulatorState | None = None,
         half_lives: dict[str, float] | None = None,
+        config: object | None = None,
     ) -> None:
-        self.baseline = baseline or ModulatorState()
+        self._constants = _load_constants(config) if config is not None else _CONSTANTS
+        self.baseline = baseline or ModulatorState(**config.baselines) if config is not None else baseline or ModulatorState()
         self.state = self.baseline.copy()
-        self.half_lives = half_lives or dict(DEFAULT_HALF_LIVES)
+        self.half_lives = half_lives or dict(self._constants.half_lives)
         self._last_update_time = time.time()
         # v2: resolution modulator
         self.unresolved_items: list[UnresolvedItem] = []
-        self._resolution_decay_rates = dict(RESOLUTION_DECAY_RATES)
+        self._resolution_decay_rates = dict(self._constants.resolution_decay_rates)
         self._event_delta_caps = {
             scope: dict(values)
-            for scope, values in EVENT_DELTA_CAPS.items()
+            for scope, values in self._constants.event_delta_caps.items()
         }
         # Context shift: resting target offset for current relationship
         self._context_shift: BaselineShift | None = None
@@ -163,17 +177,17 @@ class EmotionalEngine:
 
     def update(self, event: EmotionalEvent) -> bool:
         """Apply an event to the modulator state. Returns True if spike."""
-        impacts = EVENT_IMPACTS.get(event.event_type, {})
-        is_spike = event.intensity >= SPIKE_INTENSITY_THRESHOLD
+        impacts = self._constants.event_impacts.get(event.event_type, {})
+        is_spike = event.intensity >= self._constants.spike_threshold
 
         for mod_name, base_delta in impacts.items():
             if mod_name == "energy":
-                # Energy has inertia: routine turns should not exhaust Nūr.
+                # Energy has inertia: routine turns should not exhaust OpenRook.
                 # Scale ordinary event energy by intensity, then add the
                 # explicit spike surcharge only for truly high-intensity events.
                 delta = base_delta * event.intensity
                 if is_spike:
-                    delta -= ENERGY_DRAIN_PER_SPIKE
+                    delta -= self._constants.drain_per_spike
             else:
                 delta = base_delta * event.intensity
 
@@ -233,10 +247,6 @@ class EmotionalEngine:
             base += shift_val
         return max(0.0, min(1.0, base))
 
-    def apply_context_shift(self, shift: BaselineShift) -> None:
-        """Legacy wrapper — calls set_context_shift."""
-        self.set_context_shift(shift)
-
     def apply_contagion(
         self, user_arousal: float, user_valence: float, bonding_score: float
     ) -> None:
@@ -246,8 +256,8 @@ class EmotionalEngine:
         Strong signals (arousal > 0.7 or valence < 0.3) get a minimum
         floor to ensure perceptible movement.
         """
-        weight = bonding_score * _CONTAGION_FACTOR
-        cap = _CONTAGION_CAP
+        weight = bonding_score * self._constants.contagion_factor
+        cap = self._constants.contagion_cap
         min_delta = 0.05  # minimum shift for strong signals
 
         arousal_delta = (user_arousal - self.state.arousal) * weight
@@ -266,7 +276,7 @@ class EmotionalEngine:
 
     def drain_energy(self, intensity: float = 0.0) -> None:
         """Drain energy after processing a message."""
-        drain = ENERGY_DRAIN_PER_MESSAGE + (intensity * 0.03)
+        drain = self._constants.drain_per_message + (intensity * 0.03)
         self.state.energy = max(0.0, self.state.energy - drain)
 
     def snapshot(self) -> dict[str, float]:
@@ -278,6 +288,7 @@ class EmotionalEngine:
         return {
             "modulator_snapshot": self.snapshot(),
             "unresolved_items": [item.to_dict() for item in self.unresolved_items],
+            "context_shift": self._context_shift.to_dict() if self._context_shift else None,
         }
 
     def to_emotion_label(self) -> str:
@@ -342,12 +353,32 @@ class EmotionalEngine:
         Uses item intensity directly (already decayed by _decay_unresolved_items).
         No additional age-based weighting to avoid double-decay.
         """
+        self._prune_resolved_items()
         active = self.active_unresolved()
         if not active:
             self.state.resolution = 0.0
             return
         total = sum(i.intensity for i in active)
         self.state.resolution = max(0.0, min(1.0, total))
+
+    def _prune_resolved_items(self) -> None:
+        """Drop fully-resolved items beyond a small recent tail.
+
+        Resolved items are inert for the resolution modulator but a short
+        tail is kept so callers (and persistence) can still observe recent
+        resolutions without the list growing without bound.
+        """
+        resolved_count = sum(1 for i in self.unresolved_items if i.resolved)
+        excess = resolved_count - _MAX_RESOLVED_RETAINED
+        if excess <= 0:
+            return
+        pruned: list[UnresolvedItem] = []
+        for item in self.unresolved_items:
+            if item.resolved and excess > 0:
+                excess -= 1
+                continue
+            pruned.append(item)
+        self.unresolved_items = pruned
 
     def _decay_unresolved_items(self, elapsed_seconds: float) -> None:
         """Apply time-based intensity decay to unresolved items."""
@@ -367,5 +398,5 @@ class EmotionalEngine:
     def _recover_energy(self, elapsed_seconds: float) -> None:
         """Recover energy based on elapsed rest time."""
         hours = elapsed_seconds / 3600.0
-        recovery = hours * ENERGY_RECOVERY_RATE
+        recovery = hours * self._constants.recovery_rate
         self.state.energy = min(1.0, self.state.energy + recovery)

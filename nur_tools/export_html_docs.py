@@ -185,7 +185,7 @@ def convert(md_path: Path) -> Path:
 
     title = md_path.stem.replace("_", " ")
     if md_path.name == "README.md":
-        title = "Project Nur README"
+        title = "OpenRook README"
 
     html_text = f"""<!doctype html>
 <html lang="en">

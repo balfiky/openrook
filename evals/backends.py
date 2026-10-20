@@ -1,10 +1,9 @@
 """Backend factory for the eval runner.
 
-Strict counterpart to ``runtime.llm.backend.create_llm_backend`` — the
-runtime factory falls back to mock when config is missing so the web
-UI still works offline; the eval factory MUST NOT do that, because a
-"real" eval run that silently degraded to a canned mock would produce
-unusable numbers.
+Like ``runtime.llm.backend.create_llm_backend``, this factory never
+silently replaces a live backend with a fake. Explicit mock evaluation
+is test-only and requires the source checkout's test fixtures; installed
+live evaluation must not import those fixtures just to start.
 
 If a caller asks for a live backend and the required config is
 missing, raise ``MissingBackendConfigError`` at build time. The CLI
@@ -18,7 +17,6 @@ from dataclasses import dataclass
 from typing import Callable
 
 from core.dual_process.generator import LLMBackend
-from tests._fakes import MockLLMBackend
 from core.provider_client import FastChatCompletionsClient
 from runtime.llm.backend import CodexCLIBackend, OpenAICompatibleLLMBackend
 
@@ -77,7 +75,14 @@ def build_backend_factory(spec: BackendSpec) -> Callable[[], LLMBackend]:
     - the mock backend accumulates ``last_system_prompt`` across calls
     """
     if spec.type == "mock":
-        return lambda: MockLLMBackend()
+        try:
+            from tests._fakes import MockLLMBackend
+        except ImportError as error:
+            raise MissingBackendConfigError(
+                "The mock backend requires source-checkout test fixtures. "
+                "Installed evaluations require an explicit real backend."
+            ) from error
+        return MockLLMBackend
 
     if spec.type == "minimax":
         if not spec.api_key:

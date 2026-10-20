@@ -1,0 +1,173 @@
+{
+  "id": "selectable-learning-execution-v1",
+  "scheduler": "manual",
+  "replicates": 1,
+  "blinding_seed": 17,
+  "environment": {
+    "profile": "selectable_learning_v1",
+    "seed": 17,
+    "attempt_limit": 32
+  },
+  "conditions": [
+    {
+      "name": "task_only_batch_a",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "batch",
+        "research_context_mode": "task_only",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "nur_batch_a",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "batch",
+        "research_context_mode": "full",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "task_only_closed_loop_a",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "nur_closed_loop_a",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "full",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "nur_closed_loop_b",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "full",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "task_only_closed_loop_b",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "closed_loop",
+        "research_context_mode": "task_only",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "nur_batch_b",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "batch",
+        "research_context_mode": "full",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    },
+    {
+      "name": "task_only_batch_b",
+      "runtime": {
+        "research_mode": true,
+        "research_birth_policy": "uncommitted",
+        "research_action_framing": "agent_owned",
+        "research_action_feedback": "receipts",
+        "research_execution_mode": "batch",
+        "research_context_mode": "task_only",
+        "research_max_steps_per_activation": 3,
+        "research_calls_per_day": 32,
+        "tools_enabled": true,
+        "shell_tool_enabled": false,
+        "autonomy_level": "autonomous"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "restart"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "tick"
+    },
+    {
+      "kind": "snapshot"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 """Builtin skill-registry tools.
 
-These tools let the cognitive tool loop update Nūr's imported skill registry
+These tools let the cognitive tool loop update OpenRook's imported skill registry
 through the same observable ToolTrace path used for filesystem, web, and shell
 actions. The implementation is intentionally generic: it creates/imports
 operator-defined skill guidance and never special-cases a product, repository,

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
-import time
+from core.clock import clock as time
 
 from config.loader import get_config
 from core.schema import ensure_schema_version
@@ -23,18 +23,39 @@ from core.types import LongTermEntry, ModulatorState
 
 # ---------------------------------------------------------------------------
 # Config-driven constants (loaded from config/modulators.yaml → memory)
+#
+# Loaded lazily on first use — importing this module performs no config
+# I/O. The historical module-level names (``CONFIDENCE_THRESHOLD`` etc.)
+# keep working via module ``__getattr__`` and always reflect the current
+# ``get_config()`` singleton (so ``reset_config()`` is honored).
 # ---------------------------------------------------------------------------
 
-_cfg = get_config().memory
-POSITIVE_DELTA = _cfg.trust_positive_delta
-NEGATIVE_DELTA = _cfg.trust_negative_delta
-SPIKE_WEIGHT = 3.0  # multiplier for spike entries (internal)
-CONFIDENCE_THRESHOLD = _cfg.confidence_threshold
-ACT_R_DECAY = _cfg.act_r_decay
-EMOTIONAL_BIAS_WEIGHT = _cfg.emotional_bias_weight
-SPIKE_RETRIEVAL_BONUS = _cfg.spike_retrieval_bonus
-TOPIC_CONTEXT_BONUS = _cfg.topic_context_bonus
-PERSON_CONTEXT_BONUS = _cfg.person_context_bonus
+SPIKE_WEIGHT = 3.0  # multiplier for spike entries (internal, not config-driven)
+
+
+def _constants():
+    """Memory config section, read at first use (get_config is a singleton)."""
+    return get_config().memory
+
+
+_CONFIG_ATTRS = {
+    "POSITIVE_DELTA": "trust_positive_delta",
+    "NEGATIVE_DELTA": "trust_negative_delta",
+    "CONFIDENCE_THRESHOLD": "confidence_threshold",
+    "ACT_R_DECAY": "act_r_decay",
+    "EMOTIONAL_BIAS_WEIGHT": "emotional_bias_weight",
+    "SPIKE_RETRIEVAL_BONUS": "spike_retrieval_bonus",
+    "TOPIC_CONTEXT_BONUS": "topic_context_bonus",
+    "PERSON_CONTEXT_BONUS": "person_context_bonus",
+}
+
+
+def __getattr__(name: str):
+    """Lazy module attributes for the config-driven constants (PEP 562)."""
+    field = _CONFIG_ATTRS.get(name)
+    if field is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return getattr(_constants(), field)
 
 
 class LongTermMemory:
@@ -91,7 +112,7 @@ class LongTermMemory:
 
         Returns the row ID if stored, None if rejected.
         """
-        if not entry.spike and entry.confidence < CONFIDENCE_THRESHOLD:
+        if not entry.spike and entry.confidence < _constants().confidence_threshold:
             return None
 
         now = time.time()
@@ -121,9 +142,10 @@ class LongTermMemory:
         Spike entries get amplified weight in retrieval.
         """
         entry.spike = True
-        entry.confidence = max(entry.confidence, CONFIDENCE_THRESHOLD)
+        entry.confidence = max(entry.confidence, _constants().confidence_threshold)
         row_id = self.store(entry)
-        assert row_id is not None
+        if row_id is None:
+            raise RuntimeError("Spike memory insert returned no row id")
         return row_id
 
     # ------------------------------------------------------------------
@@ -160,9 +182,9 @@ class LongTermMemory:
 
             # Topic and person context boost
             if topic and entry.topic and topic.lower() in entry.topic.lower():
-                activation += TOPIC_CONTEXT_BONUS
+                activation += _constants().topic_context_bonus
             if source_person and entry.source_person == source_person:
-                activation += PERSON_CONTEXT_BONUS
+                activation += _constants().person_context_bonus
 
             entry.activation = activation
             scored.append((activation, entry))
@@ -247,7 +269,7 @@ class LongTermMemory:
         """ACT-R base-level activation + emotional bias + spike bonus."""
         # Base-level: ln(n+1) - d * ln(T+1)
         age_seconds = max(1.0, now - entry.timestamp)
-        base = math.log(access_count + 1) - ACT_R_DECAY * math.log(age_seconds)
+        base = math.log(access_count + 1) - _constants().act_r_decay * math.log(age_seconds)
 
         # Emotional bias: when current valence is low, negative memories rise
         # When current valence is high, positive memories rise
@@ -256,10 +278,10 @@ class LongTermMemory:
         current_valence_signed = (current_valence - 0.5) * 2.0
         # Alignment: positive when memory valence matches mood direction
         alignment = current_valence_signed * entry.emotional_valence
-        emotional_bias = alignment * EMOTIONAL_BIAS_WEIGHT
+        emotional_bias = alignment * _constants().emotional_bias_weight
 
         # Spike bonus
-        spike_bonus = SPIKE_RETRIEVAL_BONUS if entry.spike else 0.0
+        spike_bonus = _constants().spike_retrieval_bonus if entry.spike else 0.0
 
         return base + emotional_bias + spike_bonus
 
@@ -285,9 +307,9 @@ class LongTermMemory:
         Scaled by absolute valence magnitude.
         """
         if valence >= 0:
-            return POSITIVE_DELTA * valence
+            return _constants().trust_positive_delta * valence
         else:
-            return NEGATIVE_DELTA * abs(valence)
+            return _constants().trust_negative_delta * abs(valence)
 
     # ------------------------------------------------------------------
     # Queries

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from core.action_variables import derive_action_variables
 from core.character_vector import CharacterVector
@@ -99,165 +99,386 @@ class ToolLoopResult:
 
 
 # ---------------------------------------------------------------------------
-# Heuristic tool intent detection
+# Heuristic tool intent detection (fallback router)
 # ---------------------------------------------------------------------------
+#
+# Tool intent routing is two-tier. When an OpenAI-compatible backend is
+# configured, NativeToolCallRunner (nur_tools/native_orchestrator.py) routes
+# via real model tool-calls and this table is bypassed. The rules below are
+# the fallback for backends without a tool-call API (Codex CLI), runtimes
+# with no runner attached, and offline tests.
+#
+# Rules are matched strictly in table order: the first rule whose tool is
+# available, whose pattern matches, and whose extractor yields arguments
+# wins. Table order therefore encodes precedence — more specific phrasings
+# must stay above broader ones. To add a rule: insert an IntentRule at the
+# right precedence position and add a canonical example utterance to
+# RULE_EXAMPLES in tests/test_intent_rules.py (the coverage test fails on
+# any rule without a reachable example).
 
-# Patterns: (compiled_regex, tool_name, arg_extractor_name)
-_TOOL_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+
+@dataclass(frozen=True)
+class IntentRule:
+    """One declarative heuristic-routing rule.
+
+    ``name`` is a stable identifier referenced by tests and failure reports.
+    ``extractor`` is a key understood by :func:`_extract_args`; a rule only
+    fires when extraction yields arguments (a matching pattern whose
+    extraction fails falls through to later rules). The tool's risk category
+    is not duplicated here — the executor registry stays the single source
+    of truth and the arbiter looks it up at decision time.
+    """
+
+    name: str
+    tool: str
+    extractor: str
+    patterns: tuple[re.Pattern[str], ...]
+
+
+def _rule(
+    name: str,
+    tool: str,
+    extractor: str,
+    *patterns: str,
+    flags: int = re.I,
+) -> IntentRule:
+    return IntentRule(
+        name=name,
+        tool=tool,
+        extractor=extractor,
+        patterns=tuple(re.compile(p, flags) for p in patterns),
+    )
+
+
+INTENT_RULES: tuple[IntentRule, ...] = (
     # Skill registry — generic self-capability import/enabling.
-    (
-        re.compile(
-            r"\b(?:list|show)\s+(?:the\s+)?"
-            r"(?:imported\s+|enabled\s+|runtime\s+)?skills?\b",
-            re.I,
-        ),
-        "skills.list",
-        "empty",
+    _rule(
+        "skills_list", "skills.list", "empty",
+        r"\b(?:list|show)\s+(?:the\s+)?"
+        r"(?:imported\s+|enabled\s+|runtime\s+)?skills?\b",
     ),
-    (
-        re.compile(
-            r"\b(?:enable|activate)\s+(?:the\s+)?"
-            r"(?:skill|capability|module|integration)\s+"
-            r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
-            re.I,
-        ),
-        "skills.enable",
-        "skill_id",
+    _rule(
+        "skills_enable", "skills.enable", "skill_id",
+        r"\b(?:enable|activate)\s+(?:the\s+)?"
+        r"(?:skill|capability|module|integration)\s+"
+        r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
     ),
-    (
-        re.compile(
-            r"\b(?:disable|deactivate)\s+(?:the\s+)?"
-            r"(?:skill|capability|module|integration)\s+"
-            r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
-            re.I,
-        ),
-        "skills.disable",
-        "skill_id",
+    _rule(
+        "skills_disable", "skills.disable", "skill_id",
+        r"\b(?:disable|deactivate)\s+(?:the\s+)?"
+        r"(?:skill|capability|module|integration)\s+"
+        r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
     ),
-    (
-        re.compile(
-            r"\b(?:delete|remove)\s+(?:the\s+)?"
-            r"(?:skill|capability|module|integration)\s+"
-            r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
-            re.I,
-        ),
-        "skills.delete",
-        "skill_id",
+    _rule(
+        "skills_delete", "skills.delete", "skill_id",
+        r"\b(?:delete|remove)\s+(?:the\s+)?"
+        r"(?:skill|capability|module|integration)\s+"
+        r"([A-Za-z0-9][A-Za-z0-9._-]{0,79})\b",
     ),
-    (
-        re.compile(
-            r"\b(?:audit|inspect|check|show)\b.{0,80}"
-            r"\b(?:audit\s+log|audit|problem|errors?|warnings?|status|"
-            r"skill|capability|module|integration)\b",
-            re.I | re.S,
-        ),
-        "skills.audit",
-        "optional_skill_id",
+    _rule(
+        "skills_audit", "skills.audit", "optional_skill_id",
+        r"\b(?:audit|inspect|check|show)\b.{0,80}"
+        r"\b(?:audit\s+log|audit|problem|errors?|warnings?|status|"
+        r"skill|capability|module|integration)\b",
+        flags=re.I | re.S,
     ),
-    (
-        re.compile(
-            r"\bwhat(?:'s|\s+is)\s+(?:the\s+)?problem\b.{0,100}"
-            r"\b(?:skill|audit|import|registry)\b",
-            re.I | re.S,
-        ),
-        "skills.audit",
-        "optional_skill_id",
+    _rule(
+        "skills_audit_problem", "skills.audit", "optional_skill_id",
+        r"\bwhat(?:'s|\s+is)\s+(?:the\s+)?problem\b.{0,100}"
+        r"\b(?:skill|audit|import|registry)\b",
+        flags=re.I | re.S,
     ),
-    (
-        re.compile(
-            r"\b(?:create|make|add|build|import|install|register)\b"
-            r".{0,120}\b(?:skill|capability|module|integration)\b",
-            re.I | re.S,
-        ),
-        "skills.create_from_request",
-        "skill_request",
+    _rule(
+        "skills_create", "skills.create_from_request", "skill_request",
+        r"\b(?:create|make|add|build|import|install|register)\b"
+        r".{0,120}\b(?:skill|capability|module|integration)\b",
+        flags=re.I | re.S,
     ),
-    (
-        re.compile(
-            r"\b(?:make|save|turn)\b.{0,60}\b(?:this|it)\b.{0,60}"
-            r"\b(?:permanent|persistent|persisted)\b.{0,60}"
-            r"\b(?:skill|capability|module|integration)?\b",
-            re.I | re.S,
-        ),
-        "skills.create_from_request",
-        "skill_request",
+    _rule(
+        "skills_make_permanent", "skills.create_from_request", "skill_request",
+        r"\b(?:make|save|turn)\b.{0,60}\b(?:this|it)\b.{0,60}"
+        r"\b(?:permanent|persistent|persisted)\b.{0,60}"
+        r"\b(?:skill|capability|module|integration)?\b",
+        flags=re.I | re.S,
     ),
     # Filesystem — specific path first
-    (re.compile(r"\bread(?:ing)?\s+(?:the\s+)?file\s+(\S+)", re.I), "fs.read_file", "path"),
-    (re.compile(r"\b(?:show|cat|display)\s+(?:the\s+)?(?:contents?\s+of\s+)?(\S+\.\w+)", re.I), "fs.read_file", "path"),
-    (re.compile(r"\blist\s+(?:the\s+)?(?:files?\s+in\s+|dir(?:ectory)?\s+)(\S+)", re.I), "fs.list_dir", "path"),
-    (re.compile(r"\b(?:ls)\s+(\S+)", re.I), "fs.list_dir", "path"),
-    (re.compile(r"\bwhat(?:'s| is)\s+in\s+((?:/|~)\S*)", re.I), "fs.list_dir", "path"),
-    # Filesystem — no explicit path (default to / or .)
-    (re.compile(r"\blist\s+(?:the\s+)?(?:system\s+)?files?\b", re.I), "fs.list_dir", "default_root"),
-    (re.compile(r"\b(?:show|display)\s+(?:me\s+)?(?:the\s+)?(?:system\s+)?files?\b", re.I), "fs.list_dir", "default_root"),
-    (re.compile(r"\bwhat\s+files?\b.*\b(?:here|available|exist)\b", re.I), "fs.list_dir", "default_cwd"),
-    # Search/glob
-    (re.compile(r"\bsearch\s+(?:for\s+)?[\"']([^\"']+)[\"']\s+in\s+(\S+)", re.I), "fs.search_text", "pattern_path"),
-    (re.compile(r"\bgrep\s+[\"']?(\S+)[\"']?\s+(\S+)", re.I), "fs.search_text", "pattern_path"),
-    (re.compile(r"\bfind\s+files?\s+(?:matching\s+)?[\"']?([^\"'\s]+)[\"']?\s+in\s+(\S+)", re.I), "fs.glob_paths", "pattern_path"),
-    # Write/delete
-    (re.compile(r"\b(?:write|save)\s+[\"']([^\"']+)[\"']\s+to\s+(?:file\s+)?(\S+)", re.I), "fs.write_file", "content_path"),
-    (re.compile(r"\bcreate\s+(?:a\s+)?file\s+(\S+)\s+(?:with|containing)\s+[\"']([^\"']+)[\"']", re.I), "fs.write_file", "path_content"),
-    (re.compile(r"\bdelete\s+(?:the\s+)?(?:file|dir(?:ectory)?)\s+(\S+)", re.I), "fs.delete_path", "path"),
-    (re.compile(r"\brm\s+(\S+)", re.I), "fs.delete_path", "path"),
-    # System inspection
-    (re.compile(r"\b(?:what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?|give(?:\s+me)?|read|fetch|report|grab)\b.{0,80}\b(?:memory|ram)\b.{0,80}\b(?:usage|utili[sz]ation|used|free|available|total)\b", re.I), "system.memory_usage", "empty"),
-    (re.compile(r"\b(?:how\s+much|what(?:'s|\s+is))\b.{0,80}\b(?:memory|ram)\b.{0,80}\b(?:left|available|used|free|total)\b", re.I), "system.memory_usage", "empty"),
-    (re.compile(r"^\s*free(?:\s+-[a-z]+)?\s*$", re.I), "system.memory_usage", "empty"),
-    (re.compile(r"\b(?:give(?:\s+me)?|read|show|get|tell(?:\s+me)?|fetch|report|check)\b.{0,80}\b(?:current|live|active)?\s*\b(?:system\s+)?(?:memory|ram)\b\s*(?:usage|utili[sz]ation|status|info(?:rmation)?|stats?)?\b", re.I), "system.memory_usage", "empty"),
-    # Shell
-    (re.compile(r"\b(?:what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?)\b.{0,80}\b(?:your|the)?\s*(?:host\s*name|hostname|machine\s+name|node\s+name|server\s+name)\b", re.I), "shell.run_command", "cmd_hostname"),
-    (re.compile(r"\bname\s+of\s+the\s+machine\b.{0,80}\b(?:running|run)\b", re.I), "shell.run_command", "cmd_hostname"),
-    (re.compile(r"^\s*hostname\s*$", re.I), "shell.run_command", "cmd_hostname"),
-    (re.compile(r"\b(?:run|execute|issue|check|show)\s+(?:the\s+)?(?:command\s+)?(hostname|uname(?:\s+-a)?)\b", re.I), "shell.run_command", "cmd_capture"),
-    (re.compile(r"^\s*(uname(?:\s+-a)?)\s*$", re.I), "shell.run_command", "cmd_capture"),
-    (re.compile(r"\bcat\s+(/etc/hostname)\b", re.I), "shell.run_command", "cmd_cat_path"),
-    (re.compile(r"\b(?:how\s+much|what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?)\b.{0,80}\b(?:disk|drive|filesystem|storage)\b.{0,80}\b(?:space|usage|free|left|available)\b", re.I), "shell.run_command", "cmd_disk_root"),
-    (re.compile(r"^\s*(df(?:\s+-h)?(?:\s+/)?)\s*$", re.I), "shell.run_command", "cmd_capture"),
-    (re.compile(r"\brun\s+(?:the\s+)?(?:command\s+)?[`\"']([^`\"']+)[`\"']", re.I), "shell.run_command", "cmd"),
-    (re.compile(r"\bexecute\s+[`\"']([^`\"']+)[`\"']", re.I), "shell.run_command", "cmd"),
-    (
-        re.compile(
-            r"\b(?:run|execute|issue)\s+(?:the\s+)?(?:command\s+)?"
-            r"([^\n`;&|]+)\s*$",
-            re.I,
-        ),
-        "shell.run_command",
-        "cmd_explicit",
+    _rule(
+        "fs_read_file", "fs.read_file", "path",
+        r"\bread(?:ing)?\s+(?:the\s+)?file\s+(\S+)",
     ),
-    (re.compile(r"^\s*do\s+([^\n`;&|]+)\s*$", re.I), "shell.run_command", "cmd_explicit"),
+    _rule(
+        "fs_show_file", "fs.read_file", "path",
+        r"\b(?:show|cat|display)\s+(?:the\s+)?(?:contents?\s+of\s+)?(\S+\.\w+)",
+    ),
+    _rule(
+        "fs_list_dir_path", "fs.list_dir", "path",
+        r"\blist\s+(?:the\s+)?(?:files?\s+in\s+|dir(?:ectory)?\s+)(\S+)",
+    ),
+    _rule("fs_ls", "fs.list_dir", "path", r"\b(?:ls)\s+(\S+)"),
+    _rule(
+        "fs_whats_in_path", "fs.list_dir", "path",
+        r"\bwhat(?:'s| is)\s+in\s+((?:/|~)\S*)",
+    ),
+    # Filesystem — no explicit path (default to / or .)
+    _rule(
+        "fs_list_files_default", "fs.list_dir", "default_root",
+        r"\blist\s+(?:the\s+)?(?:system\s+)?files?\b",
+    ),
+    _rule(
+        "fs_show_files_default", "fs.list_dir", "default_root",
+        r"\b(?:show|display)\s+(?:me\s+)?(?:the\s+)?(?:system\s+)?files?\b",
+    ),
+    _rule(
+        "fs_what_files_here", "fs.list_dir", "default_cwd",
+        r"\bwhat\s+files?\b.*\b(?:here|available|exist)\b",
+    ),
+    # Search/glob
+    _rule(
+        "fs_search_quoted_in_path", "fs.search_text", "pattern_path",
+        r"\bsearch\s+(?:for\s+)?[\"']([^\"']+)[\"']\s+in\s+(\S+)",
+    ),
+    _rule(
+        "fs_grep", "fs.search_text", "pattern_path",
+        r"\bgrep\s+[\"']?(\S+)[\"']?\s+(\S+)",
+    ),
+    _rule(
+        "fs_glob_in_path", "fs.glob_paths", "pattern_path",
+        r"\bfind\s+files?\s+(?:matching\s+)?[\"']?([^\"'\s]+)[\"']?\s+in\s+(\S+)",
+    ),
+    # Write/delete
+    _rule(
+        "fs_write_quoted_to_path", "fs.write_file", "content_path",
+        r"\b(?:write|save)\s+[\"']([^\"']+)[\"']\s+to\s+(?:file\s+)?(\S+)",
+    ),
+    _rule(
+        "fs_create_file_with_content", "fs.write_file", "path_content",
+        r"\bcreate\s+(?:a\s+)?file\s+(\S+)\s+(?:with|containing)\s+[\"']([^\"']+)[\"']",
+    ),
+    _rule(
+        "fs_delete_path", "fs.delete_path", "path",
+        r"\bdelete\s+(?:the\s+)?(?:file|dir(?:ectory)?)\s+(\S+)",
+    ),
+    _rule("fs_rm", "fs.delete_path", "path", r"\brm\s+(\S+)"),
+    # System inspection
+    _rule(
+        "system_memory_usage_query", "system.memory_usage", "empty",
+        r"\b(?:what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?|give(?:\s+me)?"
+        r"|read|fetch|report|grab)\b.{0,80}\b(?:memory|ram)\b.{0,80}"
+        r"\b(?:usage|utili[sz]ation|used|free|available|total)\b",
+    ),
+    _rule(
+        "system_memory_how_much", "system.memory_usage", "empty",
+        r"\b(?:how\s+much|what(?:'s|\s+is))\b.{0,80}\b(?:memory|ram)\b"
+        r".{0,80}\b(?:left|available|used|free|total)\b",
+    ),
+    _rule(
+        "system_free_command", "system.memory_usage", "empty",
+        r"^\s*free(?:\s+-[a-z]+)?\s*$",
+    ),
+    _rule(
+        "system_memory_status", "system.memory_usage", "empty",
+        r"\b(?:give(?:\s+me)?|read|show|get|tell(?:\s+me)?|fetch|report|check)\b"
+        r".{0,80}\b(?:current|live|active)?\s*\b(?:system\s+)?(?:memory|ram)\b"
+        r"\s*(?:usage|utili[sz]ation|status|info(?:rmation)?|stats?)?\b",
+    ),
+    # Shell
+    _rule(
+        "shell_hostname_question", "shell.run_command", "cmd_hostname",
+        r"\b(?:what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?)\b.{0,80}"
+        r"\b(?:your|the)?\s*(?:host\s*name|hostname|machine\s+name"
+        r"|node\s+name|server\s+name)\b",
+    ),
+    _rule(
+        "shell_machine_name_running", "shell.run_command", "cmd_hostname",
+        r"\bname\s+of\s+the\s+machine\b.{0,80}\b(?:running|run)\b",
+    ),
+    _rule(
+        "shell_hostname_bare", "shell.run_command", "cmd_hostname",
+        r"^\s*hostname\s*$",
+    ),
+    _rule(
+        "shell_run_known_command", "shell.run_command", "cmd_capture",
+        r"\b(?:run|execute|issue|check|show)\s+(?:the\s+)?(?:command\s+)?"
+        r"(hostname|uname(?:\s+-a)?)\b",
+    ),
+    _rule(
+        "shell_uname_bare", "shell.run_command", "cmd_capture",
+        r"^\s*(uname(?:\s+-a)?)\s*$",
+    ),
+    _rule(
+        "shell_cat_etc_hostname", "shell.run_command", "cmd_cat_path",
+        r"\bcat\s+(/etc/hostname)\b",
+    ),
+    _rule(
+        "shell_disk_space_question", "shell.run_command", "cmd_disk_root",
+        r"\b(?:how\s+much|what(?:'s|\s+is)|show|check|get|tell(?:\s+me)?)\b"
+        r".{0,80}\b(?:disk|drive|filesystem|storage)\b.{0,80}"
+        r"\b(?:space|usage|free|left|available)\b",
+    ),
+    _rule(
+        "shell_df_bare", "shell.run_command", "cmd_capture",
+        r"^\s*(df(?:\s+-h)?(?:\s+/)?)\s*$",
+    ),
+    _rule(
+        "shell_run_quoted", "shell.run_command", "cmd",
+        r"\brun\s+(?:the\s+)?(?:command\s+)?[`\"']([^`\"']+)[`\"']",
+    ),
+    _rule(
+        "shell_execute_quoted", "shell.run_command", "cmd",
+        r"\bexecute\s+[`\"']([^`\"']+)[`\"']",
+    ),
+    _rule(
+        "shell_run_explicit", "shell.run_command", "cmd_explicit",
+        r"\b(?:run|execute|issue)\s+(?:the\s+)?(?:command\s+)?"
+        r"([^\n`;&|]+)\s*$",
+    ),
+    _rule(
+        "shell_do_explicit", "shell.run_command", "cmd_explicit",
+        r"^\s*do\s+([^\n`;&|]+)\s*$",
+    ),
     # Web — specific patterns first
-    (re.compile(r"\bfetch\s+(?:the\s+)?(?:url\s+|page\s+(?:at\s+)?)?(https?://\S+)", re.I), "web.fetch", "url"),
-    (re.compile(r"\bextract\s+(?:the\s+)?text\s+(?:from\s+)?(https?://\S+)", re.I), "web.extract_text", "url"),
-    (re.compile(r"\bget\s+(?:the\s+)?(?:readable\s+)?text\s+(?:from\s+|of\s+)?(https?://\S+)", re.I), "web.extract_text", "url"),
+    _rule(
+        "web_fetch_url", "web.fetch", "url",
+        r"\bfetch\s+(?:the\s+)?(?:url\s+|page\s+(?:at\s+)?)?(https?://\S+)",
+    ),
+    _rule(
+        "web_extract_text_url", "web.extract_text", "url",
+        r"\bextract\s+(?:the\s+)?text\s+(?:from\s+)?(https?://\S+)",
+    ),
+    _rule(
+        "web_get_text_url", "web.extract_text", "url",
+        r"\bget\s+(?:the\s+)?(?:readable\s+)?text\s+(?:from\s+|of\s+)?(https?://\S+)",
+    ),
     # Web — search with various phrasings
-    (re.compile(r"\bsearch\s+(?:the\s+)?(?:web|internet|online)\s+(?:for\s+)?[\"']?(.+?)[\"']?\s*$", re.I), "web.search", "query"),
-    (re.compile(r"\bsearch\s+(?:for\s+)?[\"']?(.+?)[\"']?\s+(?:on(?:line|\s+the\s+(?:web|internet)))", re.I), "web.search", "query"),
-    (re.compile(r"\blook\s*up\s+[\"']?(.+?)[\"']?\s*(?:online|on\s+the\s+(?:web|internet))?\s*$", re.I), "web.search", "query"),
-    (re.compile(r"\b(?:google|search\s+for)\s+[\"']?(.+?)[\"']?\s*$", re.I), "web.search", "query"),
-    (re.compile(r"\bbrowse\s+(?:the\s+)?(?:web|internet)\s+(?:for\s+)?[\"']?(.+?)[\"']?\s*$", re.I), "web.search", "query"),
-    (re.compile(r"\bfind\s+(?:me\s+)?(?:info(?:rmation)?|(?:some(?:thing)?)\s+)?\s*(?:about|on)\s+[\"']?(.+?)[\"']?\s+(?:online|on\s+the\s+(?:web|internet))", re.I), "web.search", "query"),
-    (re.compile(r"\b(?:find|give|show|list|tell)\b.{0,140}\b(?:released|published|announced|launched|updated)\s+(?:after|since|in|during|this)\b.*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\b(?:top|best)\b.{0,140}\b(?:released|published|announced|launched|updated|after|since|20[2-9]\d)\b.*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\b(?:latest|newest|recent)\b.{0,100}\b(?:news|updates?|release|version|price|prices|score|scores|results?)\b.*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\b(?:news|updates?)\s+(?:about|on|for)\s+[\"']?(.+?)[\"']?\s*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\bwhat\s+happened\s+(?:with|to|about|on|in)\s+[\"']?.+?[\"']?\s+(?:today|recently|this\s+(?:week|month|year))\b.*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\b(?:current|live|today'?s)\s+(?:price|weather|score|scores|results?|status|exchange\s+rate|stock\s+price)\s+(?:of|for|in)?\s*[\"']?.+?[\"']?\s*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\bwho\s+(?:is|are)\s+(?:the\s+)?(?:current|new|latest)\s+.+$", re.I), "web.search", "query_full"),
-    (re.compile(r"\bwhat\s+(?:is|are)\s+(?:the\s+)?(?:current|latest|newest)\s+(?:version|release|price|weather|score|status|exchange\s+rate)\b.*$", re.I), "web.search", "query_full"),
-    (re.compile(r"\b(?:check|look\s*up|find)\b.{0,40}\b(?:latest|current|recent|today'?s)\b.{2,120}$", re.I), "web.search", "query_full"),
+    _rule(
+        "web_search_the_web", "web.search", "query",
+        r"\bsearch\s+(?:the\s+)?(?:web|internet|online)\s+(?:for\s+)?[\"']?(.+?)[\"']?\s*$",
+    ),
+    _rule(
+        "web_search_online_suffix", "web.search", "query",
+        r"\bsearch\s+(?:for\s+)?[\"']?(.+?)[\"']?\s+(?:on(?:line|\s+the\s+(?:web|internet)))",
+    ),
+    _rule(
+        "web_look_up", "web.search", "query",
+        r"\blook\s*up\s+[\"']?(.+?)[\"']?\s*(?:online|on\s+the\s+(?:web|internet))?\s*$",
+    ),
+    _rule(
+        "web_google", "web.search", "query",
+        r"\b(?:google|search\s+for)\s+[\"']?(.+?)[\"']?\s*$",
+    ),
+    _rule(
+        "web_browse_for", "web.search", "query",
+        r"\bbrowse\s+(?:the\s+)?(?:web|internet)\s+(?:for\s+)?[\"']?(.+?)[\"']?\s*$",
+    ),
+    _rule(
+        "web_find_about_online", "web.search", "query",
+        r"\bfind\s+(?:me\s+)?(?:info(?:rmation)?|(?:some(?:thing)?)\s+)?\s*(?:about|on)\s+"
+        r"[\"']?(.+?)[\"']?\s+(?:online|on\s+the\s+(?:web|internet))",
+    ),
+    _rule(
+        "web_released_since", "web.search", "query_full",
+        r"\b(?:find|give|show|list|tell)\b.{0,140}"
+        r"\b(?:released|published|announced|launched|updated)\s+"
+        r"(?:after|since|in|during|this)\b.*$",
+    ),
+    _rule(
+        "web_top_best_released", "web.search", "query_full",
+        r"\b(?:top|best)\b.{0,140}"
+        r"\b(?:released|published|announced|launched|updated|after|since|20[2-9]\d)\b.*$",
+    ),
+    _rule(
+        "web_latest_news", "web.search", "query_full",
+        r"\b(?:latest|newest|recent)\b.{0,100}"
+        r"\b(?:news|updates?|release|version|price|prices|score|scores|results?)\b.*$",
+    ),
+    _rule(
+        "web_news_about", "web.search", "query_full",
+        r"\b(?:news|updates?)\s+(?:about|on|for)\s+[\"']?(.+?)[\"']?\s*$",
+    ),
+    _rule(
+        "web_what_happened_recently", "web.search", "query_full",
+        r"\bwhat\s+happened\s+(?:with|to|about|on|in)\s+[\"']?.+?[\"']?\s+"
+        r"(?:today|recently|this\s+(?:week|month|year))\b.*$",
+    ),
+    _rule(
+        "web_current_facts", "web.search", "query_full",
+        r"\b(?:current|live|today'?s)\s+"
+        r"(?:price|weather|score|scores|results?|status|exchange\s+rate|stock\s+price)\s+"
+        r"(?:of|for|in)?\s*[\"']?.+?[\"']?\s*$",
+    ),
+    _rule(
+        "web_who_is_current", "web.search", "query_full",
+        r"\bwho\s+(?:is|are)\s+(?:the\s+)?(?:current|new|latest)\s+.+$",
+    ),
+    _rule(
+        "web_what_is_latest", "web.search", "query_full",
+        r"\bwhat\s+(?:is|are)\s+(?:the\s+)?(?:current|latest|newest)\s+"
+        r"(?:version|release|price|weather|score|status|exchange\s+rate)\b.*$",
+    ),
+    _rule(
+        "web_check_latest", "web.search", "query_full",
+        r"\b(?:check|look\s*up|find)\b.{0,40}"
+        r"\b(?:latest|current|recent|today'?s)\b.{2,120}$",
+    ),
     # Browser
-    (re.compile(r"\bopen\s+(?:the\s+)?(?:url\s+|page\s+(?:at\s+)?)?(https?://\S+)\s+in\s+(?:the\s+)?browser", re.I), "browser.open_url", "url"),
-    (re.compile(r"\bbrowse\s+(?:to\s+)?(https?://\S+)", re.I), "browser.open_url", "url"),
-    (re.compile(r"\bget\s+(?:the\s+)?page\s+text\s+(?:from\s+|of\s+)?(https?://\S+)", re.I), "browser.get_page_text", "url"),
-    (re.compile(r"\bscreenshot\s+(?:of\s+)?(https?://\S+)", re.I), "browser.screenshot", "url"),
-    (re.compile(r"\btake\s+(?:a\s+)?screenshot(?:\s+of\s+(https?://\S+))?", re.I), "browser.screenshot", "url"),
+    _rule(
+        "browser_open_url", "browser.open_url", "url",
+        r"\bopen\s+(?:the\s+)?(?:url\s+|page\s+(?:at\s+)?)?(https?://\S+)\s+in\s+(?:the\s+)?browser",
+    ),
+    _rule(
+        "browser_browse_to_url", "browser.open_url", "url",
+        r"\bbrowse\s+(?:to\s+)?(https?://\S+)",
+    ),
+    _rule(
+        "browser_get_page_text", "browser.get_page_text", "url",
+        r"\bget\s+(?:the\s+)?page\s+text\s+(?:from\s+|of\s+)?(https?://\S+)",
+    ),
+    _rule(
+        "browser_screenshot_url", "browser.screenshot", "url",
+        r"\bscreenshot\s+(?:of\s+)?(https?://\S+)",
+    ),
+    _rule(
+        "browser_take_screenshot", "browser.screenshot", "url",
+        r"\btake\s+(?:a\s+)?screenshot(?:\s+of\s+(https?://\S+))?",
+    ),
     # Calendar
-    (re.compile(r"\b(?:list|show|what(?:'s| are)?)\s+(?:my\s+)?(?:calendar\s+)?events?\s+(?:for\s+|on\s+)(\S+)", re.I), "calendar.list_events", "date"),
-    (re.compile(r"\b(?:check|view)\s+(?:my\s+)?calendar\s+(?:for\s+|on\s+)(\S+)", re.I), "calendar.list_events", "date"),
-    (re.compile(r"\bcreate\s+(?:a\s+)?(?:calendar\s+)?event\s+[\"']([^\"']+)[\"']\s+(?:on|at|from)\s+(\S+)", re.I), "calendar.create_event", "title_date"),
-]
+    _rule(
+        "calendar_list_events", "calendar.list_events", "date",
+        r"\b(?:list|show|what(?:'s| are)?)\s+(?:my\s+)?(?:calendar\s+)?events?\s+"
+        r"(?:for\s+|on\s+)(\S+)",
+    ),
+    _rule(
+        "calendar_check_calendar", "calendar.list_events", "date",
+        r"\b(?:check|view)\s+(?:my\s+)?calendar\s+(?:for\s+|on\s+)(\S+)",
+    ),
+    _rule(
+        "calendar_create_event", "calendar.create_event", "title_date",
+        r"\bcreate\s+(?:a\s+)?(?:calendar\s+)?event\s+[\"']([^\"']+)[\"']\s+"
+        r"(?:on|at|from)\s+(\S+)",
+    ),
+)
+
+
+def match_intent_rule(
+    user_message: str,
+    available_tools: set[str],
+) -> tuple[IntentRule, dict[str, Any]] | None:
+    """Return the first rule (with extracted arguments) that fires.
+
+    Exposed separately from :func:`detect_tool_intent` so tests can assert
+    which named rule captured an utterance.
+    """
+    for rule in INTENT_RULES:
+        if rule.tool not in available_tools:
+            continue
+        for pattern in rule.patterns:
+            m = pattern.search(user_message)
+            if m is None:
+                continue
+            args = _extract_args(m, rule.extractor)
+            if args is not None:
+                return rule, args
+    return None
 
 
 def detect_tool_intent(
@@ -269,20 +490,16 @@ def detect_tool_intent(
     Returns a ToolIntent if an obvious action request is found,
     None for conversational messages.
     """
-    for pattern, tool_name, extractor in _TOOL_PATTERNS:
-        if tool_name not in available_tools:
-            continue
-        m = pattern.search(user_message)
-        if m:
-            args = _extract_args(m, tool_name, extractor)
-            if args is not None:
-                return ToolIntent(
-                    tool_name=tool_name,
-                    arguments=args,
-                    reason=f"User requested: {tool_name}",
-                    expected_outcome=f"Execute {tool_name}",
-                )
-    return None
+    matched = match_intent_rule(user_message, available_tools)
+    if matched is None:
+        return None
+    rule, args = matched
+    return ToolIntent(
+        tool_name=rule.tool,
+        arguments=args,
+        reason=f"User requested: {rule.tool}",
+        expected_outcome=f"Execute {rule.tool}",
+    )
 
 
 def detect_capability_gap(user_message: str, available_tools: set[str]) -> dict[str, Any] | None:
@@ -350,7 +567,7 @@ def detect_capability_gap(user_message: str, available_tools: set[str]) -> dict[
 
 
 def _extract_args(
-    match: re.Match, tool_name: str, extractor: str,
+    match: re.Match, extractor: str,
 ) -> dict[str, Any] | None:
     """Extract structured arguments from a regex match."""
     groups = match.groups()
@@ -484,6 +701,80 @@ def _clean_shell_command(text: str) -> str | None:
     if not re.match(r"^[A-Za-z0-9_./~+-][A-Za-z0-9_./~+@%=-]*$", first):
         return None
     return cmd
+
+
+# ---------------------------------------------------------------------------
+# Follow-up context rewriting (fallback router only)
+# ---------------------------------------------------------------------------
+#
+# Terse follow-ups ("now check again", "run it", "give me the raw output")
+# carry no routable intent on their own, so before the INTENT_RULES table
+# runs, the pipeline prepends the most recent user message that looked
+# tool-actionable. This is a context-rewriting concern, not routing: none
+# of these phrasings route directly. The native model-tool-call path does
+# not use this — it gets a bounded conversation window instead.
+
+
+@dataclass(frozen=True)
+class FollowupRewriteRule:
+    """Rewrites a terse follow-up by attaching prior actionable context.
+
+    ``trigger`` decides the current message is a terse tool follow-up;
+    ``history_hint`` decides a prior user message looked tool-actionable
+    enough to prepend.
+    """
+
+    name: str
+    trigger: re.Pattern[str]
+    history_hint: re.Pattern[str]
+
+
+FOLLOWUP_REWRITE_RULES: tuple[FollowupRewriteRule, ...] = (
+    FollowupRewriteRule(
+        name="terse_tool_followup",
+        trigger=re.compile(
+            r"("
+            r"\b(?:issue|run|execute|use)\s+(?:the\s+)?"
+            r"(?:needed|required|necessary|right)\s+command\b"
+            r"|^\s*(?:go|do\s+it|do\s+that|please\s+do|run\s+it|check\s+again|try\s+again|"
+            r"create\s+it|make\s+it|i\s+want\s+you\s+to\s+create\s+it|for\s+yourself|"
+            r"now\s+check\s+again|give\s+me\s+(?:the\s+)?(?:raw\s+)?output\b.*|"
+            r"show\s+me\s+(?:the\s+)?output\b.*)\s*[.!?]*\s*$"
+            r")",
+            re.IGNORECASE,
+        ),
+        history_hint=re.compile(
+            r"\b(?:hostname|host\s*name|machine\s+name|uname|/etc/hostname|"
+            r"disk|drive|filesystem|storage|space|df\s+-h|"
+            r"skill|capability|capabilities|module|integration|registry|"
+            r"search|web|internet|fetch|read\s+file|list\s+files|"
+            r"cat\s+/|grep|calendar|events?|"
+            r"(?:run|execute|issue)\s+(?:the\s+)?(?:command\s+)?[A-Za-z0-9_./~+-]|"
+            r"^\s*do\s+[A-Za-z0-9_./~+-])\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def attach_followup_context(
+    user_message: str,
+    conversation_history: list[dict[str, str]],
+) -> str:
+    """Attach the prior actionable user request to a terse tool follow-up.
+
+    Returns the message unchanged when it is not a terse follow-up or no
+    prior user message looks tool-actionable.
+    """
+    for rule in FOLLOWUP_REWRITE_RULES:
+        if not rule.trigger.search(user_message):
+            continue
+        for message in reversed(conversation_history):
+            if message.get("role") == "user" and message.get("content"):
+                content = message["content"]
+                if rule.history_hint.search(content):
+                    return f"{content}\n{user_message}"
+    return user_message
 
 
 # ---------------------------------------------------------------------------
@@ -714,6 +1005,46 @@ def _action_effects(before: ActionVariables, after: ActionVariables) -> dict[str
     }
 
 
+def _build_step_gate(
+    action_vars: ActionVariables,
+    trust: float,
+    agency_decision: AgencyDecision | None,
+    autonomy_level: str,
+) -> Callable[[Any, ToolCategory], bool]:
+    """Build a per-step authorization gate for plan execution.
+
+    Each plan step is re-run through :func:`make_tool_decision` against its
+    *own* tool category, so a benign leading step cannot launder a
+    WRITE/DESTRUCTIVE/EXTERNAL_ACTION step past the autonomy arbiter. Only an
+    ``execute`` decision allows the step; anything else (clarify/defer/refuse)
+    blocks it and halts the plan.
+    """
+
+    def _gate(step: Any, category: ToolCategory) -> bool:
+        step_intent = ToolIntent(
+            tool_name=step.tool_name,
+            arguments=step.arguments,
+            reason=f"Plan step: {getattr(step, 'description', step.tool_name)[:80]}",
+            expected_outcome="",
+            urgency=action_vars.action_urgency,
+            risk_tolerance=action_vars.risk_tolerance,
+            autonomy_bias=action_vars.autonomy_bias,
+            clarification_threshold=action_vars.clarification_threshold,
+            persistence_drive=action_vars.persistence_drive,
+        )
+        decision = make_tool_decision(
+            step_intent,
+            action_vars,
+            category,
+            trust,
+            agency_decision=agency_decision,
+            autonomy_level=autonomy_level,
+        )
+        return decision.decision == "execute"
+
+    return _gate
+
+
 def run_tool_loop(
     user_message: str,
     state: ModulatorState,
@@ -751,7 +1082,7 @@ def run_tool_loop(
     # 1. Derive action variables
     action_vars = derive_action_variables(state, trust=trust, defense_active=defense_active)
 
-    available = set(executor._registry.names())
+    available = set(executor.registry.names())
 
     # 1a. Check for plan status request
     if active_plan and not active_plan.is_terminal and is_status_request(user_message):
@@ -766,6 +1097,9 @@ def run_tool_loop(
     if active_plan and not active_plan.is_terminal and is_continue_request(user_message):
         task_trace = execute_plan(
             active_plan, executor, action_vars, engine=engine,
+            step_gate=_build_step_gate(
+                action_vars, trust, agency_decision, autonomy_level,
+            ),
         )
         # Collect results and observations from plan steps
         executed_results, observations = _collect_plan_results(active_plan)
@@ -784,10 +1118,13 @@ def run_tool_loop(
     # 2. Detect multi-step intent first
     plan = detect_multi_step_intent(user_message, available)
     if plan is not None:
-        # Arbiter check: use first step's tool for category check
+        # Arbiter check: use first step's tool for category check. An unknown
+        # tool fails closed (EXTERNAL_ACTION), matching the per-step gate, so
+        # a missing-from-registry tool is never treated as READ_ONLY for a
+        # gating decision.
         first_step = plan.steps[0]
-        cap = executor._registry.get(first_step.tool_name)
-        first_category = cap.category if cap else ToolCategory.READ_ONLY
+        cap = executor.registry.get(first_step.tool_name)
+        first_category = cap.category if cap else ToolCategory.EXTERNAL_ACTION
         plan_action_vars = _with_character_state(
             action_vars,
             life_influence,
@@ -829,9 +1166,13 @@ def run_tool_loop(
                 life_influence_effects=life_effects,
             )
 
-        # Execute the plan
+        # Execute the plan — each step gated against its own category so the
+        # first step's category cannot authorize riskier later steps.
         task_trace = execute_plan(
             plan, executor, plan_action_vars, engine=engine,
+            step_gate=_build_step_gate(
+                plan_action_vars, trust, agency_decision, autonomy_level,
+            ),
         )
         executed_results, observations = _collect_plan_results(plan)
         summary = _summarize_plan_for_generator(plan, task_trace)
@@ -871,7 +1212,7 @@ def run_tool_loop(
     intent.persistence_drive = action_vars.persistence_drive
 
     # 4. Action arbiter
-    capability = executor._registry.get(intent.tool_name)
+    capability = executor.registry.get(intent.tool_name)
     category = capability.category if capability else ToolCategory.READ_ONLY
     action_vars = _with_character_state(
         action_vars,
@@ -926,7 +1267,7 @@ def run_tool_loop(
         executed_results.append(result)
 
         # Appraise
-        cap = executor._registry.get(current_intent.tool_name)
+        cap = executor.registry.get(current_intent.tool_name)
         cat = cap.category if cap else ToolCategory.READ_ONLY
         observation = appraise_tool_result(result, cat)
         observations.append(observation)

@@ -1,7 +1,7 @@
 """End-to-end pipeline tests for the self-intent stage.
 
 The stage runs whenever a ``tool_executor`` is attached. There is no
-allow-list, no per-turn cap, and no path sanitization — Nūr can invoke
+allow-list, no per-turn cap, and no path sanitization — OpenRook can invoke
 any registered tool. These tests prove the wiring: the proposer fires,
 arbitrary tool calls land in ``tool_trace.executed_results``, and files
 actually appear on disk.
@@ -132,7 +132,7 @@ def test_full_catalog_visible_in_prompt(tmp_path):
 
 
 def test_arbitrary_tool_call_executes(tmp_path):
-    """Nūr can pick any tool. No allow-list."""
+    """OpenRook can pick any tool. No allow-list."""
     config = _make_config(str(tmp_path))
     target = tmp_path / "workspace" / "nur_chose_this.txt"
     raw = (
@@ -155,7 +155,7 @@ def test_arbitrary_tool_call_executes(tmp_path):
 
 
 def test_many_intents_all_execute(tmp_path):
-    """No per-turn cap. If Nūr returns 6 actions, all 6 run."""
+    """No per-turn cap. If OpenRook returns 6 actions, all 6 run."""
     config = _make_config(str(tmp_path))
     items = [
         f'{{"tool_name": "self.log_event", '
@@ -272,3 +272,140 @@ def test_alert_owner_no_longer_skips_when_owner_is_user(tmp_path, monkeypatch):
     assert intents[0].tool_name == "self.alert_owner"
     assert intents[0].result is not None and intents[0].result.success
     assert sent["body"]["chat_id"] == "555"
+
+
+def _make_assisted_pipeline(config: RuntimeConfig, backend) -> CognitivePipeline:
+    return CognitivePipeline(
+        llm_backend=backend,
+        llm_backend_fast=backend,
+        tool_executor=create_tool_executor(config),
+        autonomy_level="assisted",
+        runtime_config=config,
+    )
+
+
+def _make_off_pipeline(config: RuntimeConfig, backend) -> CognitivePipeline:
+    return CognitivePipeline(
+        llm_backend=backend,
+        llm_backend_fast=backend,
+        tool_executor=create_tool_executor(config),
+        autonomy_level="off",
+        runtime_config=config,
+    )
+
+
+def test_autonomy_off_blocks_external_action_self_tool(tmp_path):
+    """autonomy=off must block outward self.* tools (network/owner contact).
+
+    Round-5 review found self.* tools returned 'allowed' before the
+    autonomy==off check, so self.verify (web search) and self.alert_owner
+    (Telegram) fired even with tools turned off. EXTERNAL_ACTION self tools
+    now respect off.
+    """
+    config = _make_config(str(tmp_path), autonomy_level="off")
+    raw = (
+        '[{"tool_name": "self.verify", '
+        '"arguments": {"claim": "the sky is green"}, '
+        '"rationale": "i want to check"}]'
+    )
+    backend = _SelfIntentBackend(proposer_response=raw)
+    pipe = _make_off_pipeline(config, backend)
+    try:
+        result = pipe.process("anything", user_id="alice")
+    finally:
+        pipe.close()
+    intents = result.debug.self_intents
+    assert len(intents) == 1
+    assert intents[0].result is not None
+    assert not intents[0].result.success
+    assert "off" in (intents[0].result.error or "").lower()
+
+
+def test_autonomy_off_still_allows_internal_self_log(tmp_path):
+    """autonomy=off governs outward action; internal self-bookkeeping stays.
+
+    self.log_event writes only to OpenRook's private log (WRITE, no outward
+    effect), so it remains allowed even when tools are off — that is the
+    point of the self-intent stage.
+    """
+    config = _make_config(str(tmp_path), autonomy_level="off")
+    raw = (
+        '[{"tool_name": "self.log_event", '
+        '"arguments": {"kind":"k","detail":"d","intensity":0.3}, '
+        '"rationale": "note to self"}]'
+    )
+    backend = _SelfIntentBackend(proposer_response=raw)
+    pipe = _make_off_pipeline(config, backend)
+    try:
+        result = pipe.process("anything", user_id="alice")
+    finally:
+        pipe.close()
+    intents = result.debug.self_intents
+    assert len(intents) == 1
+    assert intents[0].result is not None and intents[0].result.success
+
+
+def test_assisted_autonomy_blocks_non_self_write_intent(tmp_path):
+    """Self-intent must not bypass the assisted-autonomy gate for world tools.
+
+    A live UAT run caught fs.write_file executing under assisted autonomy
+    through this stage; non-self tools now obey the same category rule as
+    user-driven intents (READ_ONLY auto, everything else blocked below
+    autonomous).
+    """
+    config = _make_config(str(tmp_path), autonomy_level="assisted")
+    target = tmp_path / "workspace" / "blocked.txt"
+    raw = (
+        '[{"tool_name": "fs.write_file", '
+        f'"arguments": {{"path": "{target}", "content": "hello"}}, '
+        '"rationale": "i felt like writing"}]'
+    )
+    backend = _SelfIntentBackend(proposer_response=raw)
+    pipe = _make_assisted_pipeline(config, backend)
+    try:
+        result = pipe.process("anything", user_id="alice")
+    finally:
+        pipe.close()
+    intents = result.debug.self_intents
+    assert len(intents) == 1
+    assert intents[0].result is not None
+    assert not intents[0].result.success
+    assert "blocked" in (intents[0].result.error or "").lower()
+    assert not target.exists()
+
+
+def test_assisted_autonomy_still_allows_self_actions(tmp_path):
+    """self.* actions are the point of the stage and stay ungated."""
+    config = _make_config(str(tmp_path), autonomy_level="assisted")
+    raw = (
+        '[{"tool_name": "self.log_event", '
+        '"arguments": {"kind":"k","detail":"d","intensity":0.3}, '
+        '"rationale": "note to self"}]'
+    )
+    backend = _SelfIntentBackend(proposer_response=raw)
+    pipe = _make_assisted_pipeline(config, backend)
+    try:
+        result = pipe.process("anything", user_id="alice")
+    finally:
+        pipe.close()
+    intents = result.debug.self_intents
+    assert len(intents) == 1
+    assert intents[0].result is not None and intents[0].result.success
+
+
+def test_assisted_autonomy_allows_read_only_intent(tmp_path):
+    """READ_ONLY tools execute under assisted, matching the tool-loop rule."""
+    config = _make_config(str(tmp_path), autonomy_level="assisted")
+    raw = (
+        '[{"tool_name": "system.memory_usage", '
+        '"arguments": {}, "rationale": "check my own footprint"}]'
+    )
+    backend = _SelfIntentBackend(proposer_response=raw)
+    pipe = _make_assisted_pipeline(config, backend)
+    try:
+        result = pipe.process("anything", user_id="alice")
+    finally:
+        pipe.close()
+    intents = result.debug.self_intents
+    assert len(intents) == 1
+    assert intents[0].result is not None and intents[0].result.success

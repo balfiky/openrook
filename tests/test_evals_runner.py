@@ -10,6 +10,9 @@ These guard the publication-credibility contract:
 from __future__ import annotations
 
 import pytest
+import subprocess
+import sys
+from pathlib import Path
 
 from evals.backends import (
     DEFAULT_MINIMAX_BASE_URL,
@@ -29,6 +32,36 @@ from evals.provenance import (
 
 
 class TestBackendFactory:
+    def test_mock_requires_test_fixtures_when_not_shipped(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "tests._fakes", None)
+        with pytest.raises(MissingBackendConfigError, match="source-checkout test fixtures"):
+            build_backend_factory(BackendSpec(type="mock"))
+
+    def test_live_evaluation_imports_without_test_package(self):
+        script = """
+import builtins
+original_import = builtins.__import__
+def without_test_package(name, *args, **kwargs):
+    if name == "tests" or name.startswith("tests."):
+        raise ModuleNotFoundError(name)
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = without_test_package
+import evals.emotional_quality
+from evals.backends import BackendSpec, build_backend_factory
+factory = build_backend_factory(BackendSpec(
+    type="openai_compat", base_url="http://localhost:8080/v1", requested_model="example"
+))
+assert callable(factory)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+
     def test_mock_has_no_required_config(self):
         factory = build_backend_factory(BackendSpec(type="mock"))
         backend = factory()
@@ -173,7 +206,7 @@ class TestProvenance:
         source = tmp_path / "source"
         (source / "config").mkdir(parents=True)
         (source / "evals").mkdir()
-        (source / "pyproject.toml").write_text('[project]\nname = "project-nur"\n', encoding="utf-8")
+        (source / "pyproject.toml").write_text('[project]\nname = "openrook"\n', encoding="utf-8")
         (source / "config" / "soul.yaml").write_text("identity: test\n", encoding="utf-8")
         (source / "pipeline.py").write_text("# pipeline marker\n", encoding="utf-8")
         probe = source / "evals" / "provenance.py"

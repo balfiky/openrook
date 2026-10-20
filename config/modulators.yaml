@@ -1,4 +1,4 @@
-# Modulator configuration for Project Nur v1
+# Modulator configuration for OpenRook v1
 # Event impacts are raw directional pressure. event_delta_caps below provide
 # inertia so ordinary turns do not snap the whole state across multiple labels.
 

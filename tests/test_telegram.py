@@ -625,7 +625,7 @@ class TestCommands:
                     await channel.handle_update(_make_update(update_id=2, text="/state"))
 
                     message = client.sent_messages[-1]["text"].lower()
-                    assert "nūr state" in message
+                    assert "openrook state" in message
                     assert "arousal" in message
                     assert "open loops" in message
                 finally:
@@ -813,7 +813,7 @@ class TestCommands:
 
 class TestTypingIndicator:
     def test_typing_sent_during_processing(self):
-        """At least one typing indicator is sent while Nūr processes."""
+        """At least one typing indicator is sent while OpenRook processes."""
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:
                 channel, manager, client = _make_channel(tmpdir)

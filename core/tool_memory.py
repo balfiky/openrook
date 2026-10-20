@@ -12,10 +12,11 @@ All logic is deterministic — zero LLM calls.
 
 from __future__ import annotations
 
-import time
-import uuid
+from core.clock import clock as time
+from core.clock import identifiers as uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from core.clock import datetime
+from datetime import timezone
 
 from core.tool_failures import (
     is_operational_tool_failure,

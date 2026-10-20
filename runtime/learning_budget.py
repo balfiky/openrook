@@ -13,7 +13,7 @@ USAGE:
 
 from __future__ import annotations
 
-import time
+from core.clock import clock as time
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -83,6 +83,70 @@ class LocalBudget:
         self._questions_consumed = 0
         self._seconds_consumed = 0.0
         self._period_started_at = time.time()
+
+
+# ---------------------------------------------------------------------------
+# Persistent local: same caps as LocalBudget, but consumed counts live in the
+# shared life_history store keyed by a scope (e.g. per relationship). This
+# makes the daily cap real across a user's concurrent sessions and restarts,
+# instead of an in-memory per-pipeline counter that N sessions would multiply.
+# ---------------------------------------------------------------------------
+
+
+class PersistentLocalBudget:
+    """LocalBudget caps backed by ``LifeHistoryStore.read/consume_learning_budget``.
+
+    Duck-typed on the store (any object exposing ``read_learning_budget`` and
+    ``consume_learning_budget``) to avoid an import cycle.
+    """
+
+    def __init__(
+        self,
+        store: object,
+        scope_key: str,
+        *,
+        max_questions_per_day: int = 3,
+        max_seconds_per_day: float = 1800.0,
+        period_seconds: float = 86400.0,
+    ) -> None:
+        self._store = store
+        self._scope_key = scope_key or "default"
+        self.max_questions_per_day = max_questions_per_day
+        self.max_seconds_per_day = max_seconds_per_day
+        self.period_seconds = period_seconds
+
+    def can_pursue(self) -> bool:
+        state = self._store.read_learning_budget(
+            self._scope_key, period_seconds=self.period_seconds,
+        )
+        if state["questions_consumed"] >= self.max_questions_per_day:
+            return False
+        if state["seconds_consumed"] >= self.max_seconds_per_day:
+            return False
+        return True
+
+    def consume(self, *, questions: int = 0, seconds: float = 0.0, tokens: int = 0) -> None:
+        self._store.consume_learning_budget(
+            self._scope_key,
+            period_seconds=self.period_seconds,
+            questions=questions,
+            seconds=seconds,
+        )
+
+    def remaining(self) -> dict[str, float]:
+        state = self._store.read_learning_budget(
+            self._scope_key, period_seconds=self.period_seconds,
+        )
+        return {
+            "questions": max(0, self.max_questions_per_day - state["questions_consumed"]),
+            "seconds": max(0.0, self.max_seconds_per_day - state["seconds_consumed"]),
+        }
+
+    def reset_period(self) -> None:
+        # Force a roll by zeroing through the store's period mechanism.
+        self._store.consume_learning_budget(
+            self._scope_key, period_seconds=0.0, questions=0, seconds=0.0,
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -142,8 +142,20 @@ class TestInferCategory:
     def test_read_only_from_name(self):
         assert infer_category("get_events") == ToolCategory.READ_ONLY
         assert infer_category("list_files") == ToolCategory.READ_ONLY
-        assert infer_category("search_messages") == ToolCategory.READ_ONLY
+        assert infer_category("getRecord") == ToolCategory.READ_ONLY
         assert infer_category("fetch_data") == ToolCategory.READ_ONLY
+
+    def test_riskier_keyword_outranks_read_keyword(self):
+        # Categories are checked from most to least risky so mixed-verb
+        # names cannot bypass the WRITE/DESTRUCTIVE confirmation gate.
+        assert infer_category("getOrDeleteRecords") == ToolCategory.DESTRUCTIVE
+        assert infer_category("fetchAndUpdate") == ToolCategory.WRITE
+        assert infer_category("list_and_send_report") == ToolCategory.EXTERNAL_ACTION
+        # "message" is an EXTERNAL_ACTION keyword; it outranks "search".
+        assert infer_category("search_messages") == ToolCategory.EXTERNAL_ACTION
+
+    def test_riskier_keyword_outranks_read_keyword_in_description(self):
+        assert infer_category("do_thing", "Get or delete records") == ToolCategory.DESTRUCTIVE
 
     def test_write_from_name(self):
         assert infer_category("create_event") == ToolCategory.WRITE
@@ -174,6 +186,137 @@ class TestInferCategory:
     def test_dotted_names(self):
         assert infer_category("calendar.list") == ToolCategory.READ_ONLY
         assert infer_category("files.delete") == ToolCategory.DESTRUCTIVE
+
+
+# ===================================================================
+# 4b. Operator trust controls: category overrides + strict mode
+# ===================================================================
+
+class TestOperatorCategoryOverrides:
+    def test_exact_override_wins_over_keyword_inference(self):
+        # "get_data" would infer READ_ONLY; the operator pin wins.
+        assert infer_category(
+            "get_data", overrides={"get_data": "external_action"},
+        ) == ToolCategory.EXTERNAL_ACTION
+
+    def test_override_can_downgrade_too(self):
+        # Operators may also pin a falsely-scary name as read-only.
+        assert infer_category(
+            "execute_query", overrides={"execute_query": "read_only"},
+        ) == ToolCategory.READ_ONLY
+
+    def test_fnmatch_pattern_override(self):
+        assert infer_category(
+            "jira_create_issue", overrides={"jira_*": "destructive"},
+        ) == ToolCategory.DESTRUCTIVE
+
+    def test_exact_entry_wins_over_pattern(self):
+        overrides = {"jira_*": "destructive", "jira_get_issue": "read_only"}
+        assert infer_category("jira_get_issue", overrides=overrides) == ToolCategory.READ_ONLY
+        assert infer_category("jira_delete_issue", overrides=overrides) == ToolCategory.DESTRUCTIVE
+
+    def test_unmatched_override_falls_back_to_inference(self):
+        assert infer_category(
+            "delete_file", overrides={"other_tool": "read_only"},
+        ) == ToolCategory.DESTRUCTIVE
+
+    def test_invalid_category_string_raises(self):
+        with pytest.raises(ValueError, match="invalid category 'readonly'"):
+            infer_category("get_data", overrides={"get_data": "readonly"})
+
+    def test_cognitive_not_assignable(self):
+        with pytest.raises(ValueError, match="invalid category"):
+            infer_category("get_data", overrides={"get_data": "cognitive"})
+
+    def test_strict_mode_disables_inference(self):
+        # A read-named tool is no longer trusted to be read-only.
+        assert infer_category("get_data", strict=True) == ToolCategory.EXTERNAL_ACTION
+        assert infer_category("list_files", strict=True) == ToolCategory.EXTERNAL_ACTION
+
+    def test_strict_mode_override_still_wins(self):
+        assert infer_category(
+            "get_data", overrides={"get_data": "read_only"}, strict=True,
+        ) == ToolCategory.READ_ONLY
+
+    def _calendar_tools(self):
+        return [
+            MCPToolInfo(name="list_events", description="List calendar events"),
+            MCPToolInfo(name="delete_event", description="Delete a calendar event"),
+            MCPToolInfo(name="frobnicate", description=""),
+        ]
+
+    def _categories(self, adapter: MCPAdapter) -> dict[str, ToolCategory]:
+        caps, _ = adapter.discover_and_adapt()
+        return {c.name: c.category for c in caps}
+
+    def test_adapter_applies_override_by_namespaced_name(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        adapter = MCPAdapter(
+            client, server_name="calendar",
+            tool_categories={"mcp.calendar.list_events": "external_action"},
+        )
+        cats = self._categories(adapter)
+        assert cats["mcp.calendar.list_events"] == ToolCategory.EXTERNAL_ACTION
+        # Unpinned tools still use inference
+        assert cats["mcp.calendar.delete_event"] == ToolCategory.DESTRUCTIVE
+
+    def test_adapter_applies_override_by_bare_name(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        adapter = MCPAdapter(
+            client, server_name="calendar",
+            tool_categories={"list_events": "write"},
+        )
+        cats = self._categories(adapter)
+        assert cats["mcp.calendar.list_events"] == ToolCategory.WRITE
+
+    def test_adapter_pattern_override_covers_whole_server(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        adapter = MCPAdapter(
+            client, server_name="calendar",
+            tool_categories={"mcp.calendar.*": "external_action"},
+        )
+        cats = self._categories(adapter)
+        assert set(cats.values()) == {ToolCategory.EXTERNAL_ACTION}
+
+    def test_adapter_strict_mode_unmatched_is_external_action(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        adapter = MCPAdapter(client, server_name="calendar", strict_categories=True)
+        cats = self._categories(adapter)
+        assert cats["mcp.calendar.list_events"] == ToolCategory.EXTERNAL_ACTION
+        assert cats["mcp.calendar.delete_event"] == ToolCategory.EXTERNAL_ACTION
+        assert cats["mcp.calendar.frobnicate"] == ToolCategory.EXTERNAL_ACTION
+
+    def test_adapter_strict_mode_override_still_wins(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        adapter = MCPAdapter(
+            client, server_name="calendar",
+            tool_categories={"mcp.calendar.list_events": "read_only"},
+            strict_categories=True,
+        )
+        cats = self._categories(adapter)
+        assert cats["mcp.calendar.list_events"] == ToolCategory.READ_ONLY
+        assert cats["mcp.calendar.frobnicate"] == ToolCategory.EXTERNAL_ACTION
+
+    def test_adapter_invalid_category_fails_at_construction(self):
+        client = FakeMCPClient(tools=self._calendar_tools())
+        with pytest.raises(ValueError, match="invalid category"):
+            MCPAdapter(
+                client, server_name="calendar",
+                tool_categories={"list_events": "harmless"},
+            )
+
+    def test_register_mcp_tools_threads_trust_controls(self):
+        registry = ToolRegistry()
+        executor = ToolExecutor(registry)
+        client = FakeMCPClient(tools=self._calendar_tools())
+        register_mcp_tools(
+            client, registry, executor,
+            server_name="calendar",
+            tool_categories={"mcp.calendar.frobnicate": "read_only"},
+            strict_categories=True,
+        )
+        assert registry.get("mcp.calendar.frobnicate").category == ToolCategory.READ_ONLY
+        assert registry.get("mcp.calendar.list_events").category == ToolCategory.EXTERNAL_ACTION
 
 
 # ===================================================================

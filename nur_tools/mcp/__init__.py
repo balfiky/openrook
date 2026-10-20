@@ -1,4 +1,4 @@
-"""MCP bridge — adapts Model Context Protocol tools into Nūr's internal model.
+"""MCP bridge — adapts Model Context Protocol tools into OpenRook's internal model.
 
 MCP tools are treated identically to builtin tools once registered:
 same ToolCapability, same ToolResult, same cognitive appraisal path.

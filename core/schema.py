@@ -1,4 +1,4 @@
-"""Schema version management for Nūr databases.
+"""Schema version management for OpenRook databases.
 
 Each SQLite database (per-user and shared) carries an explicit schema version.
 On startup, components check their version and fail loudly if the database
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-# Current schema version for all Nūr databases.
+# Current schema version for all OpenRook databases.
 # Bump this when tables are added/altered and add a migration path.
 SCHEMA_VERSION = 2
 

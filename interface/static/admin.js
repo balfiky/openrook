@@ -425,7 +425,7 @@ const state = createSurfaceState({
       ["Sessions", String(sessions.active || 0), `Max ${sessions.max_active || 0}`],
       ["Telegram", status.telegram_configured ? "Configured" : "Not configured", "Long polling in web host"],
       ["Setup", setup.completed ? "Complete" : "Incomplete", setup.state_path || ""],
-      ["Identity", status.soul_name || "Nūr", "Seed soul"],
+      ["Identity", status.soul_name || "OpenRook", "Seed soul"],
       ["Config", "runtime_config.yaml", status.config_path || ""],
     ];
     document.getElementById("overviewCards").innerHTML = cards.map(([label, value, foot]) => `
@@ -459,7 +459,7 @@ const state = createSurfaceState({
       el.innerHTML = `
         <div class="persona-empty">
           <strong>No active persona session.</strong>
-          <p class="empty-copy">Send a Web or Telegram message, then refresh Overview to see Nūr's mental state, relationship context, memory, Life influence, and tool activity here.</p>
+          <p class="empty-copy">Send a Web or Telegram message, then refresh Overview to see OpenRook's mental state, relationship context, memory, Life influence, and tool activity here.</p>
         </div>
       `;
       return;
@@ -1566,7 +1566,7 @@ const state = createSurfaceState({
   }
 
   async function deleteBackup() {
-    const filename = window.prompt("Backup filename to delete, for example nur-backup-YYYYMMDDTHHMMSSZ.zip");
+    const filename = window.prompt("Backup filename to delete, for example openrook-backup-YYYYMMDDTHHMMSSZ.zip");
     if (!filename) return;
     const confirmation = window.prompt(`Type DELETE ${filename} to delete this backup.`);
     if (confirmation === null) return;
@@ -1656,7 +1656,7 @@ const state = createSurfaceState({
     for (const item of document.querySelectorAll(".nav-item")) {
       item.classList.toggle("active", item.dataset.page === page);
     }
-    els.pageTitle.textContent = "Nūr Settings";
+    els.pageTitle.textContent = "OpenRook Settings";
     history.replaceState(null, "", "#" + page);
     if (page === "settings" && !state.toolsLoaded && Object.keys(state.config).length) {
       loadTools().catch((err) => {
@@ -1868,7 +1868,11 @@ const state = createSurfaceState({
     });
   }
 
-  async function refreshStatusOnly() {
+  // Distinct from refreshStatusOnly() above: best-effort (never throws)
+  // and skips the persona reload. Declaring a second refreshStatusOnly
+  // here was a module-scope SyntaxError that killed the whole settings
+  // workspace in v0.30.9.
+  async function refreshStatusBestEffort() {
     try {
       const res = await authedFetch("/admin/status");
       if (!res.ok) return;
@@ -1890,7 +1894,7 @@ const state = createSurfaceState({
   // tab. Cheap enough not to spam the server, since /admin/status only
   // reads admin_state.json + summary fields.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refreshStatusOnly();
+    if (document.visibilityState === "visible") refreshStatusBestEffort();
   });
 
   reloadFromServer();

@@ -301,7 +301,7 @@ class TestReporting:
     def test_text_report_format(self):
         report = self._make_report()
         txt = text_report(report)
-        assert "Nūr Evaluation Report" in txt
+        assert "OpenRook Evaluation Report" in txt
         assert "1/2 passed" in txt
         assert "[PASS]" in txt
         assert "[FAIL]" in txt

@@ -300,7 +300,7 @@ class TestAlertOwner:
         assert "owner_chat_id" in (r.error or "")
 
     def test_owner_equal_to_user_still_sends(self, monkeypatch):
-        # No owner==user skip anymore — Nūr can message anyone it picks.
+        # No owner==user skip anymore — OpenRook can message anyone it picks.
         captured: dict = {}
 
         class FakeResp:

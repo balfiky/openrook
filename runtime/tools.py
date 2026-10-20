@@ -2,7 +2,7 @@
 
 External agentic tools are opt-in via ``RuntimeConfig.tools_enabled``. When
 disabled (the default), :func:`create_tool_executor` still returns a restricted
-executor containing only Nūr's internal skill-registry tools, so the assistant
+executor containing only OpenRook's internal skill-registry tools, so the assistant
 can create/audit/enable durable skills through the observable tool trace.
 Filesystem, browser, web, calendar, and shell capabilities remain excluded
 until tools are enabled; ``shell.run_command`` also requires the separate
@@ -11,6 +11,7 @@ until tools are enabled; ``shell.run_command`` also requires the separate
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from runtime.config import RuntimeConfig
@@ -27,23 +28,35 @@ def create_tool_executor(
     """Create a per-pipeline tool executor.
 
     Preserves the zero-arg signature for back-compat with tests that wire the
-    factory directly; those tests receive a fully-enabled, unsandboxed
-    executor to keep the phase-0..8 agentic-tool suites green. Production
+    factory directly; those tests receive a fully-enabled executor with
+    filesystem tools sandboxed to the current working directory. Production
     callers pass a ``RuntimeConfig`` so external tools honor the
     ``tools_enabled`` / ``shell_tool_enabled`` / ``tools_workspace`` gates.
+    Unsandboxed filesystem handlers are never wired implicitly; they require
+    an explicit opt-in (importing ``nur_tools.builtin.filesystem.HANDLERS``
+    or calling ``filesystem.create_handlers(workspace=None)`` directly).
     """
-    # Legacy zero-arg call path (tests). Mirror the previous behavior
-    # exactly: every builtin registered, no sandbox.
+    # Legacy zero-arg call path (tests/dev wiring). Every builtin registered,
+    # filesystem sandboxed to cwd so this path can never grant whole-host
+    # file access by accident.
     if config is None:
         registry = ToolRegistry()
         executor = ToolExecutor(registry)
         web_provider = RequestsWebProvider()
-        register_builtins(registry, executor, web_provider=web_provider)
-        executor._owned_resources = [web_provider]
+        register_builtins(
+            registry,
+            executor,
+            web_provider=web_provider,
+            fs_workspace=os.getcwd(),
+        )
+        executor.own_resource(web_provider)
         return executor
 
     registry = ToolRegistry()
     executor = ToolExecutor(registry)
+    executor.set_error_secrets(
+        [config.api_key, config.effective_llm_api_key, config.telegram_token]
+    )
 
     if not config.tools_enabled:
         register_skill_builtins(registry, executor, skill_config=config)
@@ -56,15 +69,17 @@ def create_tool_executor(
         web_provider=web_provider,
         fs_workspace=config.resolved_tools_workspace,
         include_shell=config.shell_tool_enabled,
+        shell_command_allowlist=config.shell_command_allowlist,
         skill_config=config,
     )
-    executor._owned_resources = [web_provider]
+    executor.own_resource(web_provider)
     if config.llm_base_url.strip() and config.llm_model.strip():
-        executor._tool_runner = NativeToolCallRunner(
+        runner = NativeToolCallRunner(
             executor=executor,
             base_url=config.llm_base_url,
             model=config.llm_model,
-            api_key=config.llm_api_key,
+            api_key=config.effective_llm_api_key,
         )
-        executor._owned_resources.append(executor._tool_runner)
+        executor.set_tool_runner(runner)
+        executor.own_resource(runner)
     return executor

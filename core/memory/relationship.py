@@ -7,7 +7,7 @@ relational loops that should carry across sessions.
 from __future__ import annotations
 
 import sqlite3
-import time
+from core.clock import clock as time
 
 from core.schema import ensure_schema_version
 from core.types import OpenLoop, RelationshipContext, RelationshipEvent

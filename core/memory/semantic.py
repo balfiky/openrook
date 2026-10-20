@@ -12,7 +12,7 @@ import json
 import os
 import re
 import sqlite3
-import time
+from core.clock import clock as time
 
 from config.loader import SemanticMemoryConfig
 from core.life_influence import LifeInfluence, curiosity_salience_bonus

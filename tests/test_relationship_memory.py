@@ -34,6 +34,45 @@ def _record_user_event(
     )
 
 
+class TestEventValenceDefaultConsistency:
+    """The spike-path and digestion-path _event_valence must agree.
+
+    Round-5 review found pipeline/core.py defaulted ``targets_assistant`` to
+    False while core/memory/digestion.py defaulted it to True, so the same
+    event (one lacking the key) scored opposite trust deltas on the two
+    paths. Both now default True (a 1:1 emotional event targets the
+    assistant unless marked otherwise).
+    """
+
+    def _event_no_key(self) -> EmotionalEvent:
+        return EmotionalEvent(
+            event_type=EventType.NEGATIVE_FEEDBACK,
+            intensity=0.6,
+            source="user",
+            metadata={},  # no 'targets_assistant'
+        )
+
+    def test_both_paths_default_targets_assistant_true(self):
+        from core.memory.digestion import _event_valence as digest_valence
+        from pipeline.core import CognitivePipeline
+
+        ev = self._event_no_key()
+        spike = CognitivePipeline._event_valence(ev)
+        digested = digest_valence(ev)
+        # Negative event, default targets_assistant=True → negative valence.
+        assert spike == digested
+        assert spike < 0
+
+    def test_explicit_false_zeroes_both(self):
+        from core.memory.digestion import _event_valence as digest_valence
+        from pipeline.core import CognitivePipeline
+
+        ev = self._event_no_key()
+        ev.metadata["targets_assistant"] = False
+        assert CognitivePipeline._event_valence(ev) == 0.0
+        assert digest_valence(ev) == 0.0
+
+
 class TestRelationshipMemory:
     def test_build_context_summarizes_open_loops_and_events(self):
         rel = RelationshipMemory()

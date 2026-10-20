@@ -80,37 +80,7 @@ def _features_wrapped_runner(
     original = runner_mod._make_pipeline
 
     def wrapped(scenario, factory):
-        # Build the pipeline the same way the runner would, then
-        # replace it with one that honors the ablation features.
-        from pipeline import CognitivePipeline
-
-        executor = None
-        if scenario.with_tools:
-            from nur_tools.registry import ToolRegistry
-            from nur_tools.executor import ToolExecutor
-            from nur_tools import register_builtins
-
-            registry = ToolRegistry()
-            executor = ToolExecutor(registry)
-            register_builtins(registry, executor)
-
-        pipeline = CognitivePipeline(
-            llm_backend=factory(),
-            tool_executor=executor,
-            features=features,
-            life_history_provider=(
-                (lambda: dict(scenario.life_history_context or {}))
-                if scenario.life_history_context is not None else None
-            ),
-        )
-
-        # Apply initial-state overrides (same as runner's version)
-        if scenario.initial_modulators:
-            state = pipeline.engine.state
-            for name, value in scenario.initial_modulators.items():
-                if hasattr(state, name):
-                    setattr(state, name, max(0.0, min(1.0, value)))
-        return pipeline
+        return original(scenario, factory, features=features)
 
     runner_mod._make_pipeline = wrapped
     try:
@@ -316,7 +286,7 @@ def _print_summary_table(summary: dict[str, Any]) -> None:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Run architecture ablations on Nūr's Phase 11 scenario set.",
+        description="Run architecture ablations on OpenRook's Phase 11 scenario set.",
     )
     p.add_argument("--backend", choices=["mock", "provider", "minimax", "openai_compat", "codex"], required=True)
     p.add_argument("--model", default="")

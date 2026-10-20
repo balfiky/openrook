@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict, field
-import time
+from core.clock import clock as time
 from typing import Any
 
 from runtime.config import RuntimeConfig
@@ -23,6 +23,8 @@ class IntrospectionEvent:
 def record_introspection(
     config: RuntimeConfig,
     event: IntrospectionEvent,
+    *,
+    llm_client: Any = None,
 ) -> dict[str, Any]:
     """Record self-reflection through the Learning channel pipeline."""
     text = (
@@ -37,6 +39,7 @@ def record_introspection(
             text=text,
             source_type="self_reflection",
             source_ref=event.trigger_turn_id,
-            participants=["Nūr"],
+            participants=["OpenRook"],
+            llm_client=llm_client,
             metadata={"introspection": asdict(event)},
         )

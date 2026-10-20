@@ -1,47 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc"><title id="title">Component Claim Map</title><desc id="desc">Evidence status per architectural component under the current Phase 11 scenario suite. Zero-effect is not inertness — it is a bounded falsifiability claim about this suite.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">Component Claim Map</text><text x="48" y="78" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Evidence status per architectural component under the current Phase 11 scenario suite. Zero-effect is not inertness — it is a bounded falsifiability claim about this suite.</text><rect x="60" y="140" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="290.0" y="163" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Relationship memory</text>
-<rect x="80" y="200" width="260" height="30" rx="15.0" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
-<text x="210.0" y="219.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#116329">LOAD-BEARING</text>
-<text x="80" y="265" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Disabling breaks exactly the two scenarios that depend on</text>
-<text x="80" y="283" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">cross-turn open-loop state; zero unexpected failures.</text>
-<rect x="550" y="140" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="780.0" y="163" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Semantic memory</text>
-<rect x="570" y="200" width="260" height="30" rx="15.0" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
-<text x="700.0" y="219.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2328">NEGATIVE CONTROL</text>
-<text x="570" y="265" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Phase 11 does not exercise semantic retrieval. Zero effect</text>
-<text x="570" y="283" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">is the expected result and is the observed result.</text>
-<rect x="1040" y="140" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="1270.0" y="163" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Inner dialogue</text>
-<rect x="1060" y="200" width="260" height="30" rx="15.0" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
-<text x="1190.0" y="219.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#164e63">NOT FALSIFIABLE HERE</text>
-<text x="1060" y="265" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Deliberation rounds do not move the strategy selector. A</text>
-<text x="1060" y="283" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">different suite is needed to falsify its contribution.</text>
-<rect x="60" y="430" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="290.0" y="453" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Defense mechanisms</text>
-<rect x="80" y="490" width="260" height="30" rx="15.0" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
-<text x="210.0" y="509.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#164e63">NOT FALSIFIABLE HERE</text>
-<text x="80" y="555" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Shapes generator output, which Phase 11 does not grade.</text>
-<text x="80" y="573" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Requires wording-quality scenarios or human rating.</text>
-<rect x="550" y="430" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="780.0" y="453" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Self / other profiling</text>
-<rect x="570" y="490" width="260" height="30" rx="15.0" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
-<text x="700.0" y="509.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#5931ad">ARCHITECTURAL CLAIM</text>
-<text x="570" y="555" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">One ProfileStore for user, topic, and assistant self</text>
-<text x="570" y="573" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">(entity_id='__self__'). Design claim, not a benchmark win.</text>
-<rect x="1040" y="430" width="460" height="250" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="1270.0" y="453" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Emotional modulators</text>
-<rect x="1060" y="490" width="260" height="30" rx="15.0" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
-<text x="1190.0" y="509.0" text-anchor="middle" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#0550ae">UNIT + INTEGRATION</text>
-<text x="1060" y="555" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">Numeric state with direct unit and integration coverage:</text>
-<text x="1060" y="573" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a">decay, spike, energy, contagion, context shift.</text>
-<text x="60" y="880" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a">Evidence-status legend</text>
-<rect x="60" y="888" width="16" height="12" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="1.25"/>
-<text x="84" y="898" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">load-bearing (falsified by current ablation)</text>
-<rect x="60" y="906" width="16" height="12" rx="3" fill="#cffafe" stroke="#0891b2" stroke-width="1.25"/>
-<text x="84" y="916" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">not falsifiable by current suite</text>
-<rect x="60" y="924" width="16" height="12" rx="3" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.25"/>
-<text x="84" y="934" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">negative control</text>
-<rect x="60" y="942" width="16" height="12" rx="3" fill="#eae6ff" stroke="#8250df" stroke-width="1.25"/>
-<text x="84" y="952" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">architectural claim</text>
-<rect x="60" y="960" width="16" height="12" rx="3" fill="#ddf4ff" stroke="#218bff" stroke-width="1.25"/>
-<text x="84" y="970" text-anchor="start" font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">unit + integration coverage</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="744" viewBox="0 0 1600 744" role="img" aria-labelledby="historical-phase-11-component-claim-map-title historical-phase-11-component-claim-map-desc"><title id="historical-phase-11-component-claim-map-title">Historical Phase 11 — Component Claim Map</title><desc id="historical-phase-11-component-claim-map-desc">Structural mock-backend evidence from 2026-05-16 (git 3d3f869c). Claims are limited to this suite and the cited component behavior.</desc><defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L9,5 L1,9 Z" fill="#57606a"/></marker></defs><rect width="100%" height="100%" fill="#fafbfc"/><text x="48" y="52" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="28" font-weight="800" fill="#1f2328">Historical Phase 11 — Component Claim Map</text><text x="48" y="78" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a">Structural mock-backend evidence from 2026-05-16 (git 3d3f869c). Claims are limited to this suite and the cited component behavior.</text><rect x="48" y="132" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="288.0" y="155" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Relationship memory</text>
+<rect x="68" y="180" width="440" height="32" rx="16.0" fill="#dafbe1" stroke="#2da44e" stroke-width="1.5"/>
+<text x="288.0" y="200.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#116329">LOAD-BEARING IN THIS SUITE</text>
+<text x="68" y="248" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Removal breaks the two open-loop scenarios.</text>
+<text x="68" y="270" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Four of six pass; no unexpected failures.</text>
+<rect x="560" y="132" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="800.0" y="155" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Semantic memory</text>
+<rect x="580" y="180" width="440" height="32" rx="16.0" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
+<text x="800.0" y="200.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2328">NEGATIVE CONTROL</text>
+<text x="580" y="248" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">This suite does not exercise semantic retrieval.</text>
+<text x="580" y="270" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Removal has no effect on all six scenarios.</text>
+<rect x="1072" y="132" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="1312.0" y="155" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Inner dialogue</text>
+<rect x="1092" y="180" width="440" height="32" rx="16.0" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+<text x="1312.0" y="200.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#633c01">NOT FALSIFIABLE HERE</text>
+<text x="1092" y="248" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Dialogue does not move the strategy selector.</text>
+<text x="1092" y="270" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Removal has no effect on all six scenarios.</text>
+<rect x="48" y="348" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="288.0" y="371" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Defense mechanisms</text>
+<rect x="68" y="396" width="440" height="32" rx="16.0" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+<text x="288.0" y="416.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#633c01">NOT FALSIFIABLE HERE</text>
+<text x="68" y="464" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Prompt shaping affects wording, not graded here.</text>
+<text x="68" y="486" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Removal has no effect on all six scenarios.</text>
+<rect x="560" y="348" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="800.0" y="371" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Self / other profiling</text>
+<rect x="580" y="396" width="440" height="32" rx="16.0" fill="#eae6ff" stroke="#8250df" stroke-width="1.5"/>
+<text x="800.0" y="416.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#5931ad">ARCHITECTURAL CLAIM</text>
+<text x="580" y="464" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">ProfileStore covers person, topic and assistant self.</text>
+<text x="580" y="486" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">This design alone is not a benchmark result.</text>
+<rect x="1072" y="348" width="480" height="192" rx="10" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="1312.0" y="371" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#1f2328">Emotional modulators</text>
+<rect x="1092" y="396" width="440" height="32" rx="16.0" fill="#ddf4ff" stroke="#218bff" stroke-width="1.5"/>
+<text x="1312.0" y="416.0" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#0550ae">UNIT + INTEGRATION</text>
+<text x="1092" y="464" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Numeric decay, spikes, energy and context shifts.</text>
+<text x="1092" y="486" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">Tests establish mechanics, not experienced emotion.</text>
+<rect x="48" y="572" width="1504" height="76" rx="10" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
+<text x="800.0" y="595" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2328">Later evidence is separate</text>
+<text x="800.0" y="617" text-anchor="middle" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">For v4 closed-loop goal execution and grounded-appraisal studies, see RESEARCH_RUNTIME.md and docs/OVERVIEW.md; this historical map does not summarize them.</text>
+<rect x="40" y="664" width="1520" height="68" rx="18" fill="none" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.85"/>
+<text x="56" y="686" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328">Legend</text>
+<rect x="56.0" y="702" width="16" height="12" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="1.25"/>
+<text x="80.0" y="712" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">suite-specific effect</text>
+<rect x="353.6" y="702" width="16" height="12" rx="3" fill="#fff8c5" stroke="#bf8700" stroke-width="1.25"/>
+<text x="377.6" y="712" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">not tested here</text>
+<rect x="651.2" y="702" width="16" height="12" rx="3" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.25"/>
+<text x="675.2" y="712" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">negative control</text>
+<rect x="948.8000000000001" y="702" width="16" height="12" rx="3" fill="#eae6ff" stroke="#8250df" stroke-width="1.25"/>
+<text x="972.8000000000001" y="712" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">design claim</text>
+<rect x="1246.4" y="702" width="16" height="12" rx="3" fill="#ddf4ff" stroke="#218bff" stroke-width="1.25"/>
+<text x="1270.4" y="712" text-anchor="start" font-family="'DejaVu Sans', 'Liberation Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a">mechanics tested</text></svg>

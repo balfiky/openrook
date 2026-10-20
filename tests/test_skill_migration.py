@@ -104,3 +104,17 @@ def test_migrated_skill_no_longer_loads_in_enabled_context(tmp_path):
 
     after = enabled_skill_context(config)
     assert after["count"] == 0
+
+
+def test_operator_directive_outranks_pasted_text_in_openness():
+    """An operator deliberately promoting a skill into identity must be the
+    most-trusted source — not fall to the unknown-source default (0.40).
+    Regression for the trust-weight inversion.
+    """
+    from runtime.evolution_policy import source_openness_coefficient
+
+    op = source_openness_coefficient("operator_directive")
+    assert op == 0.80
+    assert op > source_openness_coefficient("pasted_text")          # 0.65
+    assert op > source_openness_coefficient("conversation_learning_text")  # 0.45
+    assert op > source_openness_coefficient("unknown_random_source")       # 0.40

@@ -273,7 +273,7 @@ def _perception_view(appraisal: Any) -> dict[str, Any]:
 
 def _perception_summary(target: str, move: str, vulnerability: float, action_need: float) -> str:
     if target == "assistant":
-        base = f"Read as {move or 'a social move'} directed at Nūr."
+        base = f"Read as {move or 'a social move'} directed at OpenRook."
     elif target == "external":
         base = f"Read as {move or 'a social move'} about something outside the relationship."
     elif target == "self":

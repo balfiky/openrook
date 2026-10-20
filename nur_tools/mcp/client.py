@@ -4,7 +4,7 @@ Defines the MCPClient protocol that any MCP transport can implement.
 Ships with NullMCPClient (errors on call) for safe defaults.
 
 When a real MCP SDK is available, a concrete implementation can be
-plugged in without changing any Nūr code.
+plugged in without changing any OpenRook code.
 """
 
 from __future__ import annotations

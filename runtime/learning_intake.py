@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
-import time
+from core.clock import clock as time
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -188,7 +188,7 @@ def ingest_learning_from_message(
                 text=material[:MAX_LEARNING_TEXT_CHARS],
                 source_type=source_type,
                 source_ref=source_ref,
-                participants=[actor, "Nūr"],
+                participants=[actor, "OpenRook"],
                 llm_client=llm_client,
                 metadata=metadata,
             )

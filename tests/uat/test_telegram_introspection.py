@@ -87,7 +87,7 @@ def test_introspection_commands_use_last_debug_without_processing(tmp_path, monk
             await channel.handle_update(_update(command, update_id=idx))
 
         sent = "\n\n".join(item["text"] for item in client.sent_messages)
-        assert "Nūr state:" in sent
+        assert "OpenRook state:" in sent
         assert "Why this response:" in sent
         assert "What I remember right now:" in sent
         assert "No active relationship loops." in sent or "Active loops:" in sent

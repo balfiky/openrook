@@ -1,13 +1,13 @@
 # User Acceptance Testing
 
-Nūr has structural unit/eval coverage and a separate UAT layer for installed,
-operator-facing behavior. UAT starts a real `nur-web` process in a temporary
+OpenRook has structural unit/eval coverage and a separate UAT layer for installed,
+operator-facing behavior. UAT starts a real `openrook-web` process in a temporary
 workspace, drives the bundled Web/Admin UI through Chromium, and checks the
 same API payloads a user or channel sees.
 
-UAT is **live-only**. Nūr no longer ships a mock LLM backend in production, so
-the suite always calls a real model. Setting `NUR_UAT_LIVE=1` plus a
-configured `NUR_UAT_BACKEND` is required; otherwise tests are skipped with a
+UAT is **live-only**. OpenRook no longer ships a mock LLM backend in production, so
+the suite always calls a real model. Setting `OPENROOK_UAT_LIVE=1` plus a
+configured `OPENROOK_UAT_BACKEND` is required; otherwise tests are skipped with a
 clear reason.
 
 ## Install UAT Dependencies
@@ -22,8 +22,8 @@ python3 -m playwright install chromium
 The repository includes a Makefile with three test entry points:
 
 ```bash
-make test                 # non-UAT unit/integration suite (1970 tests, ~3 min)
-make uat                  # full UAT suite (67 tests, ~14 min, live LLM)
+make test                 # non-UAT unit/integration suite
+make uat                  # full UAT suite (live LLM)
 make uat-comprehensive    # single PASS/FAIL aggregator that runs the same UAT
                           # tests as a subprocess and asserts they all pass
 ```
@@ -31,16 +31,16 @@ make uat-comprehensive    # single PASS/FAIL aggregator that runs the same UAT
 `make uat` defaults to the Codex CLI backend. Override with:
 
 ```bash
-NUR_UAT_BACKEND=openai_compatible \
-  NUR_UAT_BASE_URL=http://localhost:11434/v1 \
-  NUR_UAT_MODEL=llama3.2 \
+OPENROOK_UAT_BACKEND=openai_compatible \
+  OPENROOK_UAT_BASE_URL=http://localhost:11434/v1 \
+  OPENROOK_UAT_MODEL=llama3.2 \
   make uat
 ```
 
 Direct pytest invocation works too:
 
 ```bash
-NUR_UAT_LIVE=1 NUR_UAT_BACKEND=codex \
+OPENROOK_UAT_LIVE=1 OPENROOK_UAT_BACKEND=codex \
   python -m pytest tests/uat/ -m "uat and not comprehensive"
 ```
 
@@ -77,13 +77,14 @@ Specific high-value scenarios:
   emission via metabolism reflection, UI rendering and Abandon button.
 - Self-evolution metabolism: forced `last_decay_at` in the past triggers real
   belief decay (weak <0.2 revoked) and theme→belief promotion at the next tick.
-- Trigger-time skill retrieval: `applies_when` filter exposes skills only when
-  the user message hint matches; missing field surfaces an audit warning.
+- Trigger-time skill retrieval: skills declaring `applies_when` are exposed when
+  the user message hint matches; enabled skills without the field remain always
+  on and surface an audit warning.
 - Skill→life migration: `migrate_skill_to_life` flips the skill to
   `status='migrated'` and seeds an `operator_directive` life experience.
 - Ask-user surfacing: open question surfaces in chat, transitions to
-  `pursuing`, and the default 3/day learning budget caps surfacing at exactly
-  three per session.
+  `pursuing`, and the default learning budget permits at most three
+  questions per user per rolling 24 hours, shared across sessions and restarts.
 - Multi-turn behavioral arc: belief seed → contradicting evidence → confidence
   drop + contradiction question emitted → drive shift + non-zero life-influence
   pressure on a follow-up turn → operator resolves the question.
@@ -112,37 +113,37 @@ manual checks for the visual fidelity items.
 
 ## Backend Selection
 
-`NUR_UAT_BACKEND` selects the live backend the suite runs against. The
-fixture writes a real `runtime_config.yaml`, starts `nur-web`, and the suite
+`OPENROOK_UAT_BACKEND` selects the live backend the suite runs against. The
+fixture writes a real `runtime_config.yaml`, starts `openrook-web`, and the suite
 talks to it through HTTP and the browser.
 
 OpenAI-compatible / hosted provider:
 
 ```bash
 export LLM_API_KEY=...
-NUR_UAT_LIVE=1 \
-  NUR_UAT_BACKEND=openai_compatible \
-  NUR_UAT_BASE_URL=https://your-provider.example/v1 \
-  NUR_UAT_MODEL=your-model \
+OPENROOK_UAT_LIVE=1 \
+  OPENROOK_UAT_BACKEND=openai_compatible \
+  OPENROOK_UAT_BASE_URL=https://your-provider.example/v1 \
+  OPENROOK_UAT_MODEL=your-model \
   python -m pytest tests/uat/ -m "uat and not comprehensive"
 ```
 
 Codex CLI (uses your local Codex login, no API key needed):
 
 ```bash
-NUR_UAT_LIVE=1 NUR_UAT_BACKEND=codex \
+OPENROOK_UAT_LIVE=1 OPENROOK_UAT_BACKEND=codex \
   python -m pytest tests/uat/ -m "uat and not comprehensive"
 ```
 
-`NUR_UAT_BACKEND=mock` is no longer accepted; the production runtime never
+`OPENROOK_UAT_BACKEND=mock` is no longer accepted; the production runtime never
 runs against a fake backend, and UAT mirrors that.
 
 ## Useful Options
 
 ```bash
-NUR_UAT_HEADED=1 make uat           # watch the browser locally
-NUR_UAT_KEEP_WORKSPACE=1 make uat   # keep the temp data/config workspace
-NUR_UAT_ARTIFACTS=reports/uat/run1 make uat   # custom artifact directory
+OPENROOK_UAT_HEADED=1 make uat           # watch the browser locally
+OPENROOK_UAT_KEEP_WORKSPACE=1 make uat   # keep the temp data/config workspace
+OPENROOK_UAT_ARTIFACTS=reports/uat/run1 make uat   # custom artifact directory
 ```
 
 Failure screenshots and the server log land under
@@ -151,9 +152,18 @@ Failure screenshots and the server log land under
 ## CI
 
 The UAT suite is opt-in in CI because it spends provider quota on every run.
-A workflow that exercises the live suite should set `NUR_UAT_LIVE=1` and the
+A workflow that exercises the live suite should set `OPENROOK_UAT_LIVE=1` and the
 appropriate backend env vars from repository secrets, then run
 `make uat-comprehensive` for a single PASS/FAIL signal.
+
+What runs on every push instead is `uat.yml`'s **collection + boot smoke**
+job: it asserts the suite still collects cleanly (≥60 tests — imports,
+fixtures, markers) and that a fresh `openrook-web` install boots,
+self-bootstraps `runtime_config.yaml`, and serves `/v1/health` and the
+setup wizard at `/`. It executes zero UAT test bodies and does not claim
+browser coverage; the live job (`workflow_dispatch` with `run_live`, or
+the `OPENROOK_RUN_LIVE_UAT` repository variable) is the only CI path that
+runs the suite for real.
 
 UAT remains structural and inspectable. It does not claim human-likeness or
 measure subjective response quality.

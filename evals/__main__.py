@@ -37,7 +37,7 @@ from evals.scenarios import ALL_TAGS, all_scenarios
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Nūr evaluation runner — runs behavioral scenarios against a real backend.",
+        description="OpenRook evaluation runner — runs behavioral scenarios against a real backend.",
     )
     parser.add_argument(
         "--backend",

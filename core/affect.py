@@ -32,6 +32,7 @@ def resolve_affect(
     state: ModulatorState,
     appraisal: AppraisalFrame,
     person: PersonProfile | None = None,
+    agent_goal_comparison: bool | None = None,
 ) -> AffectState:
     """Compute derived affect signals for this turn."""
     signals: list[AffectSignal] = []
@@ -46,7 +47,7 @@ def resolve_affect(
         appraisal.blame * 0.45
         + low_valence * 0.3
         + high_arousal * 0.2
-        + (0.15 if appraisal.targets_assistant else 0.0)
+        + (0.15 if appraisal.targets_assistant and appraisal.social_move in {"attack", "complaint"} else 0.0)
     )
     if anger >= 0.35:
         evidence = ["blame", "low valence", "high arousal"]
@@ -68,7 +69,7 @@ def resolve_affect(
         appraisal.expectation_violation * 0.45
         + low_valence * 0.25
         + max(0.0, 0.5 - state.bonding) * 0.3
-        + (0.15 if appraisal.targets_assistant else 0.0)
+        + (0.15 if appraisal.targets_assistant and appraisal.expectation_violation > 0 else 0.0)
     )
     if hurt >= 0.35:
         signals.append(
@@ -80,7 +81,8 @@ def resolve_affect(
         )
 
     envy = 0.0
-    if _COMPARISON_RE.search(text):
+    if ((agent_goal_comparison is True or (agent_goal_comparison is None and _COMPARISON_RE.search(text))) and appraisal.social_move == "complaint"
+            and state.valence < 0.4 and not re.search(r"\bnot\s+(?:jealous|envious)\b", text, re.IGNORECASE)):
         envy = _clamp(0.45 + low_valence * 0.25 + high_arousal * 0.15 + low_certainty * 0.15)
     if envy >= 0.35:
         signals.append(
@@ -127,7 +129,6 @@ def resolve_affect(
 
     severity_rank = {
         "rage": 6,
-        "demand_repair": 5,
         "hurt": 4,
         "anger": 3,
         "envy": 3,
@@ -165,7 +166,7 @@ def decide_agency(
                 "Keep the response brief, professional, and task-focused. Set a "
                 "boundary without retaliating or describing assistant fatigue."
             ),
-            tool_instruction="Avoid risky or write actions; read-only task tools may run for clear requests.",
+            tool_instruction="Decline tools for this request; independently selected activity remains available.",
         )
 
     if hurt >= 0.65 and appraisal.social_move == "attack":
@@ -176,7 +177,7 @@ def decide_agency(
                 "Acknowledge the friction briefly, then ask for or answer the "
                 "concrete task without escalating tone."
             ),
-            tool_instruction="Avoid risky or write actions until the request is clear.",
+            tool_instruction="Decline tools for this request pending a change in willingness.",
         )
 
     if anger >= 0.6 and appraisal.targets_assistant and trust <= 0.5:

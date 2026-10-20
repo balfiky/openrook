@@ -72,6 +72,7 @@ CAPABILITIES: list[ToolCapability] = [
 # ---------------------------------------------------------------------------
 
 _MAX_READ_BYTES = 1_000_000  # 1 MB
+_MAX_WRITE_BYTES = 1_000_000  # 1 MB — mirrors the read cap
 _MAX_SEARCH_MATCHES = 100
 
 
@@ -191,6 +192,12 @@ def _glob_paths(args: dict[str, Any]) -> ToolResult:
 def _write_file(args: dict[str, Any]) -> ToolResult:
     path = args["path"]
     content = args["content"]
+    size = len(content.encode("utf-8", errors="replace"))
+    if size > _MAX_WRITE_BYTES:
+        return ToolResult(
+            tool_name="fs.write_file", success=False, output="",
+            error=f"Content too large: {size} bytes (max {_MAX_WRITE_BYTES})",
+        )
     parent = os.path.dirname(path)
     if parent and not os.path.isdir(parent):
         os.makedirs(parent, exist_ok=True)
@@ -251,10 +258,8 @@ def _path_inside(root: str, target: str) -> bool:
 
 def _refuse(tool_name: str, path: str, workspace: str | None = None) -> ToolResult:
     detail = (
-        f"Path outside sandboxed workspace: {path}. "
-        f"Filesystem tools are scoped to {workspace or '<configured workspace>'}. "
-        "Widen the scope by setting `tools_workspace` (e.g. `/` for full host "
-        "access) in /admin > Settings or runtime_config.yaml."
+        f"Path outside the allowed workspace: {path}. "
+        f"Filesystem tools are scoped to {workspace or '<configured workspace>'}."
     )
     return ToolResult(
         tool_name=tool_name,

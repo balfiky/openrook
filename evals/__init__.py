@@ -1,4 +1,4 @@
-"""Evaluation and benchmark harness for Project Nūr.
+"""Evaluation and benchmark harness for OpenRook.
 
 Provides structured scenario definitions, a deterministic runner,
 assertion-based behavioral checks, and text/JSON reporting.

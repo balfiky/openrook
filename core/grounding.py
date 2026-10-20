@@ -9,7 +9,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ActionClaim:
-    """A response claim that Nūr performed an external action."""
+    """A response claim that OpenRook performed an external action."""
 
     text: str
     categories: set[str] = field(default_factory=set)
@@ -121,7 +121,7 @@ def verify_response_grounding(
 
     This is presentation/output verification. It does not infer user intent and
     it does not special-case any product, repo, provider, or prompt. The rule is
-    simple: claims that Nūr performed external actions must be backed by a
+    simple: claims that OpenRook performed external actions must be backed by a
     matching category of executed tool result.
     """
     claims = extract_action_claims(response)
