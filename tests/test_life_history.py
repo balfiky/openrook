@@ -717,7 +717,7 @@ def test_genesis_reset_deletes_life_history_database(tmp_path, capsys):
 
 
 def test_rollback_is_disabled_outside_testing(tmp_path, monkeypatch):
-    monkeypatch.delenv("NUR_TESTING", raising=False)
+    monkeypatch.delenv("OPENROOK_TESTING", raising=False)
     config = _config(tmp_path)
     llm = FakeDigestLLM(
         """

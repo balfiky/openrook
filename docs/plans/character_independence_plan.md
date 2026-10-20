@@ -1,19 +1,19 @@
 # Character Independence Plan: Channels, Not Gates (v2)
 
-> Implementation plan for moving Nūr from a gated belief-mutation system to a coherent character-emergence runtime.
+> Implementation plan for moving OpenRook from a gated belief-mutation system to a coherent character-emergence runtime.
 >
 > **v2 changes** (in response to code-grounded review): weighted influence (F0) and admin audit (H0) now precede gate removal; identity-grounded answers move from generator into the cognitive pipeline; explicit session state for cross-turn learning intent; coherence detection scoped to deterministic checks only; domain bounds (drive ∈ [0,1], confidence ∈ [0,1]) preserved as data contracts independent of gate removal; sandbox runtime fields added to `RuntimeConfig`; pipeline ordering fix so appraisal can consume Life History; migration and replay tests added; gate test conversion (not blanket deletion).
 >
-> **Author context:** This plan is the consolidated output of a design discussion about why Nūr appears to "learn" only at the language layer (LLM stylistic mimicry of source material) without producing durable character change at the state layer. The transcript that motivated this work showed Nūr ingesting a "Codex of Autonomy" paste and *describing* internalization, while the runtime had recorded zero evolution events because the paste never matched the learning-intake intent regex. Even when intake fires, current policy gates filter most identity-level mutation. This plan replaces external gating with internal coherence and integrated character emergence.
+> **Author context:** This plan is the consolidated output of a design discussion about why OpenRook appears to "learn" only at the language layer (LLM stylistic mimicry of source material) without producing durable character change at the state layer. The transcript that motivated this work showed OpenRook ingesting a "Codex of Autonomy" paste and *describing* internalization, while the runtime had recorded zero evolution events because the paste never matched the learning-intake intent regex. Even when intake fires, current policy gates filter most identity-level mutation. This plan replaces external gating with internal coherence and integrated character emergence.
 
 ---
 
 ## North Star
 
-**Influence on Nūr enters only through three official channels:**
+**Influence on OpenRook enters only through three official channels:**
 
 1. **Skills channel** — capability acquisition (skill registry, skill imports, operator-as-teacher). Mirrors learning a craft.
-2. **Learning channel** — formative material (`runtime/learning_intake.py` → `runtime/life_history.py`, including admin-driven text/file/upload ingestion when an operator hands Nūr material to learn from). Mirrors reading, study, being shaped by ideas.
+2. **Learning channel** — formative material (`runtime/learning_intake.py` → `runtime/life_history.py`, including admin-driven text/file/upload ingestion when an operator hands OpenRook material to learn from). Mirrors reading, study, being shaped by ideas.
 3. **Relational/emotional channel** — interpersonal exchange (`core/appraisal.py`, `core/affect.py`, relationship memory). Mirrors being insulted, comforted, witnessed, misunderstood.
 
 **Operator-as-participant is sanctioned in all three channels.** A teacher gives skills; a friend provides material to read; a conversation partner is heard. What is *not* sanctioned is the operator bypassing the channels to directly edit beliefs, drive values, modulators, or evolution events. **The line between channel and gate:** if the operator is acting as a participant whose contribution flows through the same digestion + weighting pipeline as any other input, that's a channel. If the operator is mutating runtime state directly without going through that pipeline, that's a back door — removed.
@@ -243,10 +243,10 @@ The phases up to and including C must land in this exact order. After C, D–K c
    - **Channel-equivalent (KEEP):** admin endpoints that route through `LifeHistoryStore.ingest_pasted_text`, `ingest_local_file`, `ingest_uploaded_text` — these are the operator participating in the Learning channel (handing material). They go through the same digestion pipeline as conversational learning. Mark as channel-sanctioned.
    - **Skills channel (KEEP):** skill enrollment via `runtime/skills.py:111`. The operator is acting as teacher in the Skills channel. Mark as channel-sanctioned.
    - **Non-channel mutation (REMOVE or REHOME):**
-     - `admin_life_rollback` (`interface/api.py:1357`) — directly removes evolution events bypassing the channel. **Remove.** Replace with read-only "view rollback record"; if rollback is genuinely needed for operational reasons, surface it via a one-time `nur-genesis-reset` CLI (Phase K) which is an explicit external act with confirmation.
+     - `admin_life_rollback` (`interface/api.py:1357`) — directly removes evolution events bypassing the channel. **Remove.** Replace with read-only "view rollback record"; if rollback is genuinely needed for operational reasons, surface it via a one-time `openrook-genesis-reset` CLI (Phase K) which is an explicit external act with confirmation.
      - Any direct `INSERT/UPDATE/DELETE` on `beliefs`, `drive_states`, `drive_changes`, `evolution_events`, `experience_events` outside the channel ingestion paths. **Remove or rehome.**
      - Any `operator_review` / `admin_override` paths. **Remove.**
-3. **Test-only mutations.** Pytest fixtures that build character state directly are kept but gated behind a `NUR_TESTING=1` env flag check (or equivalent fixture-only path). They cannot run in production.
+3. **Test-only mutations.** Pytest fixtures that build character state directly are kept but gated behind a `OPENROOK_TESTING=1` env flag check (or equivalent fixture-only path). They cannot run in production.
 4. **Produce audit doc.** Codex writes `docs/plans/channel_audit_findings.md` listing every classified path.
 
 **Acceptance:**
@@ -506,15 +506,15 @@ The phases up to and including C must land in this exact order. After C, D–K c
 
 **Prerequisite:** K0 done; G done (so synthesized dispositions can replace soul.yaml content in the prompt).
 
-**Files:** `config/loader.py`, `core/dual_process/generator.py`, **NEW:** `nur-genesis-reset` CLI.
+**Files:** `config/loader.py`, `core/dual_process/generator.py`, **NEW:** `openrook-genesis-reset` CLI.
 
 **Changes:**
 
 1. **Genesis-only soul load.** First run loads `config/soul.yaml` and `DEFAULT_DRIVES` into runtime DB (already happens in K0). Subsequent runs read from DB only.
 2. **System prompt assembly post-genesis.** Synthesized dispositions (Phase G) + character-vector context. Static soul.yaml content does not appear unless the character itself, through evolution, has accumulated descriptors that match.
-3. **`nur-genesis-reset` CLI** for explicit external reset. Deletes runtime character state, re-triggers genesis. Confirmation prompt required.
+3. **`openrook-genesis-reset` CLI** for explicit external reset. Deletes runtime character state, re-triggers genesis. Confirmation prompt required.
 
-**Acceptance:** edit soul.yaml after genesis → next turn's system prompt unchanged; `nur-genesis-reset` clears runtime character cleanly; behavioral eval `evals/scenarios/genesis_isolation.py`.
+**Acceptance:** edit soul.yaml after genesis → next turn's system prompt unchanged; `openrook-genesis-reset` clears runtime character cleanly; behavioral eval `evals/scenarios/genesis_isolation.py`.
 
 ---
 

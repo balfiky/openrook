@@ -1,4 +1,4 @@
-"""Tests for the /v1 integration API and the ``NurClient`` stub.
+"""Tests for the /v1 integration API and the ``OpenRookClient`` stub.
 
 The legacy endpoints in ``test_interface.py`` exercise the pipeline-override
 shortcut. The v1 surface is designed for external integrators and runs
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -19,9 +20,10 @@ from fastapi.testclient import TestClient
 import interface.api as interface_api
 from tests._fakes import MockLLMBackend
 from interface.api import app, set_pipeline, set_session_manager
-from interface.client import NurAPIError, NurClient
+from interface.client import OpenRookAPIError, OpenRookClient
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
+from runtime.storage import LEGACY_USER_DB_NAME
 from runtime.tools import create_tool_executor
 
 
@@ -1116,11 +1118,10 @@ class TestAdminEndpoints:
             assert "private memory" == archive.read("data/memory.txt").decode()
 
     @pytest.mark.parametrize("db_names", [
-        ("nur.db",), ("openrook.db",), ("nur.db", "openrook.db"),
+        (LEGACY_USER_DB_NAME,), ("openrook.db",), (LEGACY_USER_DB_NAME, "openrook.db"),
     ])
-    @pytest.mark.parametrize("archive_brand", ["nur", "openrook"])
     def test_backup_offline_restore_preserves_both_database_generations(
-        self, temp_config, tmp_path, db_names, archive_brand,
+        self, temp_config, tmp_path, db_names,
     ):
         from core.memory.semantic import SQLiteSemanticMemory
         from core.types import SemanticMemoryEntry
@@ -1146,18 +1147,8 @@ class TestAdminEndpoints:
         source_config.write_yaml(str(temp_config))
         created = _create_admin_backup(source_config, include_data=True)
 
-        # Older archives have the same ZIP layout; restore remains an offline
-        # extraction. Neither filename nor export format can exclude the data.
-        archive_path = data_dir / "backups" / f"{archive_brand}-backup-fixture.zip"
-        with zipfile.ZipFile(created["path"]) as source:
-            with zipfile.ZipFile(archive_path, "w") as archive:
-                for name in source.namelist():
-                    payload = source.read(name)
-                    if name == "runtime_config.redacted.json":
-                        export = json.loads(payload)
-                        export["format"] = f"{archive_brand}.runtime_config.redacted.v1"
-                        payload = json.dumps(export).encode()
-                    archive.writestr(name, payload)
+        # Backup and offline restore preserve memory across the database upgrade.
+        archive_path = Path(created["path"])
         listing = _list_admin_backups(source_config)
         assert archive_path.name in {item["filename"] for item in listing["backups"]}
         restored = tmp_path / "restored"
@@ -1169,7 +1160,7 @@ class TestAdminEndpoints:
         config = RuntimeConfig(data_dir=str(restored / "data"))
         restored_path = config.user_db_path("web:backup-user")
         assert os.path.basename(restored_path) == "openrook.db"
-        expected_source = "openrook.db" if "openrook.db" in db_names else "nur.db"
+        expected_source = "openrook.db" if "openrook.db" in db_names else LEGACY_USER_DB_NAME
         memory = SQLiteSemanticMemory(restored_path)
         try:
             assert memory.count() == 1
@@ -1177,7 +1168,9 @@ class TestAdminEndpoints:
         finally:
             memory.close()
         if len(db_names) == 2:
-            assert (restored / "data/web_backup-user/nur.db").read_bytes() == original["nur.db"]
+            assert (
+                restored / "data/web_backup-user" / LEGACY_USER_DB_NAME
+            ).read_bytes() == original[LEGACY_USER_DB_NAME]
         deleted = _delete_admin_backup(
             source_config,
             filename=archive_path.name,
@@ -1226,8 +1219,8 @@ class TestAdminEndpoints:
         resp = client.post(
             "/admin/backups/delete",
             json={
-                "filename": "../nur-backup-20260101T000000Z.zip",
-                "confirmation": "DELETE ../nur-backup-20260101T000000Z.zip",
+                "filename": "../openrook-backup-20260101T000000Z.zip",
+                "confirmation": "DELETE ../openrook-backup-20260101T000000Z.zip",
             },
         )
 
@@ -1662,19 +1655,19 @@ class TestDeleteUser:
             resp = client.delete(f"/v1/users/{platform}/alice")
             assert resp.status_code in (400, 404)
 
-    def test_nur_client_delete_user_helper(self, client):
+    def test_openrook_client_delete_user_helper(self, client):
         self._chat_once(client, user_id="gary")
-        nur = NurClient(base_url="http://testserver")
-        nur._session = client  # reuse TestClient for in-process request
-        body = nur.delete_user("gary")
+        sdk = OpenRookClient(base_url="http://testserver")
+        sdk._session = client  # reuse TestClient for in-process request
+        body = sdk.delete_user("gary")
         assert body["deleted"] is True
         assert body["rel_key"] == "web:gary"
 
 
-class TestNurClient:
+class TestOpenRookClient:
     def test_client_health(self, client):
-        nur = NurClient(base_url=str(client.base_url).rstrip("/"))
-        nur._session = client  # reuse TestClient for in-process request
+        sdk = OpenRookClient(base_url=str(client.base_url).rstrip("/"))
+        sdk._session = client  # reuse TestClient for in-process request
         # Monkey-patched session path: TestClient supports request()
         resp = client.get("/v1/health")
         assert resp.status_code == 200
@@ -1685,6 +1678,6 @@ class TestNurClient:
             "/v1/chat", json={"message": "hi"},
         )
         assert resp.status_code == 401
-        with pytest.raises(NurAPIError) as excinfo:
-            raise NurAPIError(resp.status_code, resp.text)
+        with pytest.raises(OpenRookAPIError) as excinfo:
+            raise OpenRookAPIError(resp.status_code, resp.text)
         assert excinfo.value.status_code == 401

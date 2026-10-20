@@ -2,10 +2,6 @@
 // UI works offline and pulls no third-party script at runtime.
 import { marked } from "./marked.esm.js";
 import DOMPurify from "./dompurify.esm.js";
-import { migrateBrowserStorage } from "./storage.js";
-
-migrateBrowserStorage(localStorage, sessionStorage);
-
 marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
 
 export const PURIFY_CONFIG = {

@@ -278,7 +278,7 @@ and dispositions, while keeping private environment state out of agent context.
 - Seven prospective protocol files validate without credentials or network access.
   New-file formatting, focused lint and whitespace checks pass. Existing E402
   import-layout findings in `interface/api.py` and `runtime/llm/backend.py`, and
-  existing F401 unused-import findings in `nur_tools/native_orchestrator.py`,
+  existing F401 unused-import findings in `openrook_tools/native_orchestrator.py`,
   are excluded from scoped lint; unrelated imports are unchanged.
 - The initial local-backend check did not test the user-supplied hosted endpoint.
   A subsequent [hosted health check](../../reports/backend-health/20261019T084524Z-hosted.json)
@@ -397,7 +397,7 @@ observation is left running, and production configuration is unchanged.
 
 Engineering tests exercise retained rules, counterexamples, hidden probes, delayed
 social feedback, matched common probes, causal retrieval allocation, budgets, restart,
-replay, and study validation. Scripted fixture competence is not Nūr competence.
+replay, and study validation. Scripted fixture competence is not OpenRook competence.
 The completed confirmation establishes the declared retained-choice result for
 this backend and controlled world. It is not cross-provider replication or a
 comparison against matched human reference data.

@@ -91,20 +91,12 @@ openrook-genesis-reset = "runtime.genesis_reset:main"
 openrook-emotional-qa = "evals.emotional_quality:main"
 openrook-uat = "openrook_tools.uat:main"
 openrook-validate = "openrook_tools.validate:main"
-nur = "openrook_tools.legacy:main"
-nur-setup = "openrook_tools.legacy:setup"
-nur-uninstall = "openrook_tools.legacy:uninstall"
-nur-web = "openrook_tools.legacy:web"
-nur-genesis-reset = "openrook_tools.legacy:genesis_reset"
-nur-emotional-qa = "openrook_tools.legacy:emotional_qa"
-nur-uat = "openrook_tools.legacy:uat"
-nur-validate = "openrook_tools.legacy:validate"
 
 [tool.setuptools]
 py-modules = ["main"]
 
 [tool.setuptools.packages.find]
-include = ["core*", "config*", "evals*", "interface*", "pipeline*", "runtime*", "openrook_tools*", "nur_tools*"]
+include = ["core*", "config*", "evals*", "interface*", "pipeline*", "runtime*", "openrook_tools*"]
 exclude = ["tests*", "data*", "storage*", "reports*"]
 
 [tool.setuptools.package-data]

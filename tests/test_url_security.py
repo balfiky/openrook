@@ -95,9 +95,9 @@ class TestLiteralPolicy:
             security.validate_http_url("http://10.0.0.8/admin")
 
     def test_literal_private_allowed_with_env_optin(self, monkeypatch):
-        monkeypatch.setenv("NUR_TEST_ALLOW_PRIVATE", "1")
+        monkeypatch.setenv("OPENROOK_TEST_ALLOW_PRIVATE", "1")
         url = security.validate_http_url(
-            "http://10.0.0.8/admin", allow_private_env="NUR_TEST_ALLOW_PRIVATE",
+            "http://10.0.0.8/admin", allow_private_env="OPENROOK_TEST_ALLOW_PRIVATE",
         )
         assert url == "http://10.0.0.8/admin"
 
@@ -189,11 +189,11 @@ class TestHostnameResolution:
     def test_env_optin_honored_without_resolution(self, real_dns, monkeypatch):
         # With the trust opt-in every address category is allowed, so
         # resolution is skipped entirely — even a broken resolver passes.
-        monkeypatch.setenv("NUR_TEST_ALLOW_PRIVATE", "1")
+        monkeypatch.setenv("OPENROOK_TEST_ALLOW_PRIVATE", "1")
         real_dns(error=socket.gaierror(-2, "resolver down"))
         url = security.validate_http_url(
             "http://internal-service.example/",
-            allow_private_env="NUR_TEST_ALLOW_PRIVATE",
+            allow_private_env="OPENROOK_TEST_ALLOW_PRIVATE",
         )
         assert url == "http://internal-service.example/"
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from interface import api as nur_api
+from interface import api as openrook_api
 from runtime.config import RuntimeConfig
 
 
@@ -43,15 +43,15 @@ def fake_uvicorn(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _restore_runtime_config_globals():
-    """``nur_api.main()`` mutates ``RUNTIME_CONFIG_PATH`` and the
+    """``openrook_api.main()`` mutates ``RUNTIME_CONFIG_PATH`` and the
     ``OPENROOK_RUNTIME_CONFIG`` env var as a side effect of CLI arg parsing,
     so subsequent tests that import the FastAPI app would otherwise pick
     up our tmp configs. Restore both after every test in this module.
     """
-    original_path = nur_api.RUNTIME_CONFIG_PATH
+    original_path = openrook_api.RUNTIME_CONFIG_PATH
     original_env = os.environ.get("OPENROOK_RUNTIME_CONFIG")
     yield
-    nur_api.RUNTIME_CONFIG_PATH = original_path
+    openrook_api.RUNTIME_CONFIG_PATH = original_path
     if original_env is None:
         os.environ.pop("OPENROOK_RUNTIME_CONFIG", None)
     else:
@@ -67,7 +67,7 @@ class TestLoopbackBinds:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", loopback, "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         assert fake_uvicorn[-1]["host"] == loopback
         err = capsys.readouterr().err
         assert "WARNING" not in err
@@ -79,7 +79,7 @@ class TestLoopbackBinds:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", "127.0.0.1", "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         reloaded = RuntimeConfig.from_yaml(cfg_path)
         assert reloaded.api_key == ""
 
@@ -92,7 +92,7 @@ class TestNonLoopbackBinds:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         # Server actually binds — no refusal, no exit.
         assert fake_uvicorn[-1]["host"] == "0.0.0.0"
         # api_key stays empty — launcher never invents one.
@@ -111,7 +111,7 @@ class TestNonLoopbackBinds:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         assert fake_uvicorn[-1]["host"] == "0.0.0.0"
         # api_key untouched.
         reloaded = RuntimeConfig.from_yaml(cfg_path)
@@ -127,10 +127,9 @@ class TestFirstRunBootstrap:
     ):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("OPENROOK_RUNTIME_CONFIG", raising=False)
-        monkeypatch.delenv("NUR_RUNTIME_CONFIG", raising=False)
         monkeypatch.setattr(sys, "argv", ["openrook-web"])
 
-        nur_api.main()
+        openrook_api.main()
 
         cfg = RuntimeConfig.from_yaml(str(tmp_path / "runtime_config.yaml"))
         assert cfg.llm_model == ""
@@ -145,7 +144,7 @@ class TestFirstRunBootstrap:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", "127.0.0.1", "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         # Config file exists after first run.
         assert Path(cfg_path).is_file()
         # Defaults are safe: tools off, shell off, no api_key.
@@ -167,7 +166,7 @@ class TestFirstRunBootstrap:
         monkeypatch.setattr(
             sys, "argv", ["openrook-web", "--host", "0.0.0.0", "--config", cfg_path],
         )
-        nur_api.main()
+        openrook_api.main()
         # File created; api_key not auto-generated.
         assert Path(cfg_path).is_file()
         cfg = RuntimeConfig.from_yaml(cfg_path)

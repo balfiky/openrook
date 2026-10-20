@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import pytest
 
 from core.types import (
-    ActionVariables,
     ModulatorState,
     PersonProfile,
     ProactiveAction,
@@ -18,7 +17,6 @@ from core.types import (
     TaskPlan,
     TaskStatus,
     TaskStep,
-    ToolTrace,
     UnresolvedItem,
 )
 from core.proactive import (
@@ -791,7 +789,7 @@ class TestPhase8Regression:
         p = CognitivePipeline(llm_backend=MockLLMBackend())
         p._proactive_count = 2
         p.process("hello")
-        result = p.end_session()
+        p.end_session()
         assert p._proactive_count == 0
         assert p._conversation_history == []
         assert p._active_task_plan is None
@@ -803,33 +801,32 @@ class TestPhase8Regression:
 
 
 class TestProactiveCallbackWiring:
-    """Fix 1: NurApp must construct SessionManager with a real callback."""
+    """Fix 1: OpenRookApp must construct SessionManager with a real callback."""
 
-    def test_nur_app_passes_callback(self):
-        from runtime.app import NurApp
+    def test_openrook_app_passes_callback(self):
+        from runtime.app import OpenRookApp
         from runtime.config import RuntimeConfig
         cfg = RuntimeConfig(llm_backend="mock", proactive_enabled=True)
-        app = NurApp(config=cfg)
+        app = OpenRookApp(config=cfg)
         assert app.session_manager._proactive_callback is not None
 
-    def test_nur_app_callback_is_deliver_proactive(self):
-        from runtime.app import NurApp
+    def test_openrook_app_callback_is_deliver_proactive(self):
+        from runtime.app import OpenRookApp
         from runtime.config import RuntimeConfig
         cfg = RuntimeConfig(llm_backend="mock")
-        app = NurApp(config=cfg)
+        app = OpenRookApp(config=cfg)
         cb = app.session_manager._proactive_callback
-        assert cb.__func__ is NurApp._deliver_proactive
+        assert cb.__func__ is OpenRookApp._deliver_proactive
         assert cb.__self__ is app
 
     def test_deliver_proactive_console(self, capsys):
         """Console delivery prints to stdout."""
         import asyncio
-        from runtime.app import NurApp
+        from runtime.app import OpenRookApp
         from runtime.config import RuntimeConfig
-        from runtime.channels.console import ConsoleChannel
 
         cfg = RuntimeConfig(llm_backend="mock", console_enabled=True)
-        app = NurApp(config=cfg)
+        app = OpenRookApp(config=cfg)
         # Fake a console channel being active
         app._console = object()  # truthy — delivery checks is not None
 
@@ -842,22 +839,22 @@ class TestProactiveCallbackWiring:
     def test_deliver_proactive_bad_session_key(self, caplog):
         """Malformed session_key logs a warning, does not crash."""
         import asyncio
-        from runtime.app import NurApp
+        from runtime.app import OpenRookApp
         from runtime.config import RuntimeConfig
 
         cfg = RuntimeConfig(llm_backend="mock")
-        app = NurApp(config=cfg)
+        app = OpenRookApp(config=cfg)
         # No exception
         asyncio.run(app._deliver_proactive("bad_key", "user", "msg"))
 
     def test_deliver_proactive_no_channel(self, caplog):
         """Unknown platform logs warning, does not crash."""
         import asyncio
-        from runtime.app import NurApp
+        from runtime.app import OpenRookApp
         from runtime.config import RuntimeConfig
 
         cfg = RuntimeConfig(llm_backend="mock")
-        app = NurApp(config=cfg)
+        app = OpenRookApp(config=cfg)
         asyncio.run(app._deliver_proactive("unknown:user:chat", "user", "msg"))
 
 
@@ -876,7 +873,7 @@ class TestProactiveSerialization:
     def test_run_proactive_acquires_user_lock(self, _event_loop_policy, tmp_path):
         """_run_proactive must hold user_lock during pipeline execution."""
         import asyncio
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import MagicMock, patch
         from runtime.sessions.manager import SessionManager
         from runtime.config import RuntimeConfig
 
@@ -913,7 +910,6 @@ class TestProactiveSerialization:
 
     def test_no_proactive_during_processing(self, _event_loop_policy, tmp_path):
         """_proactive_sweep skips sessions with _processing=True."""
-        import asyncio
         from unittest.mock import MagicMock
         from runtime.sessions.manager import SessionManager
         from runtime.config import RuntimeConfig
@@ -940,7 +936,6 @@ class TestProactiveSerialization:
 
     def test_no_proactive_with_queued_work(self, _event_loop_policy, tmp_path):
         """_proactive_sweep skips sessions with queued messages."""
-        import asyncio
         from unittest.mock import MagicMock
         from runtime.sessions.manager import SessionManager
         from runtime.config import RuntimeConfig
@@ -1020,14 +1015,11 @@ class TestProactiveElapsedDecay:
         p.process("hello", user_id="user1")
         old_time = p._last_turn_time
 
-        # Record initial arousal
-        initial_arousal = p.engine.state.arousal
-
         # Fake elapsed time (simulate 600s idle)
         p._last_state_update_at = time.time() - 600
 
         # Run proactive — should apply decay before evaluation
-        result = p.process_proactive("user1", idle_threshold=1.0)
+        p.process_proactive("user1", idle_threshold=1.0)
 
         assert p._last_turn_time == old_time
         assert p._last_state_update_at > old_time
@@ -1075,7 +1067,7 @@ class TestProactiveElapsedDecay:
         p = CognitivePipeline(llm_backend=MockLLMBackend())
         assert p._last_turn_time is None
         # Should not raise
-        result = p.process_proactive("user1", idle_threshold=0.0)
+        p.process_proactive("user1", idle_threshold=0.0)
         assert p._last_turn_time is None
         assert p._last_state_update_at is not None
 

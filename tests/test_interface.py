@@ -539,7 +539,7 @@ class TestConfigEndpoint:
             llm_backend="mock",
             tools_enabled=True,
             autonomy_level="high_risk",
-            tools_workspace="/tmp/nur_ws",
+            tools_workspace="/tmp/openrook_ws",
             shell_tool_enabled=True,
             shell_command_allowlist=["git", "ls"],
             mcp_tool_categories={"mcp.github.*": "external_action"},
@@ -552,7 +552,7 @@ class TestConfigEndpoint:
         saved = RuntimeConfig.from_yaml(str(path))
         assert saved.tools_enabled is True
         assert saved.autonomy_level == "high_risk"
-        assert saved.tools_workspace == "/tmp/nur_ws"
+        assert saved.tools_workspace == "/tmp/openrook_ws"
         assert saved.shell_tool_enabled is True
         assert saved.shell_command_allowlist == ["git", "ls"]
         assert saved.mcp_tool_categories == {"mcp.github.*": "external_action"}
@@ -568,7 +568,7 @@ class TestConfigEndpoint:
             llm_backend="mock",
             tools_enabled=True,
             autonomy_level="autonomous",
-            tools_workspace="/tmp/nur_ws2",
+            tools_workspace="/tmp/openrook_ws2",
             shell_command_allowlist=["git", "  rg  ", ""],
             mcp_tool_categories={"mcp.cal.get_hook": "  EXTERNAL_ACTION  "},
             mcp_strict_categories=True,
@@ -577,7 +577,7 @@ class TestConfigEndpoint:
         saved = RuntimeConfig.from_yaml(str(path))
         assert saved.tools_enabled is True
         assert saved.autonomy_level == "autonomous"
-        assert saved.tools_workspace == "/tmp/nur_ws2"
+        assert saved.tools_workspace == "/tmp/openrook_ws2"
         assert saved.shell_command_allowlist == ["git", "rg"]
         # shell_tool_enabled was not specified → remains default False.
         assert saved.shell_tool_enabled is False
@@ -1029,7 +1029,7 @@ Boundaries: Never say as an AI. Never use the word delve.
 
 
 class TestAdminSetupDefaultSoul:
-    async def test_default_soul_reason_surfaces_when_name_is_nur(
+    async def test_default_soul_reason_surfaces_when_name_is_openrook(
         self, monkeypatch, tmp_path
     ):
         """Setup flagged default_soul when soul.name is still the built-in 'OpenRook'."""
@@ -1068,7 +1068,7 @@ class TestAdminSoulSave:
 
         runtime_cfg_path = tmp_path / "runtime_config.yaml"
         monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(runtime_cfg_path))
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path / "identity"))
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path / "identity"))
         RuntimeConfig(data_dir=str(tmp_path / "data")).write_yaml(str(runtime_cfg_path))
         manager = HangingManager()
         set_session_manager(manager)  # type: ignore[arg-type]
@@ -1136,7 +1136,7 @@ class TestAdminSoulSave:
 
         runtime_cfg_path = tmp_path / "runtime_config.yaml"
         monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(runtime_cfg_path))
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path / "identity"))
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path / "identity"))
         RuntimeConfig(
             data_dir=str(tmp_path / "data"),
             llm_backend="mock",
@@ -1317,7 +1317,7 @@ class TestAgentNamePropagation:
         assert "You are OpenRook" not in iris_prompt
         assert "{agent_name}" not in iris_prompt
 
-    def test_generator_template_has_no_hardcoded_nur_directive(self):
+    def test_generator_template_has_no_hardcoded_openrook_directive(self):
         """Guard the generator template itself: first line must use a placeholder."""
         from config.loader import get_config, reset_config
 
@@ -1354,8 +1354,8 @@ class TestSoulSaveReloadsSessionManager:
         chat turn picks up the new identity without a process restart."""
         from interface.api import AdminSoulUpdateRequest, admin_update_soul
 
-        # Redirect soul writes to tmp; use NUR_CONFIG_DIR so the loader reads it
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path))
+        # Redirect soul writes to tmp; use OPENROOK_CONFIG_DIR so the loader reads it
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path))
         monkeypatch.setattr(interface_api, "_soul_yaml_path", lambda: str(tmp_path / "soul.yaml"))
 
         # Install a sentinel session manager
@@ -1392,11 +1392,11 @@ class TestSoulSaveReloadsSessionManager:
 
 class TestConfigLoaderOverride:
     def test_override_dir_replaces_packaged_soul(self, monkeypatch, tmp_path):
-        """NUR_CONFIG_DIR points at a user dir; soul.yaml there wins."""
+        """OPENROOK_CONFIG_DIR points at a user dir; soul.yaml there wins."""
         import importlib
         import config.loader as _loader
 
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path))
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path))
         (tmp_path / "soul.yaml").write_text(
             "soul:\n  name: Atlas\n  identity: Override identity.\n",
             encoding="utf-8",
@@ -1407,7 +1407,7 @@ class TestConfigLoaderOverride:
             assert cfg.soul.name == "Atlas"
             assert "Override" in cfg.soul.identity
         finally:
-            monkeypatch.delenv("NUR_CONFIG_DIR", raising=False)
+            monkeypatch.delenv("OPENROOK_CONFIG_DIR", raising=False)
             importlib.reload(_loader)
 
     def test_override_dir_falls_through_when_file_missing(self, monkeypatch, tmp_path):
@@ -1415,28 +1415,28 @@ class TestConfigLoaderOverride:
         import importlib
         import config.loader as _loader
 
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path))
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path))
         # No soul.yaml written — should fall through to packaged "OpenRook"
         importlib.reload(_loader)
         try:
             cfg = _loader.load_config()
             assert cfg.soul.name == "OpenRook"
         finally:
-            monkeypatch.delenv("NUR_CONFIG_DIR", raising=False)
+            monkeypatch.delenv("OPENROOK_CONFIG_DIR", raising=False)
             importlib.reload(_loader)
 
     def test_override_nonexistent_dir_ignored(self, monkeypatch, tmp_path):
-        """NUR_CONFIG_DIR pointing at a missing directory is ignored, not fatal."""
+        """OPENROOK_CONFIG_DIR pointing at a missing directory is ignored, not fatal."""
         import importlib
         import config.loader as _loader
 
-        monkeypatch.setenv("NUR_CONFIG_DIR", str(tmp_path / "does-not-exist"))
+        monkeypatch.setenv("OPENROOK_CONFIG_DIR", str(tmp_path / "does-not-exist"))
         importlib.reload(_loader)
         try:
             cfg = _loader.load_config()
             assert cfg.soul.name == "OpenRook"
         finally:
-            monkeypatch.delenv("NUR_CONFIG_DIR", raising=False)
+            monkeypatch.delenv("OPENROOK_CONFIG_DIR", raising=False)
             importlib.reload(_loader)
 
 

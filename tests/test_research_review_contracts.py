@@ -538,9 +538,8 @@ def test_research_digest_uses_schema_only_and_hashes_exact_effective_prompt(tmp_
     )
 
 
-@pytest.mark.parametrize("distribution_name", ["openrook", "project-nur"])
 def test_installed_fingerprint_uses_only_distribution_owned_files(
-    tmp_path, monkeypatch, distribution_name
+    tmp_path, monkeypatch
 ):
     import runtime.research_store as storage
 
@@ -566,8 +565,7 @@ def test_installed_fingerprint_uses_only_distribution_owned_files(
     )
 
     def distribution(name):
-        if name != distribution_name:
-            raise PackageNotFoundError(name)
+        assert name == "openrook"
         return installed
 
     monkeypatch.setattr(storage, "__file__", str(tmp_path / "runtime/research_store.py"))

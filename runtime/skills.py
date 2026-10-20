@@ -610,13 +610,6 @@ def _read_registry(root: Path) -> dict[str, Any]:
     data.setdefault("skills", [])
     if not isinstance(data["skills"], list):
         raise SkillError("Skill registry 'skills' field must be a list.")
-    for record in data["skills"]:
-        compatibility = record.get("compatibility") or {}
-        if "tool_mappings" in compatibility:
-            compatibility["tool_mappings"] = [
-                _normalize_tool_mapping(item)
-                for item in compatibility["tool_mappings"]
-            ]
     return data
 
 
@@ -685,15 +678,6 @@ def _dedupe(values: list[str]) -> list[str]:
             out.append(item)
             seen.add(item)
     return out
-
-
-def _normalize_tool_mapping(item: dict[str, Any]) -> dict[str, Any]:
-    """Read mappings from existing registries while returning current fields."""
-    normalized = dict(item)
-    legacy_tool = normalized.pop("nur_tool", None)
-    if "openrook_tool" not in normalized and legacy_tool is not None:
-        normalized["openrook_tool"] = legacy_tool
-    return normalized
 
 
 def _dedupe_mappings(values: list[dict[str, Any]]) -> list[dict[str, Any]]:

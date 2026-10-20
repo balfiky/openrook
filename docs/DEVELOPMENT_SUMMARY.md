@@ -2,8 +2,8 @@
 
 This is the public summary of the major runtime and validation work completed
 through 2026-10-19, including the **OpenRook** rename. Historical
-plans and study artifacts keep their original names and recorded results.
-See [migration instructions](OPENROOK_MIGRATION.md) for compatibility details.
+plans retain their recorded scope and results; tracked project naming is
+standardized. See [upgrade instructions](OPENROOK_MIGRATION.md) for current setup.
 
 The subsequent [F1–F7 review corrections](REVIEW_FIXES.md) narrow the historical
 study's attribution, strengthen replay and resource handling, and add offline
@@ -178,14 +178,16 @@ unchanged; new experiments record their own implementation identity.
 
 ## Rename verification
 
-The completed OpenRook rename is checked separately from the historical live study:
+The initial OpenRook rename was checked separately from the historical live
+study. These results describe that checkpoint; deprecated aliases have since
+been removed as described in the [upgrade note](OPENROOK_MIGRATION.md):
 
 - Python 3.13 non-UAT regression suite: **2,720 passed, 11 pre-existing expected
   failures**, with two existing deprecation warnings.
-- 33 new regression cases cover branding, environment precedence, legacy imports,
+- 33 new regression cases covered branding, environment precedence, legacy imports,
   existing identity/storage, backup compatibility, and installed evaluation startup.
-- Python 3.10 clean-wheel installation: all **16 new and legacy commands** respond,
-  installed-package validation passes, and evaluation listing imports without the
+- Python 3.10 clean-wheel installation: all **16 then-supported commands** responded,
+  installed-package validation passed, and evaluation listing imported without the
   test-only package. The smoke check also caught and fixed an eager fake-backend
   import in the evaluation CLI.
 - Browser checks verify the branded first-run wizard, chat, and model-configured

@@ -26,7 +26,7 @@
       }
     },
     {
-      "name": "nur_batch_a",
+      "name": "openrook_batch_a",
       "runtime": {
         "research_mode": true,
         "research_birth_policy": "uncommitted",
@@ -58,7 +58,7 @@
       }
     },
     {
-      "name": "nur_closed_loop_a",
+      "name": "openrook_closed_loop_a",
       "runtime": {
         "research_mode": true,
         "research_birth_policy": "uncommitted",
@@ -74,7 +74,7 @@
       }
     },
     {
-      "name": "nur_closed_loop_b",
+      "name": "openrook_closed_loop_b",
       "runtime": {
         "research_mode": true,
         "research_birth_policy": "uncommitted",
@@ -106,7 +106,7 @@
       }
     },
     {
-      "name": "nur_batch_b",
+      "name": "openrook_batch_b",
       "runtime": {
         "research_mode": true,
         "research_birth_policy": "uncommitted",

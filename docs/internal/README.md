@@ -12,4 +12,4 @@ Contents:
 - `EXPERT_BRIEF.md` — expert-consultation briefing from an earlier stage of
   the project; retained for implementation context, superseded as a public
   read by `docs/OVERVIEW.md` and `docs/ARCHITECTURE.md`.
-- `NUR_RUNTIME_DESIGN_REVISED.md` — historical runtime design spec retained for implementation context.
+- `OPENROOK_RUNTIME_DESIGN_REVISED.md` — historical runtime design spec retained for implementation context.

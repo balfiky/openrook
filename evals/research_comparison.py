@@ -363,7 +363,6 @@ async def run_comparison(
         environment = os.environ.copy()
         environment["LLM_API_KEY"] = config.effective_llm_api_key
         environment.pop("OPENROOK_CONFIG_DIR", None)
-        environment.pop("NUR_CONFIG_DIR", None)
         status["phase"] = "observation"
         for replicate in range(1, design["replicates"] + 1):
             status["replicate"] = replicate

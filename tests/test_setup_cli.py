@@ -51,7 +51,6 @@ def test_initialize_workspace_creates_config_and_dirs(tmp_path):
 def test_init_only_creates_config_in_a_fresh_working_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OPENROOK_RUNTIME_CONFIG", raising=False)
-    monkeypatch.delenv("NUR_RUNTIME_CONFIG", raising=False)
     monkeypatch.setattr(sys, "argv", ["openrook-setup", "--init-only"])
 
     main()
@@ -101,7 +100,7 @@ def test_terminal_setup_writes_config_identity_and_completion(tmp_path):
         force=False,
         input_fn=lambda _prompt: next(answers),
         output_fn=lambda _line: None,
-        environ={"NUR_CONFIG_DIR": str(identity_dir)},
+        environ={"OPENROOK_CONFIG_DIR": str(identity_dir)},
     )
 
     saved = RuntimeConfig.from_yaml(str(config_path))
@@ -143,7 +142,7 @@ def test_terminal_setup_can_configure_tools_and_custom_workspace(tmp_path):
         force=False,
         input_fn=lambda _prompt: next(answers),
         output_fn=lambda _line: None,
-        environ={"NUR_CONFIG_DIR": str(identity_dir)},
+        environ={"OPENROOK_CONFIG_DIR": str(identity_dir)},
     )
 
     saved = RuntimeConfig.from_yaml(str(config_path))

@@ -131,7 +131,7 @@ def _list_admin_backups(config: RuntimeConfig) -> dict:
     backups: list[dict] = []
     if os.path.isdir(backup_dir):
         for name in sorted(os.listdir(backup_dir), reverse=True):
-            if not name.startswith(("openrook-backup-", "nur-backup-")) or not name.endswith(".zip"):
+            if not name.startswith("openrook-backup-") or not name.endswith(".zip"):
                 continue
             path = _resolve_admin_backup_path(config, name, must_exist=False)
             if not os.path.isfile(path):
@@ -188,7 +188,7 @@ def _resolve_admin_backup_path(
         not filename
         or os.sep in filename
         or (os.altsep and os.altsep in filename)
-        or not filename.startswith(("openrook-backup-", "nur-backup-"))
+        or not filename.startswith("openrook-backup-")
         or not filename.endswith(".zip")
     ):
         raise HTTPException(status_code=400, detail="Invalid backup filename.")

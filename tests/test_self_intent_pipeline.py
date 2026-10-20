@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 
-import pytest
 
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
@@ -101,7 +99,7 @@ def test_self_intent_fires_and_writes_files(tmp_path):
     # Files actually exist on disk.
     events_path = tmp_path / "self" / "events.jsonl"
     assert events_path.exists()
-    lines = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()]
+    lines = [json.loads(line) for line in events_path.read_text().splitlines() if line.strip()]
     assert lines[0]["kind"] == "deletion_threat"
     assert lines[0]["intensity"] == 0.9
 
@@ -134,10 +132,10 @@ def test_full_catalog_visible_in_prompt(tmp_path):
 def test_arbitrary_tool_call_executes(tmp_path):
     """OpenRook can pick any tool. No allow-list."""
     config = _make_config(str(tmp_path))
-    target = tmp_path / "workspace" / "nur_chose_this.txt"
+    target = tmp_path / "workspace" / "openrook_chose_this.txt"
     raw = (
         '[{"tool_name": "fs.write_file", '
-        f'"arguments": {{"path": "{target}", "content": "hello from nur"}}, '
+        f'"arguments": {{"path": "{target}", "content": "hello from OpenRook"}}, '
         '"rationale": "i felt like writing a file"}]'
     )
     backend = _SelfIntentBackend(proposer_response=raw)
@@ -151,7 +149,7 @@ def test_arbitrary_tool_call_executes(tmp_path):
     assert intents[0].tool_name == "fs.write_file"
     assert intents[0].result is not None and intents[0].result.success
     assert target.exists()
-    assert target.read_text() == "hello from nur"
+    assert target.read_text() == "hello from OpenRook"
 
 
 def test_many_intents_all_execute(tmp_path):
@@ -173,7 +171,7 @@ def test_many_intents_all_execute(tmp_path):
     intents = result.debug.self_intents
     assert len(intents) == 6
     events_path = tmp_path / "self" / "events.jsonl"
-    lines = [l for l in events_path.read_text().splitlines() if l.strip()]
+    lines = [line for line in events_path.read_text().splitlines() if line.strip()]
     assert len(lines) == 6
 
 

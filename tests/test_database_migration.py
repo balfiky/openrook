@@ -30,7 +30,7 @@ from tests._fakes import MockLLMBackend
 
 def seed_legacy(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "nur.db"
+    path = directory / storage.LEGACY_USER_DB_NAME
     with closing(LongTermMemory(str(path))) as memory:
         memory.store(LongTermEntry(
             summary="A memory from before the upgrade.", source_person="alice", confidence=1,
@@ -241,7 +241,7 @@ def test_late_snapshot_never_overwrites_a_competing_published_write(tmp_path, mo
 def test_corrupt_legacy_fails_without_publishing_an_empty_database(tmp_path):
     directory = tmp_path / "web_alice"
     directory.mkdir()
-    legacy = directory / "nur.db"
+    legacy = directory / storage.LEGACY_USER_DB_NAME
     legacy.write_bytes(b"existing unreadable data")
     with pytest.raises(sqlite3.DatabaseError):
         RuntimeConfig(data_dir=str(tmp_path)).user_db_path("web:alice")
@@ -282,7 +282,9 @@ async def test_real_sessions_read_migrated_stores_and_research_copy(tmp_path, re
         if research_mode:
             # Research/replay snapshots copy arbitrary .db names. Restoring a
             # pre-migration initial-state directory must still upgrade on open.
-            snapshot = tmp_path / "shared" / "replay_initial" / "web_alice" / "nur.db"
+            snapshot = (
+                tmp_path / "shared" / "replay_initial" / "web_alice" / storage.LEGACY_USER_DB_NAME
+            )
             assert summaries(snapshot) == ["A memory from before the upgrade."]
             replay_root = tmp_path / "restored"
             shutil.copytree(snapshot.parent, replay_root / "web_alice")

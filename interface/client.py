@@ -32,9 +32,6 @@ class OpenRookAPIError(RuntimeError):
         self.body = body
 
 
-NurAPIError = OpenRookAPIError
-
-
 class OpenRookClient:
     """Thin v1 API client. Reuses a :class:`requests.Session` for keep-alive."""
 
@@ -266,6 +263,3 @@ class OpenRookClient:
 
     def get_config(self) -> dict[str, Any]:
         return self._request("GET", "/v1/config")
-
-
-NurClient = OpenRookClient

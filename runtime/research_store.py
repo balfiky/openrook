@@ -67,18 +67,16 @@ def restore_configuration(payload: dict[str, Any]) -> Any:
 
 def _code_fingerprint() -> dict[str, str]:
     root = Path(__file__).resolve().parents[1]
-    for name in ("openrook", "project-nur"):
-        try:
-            installed = distribution(name)
-        except PackageNotFoundError:
-            continue
-        files = installed.files or []
-        if not any(
-            str(path) == "runtime/research_store.py"
-            and Path(installed.locate_file(path)).resolve() == Path(__file__).resolve()
-            for path in files
-        ):
-            continue
+    try:
+        installed = distribution("openrook")
+    except PackageNotFoundError:
+        installed = None
+    files = (installed.files or []) if installed is not None else []
+    if installed is not None and any(
+        str(path) == "runtime/research_store.py"
+        and Path(installed.locate_file(path)).resolve() == Path(__file__).resolve()
+        for path in files
+    ):
         hashes = {}
         for relative in sorted(files):
             path = Path(installed.locate_file(relative)).resolve()

@@ -1,59 +1,46 @@
 """Tests for the config system — Phase 8."""
 
-import pytest
-import tempfile
-import os
-from pathlib import Path
 
 import yaml
 
 from config.loader import (
-    NurConfig,
+    OpenRookConfig,
     load_config,
     get_config,
     reset_config,
     SoulConfig,
     SemanticMemoryConfig,
-    EnergyConfig,
-    MemoryConfig,
-    ProfilingConfig,
-    PersonConfig,
-    SelfModelConfig,
-    TopicConfig,
-    ContradictionConfig,
-    ContagionDetectionConfig,
-    ContagionEngineConfig,
     EventDeltaCapsConfig,
 )
 
 
-class TestNurConfigDefaults:
+class TestOpenRookConfigDefaults:
     """Config defaults should match the hardcoded values from all modules."""
 
     def test_default_half_lives(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.half_lives["arousal"] == 120.0
         assert cfg.half_lives["valence"] == 1800.0
         assert cfg.half_lives["certainty"] == 600.0
         assert cfg.half_lives["bonding"] == 86400.0
 
     def test_default_baselines(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.baselines["arousal"] == 0.5
         assert cfg.baselines["energy"] == 1.0
 
     def test_default_spike_threshold(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.spike_threshold == 0.8
 
     def test_default_energy(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.energy.drain_per_message == 0.02
         assert cfg.energy.drain_per_spike == 0.08
         assert cfg.energy.recovery_rate_per_hour == 0.1
 
     def test_default_memory(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.memory.trust_positive_delta == 0.02
         assert cfg.memory.trust_negative_delta == -0.15
         assert cfg.memory.confidence_threshold == 0.6
@@ -61,59 +48,59 @@ class TestNurConfigDefaults:
         assert cfg.memory.spike_retrieval_bonus == 3.0
 
     def test_default_contagion_engine(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.contagion_engine.factor == 0.3
         assert cfg.contagion_engine.cap == 0.15
 
     def test_default_event_delta_caps(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert isinstance(cfg.event_delta_caps, EventDeltaCapsConfig)
         assert cfg.event_delta_caps.normal["arousal"] == 0.10
         assert cfg.event_delta_caps.spike["arousal"] == 0.40
 
     def test_default_profiling(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.profiling.primacy_default == 0.8
         assert cfg.profiling.observation_window == 20
 
     def test_default_person(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.person.trust_positive_delta == 0.02
         assert cfg.person.trust_negative_delta == -0.15
         assert cfg.person.primacy_interaction_threshold == 5
 
     def test_default_self_model(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.self_model.entity_id == "__self__"
         assert cfg.self_model.strength_threshold == 0.7
         assert cfg.self_model.flaw_threshold == 0.6
         assert "blunt" in cfg.self_model.negative_traits
 
     def test_default_topic(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.topic.charge_positive_delta == 0.03
         assert cfg.topic.charge_negative_delta == 0.10
         assert cfg.topic.avoidance_charge_threshold == 0.7
 
     def test_default_contradiction(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.contradiction.threshold == 0.3
         assert cfg.contradiction.recent_window == 10
 
     def test_default_values(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert cfg.values["loyalty"] == 0.9
         assert cfg.values["honesty"] == 0.85
 
     def test_default_soul(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert isinstance(cfg.soul, SoulConfig)
         assert cfg.soul.name == "OpenRook"
         assert "clarity" in cfg.soul.likes
         assert cfg.soul.initial_traits["calm"] == 0.8
 
     def test_default_semantic_memory(self):
-        cfg = NurConfig()
+        cfg = OpenRookConfig()
         assert isinstance(cfg.semantic_memory, SemanticMemoryConfig)
         assert cfg.semantic_memory.enabled is True
         assert cfg.semantic_memory.backend == "sqlite"
@@ -224,7 +211,7 @@ class TestModulesUseConfig:
         from core.emotional_engine import (
             DEFAULT_HALF_LIVES, SPIKE_INTENSITY_THRESHOLD,
             ENERGY_DRAIN_PER_MESSAGE, ENERGY_DRAIN_PER_SPIKE,
-            ENERGY_RECOVERY_RATE, EVENT_IMPACTS,
+            ENERGY_RECOVERY_RATE,
         )
         cfg = get_config()
         assert DEFAULT_HALF_LIVES == cfg.half_lives
@@ -247,7 +234,7 @@ class TestModulesUseConfig:
 
     def test_profiles_use_config(self):
         from core.profiles.base import PRIMACY_DEFAULT, OBSERVATION_WINDOW
-        from core.profiles.person import TRUST_POSITIVE_DELTA, TRUST_NEGATIVE_DELTA
+        from core.profiles.person import TRUST_POSITIVE_DELTA
         from core.profiles.self_model import SELF_ENTITY_ID, STRENGTH_THRESHOLD
         from core.profiles.topic import AVOIDANCE_CHARGE_THRESHOLD, CHARGE_NEGATIVE_DELTA
         from core.profiles.contradiction import CONTRADICTION_THRESHOLD
@@ -265,7 +252,6 @@ class TestModulesUseConfig:
     def test_contagion_uses_config(self):
         from core.contagion import (
             _CAPS_RATIO_THRESHOLD, _EXCLAMATION_BOOST,
-            _QUESTION_AROUSAL, _ELLIPSIS_VALENCE,
         )
         cfg = get_config()
         assert _CAPS_RATIO_THRESHOLD == cfg.contagion_detection.caps_ratio_threshold

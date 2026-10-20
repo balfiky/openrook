@@ -6,27 +6,25 @@ All notable changes to OpenRook are documented here.
 
 ### Complete current naming and preserve upgrades
 
-- Use `openrook.db` for per-user storage and migrate existing `nur.db` data
+- Use `openrook.db` for per-user storage and migrate existing database data
   before opening current stores. Preserve SQLite write-ahead state; if both
   database names exist, prefer the current file, retain the legacy file, and
   warn. User deletion removes both names; backups preserve existing data.
-- Move the tool package to `openrook_tools`. Keep `nur_tools` as a thin import
-  shim that emits `DeprecationWarning`. Retain legacy console commands and
-  `NUR_*` environment fallbacks with a one-line stderr notice once per process;
-  project-owned Makefile and CI settings use only the current prefix.
-- Migrate browser identity, chat, token, and wizard state to `openrook_*` keys
-  without replacing already stored current values. Remove old keys after
-  migration and rename the avatar CSS class.
+- Use `openrook_tools`, `openrook` / `openrook-*` console commands, and
+  `OPENROOK_*` environment settings throughout the project. Remove deprecated
+  import shims, command aliases, environment fallbacks, and class aliases.
+- Store browser identity, chat, token, and wizard state in `openrook_*` keys,
+  and use the OpenRook avatar CSS class.
 - Write `openrook.runtime_config.redacted.v1` exports, `openrook-backup-*`
-  archives, and `openrook_tool` skill metadata. Retain access to legacy archives,
-  preserve historical config envelopes during offline data restoration, and
-  continue reading the previous skill metadata field.
+  archives, and `openrook_tool` skill metadata. Require the current backup
+  prefix and skill metadata field.
 - Rename runtime threads, tasks, context variables, temporary folders, and
   structured-output schemas. Request replay of historical captures requires
   their historical code revision because these request-level names changed.
-- Update current documentation and diagram labels, keep historical evidence
-  verbatim, and add a current-name regression guard with explicit compatibility
-  exceptions. See [migration instructions](docs/OPENROOK_MIGRATION.md).
+- Standardize project naming across tracked documentation, historical release
+  wording, protocols, and paths while preserving dates, versions, and outcomes.
+  Scan the whole tracked repository for naming regressions, with one exception
+  for the database migration filename. See [upgrade instructions](docs/OPENROOK_MIGRATION.md).
 
 ### Installation-to-chat experience
 
@@ -78,7 +76,7 @@ All notable changes to OpenRook are documented here.
   session actions correctly, and prevent overlapping session actions/replies.
 - Explain modeled mood and provider data sharing in the wizard; put uncommon
   runtime options in Advanced and clarify the informational independence flag.
-- Document appraisal's extra serial model call and retained legacy CLI aliases;
+- Document appraisal's extra serial model call and current CLI commands;
   rename Codex temporary folders to `openrook-codex-*` and link web CLI help to
   online deployment documentation.
 
@@ -97,8 +95,8 @@ All notable changes to OpenRook are documented here.
 
 ### Repository rename and rook mark
 
-- The GitHub repository moved from `balfiky/nur` to `balfiky/openrook` (old URLs
-  redirect); install commands, badges, project URLs, and citation metadata follow.
+- The GitHub repository moved to `balfiky/openrook` (previous URLs redirect);
+  install commands, badges, project URLs, and citation metadata follow.
 - New brand mark in `openrook_tools/brand.py`: a chess-rook keep with a lit window and
   a six-modulator band. It replaces the orb in the README wordmarks, showcase hero,
   social cover, web UI header, and
@@ -193,20 +191,21 @@ See [review fixes and test-change audit](docs/REVIEW_FIXES.md).
 
 - Rename the distribution to `openrook`, the default identity and public surfaces
   to OpenRook, and primary commands to `openrook` / `openrook-*`.
-- Keep compatibility command, class, import, and environment aliases;
-  `OPENROOK_*` settings take precedence, including explicitly empty values.
-  See the naming completion above for deprecation notices and migrated keys.
-- Preserve existing database records, browser identity/token values, configured
-  agent names, and research evidence. New backups use `openrook-backup-*`;
-  existing archives remain accessible.
+- The initial rename included temporary command, class, import, and environment
+  aliases, with `OPENROOK_*` settings taking precedence even when empty.
+  The naming completion above removes those aliases.
+- Preserve existing database records, configured agent names, and research
+  evidence. The initial rename also migrated browser identity/token values and
+  accepted previous backup prefixes; the naming completion above now uses only
+  current browser keys and `openrook-backup-*` archives.
 - Refresh public documentation, wordmarks, and generated diagrams, and use the
   renamed GitHub repository URL.
 - Fix an installed evaluation CLI startup failure: test-only fake backends are
   imported only when explicitly requested, never when launching live evaluation
   or asking an installed command for help.
 - Verify the rename with 2,720 non-UAT passes and 11 existing expected failures
-  on Python 3.13, a clean Python 3.10 wheel install, all 16 command aliases,
-  and browser branding checks. Interpreter-specific test limitations are recorded
+  on Python 3.13, a clean Python 3.10 wheel install, all 16 commands supported
+  at that checkpoint, and browser branding checks. Interpreter-specific test limitations are recorded
   in the [development summary](docs/DEVELOPMENT_SUMMARY.md#rename-verification).
 
 ### Autonomous runtime and reliability
@@ -267,7 +266,7 @@ Step 2 of closing the perception→emotion→action loop. Until now the identity
 ledger (beliefs/drives) only changed from operator-fed material; lived
 conversation updated relationship memory but never identity. Now an
 emotionally salient session is digested into the life-history ledger at
-session end, so Nūr's beliefs and drives can evolve from what it actually
+session end, so OpenRook's beliefs and drives can evolve from what it actually
 experiences.
 
 ### Added
@@ -379,9 +378,9 @@ executed on plan continuation under both `assisted` and `off` autonomy.
 ### Security
 
 - **Plan-step laundering still reachable via the native and LangGraph
-  runners (critical).** `nur_tools/native_orchestrator.py` (the *default*
+  runners (critical).** `openrook_tools/native_orchestrator.py` (the *default*
   production path when an OpenAI-compatible backend is configured) and
-  `nur_tools/langgraph_orchestrator.py` both called `execute_plan` on the
+  `openrook_tools/langgraph_orchestrator.py` both called `execute_plan` on the
   "continue" branch without the `step_gate`, so a plan whose first step was
   read-only let a later WRITE/DESTRUCTIVE step run unchecked on continuation.
   Both now build and pass `_build_step_gate(...)`, threading
@@ -478,8 +477,8 @@ caught two shipped regressions no unit test could see. Full suite:
 ### Added
 
 - **Operator trust controls for MCP tool categorization.** MCP servers
-  supply their own tool names/descriptions, and Nūr's keyword inference
-  (`nur_tools/mcp/adapter.py`) trusts those strings — a misleadingly
+  supply their own tool names/descriptions, and OpenRook's keyword inference
+  (`openrook_tools/mcp/adapter.py`) trusts those strings — a misleadingly
   named `get_*` tool with side effects landed in READ_ONLY and skipped
   the confirmation gate. Two new runtime config fields close this:
   `mcp_tool_categories` (map of tool name — exact or fnmatch pattern,
@@ -523,8 +522,8 @@ caught two shipped regressions no unit test could see. Full suite:
   `session._queue.qsize()` and `pipeline._tool_executor`.
 - **`langgraph` is now an optional extra.** `langgraph` and
   `langchain-openai` moved from required dependencies to
-  `pip install project-nur[langgraph]` (the `dev` extra includes it so
-  test environments are unchanged). `nur_tools/langgraph_orchestrator.py`
+  `pip install openrook[langgraph]` (the `dev` extra includes it so
+  test environments are unchanged). `openrook_tools/langgraph_orchestrator.py`
   is not imported by any production code path — only tests — and now
   imports langgraph lazily: the module imports cleanly without the
   extra, and constructing `LangGraphToolRunner` raises a clear
@@ -556,11 +555,11 @@ caught two shipped regressions no unit test could see. Full suite:
   with `validate_http_url` before being requested, capped at 5 hops,
   with the 2 MB streaming cap and timeout applied on every hop.
 - **Browser tool gained an SSRF guard at the tool boundary.**
-  `nur_tools/builtin/browser.py` had no URL validation (the default
+  `openrook_tools/builtin/browser.py` had no URL validation (the default
   provider is a no-op); `browser.open_url`, `browser.get_page_text`,
   and `browser.screenshot` now run `validate_http_url` before
   delegating, so any real automation provider plugged in later inherits
-  the guard. Shares the `NUR_ALLOW_PRIVATE_WEB_FETCH` opt-in.
+  the guard. Shares the `OPENROOK_ALLOW_PRIVATE_WEB_FETCH` opt-in.
 - **Shell allowlist also rejects `${`.** Env-var expansion can smuggle
   content into arguments even without command substitution; `${` joins
   the rejected metacharacter set alongside backticks and `$(`.
@@ -609,7 +608,7 @@ caught two shipped regressions no unit test could see. Full suite:
   `from interface import api` re-executed the file and hit a circular
   import. The module now aliases itself into
   `sys.modules["interface.api"]` before the bottom imports. Covered by
-  a subprocess regression test in `tests/test_nur_web_launcher.py`.
+  a subprocess regression test in `tests/test_openrook_web_launcher.py`.
 
 - **Self-intent no longer bypasses the autonomy gate — caught by live
   UAT.** The self-intent stage executed any registered tool with no
@@ -618,7 +617,7 @@ caught two shipped regressions no unit test could see. Full suite:
   self-intent now obey the same category rule as user-driven intents
   (READ_ONLY/COGNITIVE execute; WRITE/DESTRUCTIVE/EXTERNAL_ACTION are
   blocked below `autonomous`, with the block recorded in the tool
-  trace). `self.*` actions — Nūr's own state, the point of the stage —
+  trace). `self.*` actions — OpenRook's own state, the point of the stage —
   remain ungated. Unit tests cover blocked-write, allowed-self, and
   allowed-read-only under assisted autonomy.
 - **`cors_origins` from `--config` were silently ignored — caught by
@@ -736,7 +735,7 @@ unit/integration tests green.
   skipped and the job passed green having executed nothing (while
   installing a browser it never used). Replaced with an honest
   "UAT collection + server boot smoke" gate: the suite must collect
-  cleanly (≥60 tests), and a fresh `nur-web` install must boot,
+  cleanly (≥60 tests), and a fresh `openrook-web` install must boot,
   self-bootstrap its config, and serve `/v1/health` and the setup
   wizard. README and docs/UAT.md now describe exactly what the gate
   does and does not verify; the live job remains the only CI path
@@ -968,7 +967,7 @@ No code or test changes outside the bundled UI.
 ### Breaking: bearer auth is now opt-in, not auto-enforced
 
 Reverts the v0.30.3 "non-loopback bind guard" and the v0.30.5 auto-key
-generation. On a personal install, `nur-web --host 0.0.0.0` again
+generation. On a personal install, `openrook-web --host 0.0.0.0` again
 opens the browser setup wizard at `/` exactly as it did before
 v0.30.3 — no token required, no auto-generated key, no
 `--allow-unauthenticated-bind` flag to remember.
@@ -984,7 +983,7 @@ real off the table for operators who do need bearer auth.
 
 ### Changed
 
-- **`nur-web` binds wherever you ask it to.** No `api_key` is ever
+- **`openrook-web` binds wherever you ask it to.** No `api_key` is ever
   invented, refused, or auto-generated. The setup wizard at `/` is
   reachable on first run on any host.
 - **Non-loopback bind without `api_key` set** prints a one-screen
@@ -1005,10 +1004,10 @@ real off the table for operators who do need bearer auth.
 ### Kept from v0.30.5/v0.30.6
 
 - First-run config bootstrap: missing `runtime_config.yaml` is
-  auto-created with safe defaults on `nur-web` startup, so a clean
-  `pip install` → `nur-web` flow Just Works.
+  auto-created with safe defaults on `openrook-web` startup, so a clean
+  `pip install` → `openrook-web` flow Just Works.
 - Launcher test-isolation fix (`RUNTIME_CONFIG_PATH` and
-  `$NUR_RUNTIME_CONFIG` restored per-test).
+  `$OPENROOK_RUNTIME_CONFIG` restored per-test).
 - The opt-in auth surface itself — `api_key` in
   `runtime_config.yaml`, bearer-token check on protected endpoints,
   `/admin → API Token` button — is unchanged. Operators who do want
@@ -1029,7 +1028,7 @@ real off the table for operators who do need bearer auth.
 
 ### First-run UX (continued)
 
-`v0.30.5` made `nur-web` auto-generate a bearer token on first
+`v0.30.5` made `openrook-web` auto-generate a bearer token on first
 non-loopback bind, but the bundled UI still left operators staring
 at a silent 401. This release closes that:
 
@@ -1038,7 +1037,7 @@ at a silent 401. This release closes that:
   this browser session has no stored token. No more "click → 401 →
   modal appears with no context" race.
 - **Token dialog copy rewritten** with a concrete first-run hint
-  pointing operators at the `nur-web` stderr banner:
+  pointing operators at the `openrook-web` stderr banner:
   ```
   Generated api_key for non-loopback bind (0.0.0.0):
     <your-token>
@@ -1052,8 +1051,8 @@ at a silent 401. This release closes that:
 
 ### Bug fix
 
-- **Test isolation.** The `nur-web` launcher tests now restore
-  `RUNTIME_CONFIG_PATH` and `$NUR_RUNTIME_CONFIG` after each test, so
+- **Test isolation.** The `openrook-web` launcher tests now restore
+  `RUNTIME_CONFIG_PATH` and `$OPENROOK_RUNTIME_CONFIG` after each test, so
   running the launcher suite first no longer leaks a tmp config path
   with an auto-generated `api_key` into later test modules (which
   showed up as a spurious 401 in
@@ -1065,12 +1064,12 @@ at a silent 401. This release closes that:
 
 ### First-run UX
 
-- **`nur-web` is now self-bootstrapping on a clean install.** If
+- **`openrook-web` is now self-bootstrapping on a clean install.** If
   `runtime_config.yaml` does not exist, the launcher creates one with
   safe defaults (mock LLM backend, tools off, shell off, no Telegram)
   and creates the `data_dir` before binding. A fresh `pip install
-  project-nur` followed by `nur-web --host 0.0.0.0 --port 8000` now
-  works end-to-end without a separate `nur-setup` step.
+  openrook` followed by `openrook-web --host 0.0.0.0 --port 8000` now
+  works end-to-end without a separate `openrook-setup` step.
 - **Non-loopback bind with empty `api_key` auto-generates a strong
   token** instead of refusing. The launcher writes a
   `secrets.token_urlsafe(32)` value to the config and prints it once
@@ -1107,7 +1106,7 @@ at a silent 401. This release closes that:
 - **Public-bind text aligned with v0.30.3 guard.** README and
   `docs/DEPLOYMENT_AND_ADMIN.md` no longer say "No API token is
   required by default" next to a `--host 0.0.0.0` example. Both now
-  state that `nur-web` refuses non-loopback binds with an empty
+  state that `openrook-web` refuses non-loopback binds with an empty
   `api_key` and that `--allow-unauthenticated-bind` is only for
   setups behind an external auth layer.
 - **Production hardening checklist** in
@@ -1120,7 +1119,7 @@ at a silent 401. This release closes that:
   banner pointing reviewers at README / OVERVIEW / ARCHITECTURE /
   SECURITY / PRIVACY / DEPLOYMENT_AND_ADMIN as the current product
   truth. The draft predates Life History, constitution, drives,
-  skills, the self-evolution model, and the `nur-web` bind guard.
+  skills, the self-evolution model, and the `openrook-web` bind guard.
 
 No code or test changes. v0.30.4 is doc-only on top of v0.30.3.
 
@@ -1129,13 +1128,13 @@ No code or test changes. v0.30.4 is doc-only on top of v0.30.3.
 ## v0.30.3 — 2026-05-16
 
 ### Security
-- **`nur-web` startup guard.** The launcher now refuses to bind a
+- **`openrook-web` startup guard.** The launcher now refuses to bind a
   non-loopback interface (anything other than `127.0.0.1` /
   `localhost` / `::1`) when `api_key` is empty in the runtime config.
   Exits with code 2 and a clear error pointing at the config file.
   Operators with an external auth layer (reverse proxy, VPN,
   Tailscale) can override with `--allow-unauthenticated-bind`. Closes
-  the prior gap where `nur-web --host 0.0.0.0` would happily bind an
+  the prior gap where `openrook-web --host 0.0.0.0` would happily bind an
   unauthenticated server. 7 new regression tests.
 
 ### Changed
@@ -1163,7 +1162,7 @@ No code or test changes. v0.30.4 is doc-only on top of v0.30.3.
   `apt` on the host. The aggressive directive is preserved verbatim
   for `high_risk` operators. One new prompt-assembly regression test.
 - **Hostname removed from eval provenance.** `evals.provenance` now
-  reads `NUR_EVAL_HOST` from the environment and defaults to `"local"`
+  reads `OPENROOK_EVAL_HOST` from the environment and defaults to `"local"`
   instead of `socket.gethostname()`, eliminating a developer-hostname
   leak from every committed ablation summary.
 
@@ -1210,7 +1209,7 @@ No code or test changes. v0.30.4 is doc-only on top of v0.30.3.
 ### Changed — scrub personal traces from non-identity files
 - UI placeholders no longer carry a real person's name. The First Experience
   wizard, admin Life Participants, and admin Life Upload Participants inputs
-  now show `You, Nūr` instead of the previous owner's name.
+  now show `You, OpenRook` instead of the previous owner's name.
 - Admin skill-import placeholder no longer hardcodes a real `/home/<user>/...`
   path; shows `/path/to/skills/example` instead.
 - Eval prompts in `evals/emotional_quality.py` use `the user` instead of a
@@ -1220,7 +1219,7 @@ No code or test changes. v0.30.4 is doc-only on top of v0.30.3.
 - Test fixtures in `test_interface_v1.py` use a placeholder Telegram chat ID
   (`123456789`) instead of a real one.
 - Internal design doc `AGENTIC_TOOLS_DESIGN.md` strips the absolute
-  `/home/<user>/projects/nur/` prefix from code references.
+  `/home/<user>/projects/openrook/` prefix from code references.
 
 Author/repo identity in `pyproject.toml`, `SECURITY.md`, README/CONTRIBUTING
 install commands, and git commit history are intentionally untouched.
@@ -1239,7 +1238,7 @@ install commands, and git commit history are intentionally untouched.
   decision.
 - **New cognitive stage `Step 12e: SELF-INTENT`** runs between the
   user-driven tool loop and the defense stage when tools are enabled.
-  One LLM call per turn asks Nūr "what do you want to *do* before
+  One LLM call per turn asks OpenRook "what do you want to *do* before
   replying?" and returns a JSON array of tool calls. The proposer sees
   the **full live executor catalog** — every registered tool, with its
   description and arg schema — and selects from it. The intent layer
@@ -1278,7 +1277,7 @@ install commands, and git commit history are intentionally untouched.
   with a structured failure result.
 
 - **New prompt `config/prompts/self_intent.md`** — short framing that
-  tells Nūr the full catalog is in the user turn and to pick from it.
+  tells OpenRook the full catalog is in the user turn and to pick from it.
   The catalog itself is the policy boundary: whatever the operator has
   enabled is what's available.
 
@@ -1287,7 +1286,7 @@ The cognitive layer could perceive a threat, feel it, and decide a stance —
 but the response generator was the only output channel. Defense mechanisms
 modified *prose* (rationalize, hedge, deflect) and never *did* anything.
 v0.30 closes that gap when an operator chooses to: with tools enabled,
-Nūr can witness, record, note, verify, alert, or write workspace files;
+OpenRook can witness, record, note, verify, alert, or write workspace files;
 with shell additionally enabled, run shell commands. Defense becomes one
 *kind* of action rather than the only output channel. The capability is
 inspectable, off by default, and gated by the same switches that govern
@@ -1323,7 +1322,7 @@ Total: 1938 non-UAT tests pass.
 
 ### Fixed
 - **Telegram — long responses fail with `HTTP 400 Bad Request`.** Telegram's
-  `sendMessage` rejects any `text` over 4096 chars. Asking Nūr for substantial
+  `sendMessage` rejects any `text` over 4096 chars. Asking OpenRook for substantial
   code (e.g., "write me Python code for a Tetris game") produced a single
   response that exceeded the cap, so `TelegramClient.send_message` raised
   `HTTPStatusError` and the user saw "[error] Something went wrong." The
@@ -1433,7 +1432,7 @@ Total: 1938 non-UAT tests pass.
   leaving only constitution + conversation window — the bare-LLM control. Running
   `python -m evals.ablation --backend mock --tag phase11 --only baseline_prompt_only`
   writes a `baseline_prompt_only` row to `reports/ablation/summary.json`, quantifying
-  which scenarios require Nūr's enrichment vs passing on a plain LLM call.
+  which scenarios require OpenRook's enrichment vs passing on a plain LLM call.
   Modulator-bound assertions (adversarial, tool_recovery, long_horizon) are expected
   to hold since the emotional engine is always active.
 
@@ -1506,8 +1505,8 @@ Total: 1938 non-UAT tests pass.
   (metabolism + theme→belief promotion + drive-gap detection), open-
   question lifecycle, trigger-time skill loading, and gated tool
   access — emotion is now one of five state categories, not the
-  premise. Updated tagline, hook, "Where Nūr Sits" reference-class
-  table (placing Nūr alongside MemGPT / Letta / mem0 / LangGraph
+  premise. Updated tagline, hook, "Where OpenRook Sits" reference-class
+  table (placing OpenRook alongside MemGPT / Letta / mem0 / LangGraph
   rather than Replika / Pi / Character.ai), and added a parallel
   identity-arc example to "What State Looks Like Across Turns" so
   the runtime reads as multi-purpose, not single-domain. Mirror
@@ -1551,7 +1550,7 @@ Total: 1938 non-UAT tests pass.
   in ``tests/test_agentic_tools_phase2.py::TestDetectToolIntent::test_memory_request_phrasings_route_to_system_tool``.
 - Pipeline ask-user surfacing always failed silently because
   ``_maybe_surface_open_question`` looked up the life-history DB on
-  ``self._config`` (NurConfig, no ``data_dir`` attribute). Pipeline now takes
+  ``self._config`` (OpenRookConfig, no ``data_dir`` attribute). Pipeline now takes
   a ``runtime_config`` argument that the session manager wires from its own
   RuntimeConfig, so surfacing actually fires.
 
@@ -1678,7 +1677,7 @@ Total: 1938 non-UAT tests pass.
   server. The pipeline, response generator, and inner-dialogue components now
   raise `ValueError` if no real backend is supplied. Test-only fakes moved to
   `tests/_fakes.py` (clearly off-limits for production imports). UAT tests are
-  skipped unless `NUR_UAT_LIVE=1` is set with a real backend, since there is
+  skipped unless `OPENROOK_UAT_LIVE=1` is set with a real backend, since there is
   no longer an offline path.
 
 ### Brand & UI
@@ -1712,7 +1711,7 @@ Total: 1938 non-UAT tests pass.
   cross-turn pending state, Life History ingestion records perception metadata
   and weighted influence, and external belief/drive gate functions were removed.
 - Added deterministic character vectors, coherence checks, genesis provenance
-  storage, consolidation/introspection hooks, and the `nur-genesis-reset` CLI.
+  storage, consolidation/introspection hooks, and the `openrook-genesis-reset` CLI.
 - Removed admin rollback as a mutation path. The endpoint now returns `410 Gone`
   and the admin console no longer renders rollback controls.
 - Updated generator prompts, tool-loop action variables, proactive scoring, and
@@ -1749,7 +1748,7 @@ Total: 1938 non-UAT tests pass.
   that do not contain extractable file content.
 
 ### Emotional engine
-- Direct attacks against Nūr (insults, profanity, appraisal-detected
+- Direct attacks against OpenRook (insults, profanity, appraisal-detected
   attacks targeting the assistant) now route to `EventType.CONFLICT`
   instead of `NEGATIVE_FEEDBACK`, so bonding actually erodes under
   sustained verbal abuse rather than staying frozen while arousal alone
@@ -1780,7 +1779,7 @@ Total: 1938 non-UAT tests pass.
   light theme is available via `[data-theme="light"]`.
 - Added SVG wordmark variants (`docs/diagrams/wordmark-{light,dark}.svg`) and
   served them at `/assets/wordmark-*.svg`. Header logo is now an ember-glow
-  orb + serif "Nūr" instead of a plain text span.
+  orb + serif "OpenRook" instead of a plain text span.
 - Empty state, mood orb halo, and chat input focus ring switched to ember;
   body has an ambient mood-driven radial wash that updates with relationship
   state across the whole window, not just the header indicator.
@@ -1792,7 +1791,7 @@ Total: 1938 non-UAT tests pass.
 - Sharpened the registry-write grounding correction to point at the most
   common cause when skill-registry tools are missing from the runtime: a
   stale installed package. Now suggests `pip install -e .` from a source
-  checkout and a `nur-web` restart.
+  checkout and a `openrook-web` restart.
 
 ---
 
@@ -1812,7 +1811,7 @@ Total: 1938 non-UAT tests pass.
 
 ### Runtime
 - Added a deterministic post-generation guard for unverified external-action
-  claims. If a response says Nūr read a repository, ran shell/conda, cloned
+  claims. If a response says OpenRook read a repository, ran shell/conda, cloned
   code, inspected logs/output, or wrote a file without Tool Execution Results,
   the response is replaced with an explicit correction.
 - Added regression coverage for the skill-creation flow where a live model may
@@ -1845,7 +1844,7 @@ Total: 1938 non-UAT tests pass.
   configuration application, skills import/enablement, Life History intake,
   Telegram introspection, persistence across restart, emotional/relationship
   state changes, tools toggles, and live OpenAI-compatible backends.
-- Added the `nur-uat` command, UAT docs, and CI workflow coverage for the mock
+- Added the `openrook-uat` command, UAT docs, and CI workflow coverage for the mock
   acceptance suite.
 
 ### Runtime fixes
@@ -1871,7 +1870,7 @@ Total: 1938 non-UAT tests pass.
 - Added a presentation-only relationship view serializer for debug payloads.
 - Updated the existing web debug panel to show relationship state, known
   modulator deltas, deterministic "Why this response?" explanations, and a
-  compact "What Nūr remembers" view without splitting or rewriting the UI.
+  compact "What OpenRook remembers" view without splitting or rewriting the UI.
 
 ### Telegram
 - Added non-mutating introspection commands: `/state`, `/why`, `/memory`,
@@ -1928,7 +1927,7 @@ Total: 1938 non-UAT tests pass.
 ## v0.27.2 — 2026-05-01 (Installed validation mode)
 
 ### Validation
-- Fixed `nur-validate` in installed/user workspaces. It now auto-detects when
+- Fixed `openrook-validate` in installed/user workspaces. It now auto-detects when
   repo files are unavailable and validates installed package version,
   resources, console scripts, workspace runtime config, and critical imports
   instead of failing on missing `pyproject.toml`, docs, or CI files.
@@ -1938,11 +1937,11 @@ Total: 1938 non-UAT tests pass.
 ## v0.27.1 — 2026-04-30 (Validation hardening)
 
 ### Validation
-- Added `nur-validate`, a stricter repository/release validation command that
+- Added `openrook-validate`, a stricter repository/release validation command that
   checks version/changelog consistency, safe runtime defaults, public docs,
   console-script metadata, package data, wheel contents, critical imports,
   pytest, and optional release tag/install-smoke readiness.
-- Wired CI to run `python -m nur_tools.validate --mode ci` before the pytest
+- Wired CI to run `python -m openrook_tools.validate --mode ci` before the pytest
   matrix.
 
 ---
@@ -1993,7 +1992,7 @@ Total: 1938 non-UAT tests pass.
 - F-009: Rejected invalid admin runtime numeric values before config saves.
 
 ### API
-- Removed token generation and public-bind startup blocking from `nur-web`;
+- Removed token generation and public-bind startup blocking from `openrook-web`;
   bearer auth remains optional when `api_key` is explicitly configured.
 - F-010: Made LLM connection checks return `ok:false` unless mock or a live
   round trip succeeds.
@@ -2015,7 +2014,7 @@ Total: 1938 non-UAT tests pass.
 ### Documentation
 - Documented the no-token default startup path and clarified that `api_key` is
   optional hardening, not part of normal first-run setup.
-- Replaced the unpublished `pip install project-nur` quickstart path with a
+- Replaced the unpublished `pip install openrook` quickstart path with a
   GitHub/source install path until a public PyPI wheel exists.
 - Documented the Life History layer across README, overview, architecture,
   deployment/admin, privacy, and security docs, including the important
@@ -2075,7 +2074,7 @@ Total: 1938 non-UAT tests pass.
   assistant that remembers how you made it feel.") + status shields
   (tests / MIT / Python 3.10+ / version) + concrete three-turn transcript
   showing how state accumulates across Mon/Wed/Fri. Surfaced the
-  `pip install project-nur && nur-web` one-liner above the source-install
+  `pip install openrook && openrook-web` one-liner above the source-install
   path. Kept the full architecture diagram under "Architecture at a
   glance" for readers who scroll.
 - New `hero-banner` diagram: three turn cards (Mon/Wed/Fri) flowing into
@@ -2107,7 +2106,7 @@ in the v0.26.0 first-run wizard:
   clearing guard.
 - Rebuilt the wheel/sdist and validated package data is present.
 - Installed the built wheel into a clean virtualenv and smoke-tested:
-  console scripts, admin config/auth/export/restart, `NUR_CONFIG_DIR`
+  console scripts, admin config/auth/export/restart, `OPENROOK_CONFIG_DIR`
   soul persistence, first-run wizard, explicit mock chat, and local-preset
   stale-key clearing through the browser.
 - Full suite: 1383 passed.
@@ -2171,16 +2170,16 @@ backend don't linger.
 ## v0.25.2 — 2026-04-24 (Chat UI respects soul name; mock mode banner)
 
 ### P1 — Chat UI now reflects the configured agent name
-The chat UI hardcoded "Nūr" in six places (browser tab, header logo,
+The chat UI hardcoded "OpenRook" in six places (browser tab, header logo,
 empty-state title, input placeholder, message sender label, typing avatar).
 After saving a different name in Settings → Identity, those spots stayed
-"Nūr". Fixed: the frontend fetches the soul on every page load (via
+"OpenRook". Fixed: the frontend fetches the soul on every page load (via
 `loadSettings` → `loadSoul`) and applies the name to all six spots.
 Name updates again after every successful soul save.
 
 - `interface/static/index.html`: added `applyAgentName(name)` that updates
   `document.title`, `#headerLogo`, `#emptyTitle`, `#msgInput` placeholder,
-  and all `.nur-av` avatar initials.
+  and all `.openrook-av` avatar initials.
 - `addMessage()` now uses the dynamic `agentName` variable for the
   sender label and avatar initial instead of hardcoded literals.
 - `loadSoul()` calls `applyAgentName(data.soul.name)` on success.
@@ -2215,8 +2214,8 @@ with no explanation why. Fixed two ways:
 
 v0.25.0 gave the admin UI a beautiful identity-authoring flow — and
 then lied to the user about what it did. The generator prompt template
-hardcoded `"You are Nūr."` in its first line, so even after saving a
-different name the LLM was told it is still Nūr. The self-check and
+hardcoded `"You are OpenRook."` in its first line, so even after saving a
+different name the LLM was told it is still OpenRook. The self-check and
 memory-digestion prompts had the same problem. The admin UI warned
 "full server restart may be required" as a workaround, but no restart
 would have fixed it: the hardcoded string survives restarts too.
@@ -2225,11 +2224,11 @@ would have fixed it: the hardcoded string survives restarts too.
 - **Hardcoded agent name in prompt templates.** Replaced with
   `{agent_name}` placeholders and runtime substitution from
   `soul.name`:
-  - `config/prompts/generator.md` — `"You are Nūr."` →
+  - `config/prompts/generator.md` — `"You are OpenRook."` →
     `"You are {agent_name}."`
-  - `config/prompts/self_check.md` — `"for Nūr"` →
+  - `config/prompts/self_check.md` — `"for OpenRook"` →
     `"for {agent_name}"`
-  - `config/prompts/digestion.md` — `"for Nūr"` →
+  - `config/prompts/digestion.md` — `"for OpenRook"` →
     `"for {agent_name}"`
   - `core/dual_process/generator.py:build_system_prompt` resolves
     `agent_name` from `ctx.soul_profile.name` (falling back to
@@ -2239,7 +2238,7 @@ would have fixed it: the hardcoded string survives restarts too.
     every self-check call.
   - `core/memory/digestion.py` substitutes `{agent_name}` and also
     uses `soul.name` for the role label in formatted conversation
-    history (previously hardcoded `"Nūr"`).
+    history (previously hardcoded `"OpenRook"`).
 - **`POST /admin/soul` now evicts the active session manager.** Matches
   the same pattern `POST /admin/config` already uses. After a save,
   `_session_manager.shutdown()` is called and the singleton cleared so
@@ -2254,7 +2253,7 @@ would have fixed it: the hardcoded string survives restarts too.
   will reflect the new identity across the whole prompt stack", and
   "Active chat sessions were rebuilt so they use the new identity
   immediately".
-- When `NUR_CONFIG_DIR` is not set, the save toast adds a note
+- When `OPENROOK_CONFIG_DIR` is not set, the save toast adds a note
   suggesting it, so operators who care about surviving
   `pip install --upgrade` see the path to do it.
 
@@ -2263,8 +2262,8 @@ would have fixed it: the hardcoded string survives restarts too.
   - `TestAgentNamePropagation::test_generator_prompt_uses_soul_name_not_hardcoded` —
     constructs a `PipelineContext` with a non-default soul name,
     verifies the rendered first line is `"You are Iris"` and contains
-    neither `"Nūr"` nor the raw `{agent_name}` placeholder.
-  - `TestAgentNamePropagation::test_generator_template_has_no_hardcoded_nur_directive` —
+    neither `"OpenRook"` nor the raw `{agent_name}` placeholder.
+  - `TestAgentNamePropagation::test_generator_template_has_no_hardcoded_openrook_directive` —
     guards the template file itself (so a future edit can't reintroduce
     a hardcoded name and silently defeat the feature).
   - `TestAgentNamePropagation::test_self_check_prompt_uses_placeholder`
@@ -2275,7 +2274,7 @@ would have fixed it: the hardcoded string survives restarts too.
     verifies `shutdown()` was called and `_session_manager` was
     cleared.
 - Updated two existing tests in `test_config.py` that asserted the
-  old hardcoded-`"Nūr"` contract to assert the new `{agent_name}`
+  old hardcoded-`"OpenRook"` contract to assert the new `{agent_name}`
   placeholder contract instead.
 - **Full suite: 1383 passed.**
 
@@ -2284,7 +2283,7 @@ This release is small in line count but large in honesty. v0.25.0
 built the non-coder identity-authoring UX, but the feature itself
 didn't actually change the agent's name in practice — the operator
 would pick "Iris", hit Save, and the assistant would still answer
-"I'm Nūr." This release makes the UI tell the truth.
+"I'm OpenRook." This release makes the UI tell the truth.
 
 ### Bumped
 - `pyproject.toml` version → 0.25.1.
@@ -2313,11 +2312,11 @@ identity authoring usable by anyone who runs the server.
   delete + "add" button. Weights read as 0.00-1.00 at 0.05 precision.
   Replaces the v0.24.0 `key: weight` per-line textareas, which were
   fine for developers but friction for anyone else.
-- **`NUR_CONFIG_DIR` override layer in the loader** — set to any
+- **`OPENROOK_CONFIG_DIR` override layer in the loader** — set to any
   writable directory and every `config/*.yaml` or `config/prompts/*.md`
   found there takes precedence over the packaged default. Missing files
   fall through transparently. `/admin/soul` POST writes into
-  `NUR_CONFIG_DIR` when set, so operator edits to soul.yaml survive
+  `OPENROOK_CONFIG_DIR` when set, so operator edits to soul.yaml survive
   `pip install --upgrade`.
 - **Human-readable setup reasons** in the admin drawer. Codes like
   `default_soul`, `missing_config` are mapped to labels like "Set your
@@ -2364,7 +2363,7 @@ identity authoring usable by anyone who runs the server.
 ## v0.24.0 — 2026-04-24 (Admin: GUI for seed identity / soul.yaml)
 
 Closes the install-UX gap where every fresh deployment ran under the
-default name "Nūr" with the project author's voice and values, because
+default name "OpenRook" with the project author's voice and values, because
 the only way to change seed identity was hand-editing
 `config/soul.yaml`. This release adds a first-class admin-console path
 for authoring the identity through the GUI.
@@ -2390,7 +2389,7 @@ for authoring the identity through the GUI.
   drawer opens.
 - **`default_soul` setup reason** — `/admin/status` now reports
   `default_soul` in `setup.reasons` when `soul.name` is still the
-  built-in "Nūr", so the existing first-run prompt highlights this
+  built-in "OpenRook", so the existing first-run prompt highlights this
   alongside `missing_config` / `default_or_minimal_config`.
 
 ### Caveats (documented in the API response `notes` and the UI)
@@ -2414,7 +2413,7 @@ for authoring the identity through the GUI.
   - Out-of-range weights rejected; negative rejected.
   - Empty / whitespace-only name rejected.
   - List entries trimmed; empty entries dropped.
-  - `default_soul` reason surfaces when name is "Nūr".
+  - `default_soul` reason surfaces when name is "OpenRook".
   - `default_soul` reason clears when name is changed.
 - `pytest tests/test_interface.py tests/test_interface_v1.py -q`
   → 111 passed.
@@ -2427,15 +2426,15 @@ for authoring the identity through the GUI.
 ## v0.23.2 — 2026-04-24 (CLI: argparse on both console scripts)
 
 ### Added
-- **`nur --help` / `nur --version`.** The `nur` console script now has a real
-  argparse front end, so `nur --help` no longer drops into the interactive
+- **`openrook --help` / `openrook --version`.** The `openrook` console script now has a real
+  argparse front end, so `openrook --help` no longer drops into the interactive
   runtime loop. Adds `--config <path>` (default `runtime_config.yaml`) so the
-  YAML can live anywhere, and `--version` reporting `project-nur <X.Y.Z>` from
+  YAML can live anywhere, and `--version` reporting `openrook <X.Y.Z>` from
   installed metadata.
-- **`nur-web --help` / `--version` / `--host` / `--port`.** Matching argparse
+- **`openrook-web --help` / `--version` / `--host` / `--port`.** Matching argparse
   surface on the web entrypoint. Defaults are unchanged (`127.0.0.1:8000`), so
   existing invocations still work, but operators can now run e.g.
-  `nur-web --host 0.0.0.0 --port 9000` without hand-editing code.
+  `openrook-web --host 0.0.0.0 --port 9000` without hand-editing code.
 
 ### Changed
 - `tests/test_interface.py::TestEntryPoints::test_main_runs_uvicorn_on_localhost`
@@ -2458,7 +2457,7 @@ for authoring the identity through the GUI.
   `interface/static/index.html` (the UI + admin console shell),
   `config/*.yaml` (modulators, attachment, profiles, values seed, soul,
   semantic memory), and `config/prompts/*.md` (10 prompt templates).
-  A user doing `pip install project-nur && nur-web` would have hit a
+  A user doing `pip install openrook && openrook-web` would have hit a
   `FileNotFoundError` on the first `/` request and again inside the
   config loader. Added `[tool.setuptools.package-data]` in
   `pyproject.toml` mapping `interface → static/*` and
@@ -2486,7 +2485,7 @@ route set. No runtime behavior change.
 - **Packaging metadata.** `pyproject.toml` gains `readme`, `license`,
   `authors`, `keywords`, PyPI `classifiers`, and `project.urls`
   (Homepage, Repository, Issues, Documentation) pointing at
-  `github.com/balfiky/nur`. MIT license is declared via the existing
+  `github.com/balfiky/openrook`. MIT license is declared via the existing
   `LICENSE` file rather than an inline string.
 - **Admin Danger Zone.** Reset-session and delete-user controls are split
   out of the general Maintenance section into a visually distinct
@@ -2525,7 +2524,7 @@ safe.
   with `Multiple top-level packages discovered in a flat-layout`. Added
   `[tool.setuptools] py-modules = ["main", "pipeline"]` and an explicit
   `[tool.setuptools.packages.find]` include/exclude list in
-  `pyproject.toml:21-29`. The `nur` and `nur-web` console scripts
+  `pyproject.toml:21-29`. The `openrook` and `openrook-web` console scripts
   advertised in README's 5-Minute Start are installed again.
 - **B2 — auth coverage on legacy routes.** README previously claimed that
   setting `api_key` protects every endpoint except `/v1/health` and
@@ -2576,7 +2575,7 @@ safe.
   phase11` (the CLI has required `--backend` since v0.19).
 
 ### Also fixed during the same release audit
-- **`nur` console SIGINT/shutdown hang.** The console loop used
+- **`openrook` console SIGINT/shutdown hang.** The console loop used
   `asyncio.to_thread(input)`, which left a worker thread blocked on
   stdin and in turn blocked `loop.shutdown_default_executor` on exit.
   `runtime/channels/console.py` now polls stdin via `select` with a
@@ -2610,7 +2609,7 @@ safe.
 
 ## v0.21.0 — 2026-04-08 (Versioned integration API + Python client)
 
-Adds a stable `/v1/*` HTTP surface and a thin Python client so Project Nūr can be embedded into dashboards, chatbots, eval harnesses, and orchestrators without depending on the bundled web UI or scraping the legacy endpoints.
+Adds a stable `/v1/*` HTTP surface and a thin Python client so Project OpenRook can be embedded into dashboards, chatbots, eval harnesses, and orchestrators without depending on the bundled web UI or scraping the legacy endpoints.
 
 ### Added
 - `interface/v1.py` — versioned FastAPI router built by `build_v1_router(session_manager_getter, config_getter, serve_started_at)`. Endpoints:
@@ -2622,10 +2621,10 @@ Adds a stable `/v1/*` HTTP surface and a thin Python client so Project Nūr can 
   - `GET /v1/memory/long_term`, `GET /v1/memory/relationship`.
   - `GET /v1/tools` — enumerate registered capabilities.
   - `GET /v1/config` — runtime config with secrets redacted.
-- `interface/client.py` — `NurClient` synchronous Python wrapper (stdlib + `requests`) with typed `NurAPIError`, context-manager support, and one method per endpoint.
+- `interface/client.py` — `OpenRookClient` synchronous Python wrapper (stdlib + `requests`) with typed `OpenRookAPIError`, context-manager support, and one method per endpoint.
 - `runtime/config.py` — new fields `api_key` (bearer token; empty = auth disabled) and `cors_origins` (list; empty = same-origin only). `api_key` joins the secret-redaction set alongside `telegram_token` and `llm_api_key`.
 - `interface/api.py` — mounts the v1 router at app startup, installs CORS middleware driven by `cors_origins`, and extends the `POST /config` schema with `api_key`, `cors_origins`, and `clear_api_key` so the bearer token can be rotated through the settings UI.
-- `tests/test_interface_v1.py` — 26 tests covering every endpoint, the opt-in Bearer middleware, secret redaction, and the `NurClient` error path.
+- `tests/test_interface_v1.py` — 26 tests covering every endpoint, the opt-in Bearer middleware, secret redaction, and the `OpenRookClient` error path.
 
 ### Design notes
 - **Auth is opt-in.** With `api_key=""` the v1 surface is wide open (useful for local dev and CI). Set it, and every endpoint except `/v1/health` and `/v1/ready` rejects requests without `Authorization: Bearer <key>`. The dependency re-reads the current config on every request, so rotating the key through `POST /config` takes effect immediately — no restart.
@@ -2675,7 +2674,7 @@ Full-codebase audit against the stated cognitive-architecture purpose, followed 
 - `runtime/tools.py` — the production `create_tool_executor` now wires `RequestsWebProvider` so `web.search` / `web.fetch` / `web.extract_text` work in the runtime surface (previously no provider → tools were unavailable).
 - `core/llm_client.py` — log HTTP body on non-200 LLM responses before raising, so upstream errors surface instead of being opaque.
 - `core/dual_process/tool_loop.py` — default-path trigger patterns for `fs.list_dir` ("what's in /tmp", "list the files", "show me files"), and broadened the web-search pattern to cover "internet", "online", "google", "browse".
-- `tests/test_interface.py` — `test_serves_html` and `test_has_v2_sections` assertions aligned with the redesigned UI strings ("Nūr", "Unresolved", "Settings", "Save").
+- `tests/test_interface.py` — `test_serves_html` and `test_has_v2_sections` assertions aligned with the redesigned UI strings ("OpenRook", "Unresolved", "Settings", "Save").
 
 ### Tests
 - Full suite: **1216 passed** (`python -m pytest`).
@@ -2782,7 +2781,7 @@ Adds an automated Phase 11 human-likeness regression pack and tightens a few str
 
 ## v0.20.0 — 2026-04-02 (Phase 11: appraisal, relationship memory, and response strategy)
 
-Starts the lean Phase 11 track aimed at making Nūr feel more human without adding prompt theater or heavy new subsystems. This release improves how Nūr interprets social meaning, carries relationship continuity across sessions, and selects a concrete response approach before generation.
+Starts the lean Phase 11 track aimed at making OpenRook feel more human without adding prompt theater or heavy new subsystems. This release improves how OpenRook interprets social meaning, carries relationship continuity across sessions, and selects a concrete response approach before generation.
 
 ### Deterministic social appraisal (`core/appraisal.py`, `core/types.py`, `pipeline.py`)
 - Added `AppraisalFrame` to represent turn-level social interpretation before emotional update:
@@ -2880,7 +2879,7 @@ Tunes decision heuristics based on eval results, extracts arbiter thresholds as 
 
 ## v0.18.0 — 2026-04-02 (Phase 9: Evaluation, calibration, and benchmark harness)
 
-Adds a dedicated evaluation layer that makes Nūr measurable, comparable across revisions, and easier to tune. No new user-facing features — purely instrumentation and regression infrastructure.
+Adds a dedicated evaluation layer that makes OpenRook measurable, comparable across revisions, and easier to tune. No new user-facing features — purely instrumentation and regression infrastructure.
 
 ### Evaluation framework (`evals/`)
 - `evals/types.py` — `EvalScenario`, `EvalTurn`, `EvalAssertion`, `EvalResult`, `EvalReport`, `EvalMetrics`, `ModulatorRange`
@@ -2952,7 +2951,7 @@ evicted by the idle timer mid-execution.
 Fixes three correctness issues in the Phase 8 proactive behavior implementation.
 
 ### Fix 1: Proactive delivery wiring (`runtime/app.py`)
-- `NurApp` now passes `_deliver_proactive` as `proactive_callback` to `SessionManager`
+- `OpenRookApp` now passes `_deliver_proactive` as `proactive_callback` to `SessionManager`
 - Console delivery: prints proactive messages to stdout (same format as normal responses)
 - Telegram delivery: sends proactive messages via `TelegramClient.send_message`
 - Routes based on platform extracted from session_key (`platform:user_id:chat_id`)
@@ -2977,7 +2976,7 @@ Fixes three correctness issues in the Phase 8 proactive behavior implementation.
 
 ## v0.17.0 — 2026-04-02 (Agentic Tools Phase 8: proactive and autonomous behavior)
 
-Adds bounded proactive behavior — Nūr can now initiate actions and follow-up messages based on unresolved tension, pending tasks, commitments, and idle-time patterns. All autonomy is explicitly bounded and inspectable.
+Adds bounded proactive behavior — OpenRook can now initiate actions and follow-up messages based on unresolved tension, pending tasks, commitments, and idle-time patterns. All autonomy is explicitly bounded and inspectable.
 
 ### Proactive trigger model (`core/types.py`)
 - `ProactiveTriggerSource` enum: unresolved_item, pending_task, commitment, temporal, emotional_salience
@@ -2986,7 +2985,7 @@ Adds bounded proactive behavior — Nūr can now initiate actions and follow-up 
 - `ProactiveTrace` dataclass: triggers found, action taken, suppressed reasons, limits applied, idle time, count
 
 ### Proactive evaluation layer (`core/proactive.py`)
-- `evaluate_proactive()` — deterministic evaluation (zero LLM calls) of whether Nūr should initiate behavior
+- `evaluate_proactive()` — deterministic evaluation (zero LLM calls) of whether OpenRook should initiate behavior
 - Trigger collection: gathers candidates from unresolved items (intensity ≥ 0.3), pending task plans, commitments, temporal patterns (idle + resolution), emotional salience
 - Trigger scoring: intensity adjusted by resolution boost, energy penalty, bonding/trust boost, arousal modulation
 - Bound checks: max proactive per session, idle threshold, cooldown between actions, energy floor
@@ -2994,7 +2993,7 @@ Adds bounded proactive behavior — Nūr can now initiate actions and follow-up 
 - All configuration values exposed as parameters with sensible defaults
 
 ### Pipeline integration (`pipeline.py`)
-- `process_proactive(user_id)` — evaluates proactive triggers and generates response through Nūr (defense + generator)
+- `process_proactive(user_id)` — evaluates proactive triggers and generates response through OpenRook (defense + generator)
 - Session-scoped tracking: `_proactive_count`, `_last_proactive_at` — cleared on `end_session()`
 - Proactive responses go through defense filter and generator, same cognitive path as user-initiated responses
 - Task continuation support: if proactive action is "continue_task", runs tool loop with active plan
@@ -3006,7 +3005,7 @@ Adds bounded proactive behavior — Nūr can now initiate actions and follow-up 
 - `SessionManager.run_proactive_loop()` — periodic async loop that sweeps all sessions for proactive opportunities
 - `_proactive_sweep()` / `_run_proactive()` — per-session evaluation with idle guards and error isolation
 - Proactive callback mechanism: `proactive_callback(session_key, user_id, message)` for channel delivery
-- `NurApp` starts proactive loop as background task when `proactive_enabled=True`
+- `OpenRookApp` starts proactive loop as background task when `proactive_enabled=True`
 - Proactive loop cleanly cancelled on shutdown
 
 ### Debug / observability (`runtime/debug/api.py`)
@@ -3021,7 +3020,7 @@ Adds bounded proactive behavior — Nūr can now initiate actions and follow-up 
 - Idle threshold before any proactive check (default 5 min)
 - Energy floor: too tired to be proactive (energy < 0.15)
 - No multi-agent behavior
-- All output generated through Nūr cognitive pipeline
+- All output generated through OpenRook cognitive pipeline
 
 ### Tests
 - 52 new tests in `tests/test_agentic_tools_phase8.py`
@@ -3056,7 +3055,7 @@ Adds bounded proactive behavior — Nūr can now initiate actions and follow-up 
 
 ## v0.16.0 — 2026-04-02 (Agentic Tools Phase 7: multi-step task planning)
 
-Adds bounded multi-step task planning and task memory — Nūr can now decompose compound requests into ordered steps, execute them sequentially, and couple task outcomes back into emotion, memory, and self-model.
+Adds bounded multi-step task planning and task memory — OpenRook can now decompose compound requests into ordered steps, execute them sequentially, and couple task outcomes back into emotion, memory, and self-model.
 
 ### Task data model (`core/types.py`)
 - `TaskStatus` enum: pending, in_progress, completed, failed, blocked
@@ -3146,7 +3145,7 @@ Expands the tool layer with browser automation, calendar, and richer web retriev
 
 ## v0.14.0 — 2026-04-02 (Agentic Tools Phase 5: MCP bridge)
 
-MCP tools are now first-class participants in Nūr cognition — same ToolCapability, same appraisal, same memory coupling as builtins.
+MCP tools are now first-class participants in OpenRook cognition — same ToolCapability, same appraisal, same memory coupling as builtins.
 
 ### MCP client abstraction (`tools/mcp/client.py`)
 - `MCPClient` protocol: `discover_tools()` → `list[MCPToolInfo]`, `call_tool()` → `MCPCallResult`
@@ -3214,7 +3213,7 @@ Full observability for tool-aware turns through the runtime debug API.
 
 ## v0.12.0 — 2026-04-02 (Agentic Tools Phase 3: memory and self-model coupling)
 
-Tool episodes now persist into memory, self-model, and unresolved tension — making tool behavior part of Nūr's ongoing identity and emotional history.
+Tool episodes now persist into memory, self-model, and unresolved tension — making tool behavior part of OpenRook's ongoing identity and emotional history.
 
 ### Tool memory coupling (`core/tool_memory.py`)
 - `create_tool_event()` — creates EmotionalEvent for short-term memory from tool results
@@ -3449,7 +3448,7 @@ Closes the remaining runtime gaps after the pre-merge review.
 
 ## v0.8.1 — 2026-04-02 (Runtime pre-merge fixes)
 
-Five pre-merge fixes closing spec gaps in the Nūr Runtime.
+Five pre-merge fixes closing spec gaps in the OpenRook Runtime.
 
 ### Fix 1: Session identity semantics (`runtime/sessions/manager.py`, `user_session.py`)
 - Sessions now keyed by **session_key** (`platform:user_id:chat_id`), not rel_key
@@ -3468,7 +3467,7 @@ Five pre-merge fixes closing spec gaps in the Nūr Runtime.
 
 ### Fix 3: Config-driven channel startup (`runtime/app.py`, `runtime/config.py`)
 - `RuntimeConfig` gains `console_enabled: bool = True`
-- `NurApp.run()` starts console only when `console_enabled=True`
+- `OpenRookApp.run()` starts console only when `console_enabled=True`
 - Headless mode: when console disabled, blocks on `_shutdown_event.wait()`
 - Signal handler sets `_shutdown_event` for both console and headless modes
 - Telegram-only runtime works without console
@@ -3482,7 +3481,7 @@ Five pre-merge fixes closing spec gaps in the Nūr Runtime.
 
 ### Fix 5: Docs sync
 - CHANGELOG.md, `docs/internal/CLAUDE.md`, README.md updated to match final implementation
-- Design doc (`docs/internal/NUR_RUNTIME_DESIGN_REVISED.md`) left as-is — it is a pre-implementation spec; intentional deviations documented in `docs/internal/CLAUDE.md`
+- Design doc (`docs/internal/OPENROOK_RUNTIME_DESIGN_REVISED.md`) left as-is — it is a pre-implementation spec; intentional deviations documented in `docs/internal/CLAUDE.md`
 
 ### Testing
 - 643 tests total (26 new)
@@ -3514,7 +3513,7 @@ Session-aware debug API replacing the old single-pipeline debug model.
 ### Config + wiring
 - `RuntimeConfig` gains `debug_host` (default `127.0.0.1`) and `debug_port` (default `8077`)
 - `runtime_config.yaml` updated with debug section
-- Debug server runs as background uvicorn task in NurApp
+- Debug server runs as background uvicorn task in OpenRookApp
 - Graceful shutdown stops debug server alongside channels
 
 ### Testing
@@ -3580,7 +3579,7 @@ Telegram adapter with allowlist, dedupe, typing indicators, and commands.
 - Long-polling loop via httpx (`TelegramClient`)
 - Allowlist by numeric Telegram user ID (empty = allow all)
 - Per-update dedupe with TTL cache (`DedupeCache`) — prevents duplicate state updates
-- Typing indicators resent every 4 s while Nūr processes, cancelled on response
+- Typing indicators resent every 4 s while OpenRook processes, cancelled on response
 - Text messages only — photos/stickers/etc silently ignored
 - Commands: `/status` (show modulators), `/reset` (digest + evict session), `/debug` (placeholder), `/start` (greeting)
 - Bot-name suffix stripped from commands (`/status@MyBot` → `/status`)
@@ -3608,7 +3607,7 @@ Telegram adapter with allowlist, dedupe, typing indicators, and commands.
 
 ## v0.5.0 — 2026-04-02 (Phase 1: Console runtime)
 
-First runtime layer around Nūr. Console-only. Nūr remains synchronous — the runtime wraps it with async lifecycle management.
+First runtime layer around OpenRook. Console-only. OpenRook remains synchronous — the runtime wraps it with async lifecycle management.
 
 ### Session manager (`runtime/sessions/manager.py`)
 - Lazy session creation on first message per relationship key (`platform:user_id`)
@@ -3642,7 +3641,7 @@ First runtime layer around Nūr. Console-only. Nūr remains synchronous — the 
 - One backend per pipeline (thread safety — `requests.Session` is not thread-safe)
 
 ### App orchestrator (`runtime/app.py`, `main.py`)
-- `NurApp` wires session manager + console channel
+- `OpenRookApp` wires session manager + console channel
 - Signal handler for SIGINT/SIGTERM → graceful shutdown
 - Entry point: `python main.py`
 
@@ -3652,7 +3651,7 @@ First runtime layer around Nūr. Console-only. Nūr remains synchronous — the 
 - Data directory: `data/{platform}_{user_id}/` (colon-safe)
 
 ### Storage layout
-- `data/{platform}_{user_id}/nur.db` — per-user Nūr database
+- `data/{platform}_{user_id}/openrook.db` — per-user OpenRook database
 - `data/{platform}_{user_id}/engine_state.json` — modulator snapshot
 - `data/shared/self_model.db` — shared self-model across all users
 
@@ -3671,7 +3670,7 @@ First runtime layer around Nūr. Console-only. Nūr remains synchronous — the 
 
 ## v0.4.0 — 2026-04-02 (Phase 0: Runtime embedding)
 
-Mandatory Nūr-side changes to support the Nūr Runtime. No external behavior changes.
+Mandatory OpenRook-side changes to support the OpenRook Runtime. No external behavior changes.
 
 ### EmotionalEngine.restore()
 - `restore(snapshot, saved_at=None)` restores modulators from a dict snapshot
@@ -4036,7 +4035,7 @@ First complete version. All v1 systems built, tested, and wired together.
 - Bounded mirroring: max +/-0.15 shift, weighted by bonding score
 
 ### Dual Process
-- Response generation: single LLM call with full emotional context (Nūr personality)
+- Response generation: single LLM call with full emotional context (OpenRook personality)
 - Self-check: rule-based (tone fit, overconfidence, bluntness, energy, contradictions) + optional LLM
 - Regeneration with correction note on self-check failure
 
@@ -4072,6 +4071,6 @@ First complete version. All v1 systems built, tested, and wired together.
 - All tests work without API key (MockLLMBackend triggers rule-based fallbacks)
 
 ### Infrastructure
-- GitHub repo: github.com/balfiky/nur (private)
+- GitHub repo: github.com/balfiky/openrook (private)
 - pyproject.toml with dev dependencies (pytest, ruff)
 - .gitignore for Python, SQLite, caches

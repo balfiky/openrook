@@ -54,9 +54,7 @@ def test_durable_subject_survives_two_independent_python_processes(tmp_path):
     environment = dict(os.environ)
     for name in (
         "OPENROOK_CONFIG_DIR",
-        "NUR_CONFIG_DIR",
         "OPENROOK_RUNTIME_CONFIG",
-        "NUR_RUNTIME_CONFIG",
     ):
         environment.pop(name, None)
     root = Path(__file__).resolve().parents[1]

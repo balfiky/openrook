@@ -1,14 +1,15 @@
 # Research review fixes
 
 This records the F1–F7 review corrections to OpenRook. The work is an offline
-engineering correction, not a new live behavioral study. Historical protocols,
-reports, raw ledgers, and recorded outcomes are not rewritten.
+engineering correction, not a new live behavioral study. Project naming in
+tracked documentation and protocols is standardized; historical reports, raw
+ledgers, and recorded outcomes are not rewritten.
 
 ## Documentation review
 
 The 2026-10-20 documentation follow-up addresses D1–D16 and B1–B12.
 Report files were read for verification only. Historical plans, checkpoints,
-and study evidence retain their original scope and wording.
+and study evidence retain their original scope and results.
 
 | ID | Outcome |
 |---|---|
@@ -20,7 +21,7 @@ and study evidence retain their original scope and wording.
 | D6 | Replaced the aggregate call ceiling with conditional costs and possible model appraisal; repaired flow layout. |
 | D7 | Showed native selection and regex fallback feeding shared executor/policy checks; wrapped safety labels. |
 | D8 | Replaced `github-cover.png` with a generated OpenRook 1280×640 preview; removed unreferenced `hero-illustration.png`. GitHub's social preview setting must be re-uploaded manually. |
-| D9 | Corrected current `nur_tools/` paths; documented and automated the hand-authored feature SVG render path. Historical path references remain historical. |
+| D9 | Corrected `openrook_tools/` paths; documented and automated the hand-authored feature SVG render path. |
 | D10 | Removed counts from command comments; updated the latest closeout to Claude's prior 2,792 passed / 11 xfailed run, preserving dated checkpoints. |
 | D11 | Corrected the emotional-engine module reference. |
 | D12 | Labeled dialogue illustrative and added the research-runtime loop to README and the runtime guide. |
@@ -41,7 +42,7 @@ and study evidence retain their original scope and wording.
 | B11 | Qualified `applies_when`: enabled skills without the field retain always-on loading. |
 | B12 | Distinguished the public `/settings` HTML shell from authenticated administrative APIs. |
 
-Validation: `python3 -m nur_tools.validate --mode quick` passes; the validator,
+Validation: `python3 -m openrook_tools.validate --mode quick` passes; the validator,
 branding, and SVG-serving tests pass (43 + 3 tests). The full non-UAT suite
 completes with **2,792 passed, 11 xfailed, and two existing deprecation warnings**
 in 428.84 seconds. The direct invocation stalled at the sandbox's socket-wakeup
@@ -183,7 +184,7 @@ selector-polling helper noted below; no live calls or studies were run.
 ## F6: fingerprint only owned installed files
 
 Installed fingerprints use the owning `openrook` distribution's file inventory,
-with `project-nur` compatibility, rather than traversing all of site-packages.
+rather than traversing all of site-packages.
 This includes `main.py`, prompts, configuration, and packaged UI assets. Installer
 metadata and bytecode are excluded. Dependency versions remain separately recorded.
 Source/archive fallback stays confined to project source locations rather than

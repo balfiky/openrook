@@ -243,6 +243,3 @@ class OpenRookApp:
         self._shutdown_event.set()
         if self._console is not None:
             self._console._running = False
-
-
-NurApp = OpenRookApp

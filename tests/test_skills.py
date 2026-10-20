@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from runtime.config import RuntimeConfig
@@ -36,35 +34,6 @@ def test_audit_skill_text_maps_agent_skill_metadata_and_tools():
     assert "web.fetch" in audit["required_tools"]
     assert "shell_access" in audit["risk_flags"]
     assert all("openrook_tool" in item for item in audit["tool_mappings"])
-    assert all("nur_tool" not in item for item in audit["tool_mappings"])
-
-
-def test_existing_skill_mappings_load_with_current_field_without_rewriting_disk(tmp_path):
-    config = RuntimeConfig(data_dir=str(tmp_path / "data"))
-    import_skill(config, skill_markdown=VALID_SKILL)
-    path = tmp_path / "data" / "skills" / "registry.json"
-    registry = json.loads(path.read_text())
-    mappings = registry["skills"][0]["compatibility"]["tool_mappings"]
-    for item in mappings:
-        item["nur_tool"] = item.pop("openrook_tool")
-    # Current metadata wins when both names exist.
-    mappings[0]["openrook_tool"] = "fs.read_file"
-    path.write_text(json.dumps(registry))
-    original = path.read_bytes()
-
-    skill = list_skills(config)["skills"][0]
-
-    loaded = skill["compatibility"]["tool_mappings"]
-    assert all("nur_tool" not in item for item in loaded)
-    assert all("openrook_tool" in item for item in loaded)
-    assert loaded[0]["openrook_tool"] == "fs.read_file"
-    assert loaded[1]["openrook_tool"] == mappings[1]["nur_tool"]
-    assert path.read_bytes() == original
-
-    # The next ordinary registry write persists the normalized fields.
-    set_skill_enabled(config, "disk-helper", False)
-    stored = json.loads(path.read_text())["skills"][0]["compatibility"]["tool_mappings"]
-    assert all("nur_tool" not in item for item in stored)
 
 
 def test_import_skill_installs_disabled_until_review(tmp_path):

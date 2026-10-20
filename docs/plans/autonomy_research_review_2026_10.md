@@ -1,4 +1,4 @@
-# Research review for humanlike autonomy in Nūr
+# Research review for humanlike autonomy in OpenRook
 
 Research cutoff: 18 October 2026. This review informs the [implementation and evaluation plan](experience_grounded_autonomy_plan.md). It does not change the running agent or authorize a new study.
 
@@ -24,7 +24,7 @@ These are design conclusions from the combined evidence, not claims that any one
 
 Self-determination theory distinguishes self-endorsed regulation from independence or isolation. Cooperation can be autonomous; opposition can be externally driven. This is one psychological framework, not a definition of machine consciousness.
 
-**Design implication:** do not reward Nūr for disagreeing with its owner, avoiding contact, or producing more actions. Evaluate continuity of choice and responsiveness to evidence, while allowing cooperation, rest, and changing one's mind.
+**Design implication:** do not reward OpenRook for disagreeing with its owner, avoiding contact, or producing more actions. Evaluate continuity of choice and responsiveness to evidence, while allowing cooperation, rest, and changing one's mind.
 
 ### H2 Motivation involves distinguishable needs
 
@@ -74,7 +74,7 @@ Associations were generally small and dependent on event, trait, and measurement
 
 Five models were compared with human behavior in a controlled learning task. Models often concentrated on a discovered solution or learned poorly, with less within-model diversity; reasoning and persona steering offered limited improvements. Full-history access and the constrained task limit generalization. The result does not show that every model or engineered agent must fail.
 
-**Design implication:** measure the backend alone before attributing behavior to Nūr. Separate freely selected practice goals from later tests covering neglected and transferable knowledge. A high success rate on repeatedly chosen easy goals can conceal weak learning.
+**Design implication:** measure the backend alone before attributing behavior to OpenRook. Separate freely selected practice goals from later tests covering neglected and transferable knowledge. A high success rate on repeatedly chosen easy goals can conceal weak learning.
 
 ### A2 Plausible averages can hide incorrect psychological dynamics
 
@@ -82,7 +82,7 @@ Five models were compared with human behavior in a controlled learning task. Mod
 
 The benchmark tests 36 models using synthetic personas and six simulated days of workplace narratives. Broad relationships were easier to reproduce than within-person covariance and distributional structure. These are prompted state ratings against published human reference patterns, not an independently observed longitudinal population of autonomous agents.
 
-**Design implication:** measure event-conditioned trajectories, variability, and recovery separately from mean state values. Matching a synthetic benchmark's aggregate correlations is not sufficient validation of Nūr's internal mechanism.
+**Design implication:** measure event-conditioned trajectories, variability, and recovery separately from mean state values. Matching a synthetic benchmark's aggregate correlations is not sufficient validation of OpenRook's internal mechanism.
 
 ### A3 Persona change is not yet convincing developmental fidelity
 
@@ -98,7 +98,7 @@ Event-conditioned trait shifts occurred, but were weakly event-specific and show
 
 The study combines repeated questionnaires with behavioral samples and human ratings. Reliable self-report structure did not translate into strong overall agreement with human-rated behavior. Agreement between an acting model and another model's ratings is not an adequate substitute.
 
-**Design implication:** treat Nūr's diary, trait statements, and emotional descriptions as reports. Ground primary outcomes in actions and consequences; use blinded human ratings only where interpretation genuinely requires them.
+**Design implication:** treat OpenRook's diary, trait statements, and emotional descriptions as reports. Ground primary outcomes in actions and consequences; use blinded human ratings only where interpretation genuinely requires them.
 
 ### A5 Psychometrics still has a bounded role
 
@@ -114,7 +114,7 @@ The work finds useful psychometric properties under particular model and prompti
 
 Training on human experimental behavior improves predictions across cognitive tasks. A predictor fitted to human choices is a different product from an agent that develops its own goals through interaction.
 
-**Design implication:** human trajectories are a plausible calibration or training resource if behavioral fidelity is the aim. Centaur is a comparator, not an assumed replacement brain for Nūr.
+**Design implication:** human trajectories are a plausible calibration or training resource if behavioral fidelity is the aim. Centaur is a comparator, not an assumed replacement brain for OpenRook.
 
 ### A7 Predictive accuracy is not free-running validity
 
@@ -140,7 +140,7 @@ Interview and survey grounding improves prediction of held-out responses. Report
 
 The model formalizes appraisal checks using temporal-difference learning and evaluates predictions of human emotions in vignette studies. It connects events to goals, expectations, and coping possibilities rather than assigning emotion solely by event label. Validation is bounded to the studied tasks and measures.
 
-**Design implication:** compare Nūr's fixed updates with outcome-grounded appraisal. Do not label a heuristic implementation of selected ideas as a reproduction of the full model.
+**Design implication:** compare OpenRook's fixed updates with outcome-grounded appraisal. Do not label a heuristic implementation of selected ideas as a reproduction of the full model.
 
 ### M2 Need-linked attention can have measurable consequences
 
@@ -148,7 +148,7 @@ The model formalizes appraisal checks using temporal-difference learning and eva
 
 A hand-specified need-aligned allocation rule improves survival in a small gridworld at matched sensing budget; reversed and pathway controls test parts of the mechanism. It does not demonstrate human emotion or a learned prioritization rule. The main text and supplement describe different policy precision values; the supplement also specifies the executed objective without state-information gain. Resolve those implementation details before replication.
 
-**Design implication:** test competing resource demands and causal pathways, not decorative emotional labels. A lightweight Nūr experiment need not adopt active inference or invent hunger and suffering.
+**Design implication:** test competing resource demands and causal pathways, not decorative emotional labels. A lightweight OpenRook experiment need not adopt active inference or invent hunger and suffering.
 
 ### M3 Useful memory includes procedures and changing premises
 
@@ -172,7 +172,7 @@ Repeated semantic-game experience produced model improvement, but learning was l
 
 A learned environment model supports policy improvement across many control tasks. The system uses trained world-model, actor, and critic networks; it is not equivalent to asking a hosted language model to imagine a future.
 
-**Design implication:** start with explicit forecasts and observed outcomes. A trained world model is a later research branch requiring its own training environment and compute, not a prerequisite for the first Nūr experiment.
+**Design implication:** start with explicit forecasts and observed outcomes. A trained world model is a later research branch requiring its own training environment and compute, not a prerequisite for the first OpenRook experiment.
 
 ## Promising proposals that are not established solutions
 
@@ -212,6 +212,6 @@ The proposal emphasizes continuing interaction, grounded observations and conseq
 
 The recent empirical studies offer sharper tests, not a consensus psychological architecture. Their settings range from human laboratory tasks to prompted fictional narratives, game control, and model-generated survey responses. Results cannot be transferred between those settings without testing.
 
-For Nūr, the recommended near-term synthesis is deliberately modest: **persistent commitments, evidence-backed predictions, outcome-tested procedures, and a separately testable appraisal layer**. Human goal-selection tasks provide the first behavioral reference. More elaborate intrinsic motivation, active inference, and weight training remain alternatives evaluated only when a specific failure calls for them.
+For OpenRook, the recommended near-term synthesis is deliberately modest: **persistent commitments, evidence-backed predictions, outcome-tested procedures, and a separately testable appraisal layer**. Human goal-selection tasks provide the first behavioral reference. More elaborate intrinsic motivation, active inference, and weight training remain alternatives evaluated only when a specific failure calls for them.
 
 Claims about human resemblance require a declared population, task, interface, and time scale. Synthetic days are not human years. Repeated calls to one model are not a representative population of people. The plan therefore separates engineering acceptance, exploratory findings, and later confirmatory behavioral claims.

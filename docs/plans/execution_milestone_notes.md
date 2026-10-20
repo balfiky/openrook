@@ -44,7 +44,7 @@ manifests additionally identify their complete current implementation.
 and a random predictor on identical balanced opportunity schedules. The learner
 uses the same hypothesis family disclosed in the environment instructions.
 These non-LLM controls test learnability and scoring; their competence is not
-attributed to Nūr. They are not an autonomous motivation comparison.
+attributed to OpenRook. They are not an autonomous motivation comparison.
 
 The [prospective protocol](../research_learning_execution.protocol.json) crosses
 full/task-only context with batch/closed-loop execution and mirrors condition
@@ -74,7 +74,7 @@ probes reflect unobserved capability, not proof that the subject cannot learn.
 - [Non-LLM task controls](../../reports/research-comparison/20261019-execution-task-controls/results.json):
   the finite-hypothesis learner predicts all four held-out beta inputs correctly
   at seed 17; the matched random predictor gets zero of four. This small control
-  validates task learnability, not Nūr's learning or a population effect.
+  validates task learnability, not OpenRook's learning or a population effect.
 - Focused lint, formatting, whitespace, protocol, local-link, and credential
   checks pass. The existing late router import in `interface/api.py` still
   triggers Ruff E402; this unrelated import-layout issue is unchanged.

@@ -17,13 +17,13 @@ Classifications:
 - `interface/api.py` Life History text/file/upload endpoints: keep. They route through `LifeHistoryStore.ingest_*`, so the operator is participating in the Learning channel.
 - `runtime/skills.py` skill enrollment/import/enable paths: keep. They are the Skills channel.
 - `interface/api.py` `/admin/life/rollback`: removed as a mutation path. The endpoint now returns `410 Gone`; the admin console rollback form and JavaScript caller were removed.
-- `runtime/life_history.py` `rollback_batch`: retained only as a test-gated internal helper. It raises unless `NUR_TESTING=1`.
-- `runtime/life_history.py` direct inserts/updates/deletes on `experience_events`, `evolution_events`, `beliefs`, `drive_states`, and `drive_changes`: keep only inside Learning-channel ingestion, metabolic consolidation/decay/revision, or the `NUR_TESTING=1` rollback helper.
+- `runtime/life_history.py` `rollback_batch`: retained only as a test-gated internal helper. It raises unless `OPENROOK_TESTING=1`.
+- `runtime/life_history.py` direct inserts/updates/deletes on `experience_events`, `evolution_events`, `beliefs`, `drive_states`, and `drive_changes`: keep only inside Learning-channel ingestion, metabolic consolidation/decay/revision, or the `OPENROOK_TESTING=1` rollback helper.
 - `runtime/evolution_policy.py`: converted to perception-only helpers. Gate functions and source-trust tiers were removed.
 
 Final audit:
 
-- No hits for `evaluate_belief`, `evaluate_drive_change`, `evaluate_future_behavior`, `operator_review`, `require_review`, `admin_override`, `MAX_INFLUENCE_DELTA`, or `SOURCE_TRUST` in `core/`, `runtime/`, `interface/`, `nur_tools/`, or `config/`.
+- No hits for `evaluate_belief`, `evaluate_drive_change`, `evaluate_future_behavior`, `operator_review`, `require_review`, `admin_override`, `MAX_INFLUENCE_DELTA`, or `SOURCE_TRUST` in `core/`, `runtime/`, `interface/`, `openrook_tools/`, or `config/`.
 - Old proactive hard-cap constants were removed from runtime code.
 - Admin rollback UI identifiers were removed from `interface/static`.
 

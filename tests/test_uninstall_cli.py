@@ -69,7 +69,7 @@ def test_uninstall_removes_identity_only_when_requested(tmp_path):
     soul_path.write_text("soul:\n  name: Test\n", encoding="utf-8")
     RuntimeConfig(data_dir=str(data_dir)).write_yaml(str(config_path))
     data_dir.mkdir()
-    env = {"NUR_CONFIG_DIR": str(identity_dir)}
+    env = {"OPENROOK_CONFIG_DIR": str(identity_dir)}
 
     default_plan = build_uninstall_plan(config_path=config_path, environ=env)
     assert "identity" not in {item.kind for item in default_plan.remove}

@@ -7,8 +7,6 @@ import os
 import socket
 from urllib.parse import urlparse
 
-from config.environment import project_env
-
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
@@ -104,10 +102,7 @@ def validate_http_url(
             raise ValueError("URL host is local-only")
         return parsed.geturl()
 
-    if allow_private_env.startswith(("OPENROOK_", "NUR_")):
-        private_allowed = bool(project_env(allow_private_env.partition("_")[2]))
-    else:
-        private_allowed = bool(allow_private_env and os.environ.get(allow_private_env))
+    private_allowed = bool(allow_private_env and os.environ.get(allow_private_env))
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:

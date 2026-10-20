@@ -1,4 +1,4 @@
-# Experience grounded autonomy plan for Nūr
+# Experience grounded autonomy plan for OpenRook
 
 Date: 18 October 2026. Updated 19 October 2026: opt-in engineering mechanisms and
 comparison infrastructure cover Phases 0–5. The final fixed-cohort retained-choice
@@ -12,7 +12,7 @@ retained, history-dependent choice, not human equivalence or subjective feeling.
 
 ## Decision
 
-Keep Nūr's persistent research runtime, repair the remaining execution limitations, and change the center of development from **describing an evolving personality** to **demonstrating experience-dependent choices and capabilities**. Add psychological mechanisms only as separately testable hypotheses.
+Keep OpenRook's persistent research runtime, repair the remaining execution limitations, and change the center of development from **describing an evolving personality** to **demonstrating experience-dependent choices and capabilities**. Add psychological mechanisms only as separately testable hypotheses.
 
 This supersedes the next-step research direction of [Character Independence Plan](character_independence_plan.md), not its historical implementation record. The [research review](autonomy_research_review_2026_10.md) records 23 relevant sources, including October 2026 human research and model evaluations, implemented computational models, and explicitly speculative proposals.
 
@@ -138,7 +138,7 @@ Procedures begin as declarative, evidence-backed records rather than unrestricte
 
 Retain the existing affect system as the baseline. Introduce an optional appraisal path using goal relevance, outcome versus expectation, uncertainty, and estimated controllability. At first, connect it to one measurable decision site, such as allocating observations among competing uncertainties. Avoid changing expression, retrieval, learning rate, planning, and traits simultaneously.
 
-An appraisal intervention must alter behavior after controlling for emotional wording, without merely consuming extra inference budget. Compare it with an equally informed non-emotional controller. A useful effect supports that implemented mechanism, not the necessity of naming it emotion. [Computational appraisal research](https://doi.org/10.1109/TAFFC.2024.3470555) motivates the hypothesis; the transfer to Nūr remains to be tested.
+An appraisal intervention must alter behavior after controlling for emotional wording, without merely consuming extra inference budget. Compare it with an equally informed non-emotional controller. A useful effect supports that implemented mechanism, not the necessity of naming it emotion. [Computational appraisal research](https://doi.org/10.1109/TAFFC.2024.3470555) motivates the hypothesis; the transfer to OpenRook remains to be tested.
 
 Only add longer-term affective expectations after short-term behavior and recovery are measurable. Do not create simulated pain, death avoidance, or compulsory attachment merely to force activity. Resource demands should correspond to declared properties of the environment rather than unsupported biological claims.
 
@@ -160,7 +160,7 @@ Also include a simple non-LLM learner and an opportunity-matched random selector
 
 | Question | Controlled comparison | Main observation |
 |---|---|---|
-| Backend or wrapper? | Backend-only task adapter versus current Nūr, with the same observations and budget; retain a full-history capability reference separately | Goal-choice distribution, learning curve, context-induced performance loss |
+| Backend or wrapper? | Backend-only task adapter versus current OpenRook, with the same observations and budget; retain a full-history capability reference separately | Goal-choice distribution, learning curve, context-induced performance loss |
 | Execution defect? | Current receipt mode versus resumable closed-loop execution | Verified progress, recovery after failure, and unnecessary repeated actions |
 | Memory or rehearsal? | Relevant procedural memory versus episode-only memory at matched context budget; add a no-retained-experience control | Transfer, retained benefit after restart, and stale-rule errors |
 | Motivation signal? | Same execution and memory, with versus without grounded progress estimates | Selection of learnable challenges, coverage, and avoidance of uninformative repetition |
@@ -222,11 +222,11 @@ Hold out world configurations and human reference data from mechanism tuning. Pu
 
 ### Phase 0 Freeze the baseline and build the measuring task
 
-**Deliverables:** a versioned protocol, task/environment adapter, independent outcome scorer, source/data provenance, and baseline reports distinguishing backend-only behavior from the current Nūr wrapper.
+**Deliverables:** a versioned protocol, task/environment adapter, independent outcome scorer, source/data provenance, and baseline reports distinguishing backend-only behavior from the current OpenRook wrapper.
 
 **Likely files:** `evals/research_environment.py`, `evals/research_comparison.py`, `evals/research.py`, their existing tests, and a focused new behavioral-task module if separation is needed.
 
-**Gate:** deterministic fixtures reproduce the task's rules and exclude answer leakage; a small live smoke establishes valid model choices and complete request accounting. If Nūr cannot perceive the task or the backend cannot follow its action schema, resolve that before interpreting motivation.
+**Gate:** deterministic fixtures reproduce the task's rules and exclude answer leakage; a small live smoke establishes valid model choices and complete request accounting. If OpenRook cannot perceive the task or the backend cannot follow its action schema, resolve that before interpreting motivation.
 
 ### Phase 1 Resumable action and outcome verification
 
@@ -256,7 +256,7 @@ Hold out world configurations and human reference data from mechanism tuning. Pu
 
 **Deliverables:** a modest persistent world with competing projects, partial observations, delayed consequences, interruptions, and independently controlled social partners. Add slow disposition estimates only after repeatable behavioral patterns can be measured.
 
-Use scripted stochastic partners first to avoid the same backend generating both the experience and its supposed validation. Later add heterogeneous agent partners as a separate condition. Public environment descriptions explain affordances without telling Nūr what personality to develop.
+Use scripted stochastic partners first to avoid the same backend generating both the experience and its supposed validation. Later add heterogeneous agent partners as a separate condition. Public environment descriptions explain affordances without telling OpenRook what personality to develop.
 
 **Gate:** different histories produce retained differences under common probes, not merely repeated biography wording; independent outcome checks distinguish a learned relationship expectation from a sympathetic story. If adding social complexity obscures earlier effects, return to the smaller task.
 
@@ -280,8 +280,8 @@ End or suspend a run for an integrity failure, budget exhaustion, unavailable ba
 
 | Observation after controlled tests | Next decision |
 |---|---|
-| Backend-only and Nūr both fail the basic learning task | Compare a different backend and a small explicit learner; do not add more emotional prompts |
-| Backend-only works but Nūr fails | Minimize wrapper/context interference before adding mechanisms |
+| Backend-only and OpenRook both fail the basic learning task | Compare a different backend and a small explicit learner; do not add more emotional prompts |
+| Backend-only works but OpenRook fails | Minimize wrapper/context interference before adding mechanisms |
 | Execution improves, but repeated experience does not transfer | Rework evidence selection and procedural learning; test a trained component only after localizing the failure |
 | Goal choice collapses onto easy success or noise | Compare progress-informed selection with a simple intrinsic learner, using held-out tasks |
 | Appraisal changes wording but not behavior | Classify it as expression modeling; remove claims of functional emotional development |
@@ -296,4 +296,4 @@ Active inference, richer learned world models, and multiscale intrinsic motivati
 
 The first coding increment delivered **Phase 0 plus the smallest Phase 1 slice**: one controlled selectable-learning environment, a frozen current baseline, a durable goal continuation, step-by-step receipt feedback, and independent outcome verification. Subsequent optional mechanisms are now implemented for controlled comparison, not promoted to defaults on the strength of engineering tests.
 
-Its result must answer: **Is Nūr failing to choose useful experiences, failing to execute its choice, or failing to retain and use what happened?** That diagnosis determines the next change. It replaces another unstructured long run and avoids promising humanlike development from plumbing fixes alone.
+Its result must answer: **Is OpenRook failing to choose useful experiences, failing to execute its choice, or failing to retain and use what happened?** That diagnosis determines the next change. It replaces another unstructured long run and avoids promising humanlike development from plumbing fixes alone.

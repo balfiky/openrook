@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from runtime.config import RuntimeConfig
-from openrook_tools.legacy import COMMAND_TARGETS
 
 
 PROJECT_NAME = "openrook"
@@ -32,21 +31,12 @@ EXPECTED_CONSOLE_SCRIPTS = {
     "openrook-uat": "openrook_tools.uat:main",
     "openrook-validate": "openrook_tools.validate:main",
 }
-EXPECTED_CONSOLE_SCRIPTS.update({
-    name: "openrook_tools.legacy:" + (
-        name.partition("-")[2].replace("-", "_") or "main"
-    )
-    for name in COMMAND_TARGETS
-})
 EXPECTED_PACKAGE_FILES = {
     "openrook_tools/__init__.py",
-    "openrook_tools/legacy.py",
-    "nur_tools/__init__.py",
     "interface/static/index.html",
     "interface/static/admin.html",
     "interface/static/admin.js",
     "interface/static/admin.css",
-    "interface/static/lib/storage.js",
     "config/soul.yaml",
     "config/modulators.yaml",
     "config/values_seed.yaml",
@@ -558,7 +548,7 @@ def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
         ]
         commands.extend(
             [str(venv_dir / bin_dir / command), "--help"]
-            for command in COMMAND_TARGETS
+            for command in ("openrook-genesis-reset", "openrook-uat")
         )
         for cmd in commands:
             _run(cmd, cwd=workspace)

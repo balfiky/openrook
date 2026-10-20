@@ -1,4 +1,4 @@
-# Project Nūr Expert Brief
+# Project OpenRook Expert Brief
 
 This document is a current-state, implementation-grounded briefing for consultation with experts in:
 
@@ -12,7 +12,7 @@ It describes the project as it exists in the repository now, not as a phase-by-p
 
 ## 1. Executive Summary
 
-Project Nūr is an attempt to build a more human-like assistant by combining:
+Project OpenRook is an attempt to build a more human-like assistant by combining:
 
 - a persistent internal emotional state
 - relationship-specific memory
@@ -31,7 +31,7 @@ Instead, emotion should emerge from the interaction between:
 - limited cognitive resources
 - explicit response strategy selection
 
-In practical terms, Nūr is a synchronous cognitive pipeline wrapped by an async runtime. It supports:
+In practical terms, OpenRook is a synchronous cognitive pipeline wrapped by an async runtime. It supports:
 
 - web chat UI
 - session-aware debug inspection
@@ -68,7 +68,7 @@ The intended result is an assistant that:
 
 ### 3.1 Emotion is state, not style
 
-Nūr does not start from “pick an emotion label and write in that tone.”
+OpenRook does not start from “pick an emotion label and write in that tone.”
 
 It starts from six continuous modulators:
 
@@ -146,7 +146,7 @@ The strongest influence is PSI Theory:
 - motivation and cognition are coupled
 - resource constraints matter
 
-Nūr adapts this idea into a small modulator system. It does **not** claim to implement PSI in a research-complete sense. It uses PSI mainly as an engineering orientation:
+OpenRook adapts this idea into a small modulator system. It does **not** claim to implement PSI in a research-complete sense. It uses PSI mainly as an engineering orientation:
 
 - use continuous state
 - let response behavior emerge from state interactions
@@ -160,14 +160,14 @@ ACT-R mainly influences memory:
 - repetition matters
 - context and activation matter
 
-Nūr’s long-term memory is not a full ACT-R implementation, but it adopts the practical idea that:
+OpenRook’s long-term memory is not a full ACT-R implementation, but it adopts the practical idea that:
 
 - memories should not be retrieved uniformly
 - current emotional/relational context should bias which memories surface
 
 ### 4.3 CLARION / dual-process influence
 
-Nūr borrows the idea of fast vs slow cognition:
+OpenRook borrows the idea of fast vs slow cognition:
 
 - fast path: quick intuitive candidate
 - slow path: reflective evaluation / objection / revision
@@ -224,7 +224,7 @@ That distinction matters when consulting psychologists.
 
 At the highest level, the project has two layers:
 
-- the **cognitive layer**: Nūr’s internal “mind”
+- the **cognitive layer**: OpenRook’s internal “mind”
 - the **runtime layer**: sessions, channels, persistence, and tooling
 
 ### 6.1 Cognitive layer
@@ -776,7 +776,7 @@ For existing narrative docs:
 
 ## 20. Bottom Line
 
-Project Nūr is trying to operationalize a strong idea:
+Project OpenRook is trying to operationalize a strong idea:
 
 **human-like assistance is less about sounding emotional and more about being stateful, relational, resource-limited, and socially continuous.**
 

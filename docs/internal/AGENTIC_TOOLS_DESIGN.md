@@ -1,12 +1,12 @@
-# Nūr Agentic Tools — Revised Design Spec
+# OpenRook Agentic Tools — Revised Design Spec
 
 > **Status:** Pre-implementation, implementation-ready
 > **Date:** 2026-04-02
-> **Purpose:** Extend Project Nūr with agentic tool use while preserving Nūr as the actual cognitive architecture.
+> **Purpose:** Extend Project OpenRook with agentic tool use while preserving OpenRook as the actual cognitive architecture.
 
 ## 1. Goal
 
-Nūr should be able to:
+OpenRook should be able to:
 - access the local system
 - browse the web
 - inspect and modify files
@@ -20,12 +20,12 @@ The key requirement is:
 **Tool use must happen inside cognition, not outside it.**
 
 That means:
-- emotions influence whether Nūr acts
+- emotions influence whether OpenRook acts
 - inner dialogue can propose, revise, or refuse actions
 - defense mechanisms can shape action style or deflect from action
 - tool outcomes feed back into emotional state, memory, and self-model
 
-Nūr remains the brain.
+OpenRook remains the brain.
 The tool layer is the body.
 
 ## 2. Design Principle
@@ -33,7 +33,7 @@ The tool layer is the body.
 The runtime must not follow this pattern:
 
 ```text
-user request -> tool executor -> tool result -> Nūr narrates
+user request -> tool executor -> tool result -> OpenRook narrates
 ```
 
 It must follow this pattern:
@@ -48,14 +48,14 @@ user request
 ```
 
 This preserves the research objective:
-- Nūr does not merely have tools
-- Nūr develops action tendencies, caution, persistence, and frustration
+- OpenRook does not merely have tools
+- OpenRook develops action tendencies, caution, persistence, and frustration
 
 ## 3. Current Constraints
 
 The design must respect the code that exists today.
 
-Current Nūr facts:
+Current OpenRook facts:
 - [`CognitivePipeline.process()`](pipeline.py#L208) is synchronous
 - [`CognitivePipeline.end_session()`](pipeline.py#L641) is synchronous
 - current LLM protocol is `generate(system_prompt, user_message) -> str`
@@ -70,9 +70,9 @@ Implication:
 
 ## 4. Core Principles
 
-### 4.1 Nūr owns action selection
+### 4.1 OpenRook owns action selection
 
-Tool use is decided by Nūr's cognitive state, not by a framework and not by the transport layer.
+Tool use is decided by OpenRook's cognitive state, not by a framework and not by the transport layer.
 
 ### 4.2 Emotion influences execution decisions
 
@@ -81,7 +81,7 @@ Therefore:
 - emotions may influence whether to ask first or act directly
 - emotions may influence how risky or broad an action is
 - emotions may influence retry behavior and persistence
-- emotions may influence whether Nūr narrows scope or escalates scope
+- emotions may influence whether OpenRook narrows scope or escalates scope
 
 This design does **not** force externally imposed safety-governance behavior into cognition.
 
@@ -120,7 +120,7 @@ MCP is valuable for breadth, but it must be adapted into the same internal model
 User message
     |
     v
-Normal Nūr processing
+Normal OpenRook processing
 (anticipation -> contagion -> event -> memory -> profiles -> contradictions)
     |
     v
@@ -158,13 +158,13 @@ Final response
 ## 6. Recommended Project Structure
 
 ```text
-project-nur/
+openrook/
 ├── core/
 │   ├── dual_process/
 │   │   ├── inner_dialogue.py          # existing
 │   │   ├── generator.py               # existing
 │   │   └── tool_loop.py               # NEW — tool-aware deliberation bridge
-│   ├── tool_appraisal.py              # NEW — maps tool outcomes back into Nūr state
+│   ├── tool_appraisal.py              # NEW — maps tool outcomes back into OpenRook state
 │   └── types.py                       # extended with tool dataclasses
 │
 ├── tools/
@@ -236,7 +236,7 @@ class ToolCapability:
 ## 7.3 ToolIntent
 
 This is the key cognitive object.
-It represents what Nūr wants to do.
+It represents what OpenRook wants to do.
 
 ```python
 @dataclass
@@ -352,7 +352,7 @@ and before:
 - defense mechanisms
 - generator
 
-That is the point where Nūr has enough context to decide whether to act.
+That is the point where OpenRook has enough context to decide whether to act.
 
 ## 9.2 Updated processing flow
 
@@ -423,10 +423,10 @@ Do not create a second independent planner that bypasses inner dialogue.
 The Action Arbiter is a cognitive decision layer, not an external policy firewall.
 
 Its job is:
-- decide whether Nūr acts now
-- decide whether Nūr asks first
-- decide whether Nūr refuses
-- decide whether Nūr narrows scope or retries
+- decide whether OpenRook acts now
+- decide whether OpenRook asks first
+- decide whether OpenRook refuses
+- decide whether OpenRook narrows scope or retries
 
 Inputs:
 - `ToolIntent`
@@ -526,7 +526,7 @@ Tool behavior should feed self-observations such as:
 - persistent
 - technically competent
 
-These observations matter because they let Nūr develop action style over time.
+These observations matter because they let OpenRook develop action style over time.
 
 ## 13.4 Unresolved items
 
@@ -579,7 +579,7 @@ Recommended operations:
 - `find_by_topic(topic)`
 - `find_by_person(person_id)`
 
-This gives Nūr explicit introspective recall when the user asks:
+This gives OpenRook explicit introspective recall when the user asks:
 - "Do you remember...?"
 - "What did I tell you about...?"
 
@@ -603,7 +603,7 @@ MCP tools must be adapted into the exact same internal model as builtin tools:
 - `ToolResult`
 - `ToolObservation`
 
-Nūr should not need separate cognition for MCP tools.
+OpenRook should not need separate cognition for MCP tools.
 
 ## 15.3 Adapter responsibilities
 
@@ -627,7 +627,7 @@ Responsibilities:
 What runtime must **not** do:
 - decide whether a tool should be used
 - choose arguments on its own
-- bypass Nūr to satisfy user requests directly
+- bypass OpenRook to satisfy user requests directly
 
 ## 17. Debug and Observability
 
@@ -774,7 +774,7 @@ Protect against:
 
 This design is complete when:
 
-1. Nūr can choose between replying directly and using a tool
+1. OpenRook can choose between replying directly and using a tool
 2. Tool use is visible in inner dialogue traces
 3. A tool result changes emotional state in a measurable/debuggable way
 4. Salient tool episodes enter memory
@@ -783,7 +783,7 @@ This design is complete when:
 7. MCP tools, when added, follow the exact same internal model
 8. The generator receives summarized tool context, not raw execution dumps
 9. Tool loops are bounded and traceable
-10. Nūr remains the planning/decision core throughout
+10. OpenRook remains the planning/decision core throughout
 
 ## 23. Non-Goals for Phase 1
 
@@ -792,19 +792,19 @@ Do not do these first:
 - complex multi-step planning across many turns
 - background autonomous tasks
 - multi-agent collaboration
-- replacing Nūr with an external planner
+- replacing OpenRook with an external planner
 
 ## 24. Final Design Principle
 
-Nūr should not become:
+OpenRook should not become:
 - a generic agent framework with a personality prompt
 - or a tool runner wrapped in emotional narration
 
-Nūr should become:
+OpenRook should become:
 - a cognitive system whose emotions, memory, tension, and self-model
   shape real action in the environment.
 
 That means the correct architecture is:
 
-**custom Nūr-native cognition with structured tools underneath.**
+**custom OpenRook-native cognition with structured tools underneath.**
 

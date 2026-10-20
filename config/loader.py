@@ -314,9 +314,6 @@ class OpenRookConfig:
 # Loader
 # ---------------------------------------------------------------------------
 
-NurConfig = OpenRookConfig
-
-
 def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
     """Load configuration from YAML files.
 

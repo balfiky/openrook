@@ -1,11 +1,11 @@
-# Nūr Runtime — Revised Implementation Spec
+# OpenRook Runtime — Revised Implementation Spec
 
 > **Status:** Pre-implementation, implementation-ready
-> **Purpose:** Build a purpose-built runtime around Project Nūr without fighting a framework and without assuming APIs Nūr does not currently expose.
+> **Purpose:** Build a purpose-built runtime around Project OpenRook without fighting a framework and without assuming APIs OpenRook does not currently expose.
 
 ## 1. Goal
 
-Nūr Runtime is the transport and lifecycle layer around Nūr.
+OpenRook Runtime is the transport and lifecycle layer around OpenRook.
 
 It is responsible for:
 - receiving messages from channels
@@ -15,7 +15,7 @@ It is responsible for:
 - exposing runtime-aware debug inspection
 - shutting down cleanly
 
-Nūr remains the brain.
+OpenRook remains the brain.
 
 ## 2. Correct Scope
 
@@ -27,13 +27,13 @@ This runtime is **not** a new cognitive framework. It must not replace or duplic
 - defense logic
 - response generation
 
-It only wraps Nūr and gives it a body.
+It only wraps OpenRook and gives it a body.
 
-## 3. Reality Check: Current Nūr Constraints
+## 3. Reality Check: Current OpenRook Constraints
 
 The runtime must be designed around the code that exists today.
 
-Current Nūr facts:
+Current OpenRook facts:
 - `CognitivePipeline.process()` is synchronous
 - `CognitivePipeline.end_session()` is synchronous
 - current LLM protocol is `generate(system_prompt, user_message) -> str`
@@ -46,7 +46,7 @@ These constraints define phase 0.
 
 ## 4. Required Phase 0 Before Runtime Work
 
-These are mandatory embedding changes inside Nūr.
+These are mandatory embedding changes inside OpenRook.
 
 ### 4.1 Add state restore
 
@@ -77,13 +77,13 @@ Refactor pipeline construction so:
   - self-profile observations
   - defense history
 
-Without this, “one Nūr personality across all users” is false.
+Without this, “one OpenRook personality across all users” is false.
 
-### 4.4 Keep Nūr synchronous in phase 1
+### 4.4 Keep OpenRook synchronous in phase 1
 
 Do not async-refactor the brain yet.
 
-The runtime must call Nūr in worker threads, but not on the event loop.
+The runtime must call OpenRook in worker threads, but not on the event loop.
 
 Current implementation:
 - `SessionManager` owns a dedicated `ThreadPoolExecutor`
@@ -96,7 +96,7 @@ Current implementation:
 Channels (Telegram / Console / later WhatsApp)
         │
         ▼
-NurApp
+OpenRookApp
         │
         ▼
 SessionManager
@@ -109,7 +109,7 @@ UserSession(user_id)
 - idle timeout task
         │
         ▼
-CognitivePipeline (Nūr)
+CognitivePipeline (OpenRook)
         │
         ▼
 Task-routed sync LLM backends
@@ -125,7 +125,7 @@ The runtime must distinguish between **relationship identity** and **session ide
 - Session state key: `platform:user_id:chat_id`
 
 Implication:
-- the same human can have one accumulated relationship with Nūr
+- the same human can have one accumulated relationship with OpenRook
 - but distinct active conversational sessions across DM vs group contexts
 
 Default group-chat interpretation:
@@ -149,7 +149,7 @@ Current runtime: serialized async lock plus bounded backlog accounting.
 
 ### 6.1.1 Dedupe is mandatory
 
-Channel adapters must reject duplicate deliveries before they reach Nūr.
+Channel adapters must reject duplicate deliveries before they reach OpenRook.
 
 Minimum requirement:
 - maintain a per-channel TTL cache of recently processed platform message/update IDs
@@ -169,7 +169,7 @@ Channels should remain async because:
 - typing indicators need async timers
 - multiple users can be active at once
 
-### 6.3 Nūr runs off the event loop
+### 6.3 OpenRook runs off the event loop
 
 All pipeline calls must run in worker threads, off the event loop.
 
@@ -204,10 +204,10 @@ Reason:
 ## Per-user
 
 `data/{platform}_{user_id}/`
-- `nur.db`
+- `openrook.db`
 - `sessions/{chat_id}.json`
 
-`nur.db` contains:
+`openrook.db` contains:
 - long-term memories
 - person profile data
 - topic profile data
@@ -227,7 +227,7 @@ Each session-state JSON contains:
 - self observations
 - self trait extraction cache if kept
 - defense history
-- any future global Nūr identity state
+- any future global OpenRook identity state
 
 Shared self-model write invariant:
 - all writes to the shared self-model happen only inside serialized per-user
@@ -289,7 +289,7 @@ On SIGINT/SIGTERM:
 
 ## 9. LLM Backend Design
 
-Phase 1 should use a **sync** backend adapter that matches current Nūr.
+Phase 1 should use a **sync** backend adapter that matches current OpenRook.
 
 ### Interface
 
@@ -381,7 +381,7 @@ runtime_config.yaml
 
 ### Phase 0
 
-Nūr embedding changes:
+OpenRook embedding changes:
 - restore API
 - close API
 - shared self-store split
@@ -443,7 +443,7 @@ Optional:
 
 ### Regression rule
 
-All existing Nūr tests must still pass.
+All existing OpenRook tests must still pass.
 
 ### Persistence invariants to test
 
@@ -457,7 +457,7 @@ All existing Nūr tests must still pass.
 Both per-user and shared databases must carry explicit schema versions.
 
 Required:
-- `schema_version` table in `nur.db`
+- `schema_version` table in `openrook.db`
 - `schema_version` table in `self_model.db`
 - startup migration check before runtime begins serving messages
 
@@ -469,7 +469,7 @@ Rules:
 ## 16. Acceptance Criteria
 
 The runtime is complete when:
-1. console input goes through runtime into Nūr and returns a response
+1. console input goes through runtime into OpenRook and returns a response
 2. Telegram messages work with typing indicators
 3. two users maintain different emotional states
 4. one shared self-profile is visible across users
@@ -477,13 +477,13 @@ The runtime is complete when:
 6. inactivity timeout digests and evicts sessions without waiting for another message
 7. shutdown persists active sessions cleanly
 8. debug API can inspect a selected live user session
-9. existing Nūr tests remain green
+9. existing OpenRook tests remain green
 10. runtime tests pass independently
 
 ## 17. Non-Goals for Phase 1
 
 Do not do these in the first runtime pass:
-- async refactor of all Nūr internals
+- async refactor of all OpenRook internals
 - vector memory
 - multi-agent routing
 - streaming token-by-token responses
@@ -492,7 +492,7 @@ Do not do these in the first runtime pass:
 
 ## 18. Final Design Principle
 
-Nūr Runtime should be thin, but not fake-thin.
+OpenRook Runtime should be thin, but not fake-thin.
 
 The correct thinness is:
 - channels
@@ -502,4 +502,4 @@ The correct thinness is:
 - observability
 
 Not:
-- pretending current Nūr APIs already support shared identity, async processing, or restart restoration.
+- pretending current OpenRook APIs already support shared identity, async processing, or restart restoration.

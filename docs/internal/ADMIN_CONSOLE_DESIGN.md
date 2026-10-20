@@ -1,6 +1,6 @@
-# Nūr Admin Console Design
+# OpenRook Admin Console Design
 
-This document defines the production direction for Nūr's first-run setup and
+This document defines the production direction for OpenRook's first-run setup and
 permanent admin settings surface.
 
 The goal is not to add a second runtime or a separate configuration system.
@@ -10,7 +10,7 @@ installations.
 
 ## Product Goal
 
-An operator should be able to install Nūr, open the web UI, configure the
+An operator should be able to install OpenRook, open the web UI, configure the
 runtime, test the setup, and keep managing the instance without editing YAML
 unless they choose to.
 
@@ -25,7 +25,7 @@ does not fork into "wizard config" and "runtime config".
 
 ## Current Surfaces
 
-Nūr already has the important foundation:
+OpenRook already has the important foundation:
 
 - `runtime/config.py` owns `RuntimeConfig`, YAML persistence, redacted public
   serialization, and secret-status reporting.
@@ -69,7 +69,7 @@ The setup and admin pages may stay open for localhost-only starter use, but the
 product should strongly push users to configure `api_key` before enabling remote
 access, Telegram, or tools.
 
-If Nūr is bound beyond localhost, the admin console should treat missing
+If OpenRook is bound beyond localhost, the admin console should treat missing
 `api_key` as a high-severity warning.
 
 ### Test Before Save When Possible
@@ -91,7 +91,7 @@ Every setting should declare its application behavior:
 
 - **Live reload**: applied immediately by the standalone web runtime.
 - **Session manager reload**: active sessions are shut down and rebuilt.
-- **Restart required**: `nur` / `python3 main.py` or process-level settings need
+- **Restart required**: `openrook` / `python3 main.py` or process-level settings need
   a restart.
 
 The existing `/config` response already reports manager reload; milestone 1
@@ -136,7 +136,7 @@ The wizard should end in the normal admin console, not a separate page.
 
 ### Terminal Setup Follow-Ups
 
-The `nur-setup` terminal flow should collect the network binding target before
+The `openrook-setup` terminal flow should collect the network binding target before
 it prints run instructions:
 
 - bind host/IP, defaulting to `127.0.0.1`
@@ -144,7 +144,7 @@ it prints run instructions:
 - a warning when binding to `0.0.0.0` or another non-loopback address without
   a configured access token
 
-The generated completion message should then show the exact `nur-web --host ...
+The generated completion message should then show the exact `openrook-web --host ...
 --port ...` command for the selected values. This keeps setup terminal-native
 while avoiding a hidden assumption about localhost and port 8000.
 
@@ -257,7 +257,7 @@ Validation should be clear and bounded:
 - `llm_backend=openai_compatible`: require `llm_base_url` and `llm_model`; key
   optional for local deployments
 - `llm_backend=codex`: require the local `codex` CLI on `PATH`; `llm_model` is
-  optional and `llm_api_key` is not used by Nūr
+  optional and `llm_api_key` is not used by OpenRook
 - `llm_backend=minimax`: legacy installs use the generic `llm_api_key`
 - Telegram enabled means `telegram_token` is configured
 - `tools_enabled=true` should warn if `api_key` is empty

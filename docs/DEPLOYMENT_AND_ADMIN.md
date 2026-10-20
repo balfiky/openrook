@@ -154,7 +154,7 @@ Session actions are disabled while a reply or another session action is pending.
 For terminal chat use `openrook`; `/help` is immediate and does not call a model.
 Console INFO logging is off by default to keep prompts readable; `--verbose`
 restores it. Headless runtime logging stays at INFO. Existing installations
-should review the [migration guide](OPENROOK_MIGRATION.md) for compatibility.
+should review the [upgrade note](OPENROOK_MIGRATION.md) before updating.
 
 ## Git Install
 
