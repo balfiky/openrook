@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+import importlib
 import os
 from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
 import sys
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 import httpx
@@ -20,6 +22,7 @@ from core.memory.long_term import LongTermMemory
 from core.memory.semantic import SQLiteSemanticMemory
 from core.types import LongTermEntry, ModulatorState, SemanticMemoryEntry
 from interface.v1 import build_v1_router
+from runtime import storage
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 from tests._fakes import MockLLMBackend
@@ -64,6 +67,55 @@ def test_legacy_snapshot_preserves_source_and_is_idempotent(tmp_path, caplog):
     assert config.user_db_path("web:alice") == str(current)
     assert current.stat().st_ino == inode
     assert "preserving" in caplog.text
+
+
+@pytest.fixture
+def storage_without_result_constants(monkeypatch):
+    for name in ("SQLITE_BUSY", "SQLITE_LOCKED"):
+        monkeypatch.delattr(sqlite3, name, raising=False)
+    # Reload to exercise the import-time fallbacks as well as the callback.
+    return importlib.reload(storage)
+
+
+def test_legacy_snapshot_without_sqlite_result_constants(tmp_path, storage_without_result_constants):
+    legacy = seed_legacy(tmp_path / "web_alice")
+    original = legacy.read_bytes()
+    current = Path(storage_without_result_constants.resolve_user_db_path(str(legacy.parent)))
+    assert summaries(current) == summaries(legacy)
+    assert legacy.read_bytes() == original
+    assert not list(legacy.parent.glob(".openrook-migration-*"))
+
+
+@pytest.mark.parametrize("status", [5, 6], ids=["busy", "locked"])
+def test_backup_timeout_without_sqlite_result_constants(
+    tmp_path, monkeypatch, storage_without_result_constants, status,
+):
+    legacy = seed_legacy(tmp_path / "web_alice")
+    original = legacy.read_bytes()
+    retries = []
+
+    class BlockedConnection(sqlite3.Connection):
+        def backup(self, destination, *, progress):
+            progress(status, 1, 2)
+            retries.append(status)
+            progress(status, 1, 2)
+
+    connect = sqlite3.connect
+    monkeypatch.setattr(
+        sqlite3, "connect", lambda *args, **kwargs: connect(
+            *args, factory=BlockedConnection, **kwargs,
+        ),
+    )
+    ticks = iter([0, 1, 11])
+    monkeypatch.setattr(
+        storage_without_result_constants, "time", SimpleNamespace(monotonic=lambda: next(ticks)),
+    )
+    with pytest.raises(TimeoutError, match="migration blocked"):
+        storage_without_result_constants.resolve_user_db_path(str(legacy.parent))
+    assert retries == [status]
+    assert legacy.read_bytes() == original
+    assert not legacy.with_name("openrook.db").exists()
+    assert not list(legacy.parent.glob(".openrook-migration-*"))
 
 
 def test_both_present_uses_current_without_overwriting_either(tmp_path, caplog):

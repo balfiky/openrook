@@ -15,6 +15,9 @@ import time
 log = logging.getLogger(__name__)
 USER_DB_NAME = "openrook.db"
 LEGACY_USER_DB_NAME = "nur.db"
+# SQLite result codes are only exposed by sqlite3 on Python 3.11+.
+_SQLITE_BUSY = getattr(sqlite3, "SQLITE_BUSY", 5)
+_SQLITE_LOCKED = getattr(sqlite3, "SQLITE_LOCKED", 6)
 _migration_lock = threading.Lock()
 
 
@@ -66,7 +69,7 @@ def resolve_user_db_path(directory: str) -> str:
             deadline = time.monotonic() + 10
 
             def check_backup_progress(status: int, remaining: int, total: int) -> None:
-                if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                if status in (_SQLITE_BUSY, _SQLITE_LOCKED):
                     if time.monotonic() >= deadline:
                         raise TimeoutError("User database migration blocked; stop the older writer")
 
