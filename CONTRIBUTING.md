@@ -20,7 +20,7 @@ empirical validation are especially welcome.
 ## Development Setup
 
 ```bash
-git clone https://github.com/balfiky/nur.git openrook
+git clone https://github.com/balfiky/openrook.git
 cd openrook
 python3 -m pip install -e ".[dev]"
 python3 -m pytest -q        # full suite; see CI for the current collected count

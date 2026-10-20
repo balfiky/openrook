@@ -4,6 +4,15 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Repository rename and rook mark
+
+- The GitHub repository moved from `balfiky/nur` to `balfiky/openrook` (old URLs
+  redirect); install commands, badges, project URLs, and citation metadata follow.
+- New brand mark in `nur_tools/brand.py`: a chess-rook keep with a lit window and
+  a six-modulator band. It replaces the orb in the README wordmarks, showcase hero
+  (window glow follows the replayed valence), social cover, web UI header, and
+  favicon. The header name now updates without removing the mark.
+
 ### Showcase visuals
 
 - New data-driven README visuals in `nur_tools/build_showcase.py`: an animated

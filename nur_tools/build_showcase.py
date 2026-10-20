@@ -24,13 +24,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from config.loader import load_config
 from core.emotional_engine import EmotionalEngine
 from core.types import EmotionalEvent, EventType, UnresolvedItem
-
-from pathlib import Path
+from nur_tools.brand import rook_defs, rook_mark
 
 SHIPPED_CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
@@ -52,8 +52,6 @@ MODULATORS = [
     ("energy", "energy", "#7BD389"),
     ("resolution", "unresolved tension", "#B48CFF"),
 ]
-COLOR = {name: color for name, _, color in MODULATORS}
-
 LABEL_COLORS = {
     "neutral": "#6F6386",
     "content": "#F5A65B",
@@ -209,15 +207,6 @@ def _defs(extra: str = "") -> str:
   <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
     <stop offset="0" stop-color="{BG_TOP}"/><stop offset="1" stop-color="{BG_BOTTOM}"/>
   </linearGradient>
-  <radialGradient id="orb" cx="34%" cy="32%" r="70%">
-    <stop offset="0" stop-color="#FFE3BD"/><stop offset="0.35" stop-color="#F5A65B"/>
-    <stop offset="0.78" stop-color="#7A4A8C"/><stop offset="1" stop-color="#2A1E3F"/>
-  </radialGradient>
-  <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-    <stop offset="0" stop-color="#F5A65B" stop-opacity="0.55"/>
-    <stop offset="0.6" stop-color="#F5A65B" stop-opacity="0.12"/>
-    <stop offset="1" stop-color="#F5A65B" stop-opacity="0"/>
-  </radialGradient>
   <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
     <feGaussianBlur stdDeviation="3.2" result="b"/>
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -257,14 +246,13 @@ def build_emotional_arc() -> str:
 
     reveal = (f'<mask id="reveal"><rect class="reveal" x="{x0 - 12}" y="0" width="{x1 - x0 + 24}" '
               f'height="{ARC_H}" fill="#FFFFFF"/></mask>')
-    parts = [_defs(reveal), f'<rect width="{ARC_W}" height="{ARC_H}" rx="28" fill="url(#bg)"/>',
+    parts = [_defs(reveal + rook_defs("hero")), f'<rect width="{ARC_W}" height="{ARC_H}" rx="28" fill="url(#bg)"/>',
              _stars(ARC_W, ARC_H, 90, 7)]
 
-    # Left column: orb + headline. The orb shares the chart's timeline.
+    # Left column: the rook + headline. Its halo and lit window share the chart's timeline.
     parts.append(
-        '<g transform="translate(205 250)">'
-        '<circle class="halo" r="150" fill="url(#halo)"/>'
-        '<circle class="orb" r="72" fill="url(#orb)"/></g>'
+        '<g transform="translate(205 250)"><circle class="halo" r="150" fill="url(#heroHalo)"/></g>'
+        + rook_mark(122, 140, 210, "hero", halo=False)
     )
     parts.append(
         f'<text x="70" y="500" font-family="{SERIF}" font-size="34" fill="{INK}">The moment passes.</text>'
@@ -360,12 +348,14 @@ def build_emotional_arc() -> str:
     )
 
     sweep = 85  # percent of the loop spent sweeping; the rest holds the final frame
-    orb_frames = []
-    for m, s in list(zip(minutes, states))[::6] + [(minutes[-1], states[-1])]:
+    light_frames = []
+    for m, s in zip(minutes, states):
         pct = m / DURATION_MIN * sweep
-        orb_frames.append((pct, 0.86 + 0.32 * s["arousal"], 0.25 + 0.75 * s["valence"]))
-    orb_kf = "".join(f"{p:.2f}% {{ transform: scale({sc:.3f}); }}" for p, sc, _ in orb_frames)
-    halo_kf = "".join(f"{p:.2f}% {{ opacity: {op:.3f}; }}" for p, _, op in orb_frames)
+        light_frames.append((pct, 0.86 + 0.32 * s["arousal"], 0.25 + 0.75 * s["valence"]))
+    window_kf = "".join(f"{p:.4f}% {{ opacity: {0.2 + 0.8 * op:.3f}; }}" for p, _, op in light_frames)
+    halo_kf = "".join(
+        f"{p:.4f}% {{ opacity: {op:.3f}; transform: scale({sc:.3f}); }}" for p, sc, op in light_frames
+    )
     style = f"""
 .reveal {{ transform-origin: {x0 - 12}px 0; animation: reveal {DRAW_SECONDS}s linear infinite; }}
 @keyframes reveal {{ 0% {{ transform: scaleX(0); }} {sweep}% {{ transform: scaleX(1); }} 100% {{ transform: scaleX(1); }} }}
@@ -375,12 +365,12 @@ def build_emotional_arc() -> str:
   {sweep}% {{ transform: translateX(0); opacity: 1; }}
   {sweep + 1}%, 100% {{ transform: translateX(0); opacity: 0; }}
 }}
-.orb {{ animation: orb {DRAW_SECONDS}s linear infinite; }}
-@keyframes orb {{ {orb_kf} 100% {{ transform: scale({orb_frames[-1][1]:.3f}); }} }}
+.rook-window {{ animation: windowlight {DRAW_SECONDS}s linear infinite; }}
+@keyframes windowlight {{ {window_kf} 100% {{ opacity: {0.2 + 0.8 * light_frames[-1][2]:.3f}; }} }}
 .halo {{ animation: halo {DRAW_SECONDS}s linear infinite; }}
-@keyframes halo {{ {halo_kf} 100% {{ opacity: {orb_frames[-1][2]:.3f}; }} }}
+@keyframes halo {{ {halo_kf} 100% {{ opacity: {light_frames[-1][2]:.3f}; transform: scale({light_frames[-1][1]:.3f}); }} }}
 @media (prefers-reduced-motion: reduce) {{
-  .reveal, .orb, .halo {{ animation: none; }}
+  .reveal, .rook-window, .halo {{ animation: none; }}
   .playhead {{ display: none; }}
 }}"""
     return _svg(ARC_W, ARC_H, "OpenRook — the moment passes, its state carries on",
@@ -417,7 +407,7 @@ def _flower(cx: float, cy: float, state: dict[str, float], radius: float, delay:
     )
     return (
         f'<g class="breathe" style="animation-delay:{delay:.1f}s; transform-origin:{cx}px {cy}px">'
-        f'{guide}{"".join(petals)}<circle cx="{cx}" cy="{cy}" r="16" fill="url(#orb)"/></g>'
+        f'{guide}{"".join(petals)}<circle cx="{cx}" cy="{cy}" r="9" fill="#FFE3BD" filter="url(#glow)"/></g>'
     )
 
 
@@ -634,15 +624,17 @@ def build_github_cover() -> str:
     def pt(minute: float, value: float) -> tuple[float, float]:
         return x0 + (x1 - x0) * minute / DURATION_MIN, y1 - (y1 - y0) * value
 
-    parts = [_defs(), f'<rect width="{COVER_W}" height="{COVER_H}" fill="url(#bg)"/>',
+    parts = [_defs(rook_defs("cover")), f'<rect width="{COVER_W}" height="{COVER_H}" fill="url(#bg)"/>',
              _stars(COVER_W, COVER_H, 80, 31)]
     for name, _, color in MODULATORS:
         pts = [pt(m, s[name]) for m, s in zip(minutes, states)]
         parts.append(f'<path d="{_line_path(pts)}" fill="none" stroke="{color}" stroke-width="3" '
                      f'stroke-opacity="0.8" stroke-linecap="round" filter="url(#glow)"/>')
     parts.append(
-        '<circle cx="190" cy="250" r="150" fill="url(#halo)"/>'
-        '<circle cx="190" cy="250" r="78" fill="url(#orb)"/>'
+        '<circle cx="190" cy="250" r="160" fill="url(#coverHalo)"/>'
+        + rook_mark(96, 118, 236, "cover", halo=False)
+    )
+    parts.append(
         f'<text x="64" y="452" font-family="{SERIF}" font-size="86" fill="{INK}">OpenRook</text>'
         f'<text x="68" y="500" font-family="{SANS}" font-size="24" fill="{INK_SOFT}">'
         "Persistent state for any LLM.</text>"
@@ -654,7 +646,7 @@ def build_github_cover() -> str:
         "six modulators · real engine evaluation of an authored rupture → repair</text>"
     )
     return _svg(COVER_W, COVER_H, "OpenRook",
-                "OpenRook social preview: glowing orb, wordmark, and six real modulator curves.",
+                "OpenRook social preview: rook mark with a lit window, wordmark, and six real modulator curves.",
                 "".join(parts))
 
 

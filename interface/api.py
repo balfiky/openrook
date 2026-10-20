@@ -520,14 +520,7 @@ def set_pipeline(pipeline: CognitivePipeline | None) -> None:
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    from fastapi.responses import Response
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-        '<rect width="32" height="32" rx="6" fill="#13131d"/>'
-        '<circle cx="16" cy="16" r="8" fill="#b8a0ff"/>'
-        "</svg>"
-    )
-    return Response(content=svg, media_type="image/svg+xml")
+    return brand_asset("openrook-icon.svg")
 
 
 @app.post("/chat", dependencies=[Depends(_require_bearer)])
@@ -930,23 +923,25 @@ def admin_asset(asset_path: str):
 
 @app.get("/assets/{asset_path:path}", include_in_schema=False)
 def brand_asset(asset_path: str):
+    from fastapi.responses import Response
+
     media_type = _static_media_type(asset_path)
     if media_type is None:
         raise HTTPException(status_code=404, detail="Brand asset not found")
+    static_dirs = [os.path.join(os.path.dirname(__file__), "static")]
     if asset_path.endswith(".svg"):
-        static_dir = os.path.join(os.path.dirname(__file__), "..", "docs", "diagrams")
+        static_dirs.append(os.path.join(os.path.dirname(__file__), "..", "docs", "diagrams"))
+    for static_dir in static_dirs:
+        static_root = os.path.realpath(static_dir)
         path = os.path.realpath(os.path.join(static_dir, asset_path))
-        diagrams_root = os.path.realpath(static_dir)
-        if not (path == diagrams_root or path.startswith(diagrams_root + os.sep)):
-            raise HTTPException(status_code=404, detail="Brand asset not found")
-        if not os.path.isfile(path):
-            raise HTTPException(status_code=404, detail="Brand asset not found")
-    else:
-        return _static_asset_response(asset_path, media_type)
-    from fastapi.responses import Response
-
-    with open(path, "rb") as f:
-        return Response(content=f.read(), media_type=media_type, headers=_HTML_SECURITY_HEADERS)
+        if path.startswith(static_root + os.sep) and os.path.isfile(path):
+            with open(path, "rb") as f:
+                return Response(
+                    content=f.read(),
+                    media_type=media_type,
+                    headers=_HTML_SECURITY_HEADERS,
+                )
+    raise HTTPException(status_code=404, detail="Brand asset not found")
 
 
 def _index_response() -> HTMLResponse:
@@ -1509,7 +1504,7 @@ app.include_router(_routes_backup.router)
 app.include_router(_routes_skills.router)
 app.include_router(_routes_life.router)
 
-from interface import routes_research as _routes_research
+from interface import routes_research as _routes_research  # noqa: E402
 
 app.include_router(_routes_research.router)
 

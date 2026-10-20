@@ -77,10 +77,10 @@ uat = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/balfiky/nur"
-Repository = "https://github.com/balfiky/nur"
-Issues = "https://github.com/balfiky/nur/issues"
-Documentation = "https://github.com/balfiky/nur#readme"
+Homepage = "https://github.com/balfiky/openrook"
+Repository = "https://github.com/balfiky/openrook"
+Issues = "https://github.com/balfiky/openrook/issues"
+Documentation = "https://github.com/balfiky/openrook#readme"
 
 [project.scripts]
 openrook = "main:main"

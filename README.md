@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/balfiky/nur/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/balfiky/nur/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"></a>
+  <a href="https://github.com/balfiky/openrook/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/balfiky/openrook/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F5A65B?style=for-the-badge" alt="MIT License"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.10%2B-7A4A8C?style=for-the-badge" alt="Python 3.10+"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.37.0-1A1428?style=for-the-badge" alt="Version"></a>
@@ -184,7 +184,7 @@ When a user explicitly asks OpenRook to learn from a URL, the runtime fetches re
 ## Quickstart
 
 Install OpenRook from this repository; these instructions do not assume a PyPI
-release. The hosted repository currently retains its `balfiky/nur` URL.
+release. The repository moved from `balfiky/nur` to `balfiky/openrook`; old URLs redirect.
 Existing installations should follow the [migration guide](docs/OPENROOK_MIGRATION.md)
 to replace the old distribution without deleting their workspace.
 
@@ -192,7 +192,7 @@ to replace the old distribution without deleting their workspace.
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install "git+https://github.com/balfiky/nur.git"
+python3 -m pip install "git+https://github.com/balfiky/openrook.git"
 export OPENROOK_CONFIG_DIR=~/.config/openrook
 mkdir -p "$OPENROOK_CONFIG_DIR"
 openrook-setup
@@ -264,7 +264,7 @@ identity files unless you explicitly pass the removal flags shown in
 ### From Source
 
 ```bash
-git clone https://github.com/balfiky/nur.git openrook
+git clone https://github.com/balfiky/openrook.git
 cd openrook
 python3 -m pip install -e ".[dev]"
 export OPENROOK_CONFIG_DIR=~/.config/openrook

@@ -11,7 +11,7 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .header { display: flex; align-items: center; justify-content: space-between; padding: 0 1.25rem; height: 3.5rem; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 5; }
 .header-left { display: flex; align-items: center; gap: 1rem; }
 .logo { font-family: var(--font-display); font-size: 1.625rem; font-weight: 500; color: var(--text); letter-spacing: -0.0625rem; line-height: 1; display: inline-flex; align-items: center; gap: 0.625rem; }
-.logo .logo-orb { width: 1.375rem; height: 1.375rem; border-radius: 50%; background: radial-gradient(circle at 34% 32%, #FFE3BD, #F5A65B 40%, #7A4A8C 80%, #2A1E3F); box-shadow: 0 0 0.875rem rgba(245, 166, 91, 0.45); }
+.logo .logo-mark { width: 1.375rem; height: 1.65rem; display: block; filter: drop-shadow(0 0 0.5rem rgba(245, 166, 91, 0.45)); }
 .mood-indicator { display: flex; align-items: center; gap: 0.625rem; }
 .mood-orb { width: 1.875rem; height: 1.875rem; border-radius: 50%; background: radial-gradient(circle at 35% 35%, hsl(var(--mood-hue), var(--mood-sat), calc(var(--mood-light) + 18%)), hsl(var(--mood-hue), var(--mood-sat), var(--mood-light)), hsl(var(--mood-hue), calc(var(--mood-sat) - 20%), calc(var(--mood-light) - 25%))); animation: pulse var(--mood-pulse) var(--ease-out) infinite; box-shadow: 0 0 1.125rem hsla(var(--mood-hue), var(--mood-sat), var(--mood-light), 0.25); transition: background var(--t-slow) var(--ease-out), box-shadow var(--t-slow) var(--ease-out); }
 @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.88; } 50% { transform: scale(1.1); opacity: 1; } }
@@ -109,7 +109,7 @@ a.icon-btn { text-decoration: none; }
 @media (max-width: 30rem) {
   .header { height: 3rem; }
   .logo { font-size: 1.375rem; }
-  .logo .logo-orb { width: 1.125rem; height: 1.125rem; }
+  .logo .logo-mark { width: 1.125rem; height: 1.35rem; }
   .message-inner { padding: 0 0.5rem; }
   .input-container { padding: 0.5rem 0.5rem 0.75rem; }
   .session-actions { flex-wrap: wrap; gap: 0.5rem; }

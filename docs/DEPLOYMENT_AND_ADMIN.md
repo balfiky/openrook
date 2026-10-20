@@ -13,7 +13,7 @@ Use it together with:
 ## Recommended Local Install
 
 ```bash
-git clone https://github.com/balfiky/nur.git openrook
+git clone https://github.com/balfiky/openrook.git
 cd openrook
 python3 -m venv .venv
 source .venv/bin/activate
@@ -63,15 +63,15 @@ You can skip it and configure the same runtime fields later from `/settings`.
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install "git+https://github.com/balfiky/nur.git"
+python3 -m pip install "git+https://github.com/balfiky/openrook.git"
 export OPENROOK_CONFIG_DIR=~/.config/openrook   # see below — do this before the first run
 mkdir -p "$OPENROOK_CONFIG_DIR"
 openrook-setup
 ```
 
 Use the source checkout, its built wheel, or the Git URL above. These instructions
-do not assume a PyPI release. The hosted repository still uses `balfiky/nur`;
-the installed distribution and primary commands use `openrook`.
+do not assume a PyPI release. The repository is `balfiky/openrook` (formerly
+`balfiky/nur`, which redirects); the distribution and primary commands use `openrook`.
 
 For local-only use, the default `openrook-web` command binds to `127.0.0.1`. For
 LAN/public testing, point it at a public host:
@@ -443,7 +443,7 @@ python3 -m pytest tests/test_interface.py tests/test_interface_v1.py -q
 **Git install:**
 
 ```bash
-python3 -m pip install --upgrade "git+https://github.com/balfiky/nur.git"
+python3 -m pip install --upgrade "git+https://github.com/balfiky/openrook.git"
 ```
 
 Then restart `openrook-web`.

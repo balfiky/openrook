@@ -75,9 +75,10 @@ setup to accomplish the rename.
   remain listable, downloadable, and deletable through the same guarded API.
 - Historical releases, research protocols, report files, source fingerprints,
   and recorded model outputs remain original evidence, including their old names.
-- The GitHub remote remains `https://github.com/balfiky/nur`. Local source clones
-  can use any directory name; a server-side repository rename is separate from
-  changing the distribution. No package is published by these instructions.
+- The GitHub repository is now `https://github.com/balfiky/openrook`; the old
+  `balfiky/nur` URLs redirect. Existing clones keep working, or update them with
+  `git remote set-url origin https://github.com/balfiky/openrook.git`. Local clones
+  can use any directory name. No package is published by these instructions.
 
 The default name for a newly configured identity is OpenRook. A customized
 `soul.yaml` or an existing research birth manifest remains authoritative.

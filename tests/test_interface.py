@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 
 import pytest
+from fastapi import HTTPException
 import interface.api as interface_api
 
 from interface.api import (
@@ -302,7 +303,7 @@ class TestIndexPage:
         assert "Maintenance" in html
         assert "Delete User Data" in html
         assert "Mark first-run setup complete" in html
-        assert '<link rel="icon" href="data:,' in html
+        assert '<link rel="icon" type="image/svg+xml" href="/assets/openrook-icon.svg">' in html
         assert "clearGenericKey" in js
         assert "hosted:      { backend: 'openai_compatible'" in js
         assert "Hosted OpenAI-compatible gateway" in js
@@ -334,10 +335,75 @@ class TestIndexPage:
         assert 'id="sendBtn" data-action="send-message" aria-label="Send message" disabled' in html
         assert "function updateSendButtonState()" in js
 
+    def test_rook_brand_assets_are_served(self):
+        for name in ("openrook-icon.svg", "openrook-mark.svg"):
+            resp = interface_api.brand_asset(name)
+            assert resp.status_code == 200
+            assert resp.media_type == "image/svg+xml"
+            assert resp.body.startswith(b"<svg")
+
+    @pytest.mark.parametrize("extension", ["svg", "css", "js"])
+    def test_brand_asset_serves_only_the_validated_canonical_path(
+        self, tmp_path, monkeypatch, extension,
+    ):
+        package = tmp_path / "interface"
+        static = package / "static"
+        (static / "nested" / "deep").mkdir(parents=True)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / f"probe.{extension}").write_text("outside")
+        (static / "nested" / "escape").mkdir()
+        (static / "nested" / "escape" / f"probe.{extension}").write_text("inside")
+        (static / "alias").symlink_to(static / "nested" / "deep")
+        (static / "escape").symlink_to(outside)
+        monkeypatch.setattr(interface_api, "__file__", str(package / "api.py"))
+
+        resp = interface_api.brand_asset(f"alias/../escape/probe.{extension}")
+
+        assert resp.body == b"inside"
+
+    @pytest.mark.parametrize("extension", ["svg", "css", "js"])
+    def test_brand_asset_rejects_symlink_escape(self, tmp_path, monkeypatch, extension):
+        package = tmp_path / "interface"
+        static = package / "static"
+        static.mkdir(parents=True)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / f"probe.{extension}").write_text("outside")
+        (static / "escape").symlink_to(outside)
+        monkeypatch.setattr(interface_api, "__file__", str(package / "api.py"))
+
+        with pytest.raises(HTTPException) as exc:
+            interface_api.brand_asset(f"escape/probe.{extension}")
+
+        assert exc.value.status_code == 404
+
+    @pytest.mark.parametrize("extension", ["svg", "css", "js"])
+    def test_missing_brand_asset_returns_404(self, extension):
+        with pytest.raises(HTTPException) as exc:
+            interface_api.brand_asset(f"missing-brand-asset.{extension}")
+
+        assert exc.value.status_code == 404
+
+    def test_packaged_svg_takes_precedence_over_diagram_fallback(self, tmp_path, monkeypatch):
+        package = tmp_path / "interface"
+        static = package / "static"
+        static.mkdir(parents=True)
+        diagrams = tmp_path / "docs" / "diagrams"
+        diagrams.mkdir(parents=True)
+        (static / "shared.svg").write_text("<svg>packaged</svg>")
+        (diagrams / "shared.svg").write_text("<svg>diagram</svg>")
+        (diagrams / "legacy.svg").write_text("<svg>legacy</svg>")
+        monkeypatch.setattr(interface_api, "__file__", str(package / "api.py"))
+
+        assert interface_api.brand_asset("shared.svg").body == b"<svg>packaged</svg>"
+        assert interface_api.brand_asset("legacy.svg").body == b"<svg>legacy</svg>"
+
     async def test_favicon_returns_body(self):
         resp = await favicon()
         assert resp.status_code == 200
-        assert resp.body
+        assert resp.media_type == "image/svg+xml"
+        assert resp.body == interface_api.brand_asset("openrook-icon.svg").body
 
     async def test_admin_route_redirects_to_settings(self):
         resp = interface_api.admin_index()

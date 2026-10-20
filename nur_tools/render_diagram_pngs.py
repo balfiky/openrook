@@ -38,9 +38,11 @@ sys.path.insert(0, str(ROOT))
 
 from nur_tools.build_diagrams import BUILDERS  # noqa: E402
 from nur_tools.build_showcase import SHOWCASE, SIZES  # noqa: E402
+from nur_tools.brand import rook_icon_svg, wordmark_svg  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs" / "diagrams"
+STATIC_DIR = ROOT / "interface" / "static"
 PNG_SCALE = 2  # retina-style preview for README/docs
 STATIC_SVGS = ("feature-overview",)
 
@@ -77,8 +79,18 @@ def render_showcase(name: str) -> None:
     print(f"wrote {svg_path.name} and {png_path.name}")
 
 
+def render_brand() -> None:
+    """Wordmarks for the README and the rook icon for the web UI and favicon."""
+    (OUT_DIR / "wordmark-light.svg").write_text(wordmark_svg("#1F1830"), encoding="utf-8")
+    (OUT_DIR / "wordmark-dark.svg").write_text(wordmark_svg("#F5EFE6"), encoding="utf-8")
+    (STATIC_DIR / "openrook-icon.svg").write_text(rook_icon_svg(64), encoding="utf-8")
+    (STATIC_DIR / "openrook-mark.svg").write_text(rook_icon_svg(64, background=None), encoding="utf-8")
+    print("wrote wordmarks and web UI rook icons")
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    render_brand()
     for name in BUILDERS:
         render_one(name)
     for name in SHOWCASE:
