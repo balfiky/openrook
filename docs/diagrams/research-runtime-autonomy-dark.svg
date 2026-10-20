@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="research-runtime-autonomy-dark-title research-runtime-autonomy-dark-desc">
+<title id="research-runtime-autonomy-dark-title">A persistent subject, one continuing loop</title>
+<desc id="research-runtime-autonomy-dark-desc">One owner advances wake, deliberation, goals, permitted actions, receipts, conditional completion assessment, public-outcome learning and checkpoints around saved subject state; observers never advance the subject.</desc>
+<defs><marker id="research-runtime-autonomy-dark-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#A6B0BE"/></marker><marker id="research-runtime-autonomy-dark-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#F5A65B"/></marker></defs>
+<text x="48" y="36" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#A6B0BE">OPENROOK  /  LOOP</text>
+<text x="48" y="84" font-family="'DejaVu Serif','EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif" font-size="38" font-weight="400" text-anchor="start" fill="#E6EDF3">A persistent subject, one continuing loop</text>
+<rect x="64" y="136" width="1072" height="936" rx="8" fill="none" stroke="#3D444D" stroke-width="1.5" stroke-dasharray="6 5" data-role="boundary"/>
+<text x="84" y="166" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" text-anchor="start" fill="#A6B0BE">ONE SUBJECT OWNER  ·  serialized by the owner lock</text>
+<path d="M724.000,253.035 A376,376 0 0 1 815.666,300.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M904.920,388.000 A376,376 0 0 1 973.417,564.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M973.417,652.000 A376,376 0 0 1 904.920,828.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M815.666,916.000 A376,376 0 0 1 724.000,962.965" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M476.000,962.965 A376,376 0 0 1 384.334,916.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M295.080,828.000 A376,376 0 0 1 226.583,652.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M226.583,564.000 A376,376 0 0 1 295.080,388.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M384.334,300.000 A376,376 0 0 1 476.000,253.035" fill="none" stroke="#A6B0BE" stroke-width="1.6" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="ring"/>
+<path d="M600.000,276.000 L600.000,518.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M820.000,388.000 L688.243,519.757" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M852.000,608.000 L778.000,608.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M820.000,828.000 L688.243,696.243" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M600.000,940.000 L600.000,698.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M380.000,828.000 L511.757,696.243" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M348.000,608.000 L422.000,608.000" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<path d="M380.000,388.000 L511.757,519.757" fill="none" stroke="#A6B0BE" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#research-runtime-autonomy-dark-arrow)" data-connector="spoke" opacity="0.65"/>
+<rect x="610" y="387" width="66.6" height="20" rx="2" fill="#0D1117" stroke="none" stroke-width="1.5" data-role="label-mask"/>
+<text x="616" y="402" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">CONTEXT</text>
+<rect x="610" y="787" width="74.4" height="20" rx="2" fill="#0D1117" stroke="none" stroke-width="1.5" data-role="label-mask"/>
+<text x="616" y="802" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">RECEIPTS</text>
+<rect x="350.8" y="579" width="74.4" height="20" rx="2" fill="#0D1117" stroke="none" stroke-width="1.5" data-role="label-mask"/>
+<text x="388" y="594" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="middle" fill="#A6B0BE">LEARNING</text>
+<rect x="439.0" y="413" width="90.0" height="20" rx="2" fill="#0D1117" stroke="none" stroke-width="1.5" data-role="label-mask"/>
+<text x="484" y="428" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="middle" fill="#A6B0BE">CHECKPOINT</text>
+<g data-node="Wake" data-role="step" data-focal="false">
+<rect x="476" y="188" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="476" y="188" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="496" y="210" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">01</text>
+<text x="496" y="236" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Wake</text>
+<text x="496" y="261" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">timer · condition · budget</text>
+</g>
+<g data-node="Deliberate" data-role="step" data-focal="false">
+<rect x="740" y="300" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="740" y="300" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="760" y="322" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">02</text>
+<text x="760" y="348" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Deliberate</text>
+<text x="760" y="373" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">activity, rest or wait</text>
+</g>
+<g data-node="Choose goal" data-role="step" data-focal="false">
+<rect x="852" y="564" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="852" y="564" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="872" y="586" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">03</text>
+<text x="872" y="612" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Choose goal</text>
+<text x="872" y="637" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">select / revise</text>
+</g>
+<g data-node="Act" data-role="step" data-focal="false">
+<rect x="740" y="828" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="740" y="828" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="760" y="850" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">04</text>
+<text x="760" y="876" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Act</text>
+<text x="760" y="901" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">registered tools + policy</text>
+</g>
+<g data-node="Record receipt" data-role="store" data-focal="false">
+<rect x="476" y="940" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="476" y="940" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M488,948 H712" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="496" y="962" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">05</text>
+<text x="496" y="988" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Record receipt</text>
+<text x="496" y="1013" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">result / failure / unknown</text>
+</g>
+<g data-node="Verify claim" data-role="optional" data-focal="true">
+<rect x="212" y="828" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="212" y="828" width="248" height="88" rx="6" fill="#F5A65B" stroke="none" stroke-width="1.5" fill-opacity="0.10"/>
+<rect x="212" y="828" width="248" height="88" rx="6" fill="none" stroke="#F5A65B" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="232" y="850" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">06</text>
+<text x="232" y="876" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#F5A65B">Verify claim</text>
+<text x="232" y="901" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">only on a completion claim</text>
+</g>
+<g data-node="Learn &amp; appraise" data-role="step" data-focal="false">
+<rect x="100" y="564" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="100" y="564" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="120" y="586" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">07</text>
+<text x="120" y="612" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Learn &amp; appraise</text>
+<text x="120" y="637" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">public outcomes</text>
+</g>
+<g data-node="Checkpoint &amp; rest" data-role="store" data-focal="false">
+<rect x="212" y="300" width="248" height="88" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="212" y="300" width="248" height="88" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M224,308 H448" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="232" y="322" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#A6B0BE">08</text>
+<text x="232" y="348" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#E6EDF3">Checkpoint &amp; rest</text>
+<text x="232" y="373" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">save state · wait for wake</text>
+</g>
+<rect x="428" y="524" width="344" height="168" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="428" y="524" width="344" height="168" rx="6" fill="#B48CFF" stroke="#B48CFF" stroke-width="1.5" fill-opacity="0.08" data-role="hub"/>
+<text x="600" y="564" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="23" font-weight="600" text-anchor="middle" fill="#E6EDF3">Persistent subject state</text>
+<text x="600" y="595" font-family="'DejaVu Sans Mono',monospace" font-size="16" font-weight="400" text-anchor="middle" fill="#A6B0BE">shared/agent_runtime.db</text>
+<path d="M452,612 H748" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="600" y="640" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" text-anchor="middle" fill="#E6EDF3">manifest · goals · receipts</text>
+<text x="600" y="666" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" text-anchor="middle" fill="#E6EDF3">learning · checkpoints</text>
+<text x="852" y="956" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">May choose no action.</text>
+<text x="760" y="212" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">Budget exhausted → resource wait</text>
+<text x="760" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">Study limit → resource stop</text>
+<g transform="translate(64 1092)" fill="none" stroke="#A6B0BE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M0,12 Q12,-2 24,12 Q12,26 0,12 Z"/><circle cx="12" cy="12" r="4"/></g>
+<text x="104" y="1110" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#A6B0BE">Observer (read-only) · reads the hub, never advances the loop</text>
+<text x="48" y="1150" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" text-anchor="start" fill="#F5A65B">A model saying “done” is not completion.</text>
+<text x="48" y="1180" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">Logical feedback flow; learning hooks run on public outcomes. No claim of experienced emotion.</text>
+</svg>

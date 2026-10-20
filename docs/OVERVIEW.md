@@ -107,7 +107,10 @@ Telegram mirrors that principle with non-mutating introspection commands
 (`/state`, `/why`, `/memory`, `/loops`, `/repair`, `/persona`) that read
 active-session debug state without creating sessions or changing cognition.
 
-![Runtime architecture](diagrams/runtime-architecture.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/runtime-architecture-dark.svg">
+  <img src="diagrams/runtime-architecture-light.svg" alt="Clients and runtime hosts connect to the session and cognition core, model backend, policy-gated tools, and persistent stores." width="100%">
+</picture>
 
 The emotional state is a six-dimensional vector in [0, 1]: arousal,
 valence, certainty, bonding, energy, resolution. Each modulator has its
@@ -194,7 +197,10 @@ for goal-revision evidence, rejected actions, controls, and earlier interrupted 
 
 ### Earlier structural suites
 
-![Evaluation and ablation harness](diagrams/evaluation-ablation-harness.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/evaluation-ablation-harness-dark.svg">
+  <img src="diagrams/evaluation-ablation-harness-light.svg" alt="Structural evaluation flows from fresh scenario pipelines through provenance and outcome labels to variant and summary reports." width="100%">
+</picture>
 
 The harness runs scripted scenarios against `CognitivePipeline`, stamps each
 run with provenance (git SHA, backend/model identity, and fingerprints for
@@ -241,7 +247,10 @@ human-likeness measurements.
 
 ## 5. What the evidence supports
 
-![Component claim map](diagrams/component-claim-map.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/component-claim-map-dark.svg">
+  <img src="diagrams/component-claim-map-light.svg" alt="Historical Phase 11 component evidence matrix distinguishes suite effects, negative controls, untested claims, and tested mechanics." width="100%">
+</picture>
 
 This map is historical Phase 11 mock-backend evidence. The later retained-choice
 and appraisal results are separate evidence, summarized below and in the

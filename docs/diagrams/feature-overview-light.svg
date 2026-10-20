@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="816" viewBox="0 0 1200 816" role="img" aria-labelledby="feature-overview-light-title feature-overview-light-desc">
+<title id="feature-overview-light-title">State connects the conversation to action</title>
+<desc id="feature-overview-light-desc">Web UI, Telegram, Console and REST API connect through persistent memory, relationships, modeled mood, identity and evolution to reviewed and enabled skills and opt-in external tools: web search, workspace-scoped files and separately enabled shell.</desc>
+<defs><marker id="feature-overview-light-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#655C72"/></marker><marker id="feature-overview-light-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#975119"/></marker></defs>
+<text x="48" y="36" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">OPENROOK  /  LAYER STACK</text>
+<text x="48" y="84" font-family="'DejaVu Serif','EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif" font-size="38" font-weight="400" text-anchor="start" fill="#1F1830">State connects the conversation to action</text>
+<text x="48" y="124" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#655C72">Many ways in. One continuing cognitive state.</text>
+<path d="M80.000,260.000 L80.000,420.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#feature-overview-light-arrow)" data-connector="orthogonal"/>
+<path d="M80.000,472.000 L80.000,640.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#feature-overview-light-arrow)" data-connector="orthogonal"/>
+<text x="80" y="240" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle" fill="#655C72">IN</text>
+<text x="80" y="452" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle" fill="#655C72">STATE</text>
+<text x="80" y="672" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle" fill="#655C72">ACT</text>
+<g data-node="Channels" data-role="layer" data-focal="false">
+<rect x="136" y="160" width="1016" height="160" rx="6" fill="#F6F4F9" stroke="none" stroke-width="1.5"/>
+<rect x="136" y="160" width="1016" height="160" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="160" y="196" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" text-anchor="start" fill="#1F1830">Channels</text>
+</g>
+<g data-node="Persistent state" data-role="layer" data-focal="true">
+<rect x="136" y="352" width="1016" height="188" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="136" y="352" width="1016" height="188" rx="6" fill="#E8913F" stroke="none" stroke-width="1.5" fill-opacity="0.10"/>
+<rect x="136" y="352" width="1016" height="188" rx="6" fill="none" stroke="#975119" stroke-width="1.5"/>
+<text x="160" y="388" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" text-anchor="start" fill="#975119">Persistent state</text>
+</g>
+<g data-node="Capabilities" data-role="layer" data-focal="false">
+<rect x="136" y="572" width="1016" height="160" rx="6" fill="#F6F4F9" stroke="none" stroke-width="1.5"/>
+<rect x="136" y="572" width="1016" height="160" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="160" y="608" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" text-anchor="start" fill="#1F1830">Capabilities</text>
+</g>
+<text x="1128" y="196" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="end" fill="#655C72">Shared cognition across interfaces</text>
+<text x="1128" y="388" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="end" fill="#975119">Persists beyond a single prompt</text>
+<text x="1128" y="608" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="400" text-anchor="end" fill="#655C72">External tools require tools_enabled</text>
+<g data-member="Web UI">
+<rect x="160" y="216" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(176 232)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2,8 H22 M6,5.5 H7"/></g>
+<text x="212" y="248" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Web UI</text>
+<text x="212" y="273" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">inspect + chat</text>
+</g>
+<g data-member="Telegram">
+<rect x="404" y="216" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(420 232)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2,11 L22,3 L17,22 L11,16 L7,20 L7,13 L22,3 M7,13 L17,22"/></g>
+<text x="456" y="248" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Telegram</text>
+<text x="456" y="273" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">messaging bot</text>
+</g>
+<g data-member="Console">
+<rect x="648" y="216" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(664 232)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M6,9 L10,12 L6,15 M13,16 H18"/></g>
+<text x="700" y="248" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Console</text>
+<text x="700" y="273" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">terminal chat</text>
+</g>
+<g data-member="REST API">
+<rect x="892" y="216" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(908 232)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8,5 L2,12 L8,19 M16,5 L22,12 L16,19 M14,3 L10,21"/></g>
+<text x="944" y="248" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">REST API</text>
+<text x="944" y="273" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">HTTP access</text>
+</g>
+<g data-member="Memory">
+<rect x="160" y="412" width="184" height="104" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(176 428)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3,5 V19 C3,23 21,23 21,19 V5 M3,12 C3,16 21,16 21,12"/></g>
+<text x="176" y="474" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" text-anchor="start" fill="#1F1830">Memory</text>
+<text x="176" y="499" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">recall across turns</text>
+</g>
+<g data-member="Relationships">
+<rect x="356" y="412" width="184" height="104" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(372 428)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="3"/><circle cx="18" cy="10" r="3"/><path d="M1,21 V18 C1,12 13,12 13,18 V21 M15,16 C20,14 23,17 23,21"/></g>
+<text x="372" y="474" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" text-anchor="start" fill="#1F1830">Relationships</text>
+<text x="372" y="499" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">per-user history</text>
+</g>
+<g data-member="Modeled mood">
+<rect x="552" y="412" width="184" height="104" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(568 428)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2,6 H22 M2,12 H22 M2,18 H22"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></g>
+<text x="568" y="474" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" text-anchor="start" fill="#1F1830">Modeled mood</text>
+<text x="568" y="499" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">numeric state</text>
+</g>
+<g data-member="Identity">
+<rect x="748" y="412" width="184" height="104" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(764 428)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="9" cy="9" r="2.5"/><path d="M5,17 C5,12 13,12 13,17 M16,8 H19 M16,13 H19"/></g>
+<text x="764" y="474" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" text-anchor="start" fill="#1F1830">Identity</text>
+<text x="764" y="499" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">shared self model</text>
+</g>
+<g data-member="Evolution">
+<rect x="944" y="412" width="184" height="104" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(960 428)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4,3 V17 Q4,21 8,21 H20 M4,14 L11,8 L16,12 L22,4 M16,4 H22 V10"/></g>
+<text x="960" y="474" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" text-anchor="start" fill="#1F1830">Evolution</text>
+<text x="960" y="499" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">learned changes</text>
+</g>
+<g data-member="Skills">
+<rect x="160" y="628" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(176 644)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6,3 H16 L21,8 V21 H6 Z M16,3 V8 H21 M10,12 H17 M10,16 H17 M2,7 H3 M2,12 H3 M2,17 H3"/></g>
+<text x="212" y="660" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Skills</text>
+<text x="212" y="685" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">review + enable</text>
+</g>
+<g data-member="Web search">
+<rect x="404" y="628" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(420 644)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M15,15 L22,22 M3,10 H17 M10,3 C6,7 6,13 10,17 C14,13 14,7 10,3"/></g>
+<text x="456" y="660" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Web search</text>
+<text x="456" y="685" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">tools opt-in</text>
+</g>
+<g data-member="Files">
+<rect x="648" y="628" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(664 644)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2,7 V21 H22 V6 H12 L9,3 H2 Z M2,10 H22"/></g>
+<text x="700" y="660" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Files</text>
+<text x="700" y="685" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">workspace-scoped</text>
+</g>
+<g data-member="Shell">
+<rect x="892" y="628" width="232" height="80" rx="6" fill="#FFFFFF" stroke="#D8D1E0" stroke-width="1.5"/>
+<g transform="translate(908 644)" fill="none" stroke="#655C72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4,5 L11,12 L4,19 M13,19 H21"/></g>
+<text x="944" y="660" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Shell</text>
+<text x="944" y="685" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">separate shell flag</text>
+</g>
+<path d="M48,744 H1152" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="48" y="772" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">State persists across turns. Modeled mood is numeric state, not experienced emotion.</text>
+</svg>

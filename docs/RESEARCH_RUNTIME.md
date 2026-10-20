@@ -17,7 +17,10 @@ autonomous tool willingness within the configured environment. Refusal,
 disagreement, changing priorities, emotional expression, and deliberate silence
 are valid outcomes. Human resemblance remains an empirical research question.
 
-![Persistent research subject and autonomy loop](diagrams/research-runtime-autonomy.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/research-runtime-autonomy-dark.svg">
+  <img src="diagrams/research-runtime-autonomy-light.svg" alt="Autonomous activity loop around persistent subject state, with conditional completion verification and a read-only observer." width="100%">
+</picture>
 
 One owner serializes wake, deliberation, goal revision, actions, receipts,
 completion assessment, outcome learning/appraisal, and checkpoints. Rest and
@@ -26,6 +29,16 @@ Passive observers read saved state without advancing it. Replay uses recorded
 frames and outcomes under the [checks described below](#protocols-comparisons-and-replay).
 The loop describes implemented control flow, not evidence of human emotion or
 unrestricted autonomy; verifier coverage and learning depend on the chosen mode.
+
+The boundary is `shared/agent_runtime.owner.lock`. The central store supplies
+wake/deliberation context and receives goal revisions, receipts, learning state,
+and checkpoints. Shared Life History and self-model databases retain identity
+context alongside it. The arrows show logical feedback: configured learning
+hooks run on public outcomes, while verification runs only when completion is
+claimed. A model saying "done" is not verified completion. Receipt failures and
+unknown outcomes remain evidence, with their goal and revision attribution.
+Budget exhaustion records `resource_wait`; a permanent study limit records
+`resource_stop`. Checkpoints persist subject and session state for later wakes.
 
 ## Starting a subject
 

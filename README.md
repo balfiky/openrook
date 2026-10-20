@@ -82,7 +82,10 @@ The [research review corrections](docs/REVIEW_FIXES.md) document stricter reques
 replay, expression and resource-stop fixes, real process-restart coverage, and a
 raw-experience ablation whose live comparison has not been run.
 
-![Persistent research subject and autonomy loop](docs/diagrams/research-runtime-autonomy.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/research-runtime-autonomy-dark.svg">
+  <img src="docs/diagrams/research-runtime-autonomy-light.svg" alt="Autonomous activity loop around persistent subject state, with conditional completion verification and a read-only observer." width="100%">
+</picture>
 
 The research loop runs within declared tools and resource limits. Its receipts,
 verification, and replay make activity inspectable; they do not establish human
@@ -369,10 +372,25 @@ Runtime config is `runtime_config.yaml` in the current working directory. Identi
 ## Architecture At A Glance
 
 <p align="center">
-  <img src="docs/diagrams/feature-overview.png" alt="OpenRook feature overview — three bands. Top: Channels (Web UI, Telegram, Console, REST API). Middle: Persistent Cognitive Core (Emotions with six modulators, Memory with five layers, Identity with constitution/beliefs/drives/self-traits, Evolution with metabolism/open-questions/skills). Bottom: Capabilities (Skills, Web search, File ops, Shell) — all gated by intent and autonomy level." width="1000">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/feature-overview-dark.svg">
+    <img src="docs/diagrams/feature-overview-light.svg" alt="In → state → act: Web UI, Telegram, Console and REST API connect through persistent Memory, Relationships, Modeled mood, Identity and Evolution to reviewed and enabled Skills, opt-in Web search, workspace-scoped Files and separately enabled Shell." width="100%">
+  </picture>
 </p>
 
-Three bands: **Channels** speak in (Web UI, Telegram, Console, REST API) → **Persistent Cognitive Core** holds state across turns (Emotions · Memory · Identity · Self-evolution) → **Capabilities** act, each gated by intent and autonomy level (Skills · Web search · File ops · Shell).
+Three layers: **Channels** bring input from Web UI, Telegram, Console, and REST API;
+**Persistent state** carries memory, relationships, modeled mood, identity, and
+evolution across turns; **Capabilities** provide skills, web access, files, and
+shell through the runtime's tool policy.
+Telegram uses long polling with an allowlist and per-update deduplication;
+sessions use per-user locking and bounded queues for backpressure. See [runtime topology](docs/ARCHITECTURE.md#runtime-topology)
+and [deployment](docs/DEPLOYMENT_AND_ADMIN.md) for channel configuration.
+
+Modeled mood uses six numeric modulators. Memory includes short-term, long-term,
+relationship, and semantic stores, alongside the identity-level Life History
+ledger. Identity includes constitution, beliefs, drives, and self-traits;
+evolution includes metabolism, open questions, and skill-to-Life-History migration.
+These mechanisms model state and behavior, not experienced emotion.
 
 A conversation turn runs five stages internally: pre-pass (including optional
 model-backed appraisal) → gated deliberation (inner dialogue, tool loop, defense

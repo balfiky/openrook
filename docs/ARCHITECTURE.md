@@ -35,7 +35,10 @@ don't track.
 
 ## Runtime Topology
 
-![Runtime architecture](diagrams/runtime-architecture.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/runtime-architecture-dark.svg">
+  <img src="diagrams/runtime-architecture-light.svg" alt="Clients and runtime hosts connect to the session and cognition core, model backend, policy-gated tools, and persistent stores." width="100%">
+</picture>
 
 Two executable hosts converge on one session and cognition layer:
 
@@ -49,6 +52,12 @@ creates the active session → `UserSession` serializes turns per user and
 bridges async code to the synchronous pipeline → `CognitivePipeline.process()`
 updates state, retrieves memory, runs gates, and calls the LLM backend
 when needed → persistence writes state back.
+
+Per-user locking and bounded queues provide backpressure. Runtime configuration
+comes from `runtime_config.yaml`; identity comes from `config/soul.yaml` or
+`$OPENROOK_CONFIG_DIR/soul.yaml`. The tool executor and durable stores remain
+runtime-owned. The [LLM boundary](#llm-boundary) lists backend keys, and
+[auth and tool safety](#auth-and-tool-safety) describes the executor's gates.
 
 ### Persistent Research Lifecycle
 
@@ -75,7 +84,10 @@ interventions, and provider/tool records remain distinguishable. See
 
 ## Single-Turn Cognitive Flow
 
-![Single-turn cognitive flow](diagrams/single-turn-cognitive-flow.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/single-turn-cognitive-flow-dark.svg">
+  <img src="diagrams/single-turn-cognitive-flow-light.svg" alt="Five conversation stages with a separate lane for possible model calls and a separate session-end consolidation path." width="100%">
+</picture>
 
 Call count depends on the enabled perception, appraisal, deliberation,
 generation, verification, and tool paths; model-based appraisal adds inference
@@ -84,6 +96,12 @@ fixed call count. Bounded research protocols enforce explicit study-wide
 request and time reservations, including failed attempts and configured retries.
 
 Code entry point: `pipeline/core.py::CognitivePipeline.process`.
+
+The model-call lane marks work that may call a model: appraisal, inner dialogue,
+tool selection, generation, LLM self-check, and regeneration. Decay, anticipation,
+state updates, defense shaping, rule checks, and persistence are runtime
+operations. High arousal can skip slow deliberation; enabled dialogue rounds,
+parse retries, tool rounds, and optional self-intents can add inference.
 
 <details>
 <summary><strong>Detailed flow (19 steps)</strong></summary>
@@ -161,7 +179,10 @@ contagion caps live in `config/modulators.yaml`.
 
 ## Memory And Persistence
 
-![Memory and persistence model](diagrams/memory-persistence-model.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/memory-persistence-model-dark.svg">
+  <img src="diagrams/memory-persistence-model-light.svg" alt="Nested storage boundaries show retained shared state and the per-user directory removed by user deletion." width="100%">
+</picture>
 
 Persistence is deliberately split:
 
@@ -182,6 +203,21 @@ and transcript files, and evicts active sessions. It retains all shared stores
 Research mode rejects DELETE and mutating admin requests with HTTP 409; stop the
 owner before an offline backup or complete research-subject reset. See
 [PRIVACY.md](../PRIVACY.md#deletion) for the deletion contract.
+
+The deletion endpoint is `DELETE /v1/users/{platform}/{user_id}`; the admin
+interface also requires typed `DELETE` confirmation. The entire per-user
+directory is removed, including a legacy `engine_state.json` if present.
+Best-effort database row counts may be `null`. Shared `replay_initial/`,
+study outputs, replay captures, and tool workspace files lie outside this
+boundary and may retain user-derived material.
+
+Within `nur.db`, memory and semantic records sit alongside relationship
+events, open loops, and person/topic profiles. The shared self-model retains
+assistant observations, extracted traits, and defense events; Life History
+retains formative experiences and belief/drive revisions. Research storage
+additionally holds goals, actions, outcomes, learning, and checkpoints.
+Global configuration is read at startup; ordinary-mode admin configuration
+writes are a separate operation.
 
 The `nur.db` filename remains intentional after the OpenRook rename; changing
 branding does not move or reset storage. See [migration](OPENROOK_MIGRATION.md).
@@ -393,7 +429,10 @@ Important state stays inspectable outside prompt text.
 
 ## Auth And Tool Safety
 
-![Auth and tool-safety boundary](diagrams/auth-tool-safety-boundary.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/auth-tool-safety-boundary-dark.svg">
+  <img src="diagrams/auth-tool-safety-boundary-light.svg" alt="Independent HTTP authentication and tool-availability gates, with native and regex selection sharing one policy executor." width="100%">
+</picture>
 
 Independent authentication and tool controls:
 
@@ -410,6 +449,13 @@ the server and leave external tools disabled unless needed. Internal skill tools
 can change the registry; disabling external tools does not make the runtime
 read-only. The `/settings` HTML shell is public; its administrative data and
 mutation endpoints enforce configured bearer authentication.
+
+Public surfaces include the `/` and `/admin` HTML shells, `/v1/health`, and
+`/v1/ready`. A configured key protects chat/debug/config, admin APIs, protected
+`/v1/*` routes, and WebSocket access. Missing or invalid bearer tokens receive
+HTTP 401 on protected HTTP routes; WebSocket authentication failures close
+the connection with code 1008. With no key configured, authentication is open.
+A valid token still leaves each endpoint's own checks in force.
 
 Built-in read-only tools cover hostname, OS/kernel facts, disk usage,
 installed package inventory, filesystem reads inside the configured workspace,
@@ -435,6 +481,13 @@ reachable example, which also catches rules shadowed by earlier ones.
 Both selection paths use the same executor and policy boundary; native routing
 does not bypass the external-tools switch, workspace policy, or shell opt-in.
 
+Every selected tool must be registered and pass its execution policy.
+Filesystem paths outside `tools_workspace` are refused; network tools retain
+their own policies. Shell execution additionally follows its configured
+allowlist and shell policy. Tracked starter settings are `api_key=''`,
+`cors_origins=[]`, `tools_enabled=false`, `tools_workspace=''`, and
+`shell_tool_enabled=false`.
+
 ## Skills
 
 Imported Agent Skills live under `data/skills` with a JSON registry. Code
@@ -459,7 +512,10 @@ the rest of the app. Operational instructions live in
 
 ## Evaluation And Ablation Harness
 
-![Evaluation and ablation harness](diagrams/evaluation-ablation-harness.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/evaluation-ablation-harness-dark.svg">
+  <img src="diagrams/evaluation-ablation-harness-light.svg" alt="Structural evaluation flows from fresh scenario pipelines through provenance and outcome labels to variant and summary reports." width="100%">
+</picture>
 
 The harness runs scripted behavioral scenarios against `CognitivePipeline`,
 with individual feature removals or a combined structural control, and records
@@ -471,6 +527,15 @@ they are not live-model results. Evidence discussion is in
 Entry point: `python3 -m evals.ablation`. Pre-registered hypothesis table lives
 in `evals/ablation_hypotheses.py`; provenance fingerprints follow
 `FINGERPRINT_FILES` in `evals/provenance.py`.
+
+Each scenario receives a fresh pipeline. `InstrumentedBackend` records model
+calls and latency while scripted turns test strategy, state, and memory.
+Provenance includes git SHA, branch, dirty-worktree flag, backend/model
+identity, and SHA-256 fingerprints. Per-variant JSON records turns, assertions,
+latency, and model calls; `summary.json` merges results with the registered
+predictions. Outcomes are labeled `expected_failure`, `unexpected_failure`,
+`no_effect`, or `newly_passing`. Token, cost, and retry fields stay `null` when
+the client did not extract them.
 
 Current structural evidence artifacts include:
 
@@ -496,12 +561,24 @@ relationship tie-breaks, and preference plus relationship-loop retrieval.
 
 ## Historical Phase 11 Component Claim Map
 
-![Component claim map](diagrams/component-claim-map.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/component-claim-map-dark.svg">
+  <img src="diagrams/component-claim-map-light.svg" alt="Historical Phase 11 component evidence matrix distinguishes suite effects, negative controls, untested claims, and tested mechanics." width="100%">
+</picture>
 
 The diagram summarizes the historical Phase 11 structural suite and its mock
-backend. It is not a current map of all research evidence. See
+backend (2026-05-16, git `3d3f869c`). It is not a current map of all research evidence. See
 [OVERVIEW.md §5](OVERVIEW.md#5-what-the-evidence-supports) for the later
 retained-choice and grounded-appraisal results and their limits.
+
+Removing relationship memory breaks the two open-loop scenarios: four of six
+pass, with no unexpected failures. Semantic memory is a negative control because
+this suite does not exercise semantic retrieval. Removing inner dialogue or
+defense also leaves all six passing: dialogue does not move the strategy
+selector, and defense shapes wording that these assertions do not grade.
+The unified person/topic/self `ProfileStore` is an architectural claim.
+Numeric decay, spikes, energy, and context shifts have unit and integration
+coverage; those tests establish mechanics, not experienced emotion.
 
 ## Maintenance Matrix
 

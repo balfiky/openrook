@@ -4,6 +4,19 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Documentation diagram redesign
+
+- Rebuild all eight documentation diagrams with simpler, role-specific shapes:
+  a persistent-subject loop, architecture map, model-call swimlane, nested
+  deletion boundaries, independent safety gates, evaluation data flow,
+  historical evidence matrix, and feature layer stack.
+- Share light/dark theme and font tokens in `nur_tools/brand.py`; generate
+  transparent SVGs and PNGs for both themes and select SVGs with `<picture>`
+  embeds. Replace the hand-authored feature overview with a Python builder.
+- Move detailed diagram explanations into captions, retain evidence and
+  resource-limit qualifications, document rendering conventions, and test
+  deterministic builders and committed SVG parity for every diagram and theme.
+
 ### Repository rename and rook mark
 
 - The GitHub repository moved from `balfiky/nur` to `balfiky/openrook` (old URLs

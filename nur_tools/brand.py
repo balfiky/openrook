@@ -1,4 +1,4 @@
-"""OpenRook brand mark: a chess-rook keep with a lit window.
+"""OpenRook shared visual tokens and rook mark.
 
 The rook is the name; the warm window is the state kept inside it. The six
 modulator colors run as a thin band across the plinth. Everything here is
@@ -7,6 +7,8 @@ header and the favicon.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 # Silhouette in a 100 x 120 box: three merlons, rim, tapered body, plinth.
 ROOK_PATH = (
@@ -19,6 +21,65 @@ WINDOW_PATH = "M43.5,77 V58 A6.5,6.5 0 0 1 56.5,58 V77 Z"
 MODULATOR_COLORS = ("#FF6B6B", "#F5A65B", "#5BC0EB", "#E86FB0", "#7BD389", "#B48CFF")
 
 SERIF = "'EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif"
+
+
+# Shared chart and diagram paint; the existing showcase typography stays exact.
+SHOWCASE_SERIF = "'EB Garamond','Cormorant Garamond',Georgia,'DejaVu Serif',serif"
+# CairoSVG selects the first family, so diagram titles lead with an installed serif.
+DIAGRAM_SERIF = "'DejaVu Serif'," + SERIF
+SANS = "'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif"
+
+MODULATOR_LABELS = (
+    ("arousal", "arousal"), ("valence", "valence"), ("certainty", "certainty"),
+    ("bonding", "bonding"), ("energy", "energy"), ("resolution", "unresolved tension"),
+)
+
+
+@dataclass(frozen=True)
+class Theme:
+    """Paint only: both variants carry identical data, layout and descriptions."""
+
+    name: str
+    page: str
+    panel: str
+    inset: str
+    border: str
+    ink: str
+    muted: str
+    amber: str
+    amber_ink: str
+    plum: str
+    colors: tuple[str, ...]
+    bo: str
+
+    @property
+    def modulators(self) -> tuple[tuple[str, str, str], ...]:
+        return tuple((name, label, color) for (name, label), color in zip(MODULATOR_LABELS, self.colors))
+
+    def label_color(self, label: str) -> str:
+        index = {
+            "content": 1, "joyful": 1, "loving": 3, "excited": 1,
+            "fearful": 0, "angry": 0, "anxious": 5, "uncertain": 2,
+            "sad": 2, "irritable": 0,
+        }.get(label)
+        return self.muted if index is None else self.colors[index]
+
+
+LIGHT = Theme(
+    name="light", page="#FFFFFF", panel="#F6F4F9", inset="#FFFFFF", border="#D8D1E0",
+    ink="#1F1830", muted="#655C72", amber="#E8913F", amber_ink="#975119", plum="#7A4A8C",
+    colors=("#C4474C", "#A15B17", "#167A9C", "#B33D7C", "#327D45", "#7A4A8C"),
+    bo="#4268AC",
+)
+DARK = Theme(
+    name="dark", page="#0D1117", panel="#161B22", inset="#21262D", border="#3D444D",
+    ink="#E6EDF3", muted="#A6B0BE", amber="#F5A65B", amber_ink="#F5A65B", plum="#B48CFF",
+    colors=MODULATOR_COLORS,
+    bo="#7FA7FF",
+)
+THEMES = (LIGHT, DARK)
+
+MONO = "'DejaVu Sans Mono',monospace"
 
 
 def rook_defs(prefix: str = "rook", *, halo: bool = True) -> str:

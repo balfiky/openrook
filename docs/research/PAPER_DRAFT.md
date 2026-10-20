@@ -250,10 +250,16 @@ individually has precedent in parts; the synthesis is what we offer.
 > auth/tool boundary, eval harness, component claim map) are
 > consolidated in
 > [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and
-> rendered in Markdown as PNG previews, with SVG source assets kept
-> under `../diagrams/`.
+> embedded as light/dark SVGs, with PNG previews kept under `../diagrams/`.
+> These maintained diagrams describe the current runtime and label the
+> historical Phase 11 reports as mock-backend evidence. The older prose and
+> live-model attribution below have not been reconciled with those records;
+> use [the current evidence summary](../OVERVIEW.md#4-evaluation).
 
-![Single-turn cognitive flow](../diagrams/single-turn-cognitive-flow.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/single-turn-cognitive-flow-dark.svg">
+  <img src="../diagrams/single-turn-cognitive-flow-light.svg" alt="Five conversation stages with a separate lane for possible model calls and a separate session-end consolidation path." width="100%">
+</picture>
 
 Each turn through the cognitive layer runs a consistent sequence: the
 emotional state updates from the user's message, memory and profile
@@ -473,7 +479,10 @@ between provider updates. The split is also why the ablation protocol
 in §6 can isolate architectural contributions cleanly: changing the
 LLM backend does not change what the deterministic layers compute.
 
-![Runtime architecture](../diagrams/runtime-architecture.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/runtime-architecture-dark.svg">
+  <img src="../diagrams/runtime-architecture-light.svg" alt="Clients and runtime hosts connect to the session and cognition core, model backend, policy-gated tools, and persistent stores." width="100%">
+</picture>
 
 ### 5.2 Runtime and cognitive layer separation
 
@@ -503,7 +512,10 @@ SQLite database at `data/shared/self_model.db`, keyed by the literal
 entity id `__self__`, deliberately separated from any user's data so
 "delete this user" has a clean definition.
 
-![Memory and persistence model](../diagrams/memory-persistence-model.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/memory-persistence-model-dark.svg">
+  <img src="../diagrams/memory-persistence-model-light.svg" alt="Nested storage boundaries show retained shared state and the per-user directory removed by user deletion." width="100%">
+</picture>
 
 ### 5.3 Host surfaces
 
@@ -524,7 +536,10 @@ by design does not touch the shared self-model database. Best-effort
 row counts are reported in the response so the caller can verify what
 was wiped.
 
-![Auth and tool-safety boundary](../diagrams/auth-tool-safety-boundary.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/auth-tool-safety-boundary-dark.svg">
+  <img src="../diagrams/auth-tool-safety-boundary-light.svg" alt="Independent HTTP authentication and tool-availability gates, with native and regex selection sharing one policy executor." width="100%">
+</picture>
 
 ### 5.4 Provenance-first evaluation harness
 
@@ -684,7 +699,10 @@ commit, a single backend, and a single set of config fingerprints
 in the run's provenance block so a reader can verify that no variant
 was run against a different code state or configuration.
 
-![Evaluation and ablation harness](../diagrams/evaluation-ablation-harness.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/evaluation-ablation-harness-dark.svg">
+  <img src="../diagrams/evaluation-ablation-harness-light.svg" alt="Structural evaluation flows from fresh scenario pipelines through provenance and outcome labels to variant and summary reports." width="100%">
+</picture>
 
 ### 6.4 Results
 
@@ -744,7 +762,10 @@ fails if the hardcoded heuristic returns. Latency varies by about 10%
 across variants; this is within the bounds of provider jitter and does
 not reflect systematic differences between variants.
 
-![Component claim map](../diagrams/component-claim-map.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/component-claim-map-dark.svg">
+  <img src="../diagrams/component-claim-map-light.svg" alt="Historical Phase 11 component evidence matrix distinguishes suite effects, negative controls, untested claims, and tested mechanics." width="100%">
+</picture>
 
 ### 6.6 Reproducibility
 

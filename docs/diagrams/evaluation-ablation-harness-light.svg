@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="544" viewBox="0 0 1200 544" role="img" aria-labelledby="evaluation-ablation-harness-light-title evaluation-ablation-harness-light-desc">
+<title id="evaluation-ablation-harness-light-title">How structural evidence becomes a report</title>
+<desc id="evaluation-ablation-harness-light-desc">The ablation command runs fresh CognitivePipelines for scenarios, stamps provenance and outcome labels, and writes per-variant JSON and a combined summary; the historical checked-in reports use an evaluation-only mock backend.</desc>
+<defs><marker id="evaluation-ablation-harness-light-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#655C72"/></marker><marker id="evaluation-ablation-harness-light-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#975119"/></marker></defs>
+<text x="48" y="36" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">OPENROOK  /  DATA FLOW</text>
+<text x="48" y="84" font-family="'DejaVu Serif','EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif" font-size="38" font-weight="400" text-anchor="start" fill="#1F1830">How structural evidence becomes a report</text>
+<text x="48" y="128" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" text-anchor="start" fill="#655C72">CHECKED-IN REPORTS  ·  EVALUATION-ONLY MOCK BACKEND</text>
+<text x="48" y="156" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">Phase 11 · 2026-05-16 · 3d3f869c</text>
+<text x="48" y="208" font-family="'DejaVu Sans Mono',monospace" font-size="16" font-weight="400" text-anchor="start" fill="#1F1830">python3 -m evals.ablation</text>
+<path d="M316.000,290.000 L340.000,290.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#evaluation-ablation-harness-light-arrow)" data-connector="orthogonal"/>
+<path d="M536.000,290.000 L560.000,290.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#evaluation-ablation-harness-light-arrow)" data-connector="orthogonal"/>
+<path d="M768.000,290.000 L792.000,290.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#evaluation-ablation-harness-light-arrow)" data-connector="orthogonal"/>
+<path d="M968.000,290.000 L992.000,290.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#evaluation-ablation-harness-light-arrow)" data-connector="orthogonal"/>
+<g data-node="Run ablations" data-role="input" data-focal="false">
+<rect x="48" y="236" width="268" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<path d="M48,344 H316" fill="none" stroke="#655C72" stroke-width="1"/>
+<text x="68" y="258" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">01</text>
+<text x="68" y="284" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Run ablations</text>
+<text x="68" y="309" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">scenarios × removals</text>
+</g>
+<g data-node="Fresh pipeline" data-role="step" data-focal="false">
+<rect x="340" y="236" width="196" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="340" y="236" width="196" height="108" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="360" y="258" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">02</text>
+<text x="360" y="284" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Fresh pipeline</text>
+<text x="360" y="309" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">one per scenario</text>
+</g>
+<g data-node="Stamp evidence" data-role="step" data-focal="true">
+<rect x="560" y="236" width="208" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="560" y="236" width="208" height="108" rx="6" fill="#E8913F" stroke="none" stroke-width="1.5" fill-opacity="0.10"/>
+<rect x="560" y="236" width="208" height="108" rx="6" fill="none" stroke="#975119" stroke-width="1.5"/>
+<text x="580" y="258" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">03</text>
+<text x="580" y="284" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#975119">Stamp evidence</text>
+<text x="580" y="309" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">provenance + labels</text>
+</g>
+<g data-node="Variant JSON" data-role="store" data-focal="false">
+<rect x="792" y="236" width="176" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="792" y="236" width="176" height="108" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<path d="M804,244 H956" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="812" y="258" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">04</text>
+<text x="812" y="284" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Variant JSON</text>
+<text x="812" y="309" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">one per variant</text>
+</g>
+<g data-node="summary.json" data-role="store" data-focal="false">
+<rect x="992" y="236" width="160" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="992" y="236" width="160" height="108" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<path d="M1004,244 H1140" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="1012" y="258" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">05</text>
+<text x="1012" y="284" font-family="'DejaVu Sans Mono',monospace" font-size="15" font-weight="600" text-anchor="start" fill="#1F1830">summary.json</text>
+<text x="1012" y="309" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">combined deltas</text>
+</g>
+<text x="48" y="394" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">The real cognitive pipeline, with mock model responses.</text>
+<path d="M48,448 H1152" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="48" y="476" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">Historical structural checks; wording quality and independent-agent comparisons are outside this suite.</text>
+<text x="48" y="502" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">Later real-model research studies are separate evidence.</text>
+</svg>

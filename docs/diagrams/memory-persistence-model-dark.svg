@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="824" viewBox="0 0 1280 824" role="img" aria-labelledby="memory-persistence-model-dark-title memory-persistence-model-dark-desc">
+<title id="memory-persistence-model-dark-title">A user reset has a precise boundary</title>
+<desc id="memory-persistence-model-dark-desc">Ordinary-mode deletion removes the per-user directory, while shared identity and research databases and global configuration are retained; research-mode DELETE and mutating admin requests return HTTP 409.</desc>
+<defs><marker id="memory-persistence-model-dark-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#A6B0BE"/></marker><marker id="memory-persistence-model-dark-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#F5A65B"/></marker></defs>
+<text x="48" y="36" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#A6B0BE">OPENROOK  /  NESTED</text>
+<text x="48" y="84" font-family="'DejaVu Serif','EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif" font-size="38" font-weight="400" text-anchor="start" fill="#E6EDF3">A user reset has a precise boundary</text>
+<rect x="48" y="136" width="1184" height="472" rx="8" fill="none" stroke="#3D444D" stroke-width="1.5" data-role="boundary"/>
+<text x="68" y="166" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" text-anchor="start" fill="#A6B0BE">data/</text>
+<rect x="80" y="196" width="544" height="380" rx="8" fill="none" stroke="#3D444D" stroke-width="1.5" data-role="boundary"/>
+<text x="100" y="226" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" text-anchor="start" fill="#A6B0BE">shared/  ·  RETAINED</text>
+<rect x="656" y="196" width="544" height="380" rx="8" fill="#F5A65B" stroke="none" stroke-width="1.5" fill-opacity="0.05"/>
+<rect x="656" y="196" width="544" height="380" rx="8" fill="none" stroke="#F5A65B" stroke-width="1.5" stroke-dasharray="6 5" data-role="boundary"/>
+<text x="676" y="226" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" text-anchor="start" fill="#F5A65B">&lt;platform&gt;_&lt;user_id&gt;/  ·  DELETED</text>
+<g data-node="self_model.db" data-role="store" data-focal="false">
+<rect x="104" y="260" width="496" height="80" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="104" y="260" width="496" height="80" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M116,268 H588" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="124" y="296.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">self_model.db</text>
+<text x="124" y="321.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">assistant observations + traits</text>
+</g>
+<g data-node="life_history.db" data-role="store" data-focal="false">
+<rect x="104" y="360" width="496" height="80" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="104" y="360" width="496" height="80" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M116,368 H588" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="124" y="396.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">life_history.db</text>
+<text x="124" y="421.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">formative experience + identity</text>
+</g>
+<g data-node="agent_runtime.db" data-role="store" data-focal="false">
+<rect x="104" y="460" width="496" height="80" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="104" y="460" width="496" height="80" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M116,468 H588" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="124" y="496.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">agent_runtime.db</text>
+<text x="124" y="521.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">research state + evidence</text>
+</g>
+<g data-node="nur.db" data-role="store" data-focal="false">
+<rect x="680" y="260" width="496" height="108" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="680" y="260" width="496" height="108" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<path d="M692,268 H1164" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="700" y="310.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">nur.db</text>
+<text x="700" y="335.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">memory · relationships · profiles</text>
+</g>
+<g data-node="Session files" data-role="step" data-focal="false">
+<rect x="680" y="408" width="496" height="132" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>
+<rect x="680" y="408" width="496" height="132" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
+<text x="700" y="481.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">Session files</text>
+</g>
+<text x="700" y="506" font-family="'DejaVu Sans Mono',monospace" font-size="15" font-weight="400" text-anchor="start" fill="#A6B0BE">sessions/*.json  ·  *.history.json</text>
+<text x="72" y="652" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">Global configuration</text>
+<text x="72" y="680" font-family="'DejaVu Sans Mono',monospace" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">runtime_config.yaml  ·  soul.yaml</text>
+<text x="920" y="668" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">outside user deletion</text>
+<path d="M48,728 H1232" fill="none" stroke="#3D444D" stroke-width="1"/>
+<text x="48" y="756" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">Research mode: HTTP DELETE and mutating admin requests return 409.</text>
+<text x="48" y="782" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">Stop the subject owner before a complete research reset. Shared evidence may retain user-derived material.</text>
+</svg>

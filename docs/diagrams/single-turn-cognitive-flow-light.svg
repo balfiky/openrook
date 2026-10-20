@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="848" viewBox="0 0 1400 848" role="img" aria-labelledby="single-turn-cognitive-flow-light-title single-turn-cognitive-flow-light-desc">
+<title id="single-turn-cognitive-flow-light-title">A turn is more than one model call</title>
+<desc id="single-turn-cognitive-flow-light-desc">Conversation-mode stages separate deterministic runtime work from possible appraisal, inner-dialogue, tool-selection, generation, self-check and regeneration model calls; end_session consolidation is a separate path with additional possible inference.</desc>
+<defs><marker id="single-turn-cognitive-flow-light-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#655C72"/></marker><marker id="single-turn-cognitive-flow-light-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 Z" fill="#975119"/></marker></defs>
+<text x="48" y="36" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">OPENROOK  /  SWIMLANE</text>
+<text x="48" y="84" font-family="'DejaVu Serif','EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,'DejaVu Serif',serif" font-size="38" font-weight="400" text-anchor="start" fill="#1F1830">A turn is more than one model call</text>
+<text x="48" y="124" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#655C72">Conversation mode · stage order runs left to right</text>
+<path d="M376.000,268.000 L400.000,268.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#single-turn-cognitive-flow-light-arrow)" data-connector="orthogonal"/>
+<path d="M616.000,268.000 L640.000,268.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#single-turn-cognitive-flow-light-arrow)" data-connector="orthogonal"/>
+<path d="M856.000,268.000 L880.000,268.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#single-turn-cognitive-flow-light-arrow)" data-connector="orthogonal"/>
+<path d="M1096.000,268.000 L1120.000,268.000" fill="none" stroke="#655C72" stroke-width="1.6" marker-end="url(#single-turn-cognitive-flow-light-arrow)" data-connector="orthogonal"/>
+<path d="M48,364 H1352" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<path d="M48,512 H1352" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="48" y="244" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">RUNTIME</text>
+<text x="48" y="268" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">no model</text>
+<text x="48" y="292" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">for these</text>
+<text x="48" y="316" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">operations</text>
+<g data-node="State + context" data-role="step" data-focal="false">
+<rect x="160" y="216" width="216" height="104" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="160" y="216" width="216" height="104" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="180" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">01</text>
+<text x="180" y="264" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">State + context</text>
+<text x="180" y="289" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">decay · retrieve</text>
+</g>
+<g data-node="Deliberation" data-role="step" data-focal="false">
+<rect x="400" y="216" width="216" height="104" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="400" y="216" width="216" height="104" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="420" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">02</text>
+<text x="420" y="264" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Deliberation</text>
+<text x="420" y="289" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">defense · tool policy</text>
+</g>
+<g data-node="Generate" data-role="step" data-focal="false">
+<rect x="640" y="216" width="216" height="104" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="640" y="216" width="216" height="104" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="660" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">03</text>
+<text x="660" y="264" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Generate</text>
+<text x="660" y="289" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">build prompt</text>
+</g>
+<g data-node="Self-check" data-role="step" data-focal="true">
+<rect x="880" y="216" width="216" height="104" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="880" y="216" width="216" height="104" rx="6" fill="#E8913F" stroke="none" stroke-width="1.5" fill-opacity="0.10"/>
+<rect x="880" y="216" width="216" height="104" rx="6" fill="none" stroke="#975119" stroke-width="1.5"/>
+<text x="900" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">04</text>
+<text x="900" y="264" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#975119">Self-check</text>
+<text x="900" y="289" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">rule fit · grounding</text>
+</g>
+<g data-node="Per-turn updates" data-role="step" data-focal="false">
+<rect x="1120" y="216" width="232" height="104" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="1120" y="216" width="232" height="104" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<text x="1140" y="238" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start" fill="#655C72">05</text>
+<text x="1140" y="264" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">Per-turn updates</text>
+<text x="1140" y="289" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">save · drain energy</text>
+</g>
+<text x="48" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">MODEL</text>
+<text x="48" y="436" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">call sites</text>
+<circle cx="168" cy="406" r="5" fill="#FFFFFF" stroke="#655C72" stroke-width="1.5" data-call="Appraisal"/>
+<text x="184" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">Appraisal</text>
+<circle cx="408" cy="406" r="5" fill="#FFFFFF" stroke="#655C72" stroke-width="1.5" data-call="Inner dialogue"/>
+<text x="424" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">Inner dialogue</text>
+<circle cx="408" cy="446" r="5" fill="#FFFFFF" stroke="#655C72" stroke-width="1.5" data-call="Tool selection"/>
+<text x="424" y="452" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">Tool selection</text>
+<circle cx="648" cy="406" r="5" fill="#655C72" stroke="#655C72" stroke-width="1.5" data-call="Generation"/>
+<text x="664" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">Generation</text>
+<circle cx="888" cy="406" r="5" fill="#FFFFFF" stroke="#655C72" stroke-width="1.5" data-call="LLM self-check"/>
+<text x="904" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">LLM self-check</text>
+<circle cx="888" cy="446" r="5" fill="#FFFFFF" stroke="#655C72" stroke-width="1.5" data-call="Regenerate"/>
+<text x="904" y="452" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#1F1830">Regenerate</text>
+<text x="640" y="444" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#655C72">one if reached</text>
+<text x="1120" y="412" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#655C72">No model call</text>
+<text x="160" y="550" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#975119">LLM self-check is selected by intensity &gt; 0.85, contradictions, or dialogue deadlock.</text>
+<text x="160" y="580" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">Regeneration is conditional on a failed check or the configured low-coherence path.</text>
+<text x="48" y="650" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600" text-anchor="start" fill="#655C72">SEPARATE</text>
+<text x="48" y="674" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">at session</text>
+<text x="48" y="698" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#655C72">end</text>
+<path d="M432.000,680.000 L504.000,680.000" fill="none" stroke="#655C72" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#single-turn-cognitive-flow-light-arrow)" data-connector="orthogonal"/>
+<g data-node="end_session()" data-role="input" data-focal="false">
+<rect x="160" y="636" width="272" height="88" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<path d="M160,724 H432" fill="none" stroke="#655C72" stroke-width="1"/>
+<text x="180" y="676.0" font-family="'DejaVu Sans Mono',monospace" font-size="20" font-weight="600" text-anchor="start" fill="#1F1830">end_session()</text>
+<text x="180" y="701.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">explicit consolidation path</text>
+</g>
+<g data-node="Consolidate memory" data-role="store" data-focal="false">
+<rect x="504" y="636" width="592" height="88" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<rect x="504" y="636" width="592" height="88" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
+<path d="M516,644 H1084" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="524" y="676.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">Consolidate memory</text>
+<text x="524" y="701.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">digestion / autobiographical ingestion may call a model</text>
+</g>
+<path d="M48,752 H1352" fill="none" stroke="#D8D1E0" stroke-width="1"/>
+<text x="48" y="780" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">○  may call model     ●  ordinary generation when reached</text>
+<text x="48" y="806" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">No fixed aggregate ceiling: enabled branches, dialogue/tool rounds, retries and regeneration change cost.</text>
+</svg>
