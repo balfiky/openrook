@@ -132,6 +132,8 @@ def _run_terminal_setup(
     output_fn(f"Data directory: {Path(config.data_dir).expanduser().resolve()}")
     output_fn(f"Identity file: {_soul_yaml_path(env)}")
     output_fn("")
+    output_fn("Start the terminal chat:")
+    output_fn(f"  openrook --config {config_path}")
     output_fn("Start the web UI when you want it:")
     output_fn(f"  openrook-web --config {config_path}")
     output_fn("Or run the browser wizard explicitly:")
@@ -152,7 +154,7 @@ def _configure_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: Outpu
             ("openrouter", "OpenRouter"),
             ("hosted", "Hosted OpenAI-compatible provider"),
             ("custom", "Custom OpenAI-compatible endpoint"),
-            ("codex", "Codex CLI (uses your Codex login)"),
+            ("codex", "Codex CLI — uses your Codex login"),
         ],
         default="ollama",
         input_fn=input_fn,

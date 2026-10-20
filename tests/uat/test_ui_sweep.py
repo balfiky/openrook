@@ -7,9 +7,6 @@ distinct from `test_evolution_features.py` so UI flake is easy to spot.
 
 from __future__ import annotations
 
-import json
-import os
-import time
 from pathlib import Path
 
 import pytest
@@ -354,19 +351,43 @@ def test_chat_shell_session_buttons_after_message(uat_server, page):
     )
     expect(page.locator("#whyBtn")).to_be_enabled(timeout=10_000)
 
-    # Why this response → opens explainer overlay/panel.
+    # Explanation stays attached to its reply and never adds a chat message.
     page.click("#whyBtn")
-    # The handler may render the panel, navigate to debug, or open a dialog —
-    # we just want the click to not throw and not freeze the page.
-    page.wait_for_timeout(500)
+    reply = page.locator(".message-row.assistant")
+    explanation = reply.locator(".response-explanation")
+    expect(explanation).to_be_visible()
+    expect(reply).to_have_count(1)
+    explanation.get_by_role("button", name="Dismiss explanation").click()
+    expect(explanation).to_be_hidden()
 
-    # End session — handler exists, click should not throw.
-    page.click("[data-action='end-session']")
-    page.wait_for_timeout(500)
+    # Ending preserves the visible transcript and marks the new conversation.
+    with page.expect_response(
+        lambda response: response.url.endswith("/session/end"), timeout=180_000,
+    ) as ended:
+        page.click("[data-action='end-session']")
+    result = ended.value.json()
+    saved_count = result["memories_written"]
+    saved_things = "thing" if saved_count == 1 else "things"
+    expected_divider = (
+        f"Saved {saved_count} {saved_things} from this conversation · new conversation started"
+        if saved_count > 0
+        else "Nothing saved from this conversation · new conversation started"
+    )
+    expect(page.locator(".session-divider")).to_have_text(expected_divider)
+    expect(reply).to_have_count(1)
+    expect(page.locator("#whyBtn")).to_be_disabled()
 
-    # Rest button (1hr) — same.
+    # Rest remains usable after ending the conversation.
     page.click("[data-action='apply-rest']")
-    page.wait_for_timeout(500)
+    expect(page.locator(".session-notice").last).to_contain_text(
+        "Applied one simulated hour of recovery", timeout=15_000,
+    )
+
+    # The ended conversation is page-local; only active history is restored.
+    page.reload()
+    expect(page.locator("[data-action='end-session']")).to_be_enabled(timeout=15_000)
+    expect(page.locator(".message-row")).to_have_count(0)
+    expect(page.locator(".session-divider")).to_have_count(0)
 
     assert_no_browser_errors(page)
 

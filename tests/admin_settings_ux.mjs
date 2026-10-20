@@ -30,6 +30,7 @@ function setupAdmin() {
     document, CSS: {escape: value => value},
     createSurfaceState: value => value,
     healthLabel: () => '', backendLabel: () => '',
+    renderMarkdown: value => String(value ?? ''),
   });
   vm.runInContext(readAsset('lib/http.js').replace(/^export /gm, ''), admin);
   // Load declarations without booting the network-backed page.
@@ -134,6 +135,53 @@ if (scenario === 'tool_inventory_error') {
   `, admin);
   assert.match(cards.innerHTML, /class="metric-foot metric-path" title="\/a\/long\/workspace"/);
   assert.match(cards.innerHTML, /title="\/a\/&quot;quoted&quot;\/admin_state\.json"/);
+} else if (scenario === 'observability_labels') {
+  const {admin, elements} = setupAdmin();
+  const page = {};
+  const overview = {};
+  elements.set('personaAdminPage', page);
+  elements.set('overviewPersona', overview);
+  vm.runInContext(`
+    state.persona = {sessions: [{persona_view: {
+      relationship: {
+        strategy: "practical_help", strategy_label: "Practical help",
+        strategy_reason: "actionable_request_practical_help",
+        strategy_reason_label: "The message asks for practical help",
+      },
+      perception: {
+        target: "assistant", target_label: "OpenRook",
+        social_move: "request", social_move_label: "A request",
+        intent: "seek_action", intent_label: "Asking for action",
+        summary: "Read as a request directed at OpenRook.",
+      },
+    }}]};
+    renderPersonaAdminPage();
+    renderOverviewPersona();
+  `, admin);
+  const primaryCopy = page.innerHTML.replace(/<small class="persona-debug-id">.*?<\/small>/gs, '');
+  assert.match(primaryCopy, /Practical help/);
+  assert.match(primaryCopy, /Asking for action/);
+  assert.match(primaryCopy, /Read as a request directed at OpenRook\./);
+  for (const rawId of ['practical_help', 'actionable_request_practical_help', 'seek_action']) {
+    assert.ok(page.innerHTML.includes(rawId), rawId + ' remains available for debugging');
+    assert.ok(!primaryCopy.includes(rawId), rawId + ' must be secondary');
+    assert.ok(!overview.innerHTML.includes(rawId), rawId + ' must stay out of Overview');
+  }
+  assert.match(overview.innerHTML, /Practical help/);
+  assert.match(
+    admin.renderDebugId('<img src=x onerror=alert(1)>'),
+    /&lt;img src=x onerror=alert\(1\)&gt;/,
+  );
+} else if (scenario === 'open_question_copy') {
+  const {admin, elements} = setupAdmin();
+  const list = {};
+  elements.set('lifeOpenQuestions', list);
+  admin.renderLifeOpenQuestions([], {});
+  assert.match(list.innerHTML, /reviews past conversations/);
+  assert.doesNotMatch(list.innerHTML, /metabolism tick/);
+  const html = readAsset('admin.html');
+  assert.match(html, /Questions raised while reviewing past conversations/);
+  assert.doesNotMatch(html, /nothing drains|Epistemic gaps/);
 } else {
   throw new Error('Unknown scenario: ' + scenario);
 }

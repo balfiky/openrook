@@ -12,9 +12,16 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node is no
 
 @pytest.mark.parametrize("scenario", [
     "session_saved",
+    "session_saved_one",
     "session_no_new_memory",
     "session_failure",
     "session_network_failure",
+    "explanation_card",
+    "plain_strategy_labels",
+    "history_restore",
+    "history_restore_failure",
+    "history_auth_restore",
+    "history_settings_race",
     "chat_pending",
     "end_pending",
     "rest_pending",

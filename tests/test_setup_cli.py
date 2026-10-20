@@ -210,6 +210,11 @@ def test_terminal_setup_codex_keeps_failed_connection_nonfatal(tmp_path, monkeyp
     assert "codex login" in "\n".join(lines)
     assert "continue setup" in "\n".join(lines)
     assert "informational flag" not in "\n".join(lines)
+    assert "  6. Codex CLI — uses your Codex login (codex)" in lines
+    assert "Start the terminal chat:" in lines
+    assert f"  openrook --config {config_path}" in lines
+    assert f"  openrook-web --config {config_path}" in lines
+    assert f"  openrook-setup --web --config {config_path}" in lines
     heading = lines.index("OpenRook terminal setup")
     assert len(lines[heading]) == len(lines[heading + 1])
 

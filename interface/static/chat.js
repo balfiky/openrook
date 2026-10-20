@@ -20,11 +20,16 @@ const userId = getOrCreateId('openrook_user_id', localStorage);
 const chatId = getOrCreateId('openrook_chat_id', sessionStorage);
 let sending = false;
 let sessionActionPending = false;
+let restoringHistory = true;
+let historyNeedsAuth = false;
+let historyNotice = null;
 let currentBackend = 'The model';
 let lastEmotion = 'neutral';
 let agentName = 'OpenRook';
 let lastExplanation = null;
 let lastDebugPayload = null;
+let lastReply = null;
+let explanationCount = 0;
 const ChatState = createSurfaceState({ sending: false, messageCount: 0 }, {
   sending(value) {
     sending = value;
@@ -33,9 +38,9 @@ const ChatState = createSurfaceState({ sending: false, messageCount: 0 }, {
 });
 
 function updateSendButtonState() {
-  sendBtn.disabled = sending || sessionActionPending || !inputEl.value.trim();
+  sendBtn.disabled = sending || sessionActionPending || restoringHistory || !inputEl.value.trim();
   document.querySelectorAll('[data-action="end-session"], [data-action="apply-rest"]').forEach(button => {
-    button.disabled = sending || sessionActionPending;
+    button.disabled = sending || sessionActionPending || restoringHistory;
   });
 }
 
@@ -50,6 +55,7 @@ function applyAgentName(name) {
   if (emptyTitle) emptyTitle.textContent = agentName;
   document.getElementById('msgInput').placeholder = 'Message ' + agentName + '...';
   document.querySelectorAll('.agent-av').forEach(el => { el.textContent = initial; });
+  document.querySelectorAll('.message-row.assistant .msg-name').forEach(el => { el.textContent = agentName; });
 }
 
 // ---- API-bearer token (client-side) --------------------------------------
@@ -123,9 +129,11 @@ settingsOverlay.addEventListener('click', closeSettingsIfBackdrop);
 new MutationObserver(refreshMoodContrast)
   .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 refreshMoodContrast();
-loadSettings().catch(() => {
-  document.getElementById('chatBackendStatus').textContent = 'Model status unavailable — check Settings';
+const settingsReady = loadSettings().catch(() => {
+  const status = document.getElementById('chatBackendStatus');
+  if (status) status.textContent = 'Model status unavailable — check Settings';
 });
+const historyReady = restoreConversation();
 
 function handleModuleAction(event) {
   const preset = event.target.closest('.wizard-preset[data-preset]');
@@ -180,8 +188,10 @@ function handleModuleAction(event) {
 }
 
 async function sendMessage() {
+  if (!inputEl.value.trim() || sending || sessionActionPending || restoringHistory) return;
+  if (historyNeedsAuth && !await restoreConversation({ authenticate: true })) return;
   const text = inputEl.value.trim();
-  if (!text || sending || sessionActionPending) return;
+  if (!text) return;
   inputEl.value = '';
   ChatState.sending = true;
 
@@ -218,7 +228,7 @@ async function sendMessage() {
     if (!res.ok) throw new Error(connectionSummary(data));
     typingRow.classList.remove('visible');
     lastEmotion = (data.debug && data.debug.emotion_label) || 'neutral';
-    addMessage(data.response, 'assistant', lastEmotion);
+    addMessage(data.response, 'assistant', lastEmotion, data.debug?.explanation);
     if (data.debug) updateDebug(data.debug);
   } catch (err) {
     typingRow.classList.remove('visible');
@@ -232,7 +242,41 @@ async function sendMessage() {
   }
 }
 
-function addMessage(text, role, emotion) {
+async function restoreConversation({ authenticate = false } = {}) {
+  restoringHistory = true;
+  updateSendButtonState();
+  try {
+    const url = '/session/history?' + new URLSearchParams({user_id: userId, chat_id: chatId});
+    let res = await authedFetch(url);
+    if (res.status === 401) {
+      historyNeedsAuth = true;
+      if (authenticate && await promptForBearerToken('Sign in to restore this conversation before sending.')) {
+        res = await authedFetch(url);
+      }
+    }
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(connectionSummary(data));
+    historyNeedsAuth = false;
+    historyNotice?.remove();
+    historyNotice = null;
+    for (const item of data.history || []) {
+      if (['user', 'assistant'].includes(item.role) && typeof item.content === 'string' && item.content) {
+        if (emptyState) emptyState.remove();
+        addMessage(item.content, item.role);
+      }
+    }
+    return true;
+  } catch (err) {
+    historyNotice?.remove();
+    historyNotice = addNotice('Could not restore earlier messages. ' + err.message, true);
+    return false;
+  } finally {
+    restoringHistory = false;
+    updateSendButtonState();
+  }
+}
+
+function addMessage(text, role, emotion, explanation = null) {
   const row = document.createElement('div');
   row.className = 'message-row ' + role;
   const isUser = role === 'user';
@@ -249,8 +293,26 @@ function addMessage(text, role, emotion) {
       '</div>' +
     '</div>';
   row.addEventListener('animationend', () => row.classList.add('is-settled'), { once: true });
+  if (!isUser) {
+    lastReply = row;
+    row.explanation = explanation;
+    if (explanation) {
+      const button = document.createElement('button');
+      button.className = 'message-why-btn';
+      button.type = 'button';
+      button.textContent = 'Why this response?';
+      button.setAttribute('aria-expanded', 'false');
+      row.explanationId = 'reply-explanation-' + ++explanationCount;
+      button.setAttribute('aria-controls', row.explanationId);
+      button.addEventListener('click', () => showWhyResponse(row));
+      row.explanationButton = button;
+      row.querySelector('.msg-content').appendChild(button);
+    }
+    document.getElementById('whyBtn').disabled = !explanation;
+  }
   messagesEl.appendChild(row);
   scrollToBottom();
+  return row;
 }
 
 function scrollToBottom() {
@@ -349,7 +411,7 @@ function updateDebug(d) {
   updateMood(d);
   lastExplanation = d.explanation || null;
   const whyBtn = document.getElementById('whyBtn');
-  if (whyBtn) whyBtn.disabled = !lastExplanation;
+  if (whyBtn) whyBtn.disabled = !lastReply?.explanation;
   updateExplanation(lastExplanation);
   updatePersonaPanel(d.persona_view || null, d, lastDebugPayload);
 
@@ -431,7 +493,7 @@ function updatePersonaPanel(view, currentDebug, previousDebug) {
     '</div></div>';
 
   html += personaRow('Perception', perception.summary || 'No perception recorded.');
-  html += personaRow('Strategy', (relationship.strategy || 'none') + (relationship.strategy_reason ? ' · ' + relationship.strategy_reason : ''));
+  html += personaRow('Approach', (relationship.strategy_label || 'No approach selected') + (relationship.strategy_reason_label ? ' · ' + relationship.strategy_reason_label : ''));
   html += personaRow('Open loops', String(relationship.open_loop_count || 0));
   html += personaRow('Memory used', 'relationship ' + yesNo(memory.relationship_context_used) + ' · long-term ' + (memory.long_term_count || 0) + ' · semantic ' + (memory.semantic_count || 0));
   html += personaRow('Skills/tools', (skillsTools.enabled_skill_count || 0) + ' skill(s) · ' + (skillsTools.tools_used || 0) + ' tool(s) used');
@@ -529,8 +591,9 @@ function updateRelationshipState(debug, view) {
   const effects = view.life_influence_effects || {};
   const effectEntries = Object.entries(effects);
 
-  let html = '<div class="debug-item"><span class="dl">Strategy</span> ' + esc(view.strategy || debug.response_strategy || '\u2014') + '</div>';
-  html += '<div class="debug-item"><span class="dl">Reason</span> ' + esc(view.strategy_reason || debug.strategy_trace?.matched_rule || '\u2014') + '</div>';
+  const relationship = debug.persona_view?.relationship || {};
+  let html = '<div class="debug-item"><span class="dl">Approach</span> ' + esc(relationship.strategy_label || 'No approach selected') + '</div>';
+  html += '<div class="debug-item"><span class="dl">Reason</span> ' + esc(relationship.strategy_reason_label || 'No reason recorded') + '</div>';
   html += '<div class="debug-grid">' +
     relationshipMetric('Trust', view.trust?.value, view.trust?.delta) +
     relationshipMetric('Bonding', mods.bonding?.value, mods.bonding?.delta) +
@@ -652,19 +715,43 @@ function formatTime(timestamp) {
   return ' · ' + date.toLocaleString();
 }
 
-function showWhyResponse() {
-  if (!lastExplanation) return;
-  const text = [
-    '**Why this response?**',
-    lastExplanation.interpretation,
-    lastExplanation.strategy,
-    lastExplanation.state,
-    lastExplanation.memory,
-    lastExplanation.life_history,
-    lastExplanation.tools,
-    lastExplanation.limits,
-  ].filter(Boolean).join('\n\n');
-  addMessage(text, 'assistant', lastEmotion);
+function showWhyResponse(reply = lastReply) {
+  if (!reply?.explanation) return;
+  if (!reply.explanationCard) {
+    const card = document.createElement('aside');
+    card.className = 'response-explanation';
+    card.id = reply.explanationId;
+    card.setAttribute('role', 'note');
+    card.setAttribute('aria-label', 'Explanation of this reply');
+    const heading = document.createElement('div');
+    heading.className = 'response-explanation-heading';
+    const title = document.createElement('strong');
+    title.textContent = 'Why this response?';
+    const dismiss = document.createElement('button');
+    dismiss.className = 'message-why-btn';
+    dismiss.type = 'button';
+    dismiss.textContent = 'Dismiss';
+    dismiss.setAttribute('aria-label', 'Dismiss explanation');
+    dismiss.addEventListener('click', () => {
+      card.hidden = true;
+      reply.explanationButton.setAttribute('aria-expanded', 'false');
+      reply.explanationButton.focus();
+    });
+    heading.append(title, dismiss);
+    const body = document.createElement('div');
+    body.className = 'response-explanation-body';
+    body.innerHTML = [
+      ['Interpretation', 'interpretation'], ['Approach', 'strategy'],
+      ['Modeled state', 'state'], ['Memory', 'memory'],
+      ['Life History', 'life_history'], ['Tools', 'tools'], ['Limits', 'limits'],
+    ].filter(([, key]) => reply.explanation[key])
+      .map(([label, key]) => explanationLine(label, reply.explanation[key])).join('');
+    card.append(heading, body);
+    reply.querySelector('.msg-content').appendChild(card);
+    reply.explanationCard = card;
+  }
+  reply.explanationCard.hidden = false;
+  reply.explanationButton.setAttribute('aria-expanded', 'true');
 }
 
 function updateAnticipation(ant) {
@@ -729,7 +816,7 @@ function toggleDebug() {
 
 // Session actions
 async function endSession() {
-  if (sending || sessionActionPending) return;
+  if (sending || sessionActionPending || restoringHistory) return;
   sessionActionPending = true;
   updateSendButtonState();
   const notice = addNotice('Saving this conversation to memory…');
@@ -737,11 +824,14 @@ async function endSession() {
     const res = await authedFetch('/session/end', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId, chat_id: chatId}) });
     const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(connectionSummary(data));
-    const saved = Number(data.memories_written) > 0
-      ? 'Conversation saved to memory.'
-      : 'Session ended. No new summary memory was added.';
-    notice.textContent = saved + ' A fresh session has started: short-term conversation context is cleared; stored memories and preferences remain. The transcript stays here until you reload.';
+    notice.classList.add('session-divider');
+    const savedCount = Number(data.memories_written);
+    notice.textContent = savedCount > 0
+      ? `Saved ${savedCount} ${savedCount === 1 ? 'thing' : 'things'} from this conversation · new conversation started`
+      : 'Nothing saved from this conversation · new conversation started';
+    notice.title = 'Stored memories and preferences remain. Earlier messages stay visible until you reload; only the current conversation is restored after reload.';
     lastExplanation = null;
+    lastReply = null;
     document.getElementById('whyBtn').disabled = true;
   } catch (err) {
     notice.textContent = 'Could not end the session. ' + err.message;
@@ -752,7 +842,7 @@ async function endSession() {
 }
 
 async function applyRest() {
-  if (sending || sessionActionPending) return;
+  if (sending || sessionActionPending || restoringHistory) return;
   sessionActionPending = true;
   updateSendButtonState();
   try {

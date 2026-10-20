@@ -83,13 +83,19 @@ private material into Life History unless you have the right consent.
 ## What Is Actually Recorded
 
 Active chat transcripts are stored in per-session `*.history.json` files so
-Telegram and other channels can restore the hot conversation after idle
-eviction or runtime restart. These hot transcripts are cleared by `/new`,
+the browser can restore the current conversation after reload, and Telegram
+and other channels can restore it after idle eviction or runtime restart.
+These hot transcripts are cleared by `/new`,
 `/reset`, and explicit session-end operations. Separately, the `memories` table
 holds *distilled emotional summaries*, not full conversation logs. The
 `semantic_memories` table may quote short user statements verbatim when the
 user expresses a preference or fact (e.g., "I prefer concise replies") — review
 it before sharing a database.
+
+After **End Session**, the browser keeps the ended transcript on the current
+page above a divider until reload. It does not save a browser transcript
+archive. Explanation cards are separate from messages and are never included
+in conversation transcripts.
 
 Life History is different: pasted text and local-file excerpts can be stored
 as experience evidence. Treat `data/shared/life_history.db` as sensitive.

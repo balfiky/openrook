@@ -498,8 +498,8 @@ const state = createSurfaceState({
         <section class="persona-overview-block">
           <div class="metric-label">Relationship</div>
           ${renderPersonaFacts([
-            ["strategy", relationship.strategy || "none"],
-            ["reason", relationship.strategy_reason || "none"],
+            ["strategy", relationship.strategy_label || labelize(relationship.strategy) || "None"],
+            ["reason", relationship.strategy_reason_label || "No strategy reason recorded"],
             ["trust", relationship.trust ? formatNumber(relationship.trust.value) : "0.00"],
             ["bonding", relationship.bonding ? formatNumber(relationship.bonding.value) : "0.00"],
             ["resolution", relationship.resolution ? formatNumber(relationship.resolution.value) : "0.00"],
@@ -595,8 +595,9 @@ const state = createSurfaceState({
         </div>
         <div>
           <div class="metric-label">Strategy</div>
-          <div class="metric-value">${escapeHtml(relationship.strategy || "none")}</div>
-          <p class="muted">${escapeHtml(relationship.strategy_reason || "no strategy trace")}</p>
+          <div class="metric-value">${escapeHtml(relationship.strategy_label || labelize(relationship.strategy) || "None")}</div>
+          <p class="muted">${escapeHtml(relationship.strategy_reason_label || "No strategy reason recorded")}</p>
+          ${renderDebugId([relationship.strategy, relationship.strategy_reason].filter(Boolean).join(" · "))}
         </div>
       </div>
 
@@ -610,9 +611,9 @@ const state = createSurfaceState({
         <section class="panel">
           <div class="panel-heading"><h3>Perception</h3></div>
           ${renderPersonaFacts([
-            ["target", perception.target || "unknown"],
-            ["social move", perception.social_move || "none"],
-            ["intent", perception.intent || "none"],
+            ["target", perception.target_label || labelize(perception.target) || "Unknown", perception.target],
+            ["social move", perception.social_move_label || labelize(perception.social_move) || "None", perception.social_move],
+            ["intent", perception.intent_label || labelize(perception.intent) || "None", perception.intent],
             ["vulnerability", formatNumber(perception.vulnerability)],
             ["action need", formatNumber(perception.action_need)],
           ])}
@@ -692,11 +693,15 @@ const state = createSurfaceState({
       .slice(0, 6);
   }
 
+  function renderDebugId(value) {
+    return value ? `<small class="persona-debug-id">${escapeHtml(value)}</small>` : "";
+  }
+
   function renderPersonaFacts(items) {
-    return `<dl class="persona-facts">${items.map(([label, value]) => `
+    return `<dl class="persona-facts">${items.map(([label, value, debugId]) => `
       <div>
         <dt>${escapeHtml(label)}</dt>
-        <dd class="markdown-copy">${renderMarkdown(value)}</dd>
+        <dd class="markdown-copy">${renderMarkdown(value)}${renderDebugId(debugId)}</dd>
       </div>
     `).join("")}</dl>`;
   }
@@ -711,8 +716,8 @@ const state = createSurfaceState({
     if (!items.length) return `<p class="empty-copy">${escapeHtml(emptyText)}</p>`;
     return `<div class="persona-mini-list">${items.map((item) => `
       <article>
-        <strong>${escapeHtml(item.topic || item.loop_kind || item.event_type || item.kind || "relationship")}</strong>
-        <div class="markdown-copy">${renderMarkdown(item.status || item.event_type || item.description || "active")}</div>
+        <strong>${escapeHtml(item.topic || labelize(item.loop_kind || item.event_type || item.kind || "relationship"))}</strong>
+        <div class="markdown-copy">${renderMarkdown(item.status ? labelize(item.status) : item.event_type ? labelize(item.event_type) : item.description || "active")}</div>
       </article>
     `).join("")}</div>`;
   }
@@ -1285,7 +1290,7 @@ const state = createSurfaceState({
     }
     if (!list) return;
     if (!questions.length) {
-      list.innerHTML = `<p class="empty-copy">No open questions yet. Reflection populates this on each session-start metabolism tick.</p>`;
+      list.innerHTML = `<p class="empty-copy">No open questions yet. Questions can appear as OpenRook reviews past conversations.</p>`;
       return;
     }
     list.innerHTML = questions.map((q) => {

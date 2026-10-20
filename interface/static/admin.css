@@ -543,6 +543,16 @@ h4 {
   text-align: right;
 }
 
+.persona-debug-id {
+  color: var(--muted);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
 .persona-overview-lower {
   display: grid;
   gap: 0.75rem;

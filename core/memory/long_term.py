@@ -66,6 +66,8 @@ class LongTermMemory:
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
         ensure_schema_version(self._conn)
+        # Successful inserts through this instance, independent of shared DB rows.
+        self.write_count = 0
 
     def _create_tables(self) -> None:
         self._conn.execute("""
@@ -134,6 +136,7 @@ class LongTermMemory:
             ),
         )
         self._conn.commit()
+        self.write_count += 1
         return cursor.lastrowid
 
     def store_spike(self, entry: LongTermEntry) -> int:

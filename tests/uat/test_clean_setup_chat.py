@@ -21,8 +21,23 @@ def test_clean_web_chat_exposes_debug_panels(uat_server, page):
     expect(page.locator("#whyBtn")).to_be_enabled()
 
     page.click("#whyBtn")
-    expect(assistant_messages).to_have_count(2, timeout=15_000)
-    expect(assistant_messages.nth(1)).to_contain_text("Why this response?")
+    reply = page.locator(".message-row.assistant").first
+    explanation = reply.locator("aside.response-explanation")
+    expect(explanation).to_be_visible()
+    expect(explanation).to_contain_text("Why this response?")
+    expect(assistant_messages).to_have_count(1)
+    explanation.get_by_role("button", name="Dismiss explanation").click()
+    expect(explanation).to_be_hidden()
+    reply.get_by_role("button", name="Why this response?", exact=True).click()
+    expect(explanation).to_be_visible()
+    expect(reply.locator(".response-explanation")).to_have_count(1)
+
+    reply_text = assistant_messages.first.inner_text()
+    page.reload()
+    expect(assistant_messages).to_have_count(1, timeout=15_000)
+    expect(assistant_messages.first).to_have_text(reply_text)
+    expect(page.locator(".response-explanation")).to_have_count(0)
+    expect(page.locator("#whyBtn")).to_be_disabled()
 
     page.goto(uat_server.base_url + "/settings#observability")
     expect(page.locator("#page-observability")).to_be_visible(timeout=15_000)

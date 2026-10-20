@@ -82,11 +82,32 @@ def test_persona_view_exposes_perception_life_memory_and_skills():
     view = build_persona_view(debug)
 
     assert view["perception"]["target"] == "external"
+    assert view["perception"]["target_label"] == "An outside situation"
+    assert view["perception"]["social_move_label"] == "An expression of vulnerability"
+    assert view["perception"]["intent_label"] == "Asking for support"
     assert view["perception"]["vulnerability"] == pytest.approx(0.8)
     assert view["relationship"]["strategy"] == "validate"
     assert view["relationship"]["strategy_reason"] == "external_vulnerability_validate"
+    assert view["relationship"]["strategy_label"] == "Acknowledging your experience"
+    assert view["relationship"]["strategy_reason_label"] == (
+        "the message suggested distress about an outside situation"
+    )
     assert view["life"]["belief_count"] == 1
     assert view["life"]["active_pressures"]["curiosity_pressure"] == pytest.approx(0.03)
     assert view["life"]["effects"] == {"memory_salience_delta": 0.03}
     assert view["skills_tools"]["enabled_skill_count"] == 1
     assert view["skills_tools"]["enabled_skills"][0]["id"] == "note-helper"
+
+
+def test_perception_request_has_plain_labels_and_correct_article():
+    view = build_persona_view(DebugState(appraisal_frame=AppraisalFrame(
+        primary_target="assistant",
+        social_move="request",
+        inferred_intent="seek_action",
+    )))
+
+    assert view["perception"]["summary"] == "Read as a request directed at OpenRook."
+    assert view["perception"]["intent_label"] == "Asking for practical help"
+    assert view["perception"]["social_move_label"] == "A request"
+    assert view["perception"]["target_label"] == "OpenRook"
+    assert view["perception"]["intent"] == "seek_action"

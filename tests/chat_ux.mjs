@@ -54,6 +54,16 @@ class Element {
   get innerHTML() { return this.html ?? escapeHtml(this.text); }
   appendChild(child) { this.children.push(child); return child; }
   append(...children) { children.forEach(child => this.appendChild(child)); }
+  querySelector(selector) {
+    this.matches ||= new Map();
+    if (!this.matches.has(selector)) {
+      const child = new Element();
+      child.className = selector.slice(1);
+      this.matches.set(selector, child);
+      this.appendChild(child);
+    }
+    return this.matches.get(selector);
+  }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, handler) { this.listeners[name] = handler; }
   dispatchEvent(event) { return this.listeners[event.type]?.(event); }
@@ -99,10 +109,20 @@ function setup() {
   let timerId = 0;
   let respond = async () => response({});
   let initialSettings = true;
+  let initialHistory = true;
+  const settingsRequest = deferred();
   const document = {
-    getElementById: element,
+    getElementById: id => id === "chatBackendStatus" && element("emptyState").removed ? null : element(id),
     createElement: tag => new Element(tag),
-    querySelectorAll: selector => selector.includes("end-session") ? actions : [],
+    querySelectorAll: selector => {
+      if (selector.includes("end-session")) return actions;
+      if (selector === ".message-row.assistant .msg-name") {
+        return element("messages").children
+          .filter(child => child.className === "message-row assistant")
+          .map(child => child.querySelector(".msg-name"));
+      }
+      return [];
+    },
     addEventListener() {},
     documentElement: new Element("html"),
   };
@@ -119,11 +139,15 @@ function setup() {
     },
     clearTimeout: id => timers.delete(id),
     fetch(url, options) {
+      if (url.startsWith("/session/history?") && initialHistory) {
+        initialHistory = false;
+        return Promise.resolve(response({ history: [] }));
+      }
       // Initial settings hydration is outside these action tests. Keep it
       // pending, so it cannot race the state transitions under test.
       if (url === "/admin/config" && initialSettings) {
         initialSettings = false;
-        return new Promise(() => {});
+        return settingsRequest.promise;
       }
       calls.push({ url, options });
       return respond(url, options);
@@ -140,6 +164,8 @@ function setup() {
   vm.runInContext(`
     globalThis.subject = {
       sendMessage, endSession, applyRest, connectionSummary, renderConnectionResult,
+      addMessage, showWhyResponse, restoreConversation, historyReady, settingsReady, applyAgentName,
+      updatePersonaPanel, updateRelationshipState,
       backendLabel, healthLabel, refreshMoodContrast,
       wizardSelectPreset, wizardSaveLLM, wizardSaveRuntimeChannels, wizardRenderSummary,
       modelPickerFor,
@@ -147,6 +173,7 @@ function setup() {
       selectBackend(name) { currentBackend = name; },
       seedExplanation() {
         lastExplanation = { summary: "Previous reply" };
+        addMessage("Previous reply", "assistant", "neutral", lastExplanation);
         document.getElementById('whyBtn').disabled = false;
       },
       explanation() { return lastExplanation; },
@@ -155,6 +182,8 @@ function setup() {
   return {
     ...context.subject, element, actions, calls, timers, root: document.documentElement,
     respondWith(handler) { respond = handler; },
+    promptWith(value) { context.window.prompt = () => value; },
+    failSettings(error) { settingsRequest.reject(error); },
     advance(milliseconds) {
       now += milliseconds;
       for (const [id, timer] of timers) {
@@ -172,8 +201,19 @@ function setup() {
 
 const scenario = process.argv[2];
 const app = setup();
+await app.historyReady;
 
 if (scenario.startsWith("session_")) {
+  const savedCounts = {
+    session_saved: 2,
+    session_saved_one: 1,
+    session_no_new_memory: 0,
+  };
+  const expectedNotices = {
+    session_saved: "Saved 2 things from this conversation · new conversation started",
+    session_saved_one: "Saved 1 thing from this conversation · new conversation started",
+    session_no_new_memory: "Nothing saved from this conversation · new conversation started",
+  };
   app.seedExplanation();
   app.element("msgInput").value = "Next message";
   const pending = deferred();
@@ -186,17 +226,20 @@ if (scenario.startsWith("session_")) {
   } else if (scenario === "session_failure") {
     pending.resolve(response({ detail: "Session could not be saved" }, 503));
   } else {
-    pending.resolve(response({ memories_written: scenario === "session_saved" ? 2 : 0 }));
+    pending.resolve(response({ memories_written: savedCounts[scenario] }));
   }
   await finished;
   const notice = app.notice();
   assert.equal(notice.attributes.role, "status");
-  if (scenario === "session_saved" || scenario === "session_no_new_memory") {
-    assert.match(notice.textContent, scenario === "session_saved"
-      ? /Conversation saved to memory/ : /No new summary memory was added/);
-    assert.match(notice.textContent, /fresh session has started/);
-    assert.match(notice.textContent, /stored memories and preferences remain/);
-    assert.match(notice.textContent, /transcript stays here until you reload/);
+  if (Object.hasOwn(expectedNotices, scenario)) {
+    assert.equal(notice.textContent, expectedNotices[scenario]);
+    assert.equal(notice.classList.contains("session-divider"), true);
+    assert.match(notice.title, /Stored memories and preferences remain/);
+    assert.match(notice.title, /only the current conversation is restored/);
+    const transcript = app.element("messages").children;
+    assert.match(transcript[0].innerHTML, /Previous reply/);
+    const next = app.addMessage("Fresh conversation", "user");
+    assert.ok(transcript.indexOf(next) > transcript.indexOf(notice));
     assert.equal(app.explanation(), null);
     assert.equal(app.element("whyBtn").disabled, true);
   } else {
@@ -207,6 +250,132 @@ if (scenario.startsWith("session_")) {
   }
   assert.equal(app.element("sendBtn").disabled, false);
   assert.ok(app.actions.every(button => !button.disabled));
+} else if (scenario === "explanation_card") {
+  const first = app.addMessage("First reply", "assistant", "neutral", {
+    memory: "Recalled 2 things from saved memory: You prefer concise replies; You work in Python.",
+    life_history: "Life History contributed 1 belief, 1 saved priority.",
+    strategy: "Offer practical help.",
+  });
+  const second = app.addMessage("Second reply", "assistant", "neutral", {
+    memory: "No saved details about you were used.",
+    life_history: "Only the starting character settings applied.",
+  });
+  const before = app.element("messages").children.length;
+  first.explanationButton.dispatchEvent({ type: "click" });
+  const card = first.explanationCard;
+  assert.equal(card.tagName, "aside");
+  assert.equal(card.attributes.role, "note");
+  assert.equal(card.attributes["aria-label"], "Explanation of this reply");
+  assert.equal(card.id, first.explanationButton.attributes["aria-controls"]);
+  assert.ok(first.querySelector(".msg-content").children.includes(card));
+  const firstBody = card.children[1].innerHTML;
+  assert.match(firstBody, /<strong>Memory<\/strong><div class="markdown-copy">Recalled 2 things from saved memory: You prefer concise replies; You work in Python\.<\/div><\/div>/);
+  assert.match(firstBody, /<strong>Life History<\/strong><div class="markdown-copy">Life History contributed 1 belief, 1 saved priority\.<\/div><\/div>/);
+  assert.equal(firstBody.match(/Life History contributed/g).length, 1);
+  assert.doesNotMatch(firstBody, /No saved details about you/);
+  assert.equal(first.explanationButton.attributes["aria-expanded"], "true");
+  const dismiss = card.children[0].children[1];
+  dismiss.dispatchEvent({ type: "click" });
+  assert.equal(card.hidden, true);
+  assert.equal(first.explanationButton.attributes["aria-expanded"], "false");
+  assert.equal(first.explanationButton.focused, true);
+  app.showWhyResponse(first);
+  assert.equal(card.hidden, false);
+  assert.equal(first.querySelector(".msg-content").children.filter(child => child === card).length, 1);
+  app.showWhyResponse();
+  const secondBody = second.explanationCard.children[1].innerHTML;
+  assert.match(secondBody, /<strong>Memory<\/strong><div class="markdown-copy">No saved details about you were used\.<\/div><\/div>/);
+  assert.match(secondBody, /<strong>Life History<\/strong><div class="markdown-copy">Only the starting character settings applied\.<\/div><\/div>/);
+  assert.doesNotMatch(secondBody, /Life History contributed|saved priorities|Recalled/);
+  assert.equal(app.element("messages").children.length, before, "Explanations are not chat messages");
+  assert.equal(app.calls.length, 0, "Explaining a reply never sends or stores a conversation turn");
+} else if (scenario === "plain_strategy_labels") {
+  const relationship = {
+    strategy: "practical_help", strategy_reason: "actionable_request_practical_help",
+    strategy_label: "Practical help",
+    strategy_reason_label: "You asked for help with an actionable task.",
+  };
+  app.updatePersonaPanel({ relationship });
+  app.updateRelationshipState({
+    response_strategy: relationship.strategy,
+    strategy_trace: { matched_rule: relationship.strategy_reason },
+    persona_view: { relationship },
+  }, relationship);
+  for (const id of ["personaPanel", "relationshipState"]) {
+    const html = app.element(id).innerHTML;
+    assert.match(html, /Practical help/);
+    assert.match(html, /You asked for help with an actionable task/);
+    assert.doesNotMatch(html, /practical_help|actionable_request/);
+  }
+} else if (scenario === "history_auth_restore") {
+  app.respondWith(() => response({ detail: "Sign in required" }, 401));
+  assert.equal(await app.restoreConversation(), false);
+  app.promptWith("history-token");
+  app.element("msgInput").value = "Continue";
+  app.respondWith((url, options) => {
+    if (url.startsWith("/session/history?")) {
+      if (!options.headers.Authorization) return response({ detail: "Sign in required" }, 401);
+      assert.equal(options.headers.Authorization, "Bearer history-token");
+      return response({ history: [
+        { role: "user", content: "Earlier message" },
+        { role: "assistant", content: "Earlier reply" },
+      ] });
+    }
+    assert.equal(url, "/chat");
+    assert.equal(options.headers.Authorization, "Bearer history-token");
+    const visibleRows = app.element("messages").children.filter(child => !child.removed);
+    assert.match(visibleRows[0].innerHTML, /Earlier message/);
+    assert.match(visibleRows[1].innerHTML, /Earlier reply/);
+    assert.match(visibleRows[2].innerHTML, /Continue/);
+    return response({ response: "New reply" });
+  });
+  await app.sendMessage();
+  assert.equal(app.calls.filter(call => call.url === "/chat").length, 1);
+  assert.equal(app.element("messages").children.filter(child => !child.removed).length, 4);
+} else if (scenario === "history_settings_race") {
+  app.respondWith(() => response({ history: [{ role: "assistant", content: "Earlier reply" }] }));
+  await app.restoreConversation();
+  assert.equal(app.element("emptyState").removed, true);
+  app.failSettings(new Error("Settings unavailable"));
+  await app.settingsReady;
+  app.applyAgentName("Changed Name");
+  const reply = app.element("messages").children[0];
+  assert.equal(reply.querySelector(".msg-name").textContent, "Changed Name");
+} else if (["history_restore", "history_restore_failure"].includes(scenario)) {
+  app.element("msgInput").value = "Keep draft";
+  const pending = deferred();
+  app.respondWith(() => pending.promise);
+  const restored = app.restoreConversation();
+  assert.equal(app.element("sendBtn").disabled, true);
+  assert.ok(app.actions.every(button => button.disabled));
+  await app.sendMessage();
+  await app.endSession();
+  await app.applyRest();
+  assert.equal(app.calls.length, 1, "History must load before a new turn or session action");
+  assert.match(app.calls[0].url, /^\/session\/history\?user_id=test-id&chat_id=test-id$/);
+  pending.resolve(scenario === "history_restore_failure"
+    ? response({ detail: "Unavailable" }, 503)
+    : response({ history: [
+      { role: "user", content: "I prefer bullet points <script>" },
+      { role: "assistant", content: "I will remember." },
+      { role: "system", content: "Never display this" },
+    ] }));
+  await restored;
+  assert.equal(app.element("sendBtn").disabled, false);
+  assert.equal(app.element("msgInput").value, "Keep draft");
+  if (scenario === "history_restore") {
+    const rows = app.element("messages").children;
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].className, "message-row user");
+    assert.match(rows[0].innerHTML, /bullet points &lt;script&gt;/);
+    assert.equal(rows[1].className, "message-row assistant");
+    assert.match(rows[1].innerHTML, /I will remember/);
+    assert.equal(rows[1].explanation, null);
+    assert.equal(app.element("whyBtn").disabled, true);
+    assert.equal(app.element("emptyState").removed, true);
+  } else {
+    assert.match(app.notice().textContent, /Could not restore earlier messages/);
+  }
 } else if (["chat_pending", "end_pending", "rest_pending"].includes(scenario)) {
   app.element("msgInput").value = "First message";
   const pending = deferred();

@@ -100,7 +100,10 @@ Specific high-value scenarios:
   file uploads via `#skillUpload` and `#lifeUploadFile`; token dialog
   auto-opens on 401 and Save Token persists; identity panel Save+Reload;
   destructive buttons present with `danger` class; chat-shell session buttons
-  (Why this response, End Session, Rest); open-wizard relaunches setup;
+  (Why this response, End Session, Rest); dismissible explanations attached to
+  their replies without adding conversation messages; End Session keeps a
+  visible divider and reload restores the active conversation;
+  open-wizard relaunches setup;
   `/admin`, `/persona`, `/dashboard` legacy redirects.
 - Tool diversity: `system.memory_usage` end-to-end via chat, `web.search` via
   the bundled DuckDuckGo provider, `fs.read_file` workspace read, `fs.write_file`

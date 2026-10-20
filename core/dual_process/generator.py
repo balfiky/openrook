@@ -6,14 +6,15 @@ LLM backend is swappable: OpenAI, Anthropic, Ollama, MiniMax, or a callable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import re
 from typing import Protocol
 
 from config.loader import get_config
 from core.character_vector import assemble_character_vector, format_character_vector_prompt
-from core.types import PipelineContext
+from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT, RELATIONSHIP_DETAIL_LIMIT
+from core.types import LongTermEntry, PipelineContext, RelationshipContext, SemanticMemoryEntry
 
 _INTERNAL_MARKER_RE = re.compile(
     r"^\s*\[(?:Defense instruction|Self-check correction):.*?\]\s*$",
@@ -34,6 +35,36 @@ class LLMBackend(Protocol):
 # ---------------------------------------------------------------------------
 # System prompt builder
 # ---------------------------------------------------------------------------
+
+def prompt_memory_context(
+    ctx: PipelineContext,
+) -> tuple[list[LongTermEntry], list[SemanticMemoryEntry], RelationshipContext | None]:
+    """Snapshot memories included by either prompt block, without changing input.
+
+    The character block is always included, even with a custom template.
+    Explicit relationship details additionally appear with the memory section.
+    """
+    template = ctx.generator_prompt if ctx.generator_prompt is not None else get_config().generator_prompt
+    memory_section = not template or "{retrieved_memories}" in template
+    relationship = ctx.relationship_context
+    if relationship is not None and not relationship.is_empty():
+        vector_slots = MEMORY_PROMPT_LIMIT - int(bool(relationship.summary))
+        detail_slots = RELATIONSHIP_DETAIL_LIMIT if memory_section else 0
+        loop_slots = max(detail_slots, vector_slots)
+        event_slots = max(detail_slots, vector_slots - len(relationship.active_loops))
+        relationship = replace(
+            relationship,
+            active_loops=relationship.active_loops[:loop_slots],
+            recent_events=relationship.recent_events[:event_slots],
+        )
+    else:
+        relationship = None
+    return (
+        ctx.retrieved_memories[:MEMORY_PROMPT_LIMIT] if memory_section else [],
+        ctx.semantic_memories[:MEMORY_PROMPT_LIMIT],
+        relationship,
+    )
+
 
 def build_system_prompt(ctx: PipelineContext) -> str:
     """Build the system prompt injecting full emotional context.
@@ -251,12 +282,12 @@ def _build_memory_section(ctx: PipelineContext) -> str:
     if ctx.relationship_context and not ctx.relationship_context.is_empty():
         if ctx.relationship_context.summary:
             lines.append(f"- Relationship context: {_trim_prompt_text(ctx.relationship_context.summary, 200)}")
-        for loop in ctx.relationship_context.active_loops[:2]:
+        for loop in ctx.relationship_context.active_loops[:RELATIONSHIP_DETAIL_LIMIT]:
             lines.append(f"- Open loop: {_trim_prompt_text(loop.description, 200)} (intensity={loop.intensity:.2f})")
-        for event in ctx.relationship_context.recent_events[:2]:
+        for event in ctx.relationship_context.recent_events[:RELATIONSHIP_DETAIL_LIMIT]:
             label = event.event_kind.replace("_", " ")
             lines.append(f"- Recent relationship event: {label} — {_trim_prompt_text(event.summary, 200)}")
-    for mem in ctx.retrieved_memories[:5]:
+    for mem in ctx.retrieved_memories[:MEMORY_PROMPT_LIMIT]:
         spike_tag = " [SPIKE]" if mem.spike else ""
         summary = _trim_prompt_text(mem.summary, 300)
         lines.append(f"- {summary} (valence={mem.emotional_valence:.2f}){spike_tag}")
@@ -268,7 +299,7 @@ def _build_semantic_memory_section(ctx: PipelineContext) -> str:
     if not ctx.semantic_memories:
         return ""
     lines = ["## Semantic Memory"]
-    for mem in ctx.semantic_memories[:5]:
+    for mem in ctx.semantic_memories[:MEMORY_PROMPT_LIMIT]:
         prefix = mem.kind.replace("_", " ")
         summary = _trim_prompt_text(mem.summary, 300)
         lines.append(f"- {prefix}: {summary}")

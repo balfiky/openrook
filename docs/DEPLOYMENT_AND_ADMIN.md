@@ -142,16 +142,34 @@ interpreted. It does not speed up the underlying provider.
 
 **End Session** consolidates the conversation and clears short-term context.
 The confirmation says whether summary memories were written; stored memories
-and preferences remain. The current page keeps its transcript until reload.
+and preferences remain. The current page keeps its transcript above a
+**Saved to memory · new conversation started** divider, with new messages
+below it. If no new memory was written, the divider says
+**No new memory added · new conversation started** instead.
+Reload restores the current, unended conversation from the server.
+Ended transcripts remain visible only until the page reloads; there is no
+past-conversations archive.
 User recall questions use normal generation with retrieved user memories and
 relationship context. Self-history questions use grounded recorded identity
 changes, expressed as beliefs and priorities.
 
-**Why this response?** shows recorded influences on the last reply. **Rest (1hr)**
+**Why this response?** opens a dismissible explanation card attached to the
+reply it explains. It is not a conversation message and is not saved in the
+transcript. It describes recalled facts and preferences, long-term memories,
+relationship context and unfinished matters, and Life History used for that
+turn. Interpretations and strategies use plain-language labels; Observability
+keeps technical identifiers as small secondary text for debugging.
+Restored messages contain text only; explanation cards are available for
+replies received on the current page.
+
+The header mood indicator describes a numeric model state, not a feeling;
+its accessible tooltip explains this. **Rest (1hr)**
 applies simulated recovery to modeled energy and mood; it does not wait an hour.
 Session actions are disabled while a reply or another session action is pending.
 
 For terminal chat use `openrook`; `/help` is immediate and does not call a model.
+Terminal setup lists this command alongside the browser launch commands.
+Its Codex choice reads **Codex CLI — uses your Codex login (codex)**.
 Console INFO logging is off by default to keep prompts readable; `--verbose`
 restores it. Headless runtime logging stays at INFO. Existing installations
 should review the [upgrade note](OPENROOK_MIGRATION.md) before updating.
@@ -299,9 +317,9 @@ In ordinary mode, the settings workspace lets you:
   CORS, tools, shell-tool opt-in, and workspace paths
 - Set the operator-authored **Constitution** — a short stable orientation
   string rendered above evolving beliefs in every prompt
-- Inspect and manage **Open Questions** — epistemic gaps surfaced by
-  reflection (contradiction, low-confidence, drive-gap) with Abandon and
-  Resolve actions
+- Inspect **Open Questions** raised while reviewing past conversations.
+  OpenRook may ask about them in a later chat; use **Abandon** to set a
+  question aside
 - Upload, import, audit, and enable external Agent Skills
 - Feed pasted or uploaded formative text/Markdown files into **Life History**
 - Observe experience count, evolution events, current beliefs, and drive shifts

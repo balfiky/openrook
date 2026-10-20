@@ -15,7 +15,7 @@
 .wizard-sub { font-size: 0.8125rem; color: var(--text-dim); margin-bottom: 1rem; line-height: 1.5; }
 .wizard-body { font-size: 0.8125rem; color: var(--text-dim); margin-bottom: 1.125rem; line-height: 1.6; }
 .wizard-actions { display: flex; justify-content: space-between; gap: 0.625rem; margin-top: 1.25rem; }
-.wizard-actions button { padding: 0.5625rem 1.125rem; border-radius: var(--radius-sm); font-family: var(--font); font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out), transform 260ms var(--ease-spring); }
+.wizard-actions button { padding: 0.5625rem 1.125rem; border-radius: var(--radius-sm); font-family: var(--font); font-size: var(--font-size-control); font-weight: var(--font-weight-control); cursor: pointer; border: 1px solid transparent; transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out), transform 260ms var(--ease-spring); }
 .wizard-actions button.primary { background: var(--primary); color: var(--on-primary); }
 .wizard-actions button.primary:hover:not(:disabled) { background: var(--primary-dim); }
 .wizard-actions button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -29,7 +29,7 @@
 .wizard-preset.selected .preset-sub { color: var(--text-dim); }
 .wizard-fields { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
 .wizard-fields label { font-size: 0.6875rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; display: block; }
-.wizard-fields input, .wizard-fields textarea, .wizard-fields select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 0.5625rem 0.6875rem; border-radius: var(--radius-sm); font-family: var(--font); font-size: 0.8125rem; }
+.wizard-fields input, .wizard-fields textarea, .wizard-fields select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 0.5625rem 0.6875rem; border-radius: var(--radius-sm); font-family: var(--font); font-size: var(--font-size-control); }
 .wizard-fields textarea { resize: vertical; min-height: 5rem; font-family: var(--font); }
 .wizard-fields input[type="file"] { background: var(--surface); cursor: pointer; }
 .wizard-fields input[type="file"]::file-selector-button { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; font-family: var(--font); font-weight: 600; margin-right: 0.625rem; padding: 0.4375rem 0.625rem; }
@@ -49,7 +49,7 @@
 }
 .wizard-slider-grid { display: grid; gap: 0.625rem; grid-template-columns: 1fr 1fr; }
 .wizard-slider { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.625rem 0.75rem; }
-.wizard-slider-head { display: flex; justify-content: space-between; gap: 0.625rem; margin-bottom: 0.375rem; }
+.wizard-slider-head { display: flex; justify-content: space-between; gap: 0.625rem; margin-bottom: 0.375rem; font-size: var(--font-size-control); }
 .wizard-slider input[type="range"] { accent-color: var(--primary); padding: 0; }
 .wizard-skip { margin-left: auto; }
 .wizard-tabs { display: flex; gap: 0.25rem; margin-bottom: 0.875rem; border-bottom: 1px solid var(--border); }

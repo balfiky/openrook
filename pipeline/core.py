@@ -67,6 +67,7 @@ from core.memory.short_term import ShortTermMemory
 from core.memory.long_term import LongTermMemory
 from core.memory.digestion import digest_session, DigestedSession
 from core.memory.relationship import NullRelationshipMemory, RelationshipMemory
+from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT
 from core.memory.semantic import (
     NullSemanticMemory,
     create_semantic_memory,
@@ -84,6 +85,7 @@ from core.profiles.contradiction import ContradictionDetector
 from core.dual_process.generator import (
     LLMBackend,
     ResponseGenerator,
+    prompt_memory_context,
 )
 from core.dual_process.self_check import SelfChecker, coherence_check
 from core.dual_process.inner_dialogue import InnerDialogue
@@ -215,6 +217,8 @@ class CognitivePipeline:
             )
         else:
             self.semantic_memory = NullSemanticMemory()
+        self._saved_session_memory_writes = 0
+        self._memory_write_baseline = 0
 
         # Per-user profile store (person observations + extracted traits)
         self._person_profile_store = ProfileStore(db_path=db_path)
@@ -619,8 +623,16 @@ class CognitivePipeline:
         debug.semantic_memories = semantic_memories
         timings["semantic_memory_retrieval"] = (time.perf_counter() - _ts) * 1000
 
-        identity_response = self._identity_question_response(user_message)
+        identity_response = (
+            self._identity_question_response(user_message, debug=debug)
+            if not self._research_mode else None
+        )
         if identity_response is not None and not self._research_mode:
+            # This direct reply uses the identity record, not the prefetched
+            # conversation memories. Keep its explanation aligned with that.
+            debug.retrieved_memories = []
+            debug.semantic_memories = []
+            debug.relationship_context = None
             debug.response = identity_response
             debug.modulator_snapshot = self.engine.snapshot()
             self._append_conversation_history(
@@ -1297,6 +1309,13 @@ class CognitivePipeline:
         st.character_vector = character_vector
         debug.character_vector = character_vector
 
+        debug.retrieved_memories, debug.semantic_memories, debug.relationship_context = (
+            prompt_memory_context(ctx)
+        )
+        # The slow deliberation path can consume long-term memory even when
+        # a custom generator template omits its memory section.
+        if debug.dialogue_trace and debug.dialogue_trace.total_llm_calls >= 2:
+            debug.retrieved_memories = st.retrieved[:MEMORY_PROMPT_LIMIT]
         st.gen_result = self.generator.generate(
             ctx, st.user_message, self._conversation_history
         )
@@ -1782,6 +1801,9 @@ class CognitivePipeline:
         proactive_relationship = self.relationship_memory.build_context(user_id)
         if not proactive_relationship.is_empty():
             ctx.relationship_context = proactive_relationship
+        debug.retrieved_memories, debug.semantic_memories, debug.relationship_context = (
+            prompt_memory_context(ctx)
+        )
         gen_result = self.generator.generate(
             ctx, action.message, self._conversation_history,
         )
@@ -1837,10 +1859,15 @@ class CognitivePipeline:
             return {"error": exc.__class__.__name__}
         return snapshot if isinstance(snapshot, dict) else {}
 
-    def _identity_question_response(self, user_message: str) -> str | None:
+    def _identity_question_response(
+        self, user_message: str, *, debug: DebugState | None = None,
+    ) -> str | None:
         if not _is_identity_question(user_message):
             return None
         snapshot = self._load_life_history_snapshot()
+        if debug is not None:
+            debug.life_history_context = {}
+            debug.life_influence = derive_life_influence({})
         if snapshot.get("error"):
             return "I couldn't read my saved record of changes right now. Please try again."
         evolution = snapshot.get("evolution_events") if isinstance(snapshot, dict) else []
@@ -1853,18 +1880,32 @@ class CognitivePipeline:
         experiences = experiences if isinstance(experiences, list) else []
         show_drive_details = bool(re.search(r"\bdrives?\b", user_message, re.IGNORECASE))
         changed_drives = []
+        changed_drive_records = []
         for drive in drives:
             name = str(drive.get("name") or "").replace("_", " ")
             value = float(drive.get("value", 0.5))
             baseline = float(drive.get("baseline", 0.5))
             if abs(value - baseline) >= 0.01:
+                changed_drive_records.append(drive)
                 if show_drive_details:
                     changed_drives.append(f"- {name}: {value:.2f} ({value - baseline:+.2f})")
                 else:
                     direction = "higher" if value > baseline else "lower"
                     changed_drives.append(f"- {name}: {direction} priority than its starting setting.")
+        if debug is not None:
+            debug.life_history_context = {
+                key: records
+                for key, records in (
+                    ("beliefs", beliefs[:5]),
+                    ("recent_evolution", evolution[:5]),
+                    ("drives", changed_drive_records[:7]),
+                )
+                if records
+            }
         if not evolution and not beliefs and not changed_drives:
             if experiences:
+                if debug is not None:
+                    debug.life_history_context["experiences"] = experiences[:3]
                 lines = [
                     "I've saved learning material, but it hasn't changed my recorded beliefs or priorities:",
                 ]
@@ -2476,6 +2517,7 @@ class CognitivePipeline:
     def export_session_state(self) -> dict[str, Any]:
         return {
             "episode_id": self._episode_id, "short_term": self.short_term.export_state(),
+            "session_memories_written": self._session_memory_write_count(),
             "active_task_plan": asdict(self._active_task_plan) if self._active_task_plan else None,
             "capability_gaps": self._capability_gaps, "last_turn_time": self._last_turn_time,
             "last_state_update_at": self._last_state_update_at,
@@ -2486,6 +2528,8 @@ class CognitivePipeline:
     def restore_session_state(self, state: dict[str, Any]) -> None:
         if not state:
             return
+        self._saved_session_memory_writes = int(state.get("session_memories_written", 0))
+        self._memory_write_baseline = self._memory_write_count()
         self._episode_id = str(state.get("episode_id") or self._episode_id)
         self.short_term.restore_state(state.get("short_term", []))
         self._capability_gaps = dict(state.get("capability_gaps", {}))
@@ -2528,8 +2572,23 @@ class CognitivePipeline:
     # Session management
     # ------------------------------------------------------------------
 
+    def _memory_write_count(self) -> int:
+        """Count committed memory records written by this pipeline's stores."""
+        return (
+            self.long_term.write_count
+            + self.semantic_memory.write_count
+            + self.relationship_memory.write_count
+        )
+
+    def _session_memory_write_count(self) -> int:
+        return (
+            self._saved_session_memory_writes
+            + self._memory_write_count()
+            - self._memory_write_baseline
+        )
+
     def end_session(self, user_id: str = "default") -> DigestedSession:
-        """End a session: run digestion, clear short-term, apply energy drain."""
+        """Digest and clear the session, reporting all memory records it saved."""
         if self._research_owner is not None and not self._research_in_transition:
             return self._research_owner.end_session(self, user_id)
         self._ensure_bound_user(user_id)
@@ -2571,6 +2630,11 @@ class CognitivePipeline:
         if not self._research_mode:
             self._capability_gaps.clear()
 
+        # Include turn-time saves and relationship events, which digestion's
+        # long-term-only count omits. Reset for the next conversation.
+        result.memories_written = self._session_memory_write_count()
+        self._saved_session_memory_writes = 0
+        self._memory_write_baseline = self._memory_write_count()
         return result
 
     # Sessions whose peak emotional intensity / trust movement clear these

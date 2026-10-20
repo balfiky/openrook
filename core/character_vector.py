@@ -11,6 +11,7 @@ import hashlib
 import json
 from typing import Any
 
+from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT
 from core.types import PipelineContext
 
 
@@ -151,10 +152,10 @@ def format_character_vector_prompt(vector: CharacterVector) -> str:
             continue
         topic = f"{label}/{subject}" if subject else label
         content.append(f"- Formative[{topic}]: {detail}")
-    for memory in vector.semantic[:5]:
+    for memory in vector.semantic[:MEMORY_PROMPT_LIMIT]:
         if memory:
             content.append(f"- Semantic: {memory}")
-    for relation in vector.relational[:5]:
+    for relation in vector.relational[:MEMORY_PROMPT_LIMIT]:
         if relation:
             content.append(f"- Relational: {relation}")
     for conflict in vector.conflict_resolutions:

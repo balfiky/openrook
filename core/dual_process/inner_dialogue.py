@@ -9,13 +9,13 @@ No pure math here — this is where LLM calls live.
 
 from __future__ import annotations
 
-import json
 from core.clock import identifiers as uuid
 from core.clock import datetime
 from datetime import timezone
 from typing import TYPE_CHECKING
 
 from config.loader import get_config
+from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT
 from core.types import (
     DialogueRound,
     InnerDialogueTrace,
@@ -23,7 +23,6 @@ from core.types import (
     ModulatorState,
     PersonProfile,
     SelfProfile,
-    TopicProfile,
     UnresolvedItem,
     ValueHierarchy,
 )
@@ -114,7 +113,7 @@ def _format_memories(memories: list[LongTermEntry]) -> str:
     if not memories:
         return "None"
     lines = []
-    for mem in memories[:5]:
+    for mem in memories[:MEMORY_PROMPT_LIMIT]:
         tag = " [SPIKE]" if mem.spike else ""
         lines.append(f"- {mem.summary} (valence={mem.emotional_valence:.2f}){tag}")
     return "\n".join(lines)

@@ -339,6 +339,9 @@ class TestIndexPage:
         assert 'aria-label="Send message"' in html
         assert 'id="sendBtn" data-action="send-message" aria-label="Send message" disabled' in html
         assert "function updateSendButtonState()" in js
+        assert 'title="Modeled mood: numeric state, not a feeling"' in html
+        assert 'aria-label="Modeled mood: numeric state, not a feeling"' in html
+        assert 'class="mood-indicator" tabindex="0"' in html
 
     def test_rook_brand_assets_are_served(self):
         for name in ("openrook-icon.svg", "openrook-mark.svg"):

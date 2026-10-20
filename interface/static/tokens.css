@@ -41,6 +41,8 @@
   --font-display: 'EB Garamond','Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,serif;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, sans-serif;
   --font-mono: 'JetBrains Mono','SF Mono','Fira Code',Consolas,monospace;
+  --font-size-control: 0.8125rem;
+  --font-weight-control: 600;
 
   /* Geometry */
   --radius:    0.875rem;
@@ -191,7 +193,8 @@ pre code[class^="language-"] {
 .model-picker-row select { flex: 1; min-width: 0; }
 .model-picker-row button {
   flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text); font: inherit;
+  background: var(--surface-2); color: var(--text); font-family: var(--font);
+  font-size: var(--font-size-control); font-weight: var(--font-weight-control);
   padding: 0.5625rem 0.6875rem; cursor: pointer;
 }
 .model-picker-row button:disabled { opacity: 0.6; cursor: wait; }

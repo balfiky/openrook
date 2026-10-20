@@ -103,6 +103,8 @@ def _score_entry(
 class NullSemanticMemory:
     """Disabled semantic memory backend."""
 
+    write_count = 0
+
     def store(self, entry: SemanticMemoryEntry) -> int | None:
         return None
 
@@ -140,6 +142,7 @@ class SQLiteSemanticMemory:
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
         ensure_schema_version(self._conn)
+        self.write_count = 0
 
     def _create_tables(self) -> None:
         self._conn.execute(
@@ -198,6 +201,7 @@ class SQLiteSemanticMemory:
             ),
         )
         self._conn.commit()
+        self.write_count += 1
         return cursor.lastrowid
 
     def retrieve(

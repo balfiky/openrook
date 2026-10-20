@@ -5,6 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from runtime.debug.explain import explain_turn
+from runtime.debug.labels import (
+    intent_label,
+    social_move_phrase,
+    strategy_label,
+    strategy_reason_label,
+    target_label,
+)
 from runtime.debug.mental_state import mental_health
 from runtime.debug.relationship_view import build_relationship_view
 
@@ -249,8 +256,11 @@ def _perception_view(appraisal: Any) -> dict[str, Any]:
         return {
             "available": False,
             "target": "",
+            "target_label": "",
             "social_move": "",
+            "social_move_label": "",
             "intent": "",
+            "intent_label": "",
             "vulnerability": 0.0,
             "action_need": 0.0,
             "summary": "No social perception was recorded for this turn.",
@@ -263,8 +273,11 @@ def _perception_view(appraisal: Any) -> dict[str, Any]:
     return {
         "available": True,
         "target": target,
+        "target_label": target_label(target),
         "social_move": move,
+        "social_move_label": social_move_phrase(move).capitalize(),
         "intent": intent,
+        "intent_label": intent_label(intent),
         "vulnerability": round(vulnerability, 6),
         "action_need": round(action_need, 6),
         "summary": _perception_summary(target, move, vulnerability, action_need),
@@ -272,12 +285,13 @@ def _perception_view(appraisal: Any) -> dict[str, Any]:
 
 
 def _perception_summary(target: str, move: str, vulnerability: float, action_need: float) -> str:
+    phrase = social_move_phrase(move)
     if target == "assistant":
-        base = f"Read as {move or 'a social move'} directed at OpenRook."
+        base = f"Read as {phrase} directed at OpenRook."
     elif target == "external":
-        base = f"Read as {move or 'a social move'} about something outside the relationship."
+        base = f"Read as {phrase} about something outside the relationship."
     elif target == "self":
-        base = f"Read as {move or 'a social move'} about the user's own state."
+        base = f"Read as {phrase} about your own situation."
     elif target == "shared_problem":
         base = "Read as a shared problem to work on."
     else:
@@ -293,7 +307,9 @@ def _relationship_summary(view: dict[str, Any]) -> dict[str, Any]:
     mods = view.get("modulators", {}) or {}
     return {
         "strategy": view.get("strategy", ""),
+        "strategy_label": strategy_label(view.get("strategy", "")),
         "strategy_reason": view.get("strategy_reason", ""),
+        "strategy_reason_label": strategy_reason_label(view.get("strategy_reason", "")),
         "trust": view.get("trust", {"value": 0.0, "delta": None}),
         "bonding": mods.get("bonding", {"value": 0.0, "delta": None}),
         "resolution": mods.get("resolution", {"value": 0.0, "delta": None}),

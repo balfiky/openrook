@@ -23,6 +23,8 @@ class NullRelationshipMemory:
     memory existed at all.
     """
 
+    write_count = 0
+
     def record_event(self, event: RelationshipEvent) -> int:
         return 0
 
@@ -62,6 +64,8 @@ class RelationshipMemory:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         ensure_schema_version(self._conn)
+        # Count saved events; their associated open loops are not extra memories.
+        self.write_count = 0
 
     def record_event(self, event: RelationshipEvent) -> int:
         """Persist a relationship event and return its row id."""
@@ -83,6 +87,7 @@ class RelationshipMemory:
             ),
         )
         self._conn.commit()
+        self.write_count += 1
         return int(cursor.lastrowid)
 
     def upsert_open_loop(self, loop: OpenLoop) -> int:

@@ -350,6 +350,14 @@ class UserSession:
             finally:
                 self.mark_work_finished()
 
+    def _end_session_and_save(self) -> Any:
+        result = self.pipeline.end_session(user_id=self.user_id)
+        # Persist the cleared short-term state and memory count before a restart
+        # can restore the conversation that just ended.
+        self.save_state()
+        delete_conversation_history(self.history_path)
+        return result
+
     async def _end_session_async(self) -> Any:
         """Worker-thread wrapper for session digestion without closing."""
         self.mark_work_started()
@@ -357,15 +365,12 @@ class UserSession:
             if self._user_lock is not None:
                 async with self._user_lock:
                     result = await self._run_blocking(
-                        self.pipeline.end_session,
-                        self.user_id,
+                        self._end_session_and_save,
                     )
             else:
                 result = await self._run_blocking(
-                    self.pipeline.end_session,
-                    self.user_id,
+                    self._end_session_and_save,
                 )
-            delete_conversation_history(self.history_path)
             self.last_activity = time.time()
             return result
         finally:

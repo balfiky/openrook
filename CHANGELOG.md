@@ -4,6 +4,24 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Chat explanations and continuity
+
+- Include recalled facts and preferences, long-term summaries, relationship
+  context and unfinished matters, and Life History in turn explanations.
+  Use plain-language interpretations, strategies, and intent labels; retain
+  technical identifiers as small secondary text in Observability.
+- Attach a dismissible **Why this response?** card to the reply it explains.
+  Keep explanations outside the conversation transcript.
+- Keep ended conversations visible on the current page with a
+  **Saved to memory · new conversation started** divider. Restore the active,
+  unended transcript from the server on reload. Ended transcripts remain
+  page-local; a past-conversations archive is not included.
+- Align **Refresh models** and Identity core-value typography with form
+  controls. Explain the header mood as a numeric model state, and describe
+  Life History open questions in plain language.
+- Use one parenthesized identifier in terminal setup's Codex choice and
+  include `openrook` terminal chat alongside the web launch commands.
+
 ### Complete current naming and preserve upgrades
 
 - Use `openrook.db` for per-user storage and migrate existing database data

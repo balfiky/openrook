@@ -51,6 +51,7 @@ from runtime.llm.backend import (  # noqa: F401
     list_codex_models,
 )
 from runtime.sessions.manager import SessionManager
+from runtime.sessions.persistence import load_conversation_history
 from runtime.sessions.user_session import UserSession
 from runtime.tools import create_tool_executor
 
@@ -765,8 +766,26 @@ async def update_config(req: ConfigUpdateRequest) -> dict:
     )
 
 
+@app.get("/session/history", dependencies=[Depends(_require_bearer)])
+async def session_history(user_id: str = "default", chat_id: str = "default") -> dict:
+    """Return the current transcript without starting a turn or a new session."""
+    for name, value in (("user_id", user_id), ("chat_id", chat_id)):
+        try:
+            _reject_path_traversal_ids(value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"{name}: {exc}") from exc
+    if _pipeline_override is not None:
+        history = _pipeline_override.export_conversation_history()
+    else:
+        config = get_session_manager().config
+        path = config.session_history_path(_session_key(user_id, chat_id))
+        history = await asyncio.to_thread(load_conversation_history, path)
+    return {"history": history}
+
+
 @app.post("/session/end", dependencies=[Depends(_require_bearer)])
 async def end_session(req: EndSessionRequest) -> dict:
+    """End the conversation and report its total saved memory records."""
     if _pipeline_override is not None:
         result = _pipeline_override.end_session(user_id=req.user_id)
         return _digested_to_dict(result)

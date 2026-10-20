@@ -16,6 +16,8 @@ import pytest
     "advanced_deep_link",
     "overview_paths",
     "tool_inventory_error",
+    "observability_labels",
+    "open_question_copy",
 ])
 def test_settings_behavior(scenario):
     result = subprocess.run(
