@@ -15,11 +15,11 @@ from typing import Any
 
 import requests
 
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-
 from core.provider_client import FastChatCompletionsClient
 from core.dual_process.generator import LLMBackend
 from runtime.security import validate_http_url
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 class OpenAICompatibleLLMBackend:
@@ -40,7 +40,7 @@ class OpenAICompatibleLLMBackend:
     ) -> None:
         if not base_url:
             raise ValueError("OpenAI-compatible backend requires llm_base_url")
-        if not model:
+        if not model.strip():
             raise ValueError("OpenAI-compatible backend requires llm_model")
         safe_base_url = validate_http_url(
             base_url,
@@ -48,7 +48,7 @@ class OpenAICompatibleLLMBackend:
             allow_private_env="OPENROOK_ALLOW_PRIVATE_LLM_URLS",
         )
         self._base_url = safe_base_url.rstrip("/").removesuffix("/chat/completions")
-        self._model = model
+        self._model = model.strip()
         self._timeout = timeout
         self._max_output_tokens = 2048
         self._research_single_attempt = False
@@ -191,7 +191,7 @@ class CodexCLIBackend:
             raise ValueError(f"OPENROOK_CODEX_WORKDIR does not exist: {self._workdir}")
 
     def generate(self, system_prompt: str, user_message: str) -> str:
-        with tempfile.TemporaryDirectory(prefix="nur-codex-") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="openrook-codex-") as tmpdir:
             workdir = self._workdir or tmpdir
             output_path = os.path.join(tmpdir, "last_message.txt")
             cmd = [
@@ -435,7 +435,7 @@ def create_llm_backend(config=None) -> LLMBackend:
         return FastChatCompletionsClient(
             api_key=effective_key or None,
             base_url=base_url or "https://api.minimax.io/v1",
-            model=model or "MiniMax-M2.7-highspeed",
+            model=model,
         )
 
     if backend_type == "auto":

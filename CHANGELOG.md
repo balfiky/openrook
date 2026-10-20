@@ -4,6 +4,55 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Installation-to-chat experience
+
+- Keep tool inventory, profile/memory inspection, rest, and idle session actions
+  usable before model selection. Defer session backends and native tool clients
+  until generation; report expected HTTP, console, Telegram, and proactive
+  backend failures through shared diagnostics. Browser errors preserve server
+  messages instead of exposing JSON parser errors. Shutdown drains accepted
+  turns while their backend initializes.
+- Say “No model is selected” for an empty model choice, with specific URL and
+  Codex configuration guidance. Remove the informational independence flag
+  from both first-run flows; keep it in Settings → Advanced.
+- Put Models, Identity, and Channels first in Settings, with engine controls
+  under Advanced and one runtime-reload note per section. Hide URL/key fields
+  for Codex, retain per-backend connection drafts while switching, restore
+  saving of the displayed learning controls, and truncate Overview paths with
+  full-path tooltips.
+- Remove model-name defaults and suggestions from setup, browser presets,
+  runtime clients, evaluation backends, and documentation. Existing configured
+  model IDs remain valid; Codex can still use its own default.
+- Discover available models from Ollama, OpenAI-compatible servers, hosted
+  gateways, OpenRouter, and the installed Codex catalog. Terminal setup accepts
+  a numbered choice or manual ID; the wizard and Settings offer discovery,
+  refresh, and manual entry. Preselect only an existing choice or the sole
+  available model, and explain empty catalogs without recommending a model.
+- Bound and validate model-discovery requests, authenticate admin access,
+  and keep credentials out of errors. Missing-model chat failures direct
+  users to Settings.
+- Fix unreadable light-theme chat text, emphasis, hidden settings banners, and
+  dark-theme action/toast contrast. Use the rook in the empty state and settings;
+  add starter prompts, backend status, action help, and delayed-reply feedback.
+- Route questions about the user and previous conversations through normal
+  generation with retrieved memories and relationship context. Keep self-history
+  answers grounded in records, with plain wording and honest unavailable-state
+  handling.
+- Share actionable, sanitized backend errors across chat, live connection tests,
+  and terminal setup. Expected provider failures return 503 without a traceback;
+  Settings shows the last test/error and offers a saved-connection test.
+  Live checks no longer block the web event loop.
+- Add Codex to terminal setup, an optional nonfatal live check, hidden secret
+  prompts, and a correctly sized heading underline. Console `/help` is local;
+  default console logging is quieter, with `--verbose` available.
+- Confirm session consolidation and fresh short-term context, report failed
+  session actions correctly, and prevent overlapping session actions/replies.
+- Explain modeled mood and provider data sharing in the wizard; put uncommon
+  runtime options in Advanced and clarify the informational independence flag.
+- Document appraisal's extra serial model call and retained legacy CLI aliases;
+  rename Codex temporary folders to `openrook-codex-*` and link web CLI help to
+  online deployment documentation.
+
 ### Documentation diagram redesign
 
 - Rebuild all eight documentation diagrams with simpler, role-specific shapes:

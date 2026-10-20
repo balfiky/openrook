@@ -27,12 +27,12 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from config.loader import get_config
 from interface.auth import build_require_bearer
-from interface.errors import redact_error
-from runtime.config import RuntimeConfig
+from interface.errors import llm_error_payload, redact_error
 from runtime.debug.api import _debug_to_dict
 from runtime.debug.persona_view import build_persona_view
 from runtime.sessions.manager import SessionManager
@@ -207,17 +207,23 @@ def build_v1_router(
         _validate_path_token("platform", req.platform)
         _validate_path_token("user_id", req.user_id)
         _validate_path_token("chat_id", req.chat_id)
-        mgr = get_manager()
         try:
+            mgr = get_manager()
             response = await mgr.handle_message(
                 req.platform, req.user_id, req.chat_id, req.message,
             )
             session = await mgr.ensure_session(req.platform, req.user_id, req.chat_id)
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=redact_error(str(exc), config_getter()),
-            ) from exc
+        except Exception as exc:
+            config = config_getter()
+            backend_error = llm_error_payload(exc, config)
+            if backend_error is not None:
+                return JSONResponse(status_code=503, content=backend_error)
+            if isinstance(exc, RuntimeError):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=redact_error(str(exc), config),
+                ) from exc
+            raise
         payload: dict[str, Any] = {
             "response": response,
             "session_key": _session_key(req.platform, req.user_id, req.chat_id),

@@ -286,6 +286,7 @@ class TestIndexPage:
     async def test_has_admin_console_hooks(self):
         html = index().body.decode()
         js = interface_api.brand_asset("chat.js").body.decode()
+        picker = interface_api.brand_asset("lib/llm-model-picker.js").body.decode()
         assert "Admin" in html
         assert "/admin/config" in js
         assert "/admin/test/llm" in js
@@ -298,7 +299,9 @@ class TestIndexPage:
         assert "/admin/users/delete" in js
         assert "Agentic Tools" in html
         assert "cfg-autonomy_level" in html
-        assert "wiz-character_independence" in html
+        assert "cfg-character_independence" in html
+        assert "wiz-character_independence" not in html
+        assert "wiz-character_independence" not in js
         assert "High-risk local" in html
         assert "Maintenance" in html
         assert "Delete User Data" in html
@@ -309,8 +312,10 @@ class TestIndexPage:
         assert "Hosted OpenAI-compatible gateway" in js
         assert "live: true" in js
         assert "['local', 'vllm', 'hosted', 'codex'].includes(wizardPreset)" in js
-        assert "/admin/codex/models" in js
-        assert "renderCodexModelControl" in js
+        assert 'import { attachModelPicker } from "/assets/lib/llm-model-picker.js";' in js
+        assert "return attachModelPicker(" in js
+        assert "/admin/codex/models" in picker
+        assert "/admin/llm/models" in picker
         assert "loadSettings({ loadSoul: false })" in js
         assert "Character Mode" in html
         assert 'id="wiz-soul-name" type="text" value="OpenRook"' in html
@@ -1179,23 +1184,26 @@ class TestAdminSoulSave:
 
 
 class TestAdminSoulDraft:
-    async def test_draft_requires_llm_configured(self, monkeypatch, tmp_path):
-        """With backend=auto and no keys, draft endpoint refuses with 400."""
-        from fastapi import HTTPException
+    @pytest.mark.parametrize("backend", ["auto", "minimax"])
+    @pytest.mark.parametrize("api_key", ["", "configured-key"])
+    async def test_draft_requires_llm_configured(self, monkeypatch, tmp_path, backend, api_key):
+        """An API key alone must never imply a model for draft generation."""
+        import json
         from interface.api import AdminSoulDraftRequest, admin_draft_soul
 
         runtime_cfg_path = tmp_path / "runtime_config.yaml"
         monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(runtime_cfg_path))
-        RuntimeConfig(llm_backend="auto").write_yaml(str(runtime_cfg_path))
+        RuntimeConfig(llm_backend=backend, llm_api_key=api_key).write_yaml(str(runtime_cfg_path))
         # No generic LLM key in the environment either.
         monkeypatch.delenv("LLM_API_KEY", raising=False)
 
-        with pytest.raises(HTTPException) as exc:
-            await admin_draft_soul(
-                AdminSoulDraftRequest(description="a calm assistant that values clarity")
-            )
-        assert exc.value.status_code == 400
-        assert "LLM not configured" in exc.value.detail
+        result = await admin_draft_soul(
+            AdminSoulDraftRequest(description="a calm assistant that values clarity")
+        )
+        assert result.status_code == 503
+        payload = json.loads(result.body)
+        assert "No model is selected" in payload["detail"]
+        assert payload["settings_url"] == "/settings"
 
     async def test_draft_parses_llm_json_through_schema(self, monkeypatch, tmp_path):
         """Mock LLM that returns schema-valid JSON → validated draft."""

@@ -14,8 +14,10 @@ import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 
 from interface import api as api_mod
+from interface.errors import llm_error_payload
 from runtime.config import RuntimeConfig
 
 router = APIRouter(dependencies=[Depends(api_mod._require_bearer)])
@@ -38,14 +40,6 @@ async def admin_draft_soul(req: api_mod.AdminSoulDraftRequest) -> dict:
     before saving.
     """
     config = api_mod._load_runtime_config()
-    if not _llm_configured_for_draft(config):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "LLM not configured. Set an LLM backend in Settings and run "
-                "the LLM test before using the 'Describe your agent' helper."
-            ),
-        )
     prompt_template = _load_soul_draft_prompt()
     if not prompt_template:
         raise HTTPException(
@@ -53,16 +47,24 @@ async def admin_draft_soul(req: api_mod.AdminSoulDraftRequest) -> dict:
             detail="Soul draft prompt template not found in config/prompts/.",
         )
     system_prompt = prompt_template.replace("{{description}}", req.description)
+    backend = None
     try:
         backend = api_mod.create_llm_backend(config)
         raw = backend.generate(system_prompt, req.description)
     except Exception as exc:  # pragma: no cover - depends on provider
+        payload = llm_error_payload(exc, config)
+        if payload is not None:
+            return JSONResponse(status_code=503, content=payload)
         raise HTTPException(
             status_code=502,
             detail=api_mod._redact_error(
                 f"LLM call failed: {exc.__class__.__name__}: {exc}", config,
             ),
         )
+    finally:
+        close = getattr(backend, "close", None)
+        if close:
+            close()
     payload = _parse_soul_draft_json(raw)
     try:
         draft = api_mod.AdminSoulUpdateRequest.model_validate(payload)
@@ -171,13 +173,16 @@ def _llm_configured_for_draft(config: RuntimeConfig) -> bool:
     if backend == "codex":
         return api_mod.codex_cli_available()
     if backend == "minimax":
-        return bool(config.llm_api_key or os.environ.get("LLM_API_KEY"))
+        return bool(
+            config.llm_model.strip()
+            and (config.llm_api_key or os.environ.get("LLM_API_KEY"))
+        )
     if backend == "auto":
         has_generic = bool(
             config.llm_base_url.strip()
             and config.llm_model.strip()
         )
-        return has_generic or bool(config.llm_api_key or os.environ.get("LLM_API_KEY"))
+        return has_generic
     return False
 
 

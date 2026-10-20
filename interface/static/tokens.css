@@ -7,6 +7,7 @@
  */
 
 :root {
+  color-scheme: dark;
   /* Brand — ember (warmth, presence, repair) */
   --ember-50:  #FFF4E3;
   --ember-100: #FFE3BD;
@@ -64,11 +65,12 @@
 
   --text:       var(--candle);
   --text-dim:   var(--plum-300);
-  --text-faint: #7A6F8C;
+  --text-faint: #A99AB9;
 
   --primary:     var(--ember-500);
   --primary-dim: var(--ember-600);
   --accent:      var(--ember-500);
+  --on-primary:  #1F1830;
 
   --shadow-soft: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.45);
   --glow-ember:  0 0 2rem rgba(245, 166, 91, 0.28);
@@ -76,6 +78,7 @@
 
 /* Light theme = parchment & dusk */
 [data-theme="light"] {
+  color-scheme: light;
   --bg:        var(--parchment-50);
   --surface:   #FFFFFF;
   --surface-2: var(--parchment-100);
@@ -85,11 +88,12 @@
 
   --text:       #1F1830;
   --text-dim:   #4A3F5C;
-  --text-faint: #7A6F8C;
+  --text-faint: #71647C;
 
-  --primary:     var(--ember-700);
-  --primary-dim: #A4471F;
-  --accent:      var(--ember-700);
+  --primary:     #A4471F;
+  --primary-dim: #883815;
+  --accent:      var(--primary);
+  --on-primary:  #FFFFFF;
 
   --shadow-soft: 0 0.75rem 2.5rem rgba(31, 24, 48, 0.10);
   --glow-ember:  0 0 1.75rem rgba(194, 93, 46, 0.22);
@@ -116,6 +120,8 @@ html {
   font-size: 16px;
 }
 
+[hidden] { display: none !important; }
+
 :root {
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -124,9 +130,9 @@ html {
   --space-6: 1.5rem;
   --space-8: 2rem;
 
-  --text-primary: #FFFFFF;
-  --text-muted: rgba(255, 255, 255, 0.7);
-  --surface-bg: rgba(255, 255, 255, 0.05);
+  --text-primary: var(--text);
+  --text-muted: var(--text-dim);
+  --surface-bg: transparent;
 
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --ease-out: cubic-bezier(0.21, 0.83, 0.26, 1);
@@ -163,6 +169,7 @@ pre code[class^="language-"] {
 /* Auto-apply light theme when OS prefers light and no explicit override is set — T20 */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    color-scheme: light;
     --bg:        var(--parchment-50);
     --surface:   #FFFFFF;
     --surface-2: var(--parchment-100);
@@ -171,11 +178,22 @@ pre code[class^="language-"] {
     --border-strong: rgba(31, 24, 48, 0.20);
     --text:       #1F1830;
     --text-dim:   #4A3F5C;
-    --text-faint: #7A6F8C;
-    --primary:     var(--ember-700);
-    --primary-dim: #A4471F;
-    --accent:      var(--ember-700);
+    --text-faint: #71647C;
+    --primary:     #A4471F;
+    --primary-dim: #883815;
+    --accent:      var(--primary);
+    --on-primary:  #FFFFFF;
     --shadow-soft: 0 0.75rem 2.5rem rgba(31, 24, 48, 0.10);
     --glow-ember:  0 0 1.75rem rgba(194, 93, 46, 0.22);
   }
 }
+.model-picker-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.model-picker-row select { flex: 1; min-width: 0; }
+.model-picker-row button {
+  flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font: inherit;
+  padding: 0.5625rem 0.6875rem; cursor: pointer;
+}
+.model-picker-row button:disabled { opacity: 0.6; cursor: wait; }
+.model-picker-row button:hover:not(:disabled) { background: var(--surface-3); }
+.model-picker-status { overflow-wrap: anywhere; }

@@ -28,12 +28,13 @@ make uat-comprehensive    # single PASS/FAIL aggregator that runs the same UAT
                           # tests as a subprocess and asserts they all pass
 ```
 
-`make uat` defaults to the Codex CLI backend. Override with:
+`make uat` defaults to the Codex CLI backend. For another backend, first choose
+an installed model through setup or Settings, then supply that model's exact ID:
 
 ```bash
 OPENROOK_UAT_BACKEND=openai_compatible \
   OPENROOK_UAT_BASE_URL=http://localhost:11434/v1 \
-  OPENROOK_UAT_MODEL=llama3.2 \
+  OPENROOK_UAT_MODEL="<model-id-from-your-server>" \
   make uat
 ```
 

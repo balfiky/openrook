@@ -5,6 +5,7 @@ from __future__ import annotations
 from config.environment import project_env
 
 import argparse
+import getpass
 import json
 import os
 import sys
@@ -16,6 +17,9 @@ from typing import Callable
 
 from config import loader as config_loader
 from runtime.config import RuntimeConfig
+from runtime.llm.backend import list_codex_models
+from runtime.llm.diagnostics import check_llm_connection
+from runtime.llm.discovery import discover_llm_models
 
 InputFn = Callable[[str], str]
 OutputFn = Callable[[str], None]
@@ -103,8 +107,8 @@ def _run_terminal_setup(
 
     output_fn("")
     output_fn("OpenRook terminal setup")
-    output_fn("==================")
-    output_fn("Press Enter to accept a default. Nothing launches in the browser from this flow.")
+    output_fn("=======================")
+    output_fn("Press Enter to accept the shown choice or skip an optional step. No browser is launched.")
     output_fn("")
 
     config.data_dir = _prompt_path(
@@ -113,9 +117,9 @@ def _run_terminal_setup(
         input_fn=input_fn,
     )
     _configure_llm(config, input_fn=input_fn, output_fn=output_fn)
+    _check_llm(config, input_fn=input_fn, output_fn=output_fn)
     _configure_telegram(config, input_fn=input_fn)
     _configure_tools(config, input_fn=input_fn, output_fn=output_fn)
-    _configure_character_independence(config, input_fn=input_fn)
     soul = _configure_identity(input_fn=input_fn, output_fn=output_fn)
 
     config.write_yaml(str(config_path))
@@ -136,6 +140,10 @@ def _run_terminal_setup(
 
 
 def _configure_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: OutputFn) -> None:
+    previous_backend = config.llm_backend
+    previous_url = config.llm_base_url.rstrip("/")
+    previous_model = config.llm_model
+    previous_key = config.llm_api_key
     output_fn("LLM backend (OpenRook requires a real model — there is no offline mode)")
     choice = _prompt_choice(
         [
@@ -144,11 +152,24 @@ def _configure_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: Outpu
             ("openrouter", "OpenRouter"),
             ("hosted", "Hosted OpenAI-compatible provider"),
             ("custom", "Custom OpenAI-compatible endpoint"),
+            ("codex", "Codex CLI (uses your Codex login)"),
         ],
         default="ollama",
         input_fn=input_fn,
         output_fn=output_fn,
     )
+
+    if choice == "codex":
+        config.llm_backend = "codex"
+        config.llm_base_url = ""
+        config.llm_api_key = ""
+        config.llm_model = _choose_codex_model(
+            current=previous_model if previous_backend == "codex" else "",
+            input_fn=input_fn,
+            output_fn=output_fn,
+        )
+        output_fn("Codex receives your prompts. Sign in first with `codex login`.")
+        return
 
     if choice == "vllm":
         config.llm_backend = "openai_compatible"
@@ -157,39 +178,109 @@ def _configure_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: Outpu
             "http://localhost:8002/v1",
             input_fn=input_fn,
         )
-        config.llm_model = _prompt_required_text("Model name", input_fn=input_fn)
-        config.llm_api_key = _prompt_text("API key (blank for local/no-auth)", "", input_fn=input_fn)
-        return
-
-    if choice == "ollama":
+    elif choice == "ollama":
         config.llm_backend = "openai_compatible"
         config.llm_base_url = _prompt_text(
             "Base URL",
             "http://localhost:11434/v1",
             input_fn=input_fn,
         )
-        config.llm_model = _prompt_text("Model name", "llama3.2", input_fn=input_fn)
-        config.llm_api_key = _prompt_text("API key (blank for local/no-auth)", "", input_fn=input_fn)
-        return
-
-    if choice == "openrouter":
+    elif choice == "openrouter":
         config.llm_backend = "provider"
         config.llm_base_url = "https://openrouter.ai/api/v1"
-        config.llm_model = _prompt_text("Model name", "openai/gpt-4o-mini", input_fn=input_fn)
-        config.llm_api_key = _prompt_text("OpenRouter API key", "", input_fn=input_fn)
-        return
-
-    if choice == "hosted":
+    elif choice == "hosted":
         config.llm_backend = "provider"
         config.llm_base_url = _prompt_text("Base URL", "https://api.openai.com/v1", input_fn=input_fn)
-        config.llm_model = _prompt_text("Model name", "gpt-4o-mini", input_fn=input_fn)
-        config.llm_api_key = _prompt_text("API key", "", input_fn=input_fn)
-        return
+    else:
+        config.llm_backend = "openai_compatible"
+        config.llm_base_url = _prompt_text(
+            "Base URL", config.llm_base_url or "http://localhost:8000/v1", input_fn=input_fn,
+        )
 
-    config.llm_backend = "openai_compatible"
-    config.llm_base_url = _prompt_text("Base URL", config.llm_base_url or "http://localhost:8000/v1", input_fn=input_fn)
-    config.llm_model = _prompt_text("Model name", config.llm_model or "", input_fn=input_fn)
-    config.llm_api_key = _prompt_text("API key (optional)", "", input_fn=input_fn)
+    same_endpoint = previous_url == config.llm_base_url.rstrip("/")
+    key_label = "OpenRouter API key" if choice == "openrouter" else "API key (blank for no auth)"
+    config.llm_api_key = _prompt_secret(
+        key_label, default=previous_key if same_endpoint else "", input_fn=input_fn,
+    )
+    output_fn("Looking for models served by this backend...")
+    result = discover_llm_models(config)
+    if result.get("message"):
+        output_fn(result["message"])
+    config.llm_model = _choose_model(
+        result["models"], current=previous_model if same_endpoint else "",
+        input_fn=input_fn, output_fn=output_fn,
+    )
+
+
+def _choose_model(
+    models: list[dict], *, current: str, input_fn: InputFn, output_fn: OutputFn,
+    codex: bool = False,
+) -> str:
+    if codex:
+        output_fn("  0. Codex default")
+    for index, model in enumerate(models, start=1):
+        output_fn(f"  {index}. {model['id']}")
+    selected = current
+    if current:
+        output_fn(f"Configured model: {current}")
+    elif len(models) == 1 and not codex:
+        selected = models[0]["id"]
+        output_fn(f"Only one model is available; preselected: {selected}")
+    blank_action = "keeps the configured model" if current else (
+        "accepts the preselected model" if selected else (
+            "uses Codex default" if codex else "defers to Settings"
+        )
+    )
+    while True:
+        value = input_fn(
+            f"Choose a model number or type a model name (blank {blank_action}): ",
+        ).strip()
+        if not value:
+            return selected
+        if value == "0" and codex:
+            return ""
+        if value.isdecimal():
+            index = int(value) - 1
+            if 0 <= index < len(models):
+                return models[index]["id"]
+            output_fn("Choose a listed number or type a model name.")
+        else:
+            return value
+
+
+def _choose_codex_model(
+    *, current: str, input_fn: InputFn, output_fn: OutputFn,
+) -> str:
+    try:
+        models = [
+            {"id": model["slug"]} for model in list_codex_models()
+        ]
+    except (ValueError, RuntimeError, OSError):
+        models = []
+        output_fn("Could not load the Codex model catalog. Type a model name or use Codex default.")
+    return _choose_model(
+        models, current=current, codex=True, input_fn=input_fn, output_fn=output_fn,
+    )
+
+
+def _check_llm(config: RuntimeConfig, *, input_fn: InputFn, output_fn: OutputFn) -> None:
+    if config.llm_backend != "codex" and not config.llm_model:
+        output_fn("No model selected. Choose one later in Settings → LLM.")
+        return
+    if not _prompt_yes_no(
+        "Test the model now? (sends a short sample prompt)",
+        default=True,
+        input_fn=input_fn,
+    ):
+        output_fn("Connection not checked. You can test it later in Settings → LLM.")
+        return
+    output_fn("Checking the model; this may take a minute or longer...")
+    result = check_llm_connection(config)
+    if result["ok"]:
+        output_fn("Connection succeeded. The model answered the sample prompt.")
+    else:
+        output_fn(f"Connection check failed: {result['error']}")
+        output_fn("You can continue setup and fix the connection later in Settings → LLM.")
 
 
 def _configure_telegram(config: RuntimeConfig, *, input_fn: InputFn) -> None:
@@ -197,7 +288,9 @@ def _configure_telegram(config: RuntimeConfig, *, input_fn: InputFn) -> None:
         config.telegram_token = ""
         config.telegram_allowlist = set()
         return
-    config.telegram_token = _prompt_text("Telegram bot token", config.telegram_token, input_fn=input_fn)
+    config.telegram_token = _prompt_secret(
+        "Telegram bot token", default=config.telegram_token, input_fn=input_fn,
+    )
     allowlist = _prompt_text(
         "Telegram allowlist user IDs (comma-separated)",
         ", ".join(sorted(config.telegram_allowlist)),
@@ -234,14 +327,6 @@ def _configure_tools(config: RuntimeConfig, *, input_fn: InputFn, output_fn: Out
     config.tools_workspace = _prompt_path(
         "Tools workspace",
         default=config.tools_workspace or str(Path(config.data_dir) / "workspace"),
-        input_fn=input_fn,
-    )
-
-
-def _configure_character_independence(config: RuntimeConfig, *, input_fn: InputFn) -> None:
-    config.character_independence = _prompt_yes_no(
-        "Enable character independence?",
-        default=bool(config.character_independence),
         input_fn=input_fn,
     )
 
@@ -326,12 +411,11 @@ def _prompt_text(label: str, default: str, *, input_fn: InputFn) -> str:
     return value if value else default
 
 
-def _prompt_required_text(label: str, *, input_fn: InputFn) -> str:
-    while True:
-        value = input_fn(f"{label}: ").strip()
-        if value:
-            return value
-        print(f"{label} is required.")
+def _prompt_secret(label: str, *, input_fn: InputFn, default: str = "") -> str:
+    suffix = " (blank keeps the existing value)" if default else ""
+    prompt = f"{label}{suffix}: "
+    value = (getpass.getpass(prompt) if input_fn is input else input_fn(prompt)).strip()
+    return value if value else default
 
 
 def _prompt_path(label: str, *, default: str, input_fn: InputFn) -> str:

@@ -100,19 +100,28 @@ async def test_all_advertised_comparison_tools_pass_in_separate_storage(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_preflight_default_factory_uses_the_supplied_backend_configuration(
+async def test_preflight_defers_factory_and_preserves_backend_configuration(
     tmp_path, monkeypatch
 ):
     configurations = []
+    factories = []
 
     def factory(config):
         configurations.append(config)
         return ResearchBackend()
 
+    def manager_factory(*args, **kwargs):
+        factories.append(kwargs["backend_factory"])
+        return SessionManager(*args, **kwargs)
+
     monkeypatch.setattr("evals.research_comparison.create_llm_backend", factory)
+    monkeypatch.setattr("evals.research_comparison.SessionManager", manager_factory)
     config = RuntimeConfig(llm_model="selected-model")
     result = await preflight_environment(config, design()["environment"], tmp_path / "preflight")
     assert result["passed"]
+    assert not configurations, "Tool preflight must not construct a generation backend"
+    assert len(factories) == 1
+    factories[0]()
     assert configurations and all(item.llm_model == "selected-model" for item in configurations)
 
 

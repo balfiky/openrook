@@ -1,6 +1,5 @@
 """Tests for the LLM client — MiniMax API."""
 
-import json
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -9,6 +8,12 @@ from core.llm_client import LLMClient, LLMClientFast
 
 
 class TestLLMClient:
+    @pytest.mark.parametrize("client_class", [ChatCompletionsClient, FastChatCompletionsClient])
+    @pytest.mark.parametrize("model", ["", "   "])
+    def test_requires_explicit_model(self, client_class, model):
+        with pytest.raises(ValueError, match="llm_model"):
+            client_class(api_key="test-key", model=model)
+
     def _mock_response(self, content: str = "Hello!") -> MagicMock:
         """Create a mock requests.Response with OpenAI-compatible format."""
         mock_resp = MagicMock()
@@ -21,7 +26,7 @@ class TestLLMClient:
     @patch("requests.Session.post")
     def test_generate_success(self, mock_post):
         mock_post.return_value = self._mock_response("Test response")
-        client = ChatCompletionsClient(api_key="test-key")
+        client = ChatCompletionsClient(api_key="test-key", model="chosen-model")
         result = client.generate("System prompt", "User message")
         assert result == "Test response"
 
@@ -38,14 +43,14 @@ class TestLLMClient:
         assert payload["messages"][1] == {"role": "user", "content": "Hello"}
 
     def test_sends_auth_header(self):
-        client = ChatCompletionsClient(api_key="my-secret-key")
+        client = ChatCompletionsClient(api_key="my-secret-key", model="chosen-model")
         assert client._session.headers["Authorization"] == "Bearer my-secret-key"
         assert client._session.headers["Content-Type"] == "application/json"
 
     @patch("requests.Session.post")
     def test_correct_url(self, mock_post):
         mock_post.return_value = self._mock_response()
-        client = ChatCompletionsClient(api_key="k", base_url="https://api.minimax.io/v1")
+        client = ChatCompletionsClient(api_key="k", base_url="https://api.minimax.io/v1", model="chosen-model")
         client.generate("sys", "msg")
 
         url = mock_post.call_args[0][0]
@@ -58,19 +63,19 @@ class TestLLMClient:
         mock_resp.raise_for_status.side_effect = Exception("Internal Server Error")
         mock_post.return_value = mock_resp
 
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         with pytest.raises(Exception, match="Internal Server Error"):
             client.generate("sys", "msg")
 
     @patch.dict("os.environ", {"LLM_API_KEY": "env-key"})
     def test_api_key_from_env(self):
-        client = ChatCompletionsClient()  # no explicit key
+        client = ChatCompletionsClient(model="chosen-model")  # no explicit key
         assert client._session.headers["Authorization"] == "Bearer env-key"
 
     @patch("requests.Session.post")
     def test_custom_base_url(self, mock_post):
         mock_post.return_value = self._mock_response()
-        client = ChatCompletionsClient(api_key="k", base_url="http://localhost:8080/v1")
+        client = ChatCompletionsClient(api_key="k", base_url="http://localhost:8080/v1", model="chosen-model")
         client.generate("sys", "msg")
 
         url = mock_post.call_args[0][0]
@@ -81,7 +86,7 @@ class TestLLMClient:
         mock_post.return_value = self._mock_response(
             "<think>\nLet me reason about this...\nThe user wants X.\n</think>\nHere is my answer."
         )
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         result = client.generate("sys", "msg")
         assert result == "Here is my answer."
         assert "<think>" not in result
@@ -91,7 +96,7 @@ class TestLLMClient:
         mock_post.return_value = self._mock_response(
             "<think>first</think> Hello <think>second</think> world"
         )
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         result = client.generate("sys", "msg")
         assert result == "Hello  world"
         assert "<think>" not in result
@@ -99,7 +104,7 @@ class TestLLMClient:
     @patch("requests.Session.post")
     def test_no_think_tags_unchanged(self, mock_post):
         mock_post.return_value = self._mock_response("Just a normal response.")
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         result = client.generate("sys", "msg")
         assert result == "Just a normal response."
 
@@ -110,7 +115,7 @@ class TestLLMClient:
         from core.dual_process.generator import ResponseGenerator
         from core.types import PipelineContext
 
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         gen = ResponseGenerator(backend=client)
         result = gen.generate(PipelineContext(), "Hello")
         assert result.response == "response"
@@ -126,13 +131,13 @@ class TestLLMClientFast:
         return mock_resp
 
     def test_thinking_disabled(self):
-        client = FastChatCompletionsClient(api_key="k")
+        client = FastChatCompletionsClient(api_key="k", model="chosen-model")
         assert client._thinking is False
 
     @patch("requests.Session.post")
     def test_sends_thinking_disabled(self, mock_post):
         mock_post.return_value = self._mock_response("Fast response")
-        client = FastChatCompletionsClient(api_key="k")
+        client = FastChatCompletionsClient(api_key="k", model="chosen-model")
         client.generate("sys", "msg")
 
         payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
@@ -142,7 +147,7 @@ class TestLLMClientFast:
     def test_thinking_enabled_by_default(self, mock_post):
         """Regular LLMClient does NOT send thinking=disabled."""
         mock_post.return_value = self._mock_response("Full response")
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         client.generate("sys", "msg")
 
         payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
@@ -151,7 +156,7 @@ class TestLLMClientFast:
     def test_close_releases_session(self):
         """LLMClient.close() must release the underlying requests.Session
         so session evictions do not leak HTTP connection pools."""
-        client = ChatCompletionsClient(api_key="k")
+        client = ChatCompletionsClient(api_key="k", model="chosen-model")
         with patch.object(client._session, "close") as mock_close:
             client.close()
             mock_close.assert_called_once()

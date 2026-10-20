@@ -22,10 +22,8 @@ from runtime.llm.backend import CodexCLIBackend, OpenAICompatibleLLMBackend
 
 
 # ---------------------------------------------------------------------------
-# Defaults (kept in sync with runtime/llm/backend.py; changes here should be
-# intentional and recorded in provenance.resolved_model).
+# Legacy provider endpoint; the caller must always choose a model.
 # ---------------------------------------------------------------------------
-DEFAULT_MINIMAX_MODEL = "MiniMax-M2.7-highspeed"
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
 
 
@@ -51,9 +49,7 @@ class BackendSpec:
     @property
     def resolved_model(self) -> str:
         """Model that will actually be sent to the provider."""
-        if self.type == "minimax":
-            return self.requested_model or DEFAULT_MINIMAX_MODEL
-        if self.type in {"provider", "openai_compat", "codex"}:
+        if self.type in {"provider", "minimax", "openai_compat", "codex"}:
             return self.requested_model
         return ""                           # mock
 
@@ -90,6 +86,8 @@ def build_backend_factory(spec: BackendSpec) -> Callable[[], LLMBackend]:
                 "--backend minimax requires an API key. Pass --api-key or "
                 "set LLM_API_KEY in the environment."
             )
+        if not spec.requested_model.strip():
+            raise MissingBackendConfigError("--backend minimax requires --model.")
         model = spec.resolved_model
         base_url = spec.resolved_base_url
         api_key = spec.api_key

@@ -11,7 +11,7 @@
 <div class="admin-shell">
   <aside class="sidebar" aria-label="Settings sections">
     <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true"></span>
+      <img class="brand-mark" src="/assets/openrook-mark.svg" alt="" aria-hidden="true">
       <span>
         <strong>OpenRook</strong>
         <small>Settings</small>
@@ -60,6 +60,10 @@
         <a class="button-link" href="/">Open the wizard</a>
       </div>
       <div class="card-grid" id="overviewCards"></div>
+      <div class="button-row">
+        <button class="secondary" id="overviewTestLlmBtn" type="button">Test saved connection</button>
+        <div class="muted" id="overviewLlmResult" role="status"></div>
+      </div>
       <div class="panel admin-persona-panel">
         <div class="panel-heading">
           <div>
@@ -83,42 +87,11 @@
       <div class="section-heading">
         <div>
           <h2 id="settings-heading">Settings</h2>
-          <p>All runtime, model, tool, identity, access, channel, and maintenance controls in one place.</p>
+          <p>Choose a model, shape the identity, and connect channels. Runtime tuning and maintenance are under Advanced.</p>
         </div>
       </div>
 
       <div class="settings-accordion">
-        <details class="settings-section" id="settings-runtime" open>
-          <summary>
-            <span>Runtime</span>
-            <small>Storage, sessions, console, debug API, and proactive behavior.</small>
-          </summary>
-          <form class="form-grid" id="runtimeForm"></form>
-        </details>
-
-        <details class="settings-section" id="settings-character" open>
-          <summary>
-            <span>Character</span>
-            <small>Independence, coherence checks, and pending-intake behavior.</small>
-          </summary>
-          <form class="form-grid" id="characterForm"></form>
-        </details>
-
-        <details class="settings-section" id="settings-learning" open>
-          <summary>
-            <span>Learning Schedule</span>
-            <small>Daily ask-user budget and metabolism reflection cadence.</small>
-          </summary>
-          <form class="form-grid" id="learningForm"></form>
-          <p class="muted">
-            <strong>Ask-user budget</strong> caps how often OpenRook surfaces an open question
-            during chat. <strong>Metabolism min elapsed days</strong> is the rate limit on
-            the wall-clock reflection tick (decay, theme→belief promotion, drive-gap and
-            low-confidence emission). Lower values reflect more often; raise them for
-            quieter long-running deployments.
-          </p>
-        </details>
-
         <details class="settings-section" id="settings-models" open>
           <summary>
             <span>Models</span>
@@ -128,10 +101,37 @@
             <button class="secondary" id="testLlmBtn" type="button">Test LLM</button>
           </div>
           <form class="form-grid" id="modelsForm"></form>
-          <pre class="output" id="llmTestOutput" hidden></pre>
+          <div class="output" id="llmTestOutput" role="status" hidden></div>
         </details>
 
-        <details class="settings-section" id="settings-tools" open>
+        <details class="settings-section" id="settings-identity" open>
+          <summary>
+            <span>Identity</span>
+            <small>Edit the seed soul file that drives role labels, generation, self-check, and memory digestion.</small>
+          </summary>
+          <div class="section-actions">
+            <button class="secondary" id="reloadSoulBtn" type="button">Reload Identity</button>
+          </div>
+          <form class="form-grid" id="identityForm"></form>
+          <div class="button-row">
+            <button class="primary" id="saveSoulBtn" type="button">Save Identity</button>
+          </div>
+          <pre class="output" id="soulOutput" hidden></pre>
+        </details>
+
+        <details class="settings-section" id="settings-channels" open>
+          <summary>
+            <span>Channels</span>
+            <small>Console and Telegram integration settings.</small>
+          </summary>
+          <div class="section-actions">
+            <button class="secondary" id="testTelegramBtn" type="button">Test Telegram</button>
+          </div>
+          <form class="form-grid" id="channelsForm"></form>
+          <pre class="output" id="telegramTestOutput" hidden></pre>
+        </details>
+
+        <details class="settings-section" id="settings-tools">
           <summary>
             <span>Tools</span>
             <small>Runtime gates, registered capabilities, risk category, and argument surface.</small>
@@ -154,22 +154,7 @@
           </div>
         </details>
 
-        <details class="settings-section" id="settings-identity" open>
-          <summary>
-            <span>Identity</span>
-            <small>Edit the seed soul file that drives role labels, generation, self-check, and memory digestion.</small>
-          </summary>
-          <div class="section-actions">
-            <button class="secondary" id="reloadSoulBtn" type="button">Reload Identity</button>
-          </div>
-          <form class="form-grid" id="identityForm"></form>
-          <div class="button-row">
-            <button class="primary" id="saveSoulBtn" type="button">Save Identity</button>
-          </div>
-          <pre class="output" id="soulOutput" hidden></pre>
-        </details>
-
-        <details class="settings-section" id="settings-access" open>
+        <details class="settings-section" id="settings-access">
           <summary>
             <span>Access</span>
             <small>API bearer auth, CORS, and exposure warnings.</small>
@@ -187,44 +172,68 @@
           </div>
         </details>
 
-        <details class="settings-section" id="settings-channels" open>
+        <details class="settings-section" id="settings-advanced">
           <summary>
-            <span>Channels</span>
-            <small>Console and Telegram integration settings.</small>
+            <span>Advanced</span>
+            <small>Runtime tuning, character flags, learning budgets, reflection cadence, and maintenance.</small>
           </summary>
-          <div class="section-actions">
-            <button class="secondary" id="testTelegramBtn" type="button">Test Telegram</button>
+          <div class="settings-accordion">
+            <details class="settings-section" id="settings-runtime" open>
+              <summary>
+                <span>Runtime</span>
+                <small>Storage, sessions, debug API, and proactive behavior.</small>
+              </summary>
+              <form class="form-grid" id="runtimeForm"></form>
+            </details>
+            <details class="settings-section" id="settings-character" open>
+              <summary>
+                <span>Character</span>
+                <small>Informational independence flag, coherence checks, and pending-intake behavior.</small>
+              </summary>
+              <form class="form-grid" id="characterForm"></form>
+            </details>
+            <details class="settings-section" id="settings-learning" open>
+              <summary>
+                <span>Learning Schedule</span>
+                <small>Daily ask-user budget and metabolism reflection cadence.</small>
+              </summary>
+              <form class="form-grid" id="learningForm"></form>
+              <p class="muted">
+                <strong>Ask-user budget</strong> caps how often OpenRook surfaces an open question
+                during chat. <strong>Metabolism min elapsed days</strong> is the rate limit on
+                the wall-clock reflection tick (decay, theme→belief promotion, drive-gap and
+                low-confidence emission). Lower values reflect more often; raise them for
+                quieter long-running deployments.
+              </p>
+            </details>
+            <details class="settings-section" id="settings-maintenance" open>
+              <summary>
+                <span>Maintenance</span>
+                <small>Storage checks, diagnostics, config export, backups, and runtime apply controls.</small>
+              </summary>
+              <div class="action-grid">
+                <button class="secondary" id="testStorageBtn" type="button">Test Storage</button>
+                <button class="secondary" id="diagnosticsBtn" type="button">Diagnostics</button>
+                <button class="secondary" id="reloadRuntimeBtn" type="button">Apply Saved Config</button>
+                <button class="secondary" id="restartRuntimeBtn" type="button">Restart Web Server</button>
+                <button class="secondary" id="exportConfigBtn" type="button">Export Config</button>
+                <button class="secondary" id="backupBtn" type="button">Create Backup</button>
+                <button class="secondary" id="listBackupsBtn" type="button">List Backups</button>
+                <button class="danger" id="deleteBackupBtn" type="button">Delete Backup</button>
+              </div>
+              <div class="panel inset">
+                <div class="panel-heading">
+                  <h3>Config Apply Behavior</h3>
+                </div>
+                <ul class="notes">
+                  <li>Save Config writes runtime_config.yaml and reloads web sessions plus Telegram polling.</li>
+                  <li>Use Apply Saved Config after editing runtime_config.yaml outside the browser.</li>
+                  <li>Debug host, debug port, and CORS changes require Restart Web Server.</li>
+                </ul>
+              </div>
+              <pre class="output" id="maintenanceOutput" hidden></pre>
+            </details>
           </div>
-          <form class="form-grid" id="channelsForm"></form>
-          <pre class="output" id="telegramTestOutput" hidden></pre>
-        </details>
-
-        <details class="settings-section" id="settings-maintenance" open>
-          <summary>
-            <span>Maintenance</span>
-            <small>Storage checks, diagnostics, config export, backups, and runtime apply controls.</small>
-          </summary>
-          <div class="action-grid">
-            <button class="secondary" id="testStorageBtn" type="button">Test Storage</button>
-            <button class="secondary" id="diagnosticsBtn" type="button">Diagnostics</button>
-            <button class="secondary" id="reloadRuntimeBtn" type="button">Apply Saved Config</button>
-            <button class="secondary" id="restartRuntimeBtn" type="button">Restart Web Server</button>
-            <button class="secondary" id="exportConfigBtn" type="button">Export Config</button>
-            <button class="secondary" id="backupBtn" type="button">Create Backup</button>
-            <button class="secondary" id="listBackupsBtn" type="button">List Backups</button>
-            <button class="danger" id="deleteBackupBtn" type="button">Delete Backup</button>
-          </div>
-          <div class="panel inset">
-            <div class="panel-heading">
-              <h3>Config Apply Behavior</h3>
-            </div>
-            <ul class="notes">
-              <li>Save Config writes runtime_config.yaml and reloads web sessions plus Telegram polling.</li>
-              <li>Use Apply Saved Config after editing runtime_config.yaml outside the browser.</li>
-              <li>Debug host, debug port, and CORS changes require Restart Web Server.</li>
-            </ul>
-          </div>
-          <pre class="output" id="maintenanceOutput" hidden></pre>
         </details>
       </div>
     </section>

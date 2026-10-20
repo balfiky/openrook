@@ -8,6 +8,7 @@ import select
 import sys
 
 from runtime.sessions.manager import SessionManager
+from runtime.llm.diagnostics import diagnose_llm_error, record_llm_health
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class ConsoleChannel:
         """Run the interactive input loop until /quit, EOF, or stop()."""
         self._running = True
         log.info("Console channel started (type /quit to exit)")
-        print("OpenRook console — type /quit to exit", flush=True)
+        print("OpenRook console — type /help for commands, /quit to exit", flush=True)
 
         while self._running:
             line = await self._next_line()
@@ -59,6 +60,17 @@ class ConsoleChannel:
             text = line.strip()
             if not text:
                 continue
+            if text.lower() in {"/help", "/commands"}:
+                print(
+                    "Send a message to chat with OpenRook.\n"
+                    "/help or /commands — show this help\n"
+                    "/quit or /exit — save the conversation and exit",
+                    flush=True,
+                )
+                continue
+            if text.startswith("/"):
+                print("Unknown command. Type /help to see console commands.", flush=True)
+                continue
 
             try:
                 response = await self._manager.handle_message(
@@ -66,11 +78,17 @@ class ConsoleChannel:
                 )
                 if response:
                     print(f"OpenRook: {response}", flush=True)
-            except RuntimeError as exc:
-                print(f"[error] {exc}", file=sys.stderr, flush=True)
-            except Exception:
-                log.exception("Error processing message")
-                print("[error] Internal error", file=sys.stderr, flush=True)
+            except Exception as exc:
+                diagnosis = diagnose_llm_error(exc, self._manager.config)
+                if diagnosis:
+                    record_llm_health(self._manager.config, diagnosis)
+                    message = f"{diagnosis['message']} {diagnosis['action']}"
+                elif isinstance(exc, RuntimeError):
+                    message = str(exc)
+                else:
+                    log.exception("Error processing message")
+                    message = "Internal error"
+                print(f"[error] {message}", file=sys.stderr, flush=True)
 
     async def stop(self) -> None:
         self._running = False

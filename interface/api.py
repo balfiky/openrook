@@ -37,7 +37,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from interface.auth import build_require_bearer, verify_bearer
-from interface.errors import redact_error
+from interface.errors import llm_error_payload, redact_error
 from interface.v1 import build_v1_router
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
@@ -188,6 +188,18 @@ app = FastAPI(
         "(see /docs for the full OpenAPI schema)."
     ),
 )
+
+
+@app.middleware("http")
+async def backend_error_responses(request, call_next):
+    """Use the chat diagnostic for expected backend errors on any HTTP route."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        payload = llm_error_payload(exc, _current_config_for_middleware())
+        if payload is None:
+            raise
+        return JSONResponse(status_code=503, content=payload)
 
 
 @app.middleware("http")
@@ -531,27 +543,28 @@ async def chat(req: ChatRequest):
             return ChatResponse(response=result.response, debug=_serialize_debug(result.debug))
 
         manager = get_session_manager()
-        try:
-            response = await manager.handle_message(
-                WEB_PLATFORM,
-                req.user_id,
-                req.chat_id,
-                req.message,
-            )
-        except RuntimeError as exc:
-            _log.warning("Chat unavailable: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=_redact_error(str(exc), _load_runtime_config()),
-            ) from exc
+        response = await manager.handle_message(
+            WEB_PLATFORM,
+            req.user_id,
+            req.chat_id,
+            req.message,
+        )
         session = await manager.ensure_session(WEB_PLATFORM, req.user_id, req.chat_id)
         debug = _serialize_debug(session.last_debug) if session.last_debug else {}
         return ChatResponse(response=response, debug=debug)
     except HTTPException:
         raise
     except Exception as exc:
+        config = _load_runtime_config()
+        backend_error = llm_error_payload(exc, config)
+        if backend_error is not None:
+            _log.warning("Chat unavailable: %s", backend_error["detail"])
+            return JSONResponse(status_code=503, content=backend_error)
+        if isinstance(exc, RuntimeError):
+            detail = _redact_error(str(exc), config)
+            _log.warning("Chat unavailable: %s", detail)
+            raise HTTPException(status_code=503, detail=detail) from exc
         _log.exception("Chat error")
-        from fastapi.responses import JSONResponse
         detail = str(exc)
         try:
             detail = _redact_error(detail, _load_runtime_config())
@@ -859,29 +872,35 @@ async def websocket_chat(ws: WebSocket) -> None:
                 await ws.close(code=status.WS_1009_MESSAGE_TOO_BIG)
                 return
 
-            if _pipeline_override is not None:
-                result = _pipeline_override.process(user_message, user_id=user_id)
-                payload = {
-                    "response": result.response,
-                    "debug": _serialize_debug(result.debug),
-                }
-            else:
-                manager = get_session_manager()
-                response = await manager.handle_message(
-                    WEB_PLATFORM,
-                    user_id,
-                    chat_id,
-                    user_message,
-                )
-                session = await manager.ensure_session(WEB_PLATFORM, user_id, chat_id)
-                payload = {
-                    "response": response,
-                    "debug": (
-                        _serialize_debug(session.last_debug)
-                        if session.last_debug
-                        else {}
-                    ),
-                }
+            try:
+                if _pipeline_override is not None:
+                    result = _pipeline_override.process(user_message, user_id=user_id)
+                    payload = {
+                        "response": result.response,
+                        "debug": _serialize_debug(result.debug),
+                    }
+                else:
+                    manager = get_session_manager()
+                    response = await manager.handle_message(
+                        WEB_PLATFORM,
+                        user_id,
+                        chat_id,
+                        user_message,
+                    )
+                    session = await manager.ensure_session(WEB_PLATFORM, user_id, chat_id)
+                    payload = {
+                        "response": response,
+                        "debug": (
+                            _serialize_debug(session.last_debug)
+                            if session.last_debug
+                            else {}
+                        ),
+                    }
+            except Exception as exc:
+                backend_error = llm_error_payload(exc, _load_runtime_config())
+                if backend_error is None:
+                    raise
+                payload = {"type": "error", **backend_error}
 
             await ws.send_text(json.dumps(payload))
     except WebSocketDisconnect:
@@ -1310,7 +1329,8 @@ def _parse_web_args(argv: list[str] | None = None):
         description=(
             "Serve the OpenRook HTTP API and bundled chat/admin UI via Uvicorn. "
             "Reads runtime_config.yaml from the current working directory. "
-            "Defaults bind to localhost; see docs/DEPLOYMENT_AND_ADMIN.md "
+            "Defaults bind to localhost; see "
+            "https://github.com/balfiky/openrook/blob/main/docs/DEPLOYMENT_AND_ADMIN.md "
             "before exposing beyond the local machine."
         ),
     )
@@ -1435,6 +1455,7 @@ from interface import routes_skills as _routes_skills  # noqa: E402
 
 from interface.routes_admin import (  # noqa: E402,F401
     AdminConfigUpdateRequest,
+    AdminLLMModelsRequest,
     AdminLLMTestRequest,
     AdminSessionResetRequest,
     AdminStorageTestRequest,
@@ -1447,6 +1468,7 @@ from interface.routes_admin import (  # noqa: E402,F401
     admin_get_config,
     admin_get_soul,
     admin_import_soul,
+    admin_llm_models,
     admin_persona_state,
     admin_reload_runtime,
     admin_reset_session,

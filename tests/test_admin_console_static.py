@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from html.parser import HTMLParser
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,37 @@ from runtime.config import RuntimeConfig
 
 
 class TestAdminConsoleStatic:
+    def test_settings_prioritizes_models_identity_channels_and_keeps_advanced(self):
+        class DetailsParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack = []
+                self.sections = {}
+
+            def handle_starttag(self, tag, attrs):
+                if tag == "details":
+                    attrs = dict(attrs)
+                    name = attrs.get("id")
+                    if name:
+                        self.sections[name] = (self.stack.copy(), "open" in attrs)
+                    self.stack.append(name)
+
+            def handle_endtag(self, tag):
+                if tag == "details":
+                    self.stack.pop()
+
+        parser = DetailsParser()
+        parser.feed(interface_api.settings_index().body.decode())
+        assert list(parser.sections)[:3] == [
+            "settings-models", "settings-identity", "settings-channels",
+        ]
+        assert parser.sections["settings-advanced"] == ([], False)
+        for name in ("runtime", "character", "learning", "maintenance"):
+            assert "settings-advanced" in parser.sections[f"settings-{name}"][0]
+        css = interface_api.admin_asset("admin.css").body.decode()
+        assert ".field-card[hidden] { display: none; }" in css
+        assert re.search(r"\.metric-path\s*\{[^}]*text-overflow: ellipsis", css)
+
     def test_settings_route_serves_full_console(self):
         resp = interface_api.settings_index()
         html = resp.body.decode()
@@ -78,8 +110,11 @@ class TestAdminConsoleStatic:
         assert b"renderOverviewPersona" in js.body
         assert b"renderPersonaAdminPage" in js.body
         assert b"refreshPersonaBtn" in js.body
-        assert b"/admin/codex/models" in js.body
-        assert b"renderCodexModelSelect" in js.body
+        assert b"attachModelPicker" in js.body
+        picker = interface_api.brand_asset("lib/llm-model-picker.js")
+        assert b"/admin/codex/models" in picker.body
+        assert b"/admin/llm/models" in picker.body
+        assert b"Refresh models" in picker.body
         assert b"/v1/tools" in js.body
         assert b"/admin/skills" in js.body
         assert b"/admin/skills/import/upload" in js.body

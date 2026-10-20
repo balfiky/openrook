@@ -460,9 +460,18 @@ class TestBackendSelection:
 
     def test_minimax_backend_with_config_key(self):
         """Explicit legacy MiniMax config uses the generic LLM API key."""
-        config = RuntimeConfig(llm_backend="minimax", llm_api_key="sk-test")
+        config = RuntimeConfig(
+            llm_backend="minimax", llm_api_key="sk-test", llm_model="configured-model",
+        )
         backend = create_llm_backend(config)
         assert isinstance(backend, FastChatCompletionsClient)
+        assert backend._model == "configured-model"
+
+    @pytest.mark.parametrize("model", ["", "   "])
+    def test_minimax_requires_explicit_model(self, model):
+        config = RuntimeConfig(llm_backend="minimax", llm_api_key="sk-test", llm_model=model)
+        with pytest.raises(ValueError, match="llm_model"):
+            create_llm_backend(config)
 
     def test_no_config_raises(self, monkeypatch):
         """Without config, the factory raises rather than falling back."""

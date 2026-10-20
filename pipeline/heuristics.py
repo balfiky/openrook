@@ -13,11 +13,18 @@ from core.dual_process.tool_loop import attach_followup_context
 from core.types import ToolResult
 
 _IDENTITY_QUESTION_RE = re.compile(
-    r"\bwhat (?:did|do) you learn\b|"
-    r"\bwhat (?:changed|did you change)\b|"
-    r"\bdid you evolve\b|"
+    r"\bwhat (?:did|do) you learn(?: about yourself)?[.!?]?\s*$|"
+    r"\bwhat (?:changed|did you change)(?: about yourself)?[.!?]?\s*$|"
+    r"\b(?:did you evolve|how did you (?:change|evolve)|how have you (?:changed|evolved))[.!?]?\s*$|"
     r"^\s*evolve[.!?]?\s*$|"
-    r"\bwhat do you (?:remember|believe)\b",
+    r"\bwhat do you (?:remember|believe) about yourself[.!?]?\s*$|"
+    r"\bwhat (?:do you believe|are your (?:beliefs|priorities|drives))[.!?]?\s*$",
+    re.IGNORECASE,
+)
+
+_USER_MEMORY_QUESTION_RE = re.compile(
+    r"\bdo you remember\b(?!\s+about yourself\b)|"
+    r"\bwhat (?:do|did) you (?:know|learn|believe) (?:about|of|from) (?:me|us|my|our)\b",
     re.IGNORECASE,
 )
 
@@ -46,7 +53,10 @@ _REPAIRABLE_UNRESOLVED_SOURCES = {
 
 
 def _is_identity_question(text: str) -> bool:
-    return bool(_IDENTITY_QUESTION_RE.search(text or ""))
+    # Questions about the user or past conversations need the normal generation
+    # path, including when the same message also asks about the agent itself.
+    text = text or ""
+    return bool(_IDENTITY_QUESTION_RE.search(text)) and not _USER_MEMORY_QUESTION_RE.search(text)
 
 
 def _is_broad_repair_text(text: str) -> bool:

@@ -23,7 +23,7 @@ Usage:
       --report-dir reports/ablation/
 
     python -m evals.ablation --backend minimax \\
-      --api-key-env LLM_API_KEY --tag phase11 \\
+      --model "$MODEL_ID" --api-key-env LLM_API_KEY --tag phase11 \\
       --report-dir reports/ablation/
 
 The command prints a summary comparison table and writes:
@@ -35,7 +35,6 @@ The command prints a summary comparison table and writes:
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import datetime as _dt
 import json
 import sys
@@ -51,7 +50,7 @@ from evals.backends import (
     spec_from_args,
 )
 from evals.provenance import build_provenance
-from evals.reporting import _result_to_dict, json_report
+from evals.reporting import json_report
 from evals.runner import BackendFactory, run_scenarios
 from evals.scenarios import all_scenarios
 from evals.types import EvalReport, EvalResult

@@ -335,9 +335,9 @@ Use a concise outline before drafting.
                     assert list_skills(config)["count"] == 0
 
                     learned = await _send(manager, "what did you learn", user_id="alice")
-                    assert "recorded experience material" in learned
+                    assert "saved learning material" in learned
                     assert "influence was blocked" in learned
-                    assert "no durable belief or drive change" in learned.lower()
+                    assert "hasn't changed my recorded beliefs or priorities" in learned
 
                     with LifeHistoryStore(config) as store:
                         experiences = store.list_experiences(limit=1)

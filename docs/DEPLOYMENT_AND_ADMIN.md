@@ -31,6 +31,14 @@ That command creates `runtime_config.yaml`, creates data/workspace folders,
 prompts for model backend, identity, Telegram, and tool settings, and exits. It
 does not start a browser.
 
+The backend menu includes Codex CLI. API keys and Telegram tokens are hidden
+while typing. After the URL and key are entered, setup lists models reported by
+the backend. Select a number or type a model ID manually. There is no OpenRook
+default model; only a server reporting exactly one model gets a visible
+preselection. The optional live check sends a short sample to the selected
+backend and reports a reason and recovery step on failure; setup can still
+finish so you can start the model server or log in later.
+
 Start the browser UI when you want it:
 
 ```bash
@@ -56,6 +64,89 @@ Life History material in six steps (Welcome → Connect LLM → Runtime & Channe
 Life History material can be pasted or uploaded from the browser as text or
 Markdown, so a normal user does not need to place files into the data directory.
 You can skip it and configure the same runtime fields later from `/settings`.
+Telegram, tool permissions, polling timeouts, and deduplication options are in
+the runtime step's **Advanced** disclosure. Neither first-run flow asks about
+“Character Independence”; its existing saved value is preserved. It remains
+in Settings → Advanced as an informational flag that does not change behavior,
+grant tool access, or prevent identity edits.
+The welcome page describes mood as modeled state and explains that hosted,
+Codex, and OpenRouter providers receive prompts and relevant stored context.
+
+### Discover and choose a model
+
+The wizard and Settings list the selected backend's models in a dropdown, with
+**Refresh** and a manual model field. Set the base URL and API key, if needed,
+before refreshing. Settings preserves a configured model; otherwise you choose
+from the list, with a visible preselection only when exactly one model is
+available. Model discovery does not generate a reply.
+
+Ollama discovery reads `/api/tags`. OpenAI-compatible servers, including vLLM,
+LM Studio, hosted gateways, and OpenRouter, use `/models` under the configured
+base URL with the configured key. The server-side `/admin/llm/models` endpoint
+uses the same admin authentication policy as other `/admin/*` endpoints;
+discovery errors omit credentials. Discovery requests have a timeout and
+validate backend URLs before connecting.
+
+If discovery fails, check the URL and key, then refresh or enter a model ID
+manually. If no models are installed in Ollama, choose one from
+[the Ollama library](https://ollama.com/library), run `ollama pull <model>`, and
+rerun setup or refresh models in Settings. You can finish setup and choose
+the model later in Settings. The runtime requires a model before chatting,
+except when the Codex backend uses **Codex default**.
+
+### Connection status and recovery
+
+Settings distinguishes **Not tested**, **Last test passed**, and **Last recorded
+error**, with a **Test saved connection** button. This records the last explicit
+test or failed request, not continuous monitoring. Results are held in process
+memory and are specific to the backend configuration; a restart or configuration
+change may return the status to “Not tested.” Opening Settings may list models
+but does not generate a reply.
+
+Tools, profile/memory inspection, rest, and idle session actions work before
+model selection. Session backends and native tool clients are constructed only
+when generation is requested; opening these views does not require a model.
+Expected generation failures return HTTP 503 with `detail`, `llm_error`
+(backend, model, sanitized URL, reason, action), and `settings_url`. The browser
+shows the recovery step with a Settings link and readable server messages even
+when an error response is plain text. Console and Telegram use the same
+diagnostic wording; proactive failures record connection health without an
+unhandled traceback. Connection tests show sanitized
+technical detail in a disclosure and run off the web event loop.
+
+- Empty model selection: “No model is selected.” Choose a model in Settings.
+  A blank Codex model still uses its own default.
+- Ollama unreachable: start the server with `ollama serve`.
+- Ollama 404: check the `/v1` URL and choose an available model in Settings.
+  A 404 can mean either a missing model or wrong endpoint.
+- Codex authentication rejected: run `codex login`, then test again.
+- Hosted provider: check the API key, model access, quota, and service status.
+
+### Chat timing and session actions
+
+After eight seconds the chat shows which backend is still working. Codex and
+other slow backends can take a minute or more. Ordinary chat defaults to
+`appraisal_use_llm: true`: appraisal and the final reply normally make two
+serial calls to the same backend. Deliberation, tools, and retries can add more.
+To remove the appraisal call, set `appraisal_use_llm: false` in your instance
+configuration; this uses deterministic appraisal and changes how events are
+interpreted. It does not speed up the underlying provider.
+
+**End Session** consolidates the conversation and clears short-term context.
+The confirmation says whether summary memories were written; stored memories
+and preferences remain. The current page keeps its transcript until reload.
+User recall questions use normal generation with retrieved user memories and
+relationship context. Self-history questions use grounded recorded identity
+changes, expressed as beliefs and priorities.
+
+**Why this response?** shows recorded influences on the last reply. **Rest (1hr)**
+applies simulated recovery to modeled energy and mood; it does not wait an hour.
+Session actions are disabled while a reply or another session action is pending.
+
+For terminal chat use `openrook`; `/help` is immediate and does not call a model.
+Console INFO logging is off by default to keep prompts readable; `--verbose`
+restores it. Headless runtime logging stays at INFO. Legacy `nur` / `nur-*`
+command names remain compatibility aliases for the eight canonical commands.
 
 ## Git Install
 
@@ -168,9 +259,18 @@ into this one settings page so there is one place to manage and inspect OpenRook
 
 The chat UI exposes one Settings button. Clicking it opens the full settings
 workspace. The left panel switches between Overview, Settings, Skills,
-Observability, and Life History pages. Settings includes runtime, character
-independence, model, tool access, identity, access, channel, and maintenance
-controls together; monitoring is grouped under Observability and Life History.
+Observability, and Life History pages. Settings starts with Models, Identity,
+and Channels, followed by Tools and Access. Runtime, character independence,
+learning budgets, metabolism, and maintenance controls are under **Advanced**.
+Each configuration section shows its runtime-reload note once. All controls
+remain available, including through section deep links.
+
+Models hides and disables Base URL and API key controls for Codex. Switching
+to an OpenAI-compatible backend starts with the local Ollama URL
+(`http://localhost:11434/v1`); hosted and automatic backends start with an empty
+URL for explicit configuration. Edited connection drafts are retained per
+backend while the form is open. Overview truncates long setup/workspace paths;
+hover over the text to see the full path.
 
 The Observability section reads active sessions from the shared runtime manager,
 so Web, Telegram, console, and future channel sessions appear in one place.
@@ -273,7 +373,7 @@ Important fields:
 |-------|---------------------|
 | `api_key` | Optional bearer token for hardened deployments. Empty means no browser/API token flow. When set, it protects administrative data/mutation APIs (`/admin/*`), `/chat`, `/config`, `/ws`, and `/v1/*` except health/ready. The `/settings` HTML shell is public; its data and actions use authenticated APIs. |
 | `llm_backend` | Use `provider` for hosted gateways, `openai_compatible` for local/remote compatible servers (Ollama, LM Studio, vLLM), or `codex` for the local Codex CLI. There is no mock backend in production — OpenRook always calls a real model. |
-| `llm_base_url` / `llm_model` | Required for hosted and OpenAI-compatible backends. |
+| `llm_base_url` / `llm_model` | Set the backend URL and explicitly choose a model through discovery or enter its ID. Hosted and OpenAI-compatible backends require both; legacy MiniMax also requires a configured model. OpenRook never supplies a model default. |
 | `llm_api_key` | Generic provider/gateway key. Prefer local-only YAML or environment injection. |
 | `telegram_token` | Enables the Telegram channel when set. |
 | `telegram_allowlist` | Numeric Telegram user IDs allowed to talk to the bot. |

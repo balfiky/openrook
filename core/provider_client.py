@@ -1,7 +1,7 @@
 """Provider-neutral chat-completions clients.
 
-Default values still point at the legacy MiniMax path for backward
-compatibility, but the module surface is intentionally provider-neutral.
+The legacy provider URL is retained for compatibility. A model must always
+be chosen explicitly by the caller.
 """
 
 from __future__ import annotations
@@ -25,9 +25,11 @@ class ChatCompletionsClient:
         self,
         api_key: str | None = None,
         base_url: str = "https://api.minimax.io/v1",
-        model: str = "MiniMax-M2.7-highspeed",
+        model: str = "",
         thinking: bool = True,
     ) -> None:
+        if not model.strip():
+            raise ValueError("Chat-completions backend requires llm_model; choose a model in Settings.")
         self._api_key = api_key or os.environ.get("LLM_API_KEY", "")
         safe_base_url = validate_http_url(
             base_url,
@@ -35,7 +37,7 @@ class ChatCompletionsClient:
             allow_private_env="OPENROOK_ALLOW_PRIVATE_LLM_URLS",
         )
         self._base_url = safe_base_url.rstrip("/").removesuffix("/chat/completions")
-        self._model = model
+        self._model = model.strip()
         self._thinking = thinking
         self._session = requests.Session()
         self._session.headers.update({
@@ -88,6 +90,6 @@ class FastChatCompletionsClient(ChatCompletionsClient):
         self,
         api_key: str | None = None,
         base_url: str = "https://api.minimax.io/v1",
-        model: str = "MiniMax-M2.7-highspeed",
+        model: str = "",
     ) -> None:
         super().__init__(api_key=api_key, base_url=base_url, model=model, thinking=False)

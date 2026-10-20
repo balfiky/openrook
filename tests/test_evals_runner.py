@@ -16,7 +16,6 @@ from pathlib import Path
 
 from evals.backends import (
     DEFAULT_MINIMAX_BASE_URL,
-    DEFAULT_MINIMAX_MODEL,
     BackendSpec,
     MissingBackendConfigError,
     build_backend_factory,
@@ -78,9 +77,19 @@ assert callable(factory)
         with pytest.raises(MissingBackendConfigError, match="API key"):
             build_backend_factory(BackendSpec(type="minimax"))
 
-    def test_minimax_resolves_default_model_and_base_url(self):
+    @pytest.mark.parametrize("model", ["", " \t"])
+    def test_minimax_requires_an_explicit_model(self, model):
+        spec = BackendSpec(type="minimax", requested_model=model, api_key="fake")
+        with pytest.raises(MissingBackendConfigError, match="--model"):
+            build_backend_factory(spec)
+
+    def test_minimax_does_not_resolve_an_unrequested_model(self):
         spec = BackendSpec(type="minimax", api_key="fake")
-        assert spec.resolved_model == DEFAULT_MINIMAX_MODEL
+        assert spec.resolved_model == ""
+
+    def test_minimax_preserves_chosen_model_and_default_base_url(self):
+        spec = BackendSpec(type="minimax", requested_model="chosen-model", api_key="fake")
+        assert spec.resolved_model == "chosen-model"
         assert spec.resolved_base_url == DEFAULT_MINIMAX_BASE_URL
         # Factory builds without hitting the network
         factory = build_backend_factory(spec)

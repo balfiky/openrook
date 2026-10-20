@@ -26,6 +26,7 @@ from interface import routes_admin_runtime as _runtime_mod
 
 from interface.routes_admin_config import (  # noqa: F401
     AdminConfigUpdateRequest,
+    AdminLLMModelsRequest,
     AdminLLMTestRequest,
     AdminStorageTestRequest,
     AdminTelegramTestRequest,
@@ -51,6 +52,7 @@ from interface.routes_admin_config import (  # noqa: F401
     _write_admin_state,
     admin_codex_models,
     admin_get_config,
+    admin_llm_models,
     admin_status,
     admin_test_llm,
     admin_test_storage,

@@ -12,12 +12,15 @@ import asyncio
 import json
 import os
 import time
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from interface import api as api_mod
 from runtime.config import RuntimeConfig
+from runtime.llm.diagnostics import check_llm_connection, llm_health
+from runtime.llm.discovery import discover_llm_models
 from runtime.sessions.manager import SessionManager
 
 router = APIRouter(dependencies=[Depends(api_mod._require_bearer)])
@@ -47,6 +50,16 @@ class AdminLLMTestRequest(BaseModel):
     llm_api_key: str = ""
     clear_llm_api_key: bool = False
     live: bool = False
+
+
+class AdminLLMModelsRequest(BaseModel):
+    """List models using saved settings or unsaved backend credentials."""
+
+    llm_backend: str | None = None
+    llm_base_url: str | None = None
+    llm_api_key: str = ""
+    clear_llm_api_key: bool = False
+    discovery_api: Literal["auto", "ollama", "openai"] = "auto"
 
 
 class AdminTelegramTestRequest(BaseModel):
@@ -106,6 +119,31 @@ async def admin_codex_models() -> dict:
     }
 
 
+@router.post("/admin/llm/models")
+async def admin_llm_models(req: AdminLLMModelsRequest) -> dict:
+    """Discover models without saving draft settings or running generation."""
+    existing = api_mod._load_runtime_config()
+    config = RuntimeConfig(**existing.to_yaml_dict())
+    if req.llm_backend is not None:
+        config.llm_backend = req.llm_backend
+    if req.llm_base_url is not None:
+        config.llm_base_url = req.llm_base_url.strip()
+
+    # A newly entered destination must not receive an unrelated saved/env key.
+    same_destination = (
+        config.llm_backend == existing.llm_backend
+        and config.llm_base_url.rstrip("/") == existing.llm_base_url.rstrip("/")
+    )
+    key = existing.effective_llm_api_key if same_destination else ""
+    if req.clear_llm_api_key:
+        key = ""
+    elif req.llm_api_key.strip():
+        key = req.llm_api_key.strip()
+    return await asyncio.to_thread(
+        discover_llm_models, config, discovery_api=req.discovery_api, api_key=key,
+    )
+
+
 @router.post("/admin/config")
 async def admin_update_config(req: AdminConfigUpdateRequest) -> dict:
     """Save config through the admin-console contract."""
@@ -154,6 +192,7 @@ async def admin_test_llm(req: AdminLLMTestRequest) -> dict:
             "live": False,
             "backend": config.llm_backend,
             "warnings": llm_warnings,
+            "error": " ".join(warning["message"] for warning in llm_warnings),
         }
 
     result = {
@@ -164,20 +203,9 @@ async def admin_test_llm(req: AdminLLMTestRequest) -> dict:
         "warnings": llm_warnings,
     }
     if req.live:
-        try:
-            backend = api_mod.create_llm_backend(config)
-            sample = backend.generate("Reply with ok.", "health check")
-            result.update({
-                "ok": True,
-                "live": True,
-                "sample_response": sample[:200],
-            })
-        except Exception as exc:
-            result.update({
-                "ok": False,
-                "live": True,
-                "error": api_mod._redact_error(str(exc), config),
-            })
+        result.update(await asyncio.to_thread(
+            check_llm_connection, config, backend_factory=api_mod.create_llm_backend,
+        ))
     else:
         result["error"] = "Live LLM test was not run; set live=true to verify connectivity."
     return result
@@ -344,6 +372,7 @@ def _admin_config_payload(
         "field_metadata": _admin_field_metadata(config),
         "warnings": _admin_config_warnings(config),
         "setup": _admin_setup_status(config),
+        "llm_health": llm_health(config),
     }
 
 
@@ -368,6 +397,7 @@ def _admin_status_payload(config: RuntimeConfig, manager: SessionManager) -> dic
         "soul_name": _read_soul_name(),
         "llm_backend": config.llm_backend,
         "llm_configured": _llm_configured(config),
+        "llm_health": llm_health(config),
         "telegram_configured": bool(config.telegram_token),
         "tools": {
             "enabled": config.tools_enabled,
@@ -449,9 +479,12 @@ def _admin_config_warnings(config: RuntimeConfig) -> list[dict]:
         if not config.llm_model.strip():
             warnings.append(_warning("error", "llm_model", "missing_openai_compatible_model", "OpenAI-compatible backend requires llm_model."))
     elif backend == "codex" and not api_mod.codex_cli_available():
-        warnings.append(_warning("error", "llm_backend", "missing_codex_cli", "Codex backend requires the codex CLI on PATH."))
-    elif backend == "minimax" and not has_generic_key:
-        warnings.append(_warning("error", "llm_api_key", "missing_provider_key", "Legacy MiniMax backend requires the generic LLM API key."))
+        warnings.append(_warning("error", "llm_backend", "missing_codex_cli", "Codex backend requires the codex CLI on PATH. Install it, then run `codex login`."))
+    elif backend == "minimax":
+        if not config.llm_model.strip():
+            warnings.append(_warning("error", "llm_model", "missing_provider_model", "Choose a model in Settings for the legacy MiniMax backend."))
+        if not has_generic_key:
+            warnings.append(_warning("error", "llm_api_key", "missing_provider_key", "Legacy MiniMax backend requires the generic LLM API key."))
 
     if config.tools_enabled and not config.api_key:
         warnings.append(_warning("warning", "tools_enabled", "tools_without_auth", "Agentic tools are enabled with no bearer auth. Keep this instance on a trusted network."))
@@ -465,6 +498,14 @@ def _admin_config_warnings(config: RuntimeConfig) -> list[dict]:
         warnings.append(_warning("warning", "cors_origins", "cors_without_auth", "CORS origins are configured while api_key is empty."))
     if config.debug_host not in {"127.0.0.1", "localhost", "::1"} and not config.api_key:
         warnings.append(_warning("error", "api_key", "public_bind_without_auth", "Server bind host is not localhost while api_key is empty."))
+
+    health = llm_health(config)
+    if health["status"] == "error":
+        diagnosis = health["diagnosis"]
+        warnings.append(_warning(
+            "error", "llm_backend", "llm_backend_error",
+            f"{diagnosis['message']} {diagnosis['action']}",
+        ))
 
     return warnings
 
@@ -492,12 +533,9 @@ def _llm_configured(config: RuntimeConfig) -> bool:
     if backend == "codex":
         return api_mod.codex_cli_available()
     if backend == "minimax":
-        return secret_status["llm_api_key"]["configured"]
+        return bool(config.llm_model.strip() and secret_status["llm_api_key"]["configured"])
     if backend == "auto":
-        return bool(
-            config.llm_base_url.strip()
-            or secret_status["llm_api_key"]["configured"]
-        )
+        return bool(config.llm_base_url.strip() and config.llm_model.strip())
     return False
 
 

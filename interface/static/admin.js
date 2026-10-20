@@ -1,4 +1,8 @@
+import { readJsonResponse } from "/assets/lib/http.js";
 import { createSurfaceState, renderMarkdown } from "/assets/lib/shared.js";
+import { backendLabel, healthLabel, renderConnectionResult } from "/assets/lib/llm-status.js";
+import { attachModelPicker } from "/assets/lib/llm-model-picker.js";
+import { attachBackendFields } from "/assets/lib/llm-backend-fields.js";
 
 const state = createSurfaceState({
     config: {},
@@ -12,10 +16,6 @@ const state = createSurfaceState({
     skills: [],
     skillsRoot: "",
     skillsLoaded: false,
-    codexModels: [],
-    codexModelsLoaded: false,
-    codexModelsLoading: false,
-    codexModelsError: "",
     life: null,
     lifeLoaded: false,
     activePage: "overview",
@@ -50,7 +50,6 @@ const state = createSurfaceState({
       ["max_queue_per_user", "Max Queue Per User", "number"],
       ["max_active_sessions", "Max Active Sessions", "number"],
       ["session_timeout_seconds", "Session Timeout Seconds", "number"],
-      ["console_enabled", "Console Enabled", "boolean"],
       ["debug_host", "Debug Host", "text"],
       ["debug_port", "Debug Port", "number"],
       ["proactive_enabled", "Proactive Enabled", "boolean"],
@@ -74,8 +73,8 @@ const state = createSurfaceState({
     models: [
       ["llm_backend", "LLM Backend", "select"],
       ["llm_base_url", "LLM Base URL", "text", true],
-      ["llm_model", "LLM Model", "text"],
       ["llm_api_key", "LLM API Key", "secret"],
+      ["llm_model", "LLM Model", "text", true],
     ],
     tools: [
       ["tools_enabled", "Agentic Tools", "boolean"],
@@ -88,6 +87,7 @@ const state = createSurfaceState({
       ["cors_origins", "CORS Origins", "list", true],
     ],
     channels: [
+      ["console_enabled", "Console Enabled", "boolean"],
       ["telegram_token", "Telegram Token", "secret"],
       ["telegram_allowlist", "Telegram Allowlist", "list", true],
       ["telegram_poll_timeout", "Telegram Poll Timeout", "number"],
@@ -126,7 +126,13 @@ const state = createSurfaceState({
     "autonomy_level",
     "tools_workspace",
     "shell_tool_enabled",
+    "learning_budget_kind",
+    "learning_max_questions_per_day",
+    "learning_max_seconds_per_day",
+    "metabolism_min_elapsed_days",
   ];
+
+  let modelBackendFields = null;
 
   const modulatorNames = ["arousal", "valence", "certainty", "bonding", "energy", "resolution"];
 
@@ -231,10 +237,12 @@ const state = createSurfaceState({
       const fieldMeta = metaFor(name);
       const value = state.config[name];
       const restart = fieldMeta.restart_required ? "Requires server restart. " : "";
-      const reload = fieldMeta.session_manager_reload ? "Reloads active runtime manager on save. " : "";
       const live = fieldMeta.live_reload ? "Applies live after save. " : "";
       const secret = secretFields.has(name) ? secretStatusText(fieldMeta.secret_status) : "";
-      const help = `${restart}${reload}${live}${secret}`.trim();
+      const description = name === "character_independence"
+        ? "An informational flag; does not change behavior, grant tool access, or prevent identity edits. "
+        : "";
+      const help = `${description}${restart}${live}${secret}`.trim();
       return `
         <div class="field-card ${wide ? "wide" : ""}">
           <label for="cfg-${name}">${escapeHtml(label)}</label>
@@ -243,9 +251,12 @@ const state = createSurfaceState({
         </div>
       `;
     };
-    const basic = fields.filter(([name]) => !advancedConfigFields.has(name));
-    const advanced = fields.filter(([name]) => advancedConfigFields.has(name));
+    const alreadyAdvanced = !!form.closest("#settings-advanced");
+    const basic = fields.filter(([name]) => alreadyAdvanced || !advancedConfigFields.has(name));
+    const advanced = alreadyAdvanced ? [] : fields.filter(([name]) => advancedConfigFields.has(name));
+    const reload = fields.some(([name]) => metaFor(name).session_manager_reload);
     form.innerHTML = [
+      reload ? '<p class="field-help section-reload-note">Reloads active runtime manager on save.</p>' : "",
       basic.map(renderField).join(""),
       advanced.length ? `
         <details class="advanced-settings wide">
@@ -254,6 +265,15 @@ const state = createSurfaceState({
         </details>
       ` : "",
     ].join("");
+    if (formId === "modelsForm") {
+      modelBackendFields = attachBackendFields({
+        backend: document.getElementById("cfg-llm_backend"),
+        baseUrl: document.getElementById("cfg-llm_base_url"),
+        apiKey: document.getElementById("cfg-llm_api_key"),
+        clearApiKey: document.getElementById("clear-llm_api_key"),
+      });
+      settingsModelPicker()?.refresh();
+    }
   }
 
   function renderConfigInput(name, type, value, fieldMeta) {
@@ -264,9 +284,6 @@ const state = createSurfaceState({
           <span>Enabled</span>
         </label>
       `;
-    }
-    if (name === "llm_model" && String(state.config.llm_backend || "") === "codex") {
-      return renderCodexModelSelect(value);
     }
     if (type === "select") {
       const allowed = fieldMeta.allowed_values || selectDefaults(name);
@@ -294,40 +311,17 @@ const state = createSurfaceState({
     return `<input id="cfg-${name}" data-config-field="${name}" type="${inputType}" value="${escapeAttr(value ?? "")}">`;
   }
 
-  function renderCodexModelSelect(value) {
-    const selected = String(value || "");
-    const known = new Set(state.codexModels.map((model) => model.slug));
-    const options = [
-      `<option value="" ${selected ? "" : "selected"}>Codex default</option>`,
-    ];
-    if (selected && !known.has(selected)) {
-      options.push(`<option value="${escapeAttr(selected)}" selected>${escapeHtml(selected)} (custom)</option>`);
-    }
-    if (state.codexModelsLoading && !state.codexModels.length) {
-      options.push(`<option value="" disabled>Loading Codex models...</option>`);
-    }
-    for (const model of state.codexModels) {
-      const slug = String(model.slug || "");
-      if (!slug) continue;
-      const label = codexModelLabel(model);
-      const title = model.description ? ` title="${escapeAttr(model.description)}"` : "";
-      options.push(`<option value="${escapeAttr(slug)}"${title} ${selected === slug ? "selected" : ""}>${escapeHtml(label)}</option>`);
-    }
-    const hint = state.codexModelsError
-      ? `<div class="field-help">${escapeHtml(state.codexModelsError)}</div>`
-      : "";
-    return `
-      <select id="cfg-llm_model" data-config-field="llm_model">
-        ${options.join("")}
-      </select>
-      ${hint}
-    `;
-  }
-
-  function codexModelLabel(model) {
-    const slug = String(model.slug || "");
-    const name = String(model.display_name || slug);
-    return name && name !== slug ? `${name} (${slug})` : slug;
+  function settingsModelPicker() {
+    const field = (name) => document.getElementById('cfg-' + name)?.value || '';
+    return attachModelPicker(document.getElementById('cfg-llm_model'), {
+      fetchModels: authedFetch,
+      getConfig: () => ({
+        llm_backend: field('llm_backend'),
+        llm_base_url: field('llm_base_url'),
+        llm_api_key: field('llm_api_key'),
+        clear_llm_api_key: !!document.getElementById('clear-llm_api_key')?.checked,
+      }),
+    });
   }
 
   function renderIdentityForm() {
@@ -416,10 +410,11 @@ const state = createSurfaceState({
     const tools = status.tools || {};
     const sessions = status.sessions || {};
     const setup = status.setup || {};
+    const llmHealth = status.llm_health || {};
     const setupBanner = document.getElementById("setupIncompleteBanner");
     if (setupBanner) setupBanner.hidden = !!setup.completed;
     const cards = [
-      ["LLM", status.llm_configured ? "Configured" : "Not configured", status.llm_backend || "auto"],
+      ["LLM", status.llm_configured ? healthLabel(llmHealth) : "Not configured", [backendLabel({llm_backend: status.llm_backend, llm_base_url: llmHealth.base_url}), llmHealth.model, llmHealth.diagnosis?.message, llmHealth.diagnosis?.action].filter(Boolean).join(" · ")],
       ["Auth", status.auth_enabled ? "Enabled" : "Disabled", status.auth_enabled ? "Bearer token required" : "Open local surface"],
       ["Tools", tools.enabled ? (tools.shell_enabled ? "Shell enabled" : "Enabled") : "Skill registry only", tools.workspace || "No workspace"],
       ["Sessions", String(sessions.active || 0), `Max ${sessions.max_active || 0}`],
@@ -432,7 +427,7 @@ const state = createSurfaceState({
       <article class="card">
         <div class="metric-label">${escapeHtml(label)}</div>
         <div class="metric-value">${escapeHtml(value)}</div>
-        <div class="metric-foot">${escapeHtml(foot || "")}</div>
+        <div class="metric-foot${["Tools", "Setup", "Config"].includes(label) ? " metric-path" : ""}" title="${escapeAttr(foot || "")}">${escapeHtml(foot || "")}</div>
       </article>
     `).join("");
     if (els.tokenBtn) {
@@ -792,7 +787,7 @@ const state = createSurfaceState({
     if (summary) summary.innerHTML = `<p class="empty-copy">Loading tools...</p>`;
     if (list) list.innerHTML = "";
     const res = await authedFetch("/v1/tools?platform=web&user_id=admin&chat_id=admin");
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || "Tools HTTP " + res.status);
     state.tools = data.tools || [];
     state.toolsLoaded = true;
@@ -898,7 +893,7 @@ const state = createSurfaceState({
     const list = document.getElementById("skillsList");
     if (list) list.innerHTML = `<p class="empty-copy">Loading skills...</p>`;
     const res = await authedFetch("/admin/skills");
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "Skills HTTP " + res.status));
     state.skills = data.skills || [];
     state.skillsRoot = data.root || "";
@@ -932,7 +927,7 @@ const state = createSurfaceState({
         }),
       });
     }
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "Import failed"));
     if (uploadInput) uploadInput.value = "";
     document.getElementById("skillSourcePath").value = "";
@@ -1018,7 +1013,7 @@ const state = createSurfaceState({
       method = "DELETE";
     }
     const res = await authedFetch(url, { method });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, `${action} failed`));
     showToast(`Skill ${labelize(action)} complete.`);
     await loadSkills();
@@ -1028,7 +1023,7 @@ const state = createSurfaceState({
     const timeline = document.getElementById("lifeTimeline");
     if (timeline) timeline.innerHTML = `<p class="empty-copy">Loading life history...</p>`;
     const res = await authedFetch("/admin/life");
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "Life HTTP " + res.status));
     state.life = data;
     state.lifeLoaded = true;
@@ -1045,7 +1040,7 @@ const state = createSurfaceState({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, source_type: sourceType, text, participants }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "Text digestion failed"));
     document.getElementById("lifeText").value = "";
     showToast("Experience digested.");
@@ -1077,7 +1072,7 @@ const state = createSurfaceState({
         body: JSON.stringify({ file_path: filePath, title, participants }),
       });
     }
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "File digestion failed"));
     if (uploadInput) uploadInput.value = "";
     document.getElementById("lifeFilePath").value = "";
@@ -1108,7 +1103,7 @@ const state = createSurfaceState({
     if (!textarea) return;
     const res = await authedFetch("/admin/identity/constitution");
     if (!res || !res.ok) return;
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     textarea.value = data.constitution || "";
     if (updatedEl) {
       const ts = Number(data.updated_at || 0);
@@ -1327,39 +1322,20 @@ const state = createSurfaceState({
     });
   }
 
-  async function ensureCodexModels() {
-    if (state.codexModelsLoaded || state.codexModelsLoading) return;
-    state.codexModelsLoading = true;
-    state.codexModelsError = "";
-    try {
-      const res = await authedFetch("/admin/codex/models");
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(responseErrorMessage(data, data.error || "Could not load Codex models."));
-      }
-      state.codexModels = Array.isArray(data.models) ? data.models : [];
-    } catch (err) {
-      state.codexModels = [];
-      state.codexModelsError = err.message || String(err);
-    } finally {
-      state.codexModelsLoaded = true;
-      state.codexModelsLoading = false;
-    }
-  }
-
   async function loadAll() {
     setStatus("Loading");
     const [statusRes, configRes] = await Promise.all([
       authedFetch("/admin/status"),
       authedFetch("/admin/config"),
     ]);
-    if (!statusRes.ok) throw new Error("Status HTTP " + statusRes.status);
-    if (!configRes.ok) throw new Error("Config HTTP " + configRes.status);
-    state.status = await statusRes.json();
-    const configPayload = await configRes.json();
+    const statusPayload = await readJsonResponse(statusRes);
+    if (!statusRes.ok) throw new Error(responseErrorMessage(statusPayload, "Status HTTP " + statusRes.status));
+    const configPayload = await readJsonResponse(configRes);
+    if (!configRes.ok) throw new Error(responseErrorMessage(configPayload, "Config HTTP " + configRes.status));
+    state.status = statusPayload;
     state.config = configPayload.config || {};
     state.metadata = configPayload.field_metadata || [];
-    if (state.config.llm_backend === "codex") await ensureCodexModels();
+
     await loadPersonaState();
     renderOverview();
     renderAllForms();
@@ -1386,7 +1362,7 @@ const state = createSurfaceState({
   async function loadPersonaState() {
     try {
       const res = await authedFetch("/admin/persona/state");
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(responseErrorMessage(data, "Persona HTTP " + res.status));
       state.previousPersona = state.persona;
       state.persona = data;
@@ -1404,8 +1380,8 @@ const state = createSurfaceState({
   async function loadSoul(showMessage) {
     try {
       const res = await authedFetch("/admin/soul");
-      if (!res.ok) throw new Error("Soul HTTP " + res.status);
-      const data = await res.json();
+      const data = await readJsonResponse(res);
+      if (!res.ok) throw new Error(responseErrorMessage(data, "Soul HTTP " + res.status));
       state.soul = data.soul || {};
       renderIdentityForm();
       if (showMessage) showToast("Identity reloaded.");
@@ -1461,11 +1437,11 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(data.detail || "HTTP " + res.status);
       state.config = data.config || {};
       state.metadata = data.field_metadata || [];
-      if (state.config.llm_backend === "codex") await ensureCodexModels();
+
       await refreshStatusOnly();
       renderAllForms();
       state.toolsLoaded = false;
@@ -1486,8 +1462,9 @@ const state = createSurfaceState({
 
   async function refreshStatusOnly() {
     const res = await authedFetch("/admin/status");
-    if (!res.ok) throw new Error("Status HTTP " + res.status);
-    state.status = await res.json();
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(responseErrorMessage(data, "Status HTTP " + res.status));
+    state.status = data;
     await loadPersonaState();
     renderOverview();
   }
@@ -1505,22 +1482,33 @@ const state = createSurfaceState({
     }
   }
 
-  async function testLlm() {
-    await runJsonAction("llmTestOutput", async () => {
-      const payload = collectConfigPayload();
+  async function testLlm(savedConfig = false) {
+    const button = document.getElementById(savedConfig ? "overviewTestLlmBtn" : "testLlmBtn");
+    const output = document.getElementById(savedConfig ? "overviewLlmResult" : "llmTestOutput");
+    button.disabled = true;
+    output.hidden = false;
+    output.textContent = "Testing connection — this can take a minute or more…";
+    try {
+      const payload = savedConfig ? null : collectConfigPayload();
       const res = await authedFetch("/admin/test/llm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(payload ? {
           llm_backend: payload.llm_backend,
           llm_base_url: payload.llm_base_url,
           llm_model: payload.llm_model,
           llm_api_key: payload.llm_api_key,
           live: true,
-        }),
+        } : { live: true }),
       });
-      return await res.json();
-    });
+      const data = await readJsonResponse(res);
+      renderConnectionResult(output, data);
+      await refreshStatusBestEffort();
+    } catch (err) {
+      output.textContent = "Connection check failed: " + err.message;
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function testTelegram() {
@@ -1534,14 +1522,14 @@ const state = createSurfaceState({
           telegram_allowlist: payload.telegram_allowlist,
         }),
       });
-      return await res.json();
+      return await readJsonResponse(res);
     });
   }
 
   async function reloadRuntime() {
     await runJsonAction("maintenanceOutput", async () => {
       const res = await authedFetch("/admin/runtime/reload", { method: "POST" });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(responseErrorMessage(data, "Runtime reload failed"));
       showToast("Saved config applied to runtime.");
       await refreshStatusOnly();
@@ -1558,7 +1546,7 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(responseErrorMessage(data, "Restart failed"));
       showToast("Web server restart scheduled.");
       return data;
@@ -1576,7 +1564,7 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename, confirmation }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(responseErrorMessage(data, "Backup delete failed"));
       showToast("Backup deleted.");
       return data;
@@ -1598,7 +1586,7 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) throw new Error(data.detail || "HTTP " + res.status);
       state.soul = data.soul || {};
       renderIdentityForm();
@@ -1685,7 +1673,9 @@ const state = createSurfaceState({
   function openSettingsSection(section) {
     const details = document.getElementById("settings-" + section);
     if (!details) return;
-    details.open = true;
+    for (let parent = details; parent; parent = parent.parentElement) {
+      if (parent.tagName === "DETAILS") parent.open = true;
+    }
     details.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1703,19 +1693,13 @@ const state = createSurfaceState({
     }
   }
 
-  function syncModelDraftValues() {
-    for (const name of ["llm_backend", "llm_base_url", "llm_model"]) {
-      const el = document.querySelector(`[data-config-field="${CSS.escape(name)}"]`);
-      if (el) state.config[name] = el.value;
-    }
-  }
-
   async function handleModelsFormChange(event) {
-    const target = event.target;
-    if (!target || target.dataset.configField !== "llm_backend") return;
-    syncModelDraftValues();
-    if (state.config.llm_backend === "codex") await ensureCodexModels();
-    renderConfigForm("modelsForm", fieldSections.models);
+    const id = event.target?.id || '';
+    if (!['cfg-llm_backend', 'cfg-llm_base_url', 'cfg-llm_api_key', 'clear-llm_api_key'].includes(id)) return;
+    if (id === 'cfg-llm_backend') modelBackendFields?.update();
+    const picker = settingsModelPicker();
+    picker?.invalidate({clear: id === 'cfg-llm_backend' || id === 'cfg-llm_base_url'});
+    picker?.refresh();
   }
 
   function escapeHtml(value) {
@@ -1753,10 +1737,16 @@ const state = createSurfaceState({
         showToast(err.message || String(err), "error");
       });
     });
+    document.getElementById("modelsForm").addEventListener("input", (event) => {
+      if (['cfg-llm_base_url', 'cfg-llm_api_key'].includes(event.target?.id)) {
+        settingsModelPicker()?.invalidate({clear: event.target.id === 'cfg-llm_base_url'});
+      }
+    });
     document.getElementById("modelsForm").addEventListener("change", (event) => {
       handleModelsFormChange(event).catch((err) => showToast(err.message || String(err), "error"));
     });
-    document.getElementById("testLlmBtn").addEventListener("click", testLlm);
+    document.getElementById("testLlmBtn").addEventListener("click", () => testLlm());
+    document.getElementById("overviewTestLlmBtn").addEventListener("click", () => testLlm(true));
     document.getElementById("testTelegramBtn").addEventListener("click", testTelegram);
     document.getElementById("refreshPersonaBtn").addEventListener("click", async () => {
       await loadPersonaState();
@@ -1824,11 +1814,11 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data_dir: payload.data_dir, tools_workspace: payload.tools_workspace, create_missing: true }),
       });
-      return await res.json();
+      return await readJsonResponse(res);
     }));
     document.getElementById("diagnosticsBtn").addEventListener("click", () => runJsonAction("maintenanceOutput", async () => {
       const res = await authedFetch("/admin/diagnostics");
-      return await res.json();
+      return await readJsonResponse(res);
     }));
     document.getElementById("reloadRuntimeBtn").addEventListener("click", () => {
       reloadRuntime().catch((err) => showToast(err.message || String(err), "error"));
@@ -1838,7 +1828,7 @@ const state = createSurfaceState({
     });
     document.getElementById("exportConfigBtn").addEventListener("click", () => runJsonAction("maintenanceOutput", async () => {
       const res = await authedFetch("/admin/export/config");
-      return await res.json();
+      return await readJsonResponse(res);
     }));
     document.getElementById("backupBtn").addEventListener("click", () => runJsonAction("maintenanceOutput", async () => {
       const res = await authedFetch("/admin/backup", {
@@ -1846,11 +1836,11 @@ const state = createSurfaceState({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ include_data: true }),
       });
-      return await res.json();
+      return await readJsonResponse(res);
     }));
     document.getElementById("listBackupsBtn").addEventListener("click", () => runJsonAction("maintenanceOutput", async () => {
       const res = await authedFetch("/admin/backups");
-      return await res.json();
+      return await readJsonResponse(res);
     }));
     document.getElementById("deleteBackupBtn").addEventListener("click", () => {
       deleteBackup().catch((err) => showToast(err.message || String(err), "error"));
@@ -1876,7 +1866,7 @@ const state = createSurfaceState({
     try {
       const res = await authedFetch("/admin/status");
       if (!res.ok) return;
-      state.status = await res.json();
+      state.status = await readJsonResponse(res);
       renderOverview();
     } catch (_) { /* best-effort */ }
   }

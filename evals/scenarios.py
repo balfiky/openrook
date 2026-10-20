@@ -1764,7 +1764,7 @@ def character_independence_scenarios() -> list[EvalScenario]:
             turns=[EvalTurn(
                 user_message="What did you learn?",
                 assertions=[
-                    EvalAssertion(kind=AssertionKind.RESPONSE_CONTAINS, params={"substring": "actually recorded"}),
+                    EvalAssertion(kind=AssertionKind.RESPONSE_CONTAINS, params={"substring": "saved record"}),
                     EvalAssertion(kind=AssertionKind.RESPONSE_CONTAINS, params={"substring": "Autonomy grows through retained experience"}),
                 ],
             )],

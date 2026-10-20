@@ -13,6 +13,7 @@ from typing import Any, Awaitable, TypeVar
 
 from pipeline import CognitivePipeline, DebugState
 from runtime.learning_intake import PendingLearningIntake
+from runtime.llm.lazy import LazyLLMBackend
 from runtime.sessions.persistence import (
     delete_conversation_history,
     save_conversation_history,
@@ -385,6 +386,13 @@ class UserSession:
         finally:
             self.mark_work_finished()
 
+    def _process_sync(self, text: str) -> Any:
+        """Prepare inference after registering work, before changing turn state."""
+        backend = self.pipeline._llm_backend
+        if isinstance(backend, LazyLLMBackend):
+            backend.initialize()
+        return self.pipeline.process(text, self.user_id)
+
     async def _process_message_async(self, text: str) -> str:
         """Worker-thread wrapper for a single message turn."""
         async with self._send_lock:
@@ -394,11 +402,11 @@ class UserSession:
                 if self._user_lock is not None:
                     async with self._user_lock:
                         result = await self._run_blocking(
-                            self.pipeline.process, text, self.user_id,
+                            self._process_sync, text,
                         )
                 else:
                     result = await self._run_blocking(
-                        self.pipeline.process, text, self.user_id,
+                        self._process_sync, text,
                     )
                 self.turn_index += 1
                 await self._run_blocking(self._save_hot_state)

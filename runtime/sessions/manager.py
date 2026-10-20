@@ -18,6 +18,8 @@ from core.types import UnresolvedItem
 from core.pipeline_features import PipelineFeatures
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
+from runtime.llm.diagnostics import diagnose_llm_error, record_llm_health
+from runtime.llm.lazy import LazyLLMBackend
 from runtime.learning_intake import (
     LearningIntakeError,
     PendingLearningIntake,
@@ -426,10 +428,8 @@ class SessionManager:
         if self._agent is None:
             self._run_wall_clock_decay()
 
-        # Create LLM backend (one per pipeline for thread safety)
-        backend = self._backend_factory() if self._backend_factory else None
-        if self._agent is not None and backend is not None:
-            backend = self._agent.backend(backend)
+        # Inspection routes create sessions too; only inference needs a model.
+        backend = LazyLLMBackend(self._create_backend) if self._backend_factory else None
         tool_executor = (
             self._tool_executor_factory()
             if self._tool_executor_factory is not None
@@ -492,6 +492,10 @@ class SessionManager:
         if self._agent is not None:
             self._agent.attach(pipeline, session_key, rel_key, user_id)
         return session
+
+    def _create_backend(self) -> LLMBackend:
+        backend = self._backend_factory()
+        return self._agent.backend(backend) if self._agent is not None else backend
 
     def _run_wall_clock_decay(self) -> None:
         """Apply elapsed-time decay once per session start; rate-limited to >=1 day."""
@@ -652,8 +656,8 @@ class SessionManager:
         if self._agent is not None:
             try:
                 await self._proactive_sweep()
-            except Exception:
-                log.exception("Background activation failed; retrying at the next interval")
+            except Exception as exc:
+                self._log_background_error(exc)
 
         while self._accepting:
             await asyncio.sleep(interval)
@@ -661,8 +665,16 @@ class SessionManager:
                 break
             try:
                 await self._proactive_sweep()
-            except Exception:
-                log.exception("Background activation failed; retrying at the next interval")
+            except Exception as exc:
+                self._log_background_error(exc)
+
+    def _log_background_error(self, exc: Exception) -> None:
+        diagnosis = diagnose_llm_error(exc, self.config)
+        if diagnosis:
+            record_llm_health(self.config, diagnosis)
+            log.warning("Background activation unavailable: %s %s", diagnosis["message"], diagnosis["action"])
+        else:
+            log.exception("Background activation failed; retrying at the next interval")
 
     def start_background(self) -> None:
         if self.config.proactive_enabled and (self._proactive_task is None or self._proactive_task.done()):
@@ -701,8 +713,8 @@ class SessionManager:
                 continue
             try:
                 await self._run_proactive(session_key, session)
-            except Exception:
-                log.exception("Proactive check failed for %s", session_key)
+            except Exception as exc:
+                self._log_background_error(exc)
 
     async def _run_proactive(
         self, session_key: str, session: UserSession,

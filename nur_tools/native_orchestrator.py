@@ -18,8 +18,6 @@ from core.action_variables import derive_action_variables
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.character_vector import CharacterVector
 from core.dual_process.tool_loop import (
-    HARD_CAP_EXECUTIONS,
-    DEFAULT_MAX_EXECUTIONS,
     ToolLoopResult,
     _apply_emotional_deltas,
     _build_step_gate,
@@ -133,20 +131,11 @@ class NativeToolCallRunner:
         client: Any | None = None,
         fallback_to_heuristic: bool = True,
     ) -> None:
-        if client is None:
-            if not base_url:
-                raise ValueError("Native tool runner requires llm_base_url")
-            if not model:
-                raise ValueError("Native tool runner requires llm_model")
-            client = OpenAI(
-                base_url=base_url,
-                api_key=api_key or "dummy",
-                timeout=timeout,
-                max_retries=0,
-            )
-
         self._executor = executor
         self._client = client
+        self._base_url = base_url
+        self._api_key = api_key
+        self._timeout = timeout
         self._model = model
         self._fallback_to_heuristic = fallback_to_heuristic
         self._safe_to_original: dict[str, str] = {}
@@ -558,6 +547,17 @@ class NativeToolCallRunner:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> Any:
+        if self._client is None:
+            if not self._base_url.strip():
+                raise ValueError("Native tool runner requires llm_base_url")
+            if not self._model.strip():
+                raise ValueError("Native tool runner requires llm_model")
+            self._client = OpenAI(
+                base_url=self._base_url,
+                api_key=self._api_key or "dummy",
+                timeout=self._timeout,
+                max_retries=0,
+            )
         observer = getattr(self, "_research_store", None)
         call_id = None
         if observer is not None:

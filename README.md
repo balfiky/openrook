@@ -19,6 +19,23 @@ openrook-setup
 openrook-web
 ```
 
+Setup includes Codex CLI and an optional live model check with recovery steps.
+In the browser, Settings shows the last connection test or error; “Not tested”
+means a backend is configured but has not yet been checked. Hosted, Codex, and
+OpenRouter backends receive prompts and relevant stored context; local storage
+does not make those model calls local.
+
+Try sharing a preference, then choose **End Session** to consolidate the
+conversation and clear short-term context. Stored memories and preferences
+remain available when you ask “What do you remember about me?” later. The UI
+confirms whether new summary memories were written; it does not retain the
+visible transcript after a page reload.
+
+For terminal chat, run `openrook`; `/help` lists local commands immediately.
+The eight old command aliases (`nur` and the `nur-*` commands) remain supported
+for compatibility. Prefer the matching `openrook` / `openrook-*` names in new
+scripts.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
@@ -348,9 +365,11 @@ openrook-validate --mode release  # full + tag and install-smoke checks
 CI runs `openrook-validate --mode ci` plus the full pytest suite on Python 3.10,
 3.11, and 3.12.
 
-## Configure An LLM
+## Configure an LLM
 
 The setup wizard or `/settings` workspace is the preferred path.
+OpenRook does not supply a default model. Choose your backend, enter its base
+URL and API key if required, then choose a model the server actually provides.
 
 | Backend | Use case |
 |---|---|
@@ -362,10 +381,23 @@ The conversation and research runtimes require a real LLM — configure one of t
 options above before running. The checkout evaluation harness separately provides
 an eval-only `mock` backend for structural assertions; it is not a runtime backend.
 
+Terminal setup lists discovered models by number; select a number or type a model
+ID. The browser wizard and Settings provide a model dropdown, a **Refresh** button,
+and a field for entering a model ID manually. When the server lists exactly one
+model, it is visibly preselected; multiple models require your choice. An existing
+configured model is preserved in Settings and when terminal setup reuses the same
+backend URL.
+
+Discovery uses Ollama's `/api/tags` or an OpenAI-compatible `/models` endpoint,
+including for vLLM, LM Studio, hosted gateways, and OpenRouter. It lists models
+without generating a reply. If discovery fails, check the URL and credentials,
+refresh, or enter a model ID manually. If Ollama has no installed models, choose
+one from [the Ollama library](https://ollama.com/library), run
+`ollama pull <model>`, then rerun setup or refresh models in Settings.
+
 For `codex`, install/login to the Codex CLI first. OpenRook runs `codex exec` in
-read-only ephemeral mode. In `/settings`, choosing Codex CLI loads the installed
-Codex model catalog into the model dropdown; leave the model blank to use
-Codex's default.
+read-only ephemeral mode. Setup and Settings load the installed Codex model
+catalog; the **Codex default** option leaves model selection to Codex itself.
 
 Runtime config is `runtime_config.yaml` in the current working directory. Identity is `config/soul.yaml`, or `$OPENROOK_CONFIG_DIR/soul.yaml` when the override is set.
 

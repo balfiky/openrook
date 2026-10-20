@@ -236,5 +236,5 @@ class TestBackendCallers:
         real_dns(["192.168.0.10"])
         with pytest.raises(ValueError, match="blocked"):
             FastChatCompletionsClient(
-                api_key="k", base_url="https://evil-gateway.example/v1",
+                api_key="k", base_url="https://evil-gateway.example/v1", model="chosen-model",
             )

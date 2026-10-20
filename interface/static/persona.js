@@ -1,3 +1,4 @@
+import { readJsonResponse } from "/assets/lib/http.js";
 import { createSurfaceState, renderMarkdown } from "/assets/lib/shared.js";
 
 const state = createSurfaceState({
@@ -81,7 +82,7 @@ const state = createSurfaceState({
   async function loadDashboard() {
     setStatus("Loading");
     const res = await authedFetch("/admin/persona/state");
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(responseErrorMessage(data, "Persona dashboard HTTP " + res.status));
     state.payload = data;
     if (!state.selectedSessionKey || !(data.sessions || []).some((item) => item.session_key === state.selectedSessionKey)) {

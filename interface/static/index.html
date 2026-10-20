@@ -51,10 +51,10 @@
 
     <div class="wizard-panel" id="wizPanel-1">
       <h2 class="wizard-title">Welcome</h2>
-      <p class="wizard-sub">You're about to run an AI with persistent emotional state.</p>
-      <p class="wizard-body">Before your first conversation, set the response model, runtime channels, tool execution level, seed identity, and optionally one formative experience. The identity is the authored character. Life History is what the character begins having encountered.</p>
+      <p class="wizard-sub">An agent with persistent memory and a modeled mood that changes with conversation.</p>
+      <p class="wizard-body">Connect a model, choose a character, and start chatting. You can also add background material to shape its outlook. Mood and relationship state are software models, not feelings.</p>
       <div class="wizard-consent">
-        <p class="wizard-consent-text">OpenRook stores persistent memory and relationship state across conversations. No data is sent to third parties by default. See <a href="/PRIVACY.md" target="_blank" rel="noopener">PRIVACY.md</a> for full details on what is stored, retained, and deleted.</p>
+        <p class="wizard-consent-text">OpenRook stores memory and relationship state locally across conversations. Your chosen model receives prompts and relevant stored context: hosted, Codex, and OpenRouter backends send these to their providers. Use a local model to keep model calls local. See <a href="/PRIVACY.md" target="_blank" rel="noopener">PRIVACY.md</a> for storage and deletion details.</p>
         <label class="wizard-consent-label"><input type="checkbox" id="wiz-consent-checkbox"> I understand that OpenRook persists memory and relationship state.</label>
       </div>
       <div class="wizard-actions">
@@ -75,8 +75,8 @@
       </div>
       <div class="wizard-fields" id="wizLLMFields" hidden>
         <div><label for="wiz-llm_base_url">Base URL</label><input id="wiz-llm_base_url" type="text"></div>
-        <div><label for="wiz-llm_model">Model</label><input id="wiz-llm_model" type="text"></div>
         <div><label for="wiz-llm_api_key" id="wiz-llm_api_key_label">API Key (optional)</label><input id="wiz-llm_api_key" type="password" placeholder="Leave blank if your endpoint needs none"></div>
+        <div><label for="wiz-llm_model">Model</label><input id="wiz-llm_model" type="text"></div>
       </div>
       <div class="admin-test-result" id="wiz-llm-result" hidden></div>
       <div class="wizard-actions">
@@ -88,23 +88,25 @@
 
     <div class="wizard-panel" id="wizPanel-3" hidden>
       <h2 class="wizard-title">Runtime & Channels</h2>
-      <p class="wizard-sub">Choose which surfaces and actions are available from the start.</p>
+      <p class="wizard-sub">Browser chat is ready. These optional settings add other channels and tools; the defaults are enough to start.</p>
       <div class="wizard-fields">
         <div class="wizard-grid">
           <div><label for="wiz-console_enabled">Console Channel</label><select id="wiz-console_enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
           <div><label for="wiz-api_key">Web/API Bearer Token</label><input id="wiz-api_key" type="password" placeholder="Optional token for HTTP/API access"></div>
+        </div>
+        <details class="wizard-advanced">
+          <summary>Advanced: Telegram, tools, and runtime options</summary>
+          <div class="wizard-grid">
           <div class="full"><label for="wiz-telegram_token">Telegram Bot Token</label><input id="wiz-telegram_token" type="password" placeholder="Optional; leave blank to skip Telegram"></div>
           <div class="full"><label for="wiz-telegram_allowlist">Telegram Allowlist</label><textarea id="wiz-telegram_allowlist" rows="3" placeholder="One Telegram user ID per line. Blank allows any Telegram user if token is configured."></textarea></div>
           <div><label for="wiz-telegram_poll_timeout">Telegram Poll Timeout (s)</label><input id="wiz-telegram_poll_timeout" type="number" min="1" value="30"></div>
           <div><label for="wiz-dedupe_ttl">Message Dedupe TTL (s)</label><input id="wiz-dedupe_ttl" type="number" min="0" step="1" value="60"></div>
-        </div>
-        <div class="wizard-grid">
           <div><label for="wiz-tools_enabled">Agentic Tools</label><select id="wiz-tools_enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
           <div><label for="wiz-autonomy_level">Tool Autonomy</label><select id="wiz-autonomy_level"><option value="off">Off</option><option value="assisted">Assisted</option><option value="autonomous">Autonomous</option><option value="high_risk">High-risk local</option></select></div>
           <div><label for="wiz-shell_tool_enabled">Shell Tool</label><select id="wiz-shell_tool_enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
-          <label class="wizard-checkbox"><input id="wiz-character_independence" type="checkbox"> Character Independence</label>
           <div class="full"><label for="wiz-tools_workspace">Tools Workspace</label><input id="wiz-tools_workspace" type="text" placeholder="Blank uses data/workspace"></div>
-        </div>
+          </div>
+        </details>
       </div>
       <div class="admin-test-result" id="wiz-runtime-result" hidden></div>
       <div class="wizard-actions">
@@ -159,13 +161,13 @@
 
     <div class="wizard-panel" id="wizPanel-5" hidden>
       <h2 class="wizard-title">First Experience</h2>
-      <p class="wizard-sub">Optional. Add a principle, short book excerpt, project note, or origin story that should become Life History.</p>
+      <p class="wizard-sub">Optional. Add a principle, short excerpt, project note, or origin story to shape the agent's outlook. Saved experiences appear under Life History in Settings.</p>
       <div class="wizard-fields">
         <div class="wizard-grid">
           <div><label for="wiz-life-title">Title</label><input id="wiz-life-title" type="text" value="Initial formative context"></div>
           <div><label for="wiz-life-participants">Participants</label><input id="wiz-life-participants" type="text" placeholder="You, OpenRook"></div>
           <div class="full"><label for="wiz-life-upload">Upload Formative Material</label><input id="wiz-life-upload" type="file" accept=".txt,.md,.markdown,.rst,.text"></div>
-          <div class="full"><label for="wiz-life-text">Or Paste Formative Material</label><textarea id="wiz-life-text" rows="8" placeholder="Paste something that should shift worldview, drives, or future behavior. Leave blank to skip."></textarea></div>
+          <div class="full"><label for="wiz-life-text">Or Paste Formative Material</label><textarea id="wiz-life-text" rows="8" placeholder="Paste background that should influence future replies. Leave blank to skip."></textarea></div>
         </div>
       </div>
       <div class="admin-test-result" id="wiz-life-result" hidden></div>
@@ -232,8 +234,8 @@
       <div class="settings-section"><h3>LLM Backend <button class="secondary" data-action="test-llm">Test</button></h3><div class="settings-grid">
         <div class="settings-field"><label for="cfg-llm_backend">Backend</label><select id="cfg-llm_backend"><option value="auto">auto</option><option value="provider">provider / gateway</option><option value="openai_compatible">OpenAI-compatible</option><option value="codex">Codex CLI</option></select></div>
         <div class="settings-field full"><label for="cfg-llm_base_url">Base URL / API Endpoint</label><input id="cfg-llm_base_url" type="text" placeholder="http://localhost:11434/v1 or https://your-provider.example/v1"></div>
-        <div class="settings-field full"><label for="cfg-llm_model">Model</label><input id="cfg-llm_model" type="text"></div>
         <div class="settings-field full"><label for="cfg-llm_api_key">API Key</label><input id="cfg-llm_api_key" type="password" placeholder="Generic key for a provider or compatible gateway; leave blank to keep current"><div class="secret-hint" id="cfg-status-llm_api_key">Not configured</div><label class="settings-inline"><input id="cfg-clear_llm_api_key" type="checkbox"> Clear saved key</label></div>
+        <div class="settings-field full"><label for="cfg-llm_model">Model</label><input id="cfg-llm_model" type="text"></div>
       </div><div class="admin-test-result" id="test-llm" hidden></div></div>
       <div class="settings-section"><h3>Access</h3><div class="settings-grid">
         <div class="settings-field full"><label for="cfg-api_key">Web/API Bearer Token</label><input id="cfg-api_key" type="password" placeholder="Leave blank to keep current; sets a token that protects /chat, /config, /ws, and /v1/*"><div class="secret-hint" id="cfg-status-api_key">Not configured</div><label class="settings-inline"><input id="cfg-clear_api_key" type="checkbox"> Clear saved token</label></div>
@@ -306,15 +308,23 @@
   <div class="chat-area">
     <div class="messages" id="messages">
       <div class="empty-state" id="emptyState">
-        <div class="empty-orb"></div>
+        <img class="empty-mark" src="/assets/openrook-mark.svg" alt="" aria-hidden="true">
         <h1 class="empty-title" id="emptyTitle">OpenRook</h1>
         <div class="empty-sub">An agent with a history of its own.</div>
+        <p class="empty-detail">Preferences, relationship history, and a modeled mood can carry into later conversations. Share something to remember, then come back to it.</p>
+        <div class="starter-prompts" aria-label="Conversation starters">
+          <button class="starter-prompt" data-action="starter-prompt" data-prompt="I prefer short answers. Please remember that.">Remember a preference</button>
+          <button class="starter-prompt" data-action="starter-prompt" data-prompt="Help me think through a project.">Think through a project</button>
+          <button class="starter-prompt" data-action="starter-prompt" data-prompt="What do you remember about me?">Revisit our history</button>
+        </div>
+        <p class="backend-status"><span id="chatBackendStatus" role="status">Loading model status…</span> · <a href="/settings#settings">Model settings</a></p>
       </div>
     </div>
     <div class="typing-row" id="typingRow" role="status" aria-label="OpenRook is thinking" aria-live="polite">
       <div class="typing-inner">
         <div class="msg-avatar nur-av">O</div>
         <div class="typing-dots"><span></span><span></span><span></span></div>
+        <span class="typing-label" id="typingLabel">Thinking…</span>
       </div>
     </div>
     <div class="input-container">
@@ -325,9 +335,9 @@
         </button>
       </div>
       <div class="session-actions">
-        <button class="session-btn" id="whyBtn" data-action="show-why-response" disabled>Why this response?</button>
-        <button class="session-btn" data-action="end-session">End Session</button>
-        <button class="session-btn" data-action="apply-rest">Rest (1hr)</button>
+        <button class="session-btn" id="whyBtn" data-action="show-why-response" title="Show which stored context and modeled state influenced the last reply." disabled>Why this response?</button>
+        <button class="session-btn" data-action="end-session" title="Save a conversation summary to memory and clear short-term context for a fresh session.">End Session</button>
+        <button class="session-btn" data-action="apply-rest" title="Apply one simulated hour of recovery to modeled energy and mood. This does not pause the app.">Rest (1hr)</button>
       </div>
     </div>
   </div>

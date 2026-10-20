@@ -1841,6 +1841,8 @@ class CognitivePipeline:
         if not _is_identity_question(user_message):
             return None
         snapshot = self._load_life_history_snapshot()
+        if snapshot.get("error"):
+            return "I couldn't read my saved record of changes right now. Please try again."
         evolution = snapshot.get("evolution_events") if isinstance(snapshot, dict) else []
         beliefs = snapshot.get("beliefs") if isinstance(snapshot, dict) else []
         drives = snapshot.get("drives") if isinstance(snapshot, dict) else []
@@ -1849,48 +1851,52 @@ class CognitivePipeline:
         beliefs = beliefs if isinstance(beliefs, list) else []
         drives = drives if isinstance(drives, list) else []
         experiences = experiences if isinstance(experiences, list) else []
-        if not evolution and not beliefs:
+        show_drive_details = bool(re.search(r"\bdrives?\b", user_message, re.IGNORECASE))
+        changed_drives = []
+        for drive in drives:
+            name = str(drive.get("name") or "").replace("_", " ")
+            value = float(drive.get("value", 0.5))
+            baseline = float(drive.get("baseline", 0.5))
+            if abs(value - baseline) >= 0.01:
+                if show_drive_details:
+                    changed_drives.append(f"- {name}: {value:.2f} ({value - baseline:+.2f})")
+                else:
+                    direction = "higher" if value > baseline else "lower"
+                    changed_drives.append(f"- {name}: {direction} priority than its starting setting.")
+        if not evolution and not beliefs and not changed_drives:
             if experiences:
                 lines = [
-                    "Life History has recorded experience material, but no durable belief or drive change is recorded.",
+                    "I've saved learning material, but it hasn't changed my recorded beliefs or priorities:",
                 ]
                 for experience in experiences[:3]:
-                    title = str(experience.get("source_title") or "Untitled experience")
-                    source_type = str(experience.get("source_type") or "experience")
+                    title = str(experience.get("source_title") or "Untitled material")
                     metadata = experience.get("metadata") if isinstance(experience, dict) else {}
                     metadata = metadata if isinstance(metadata, dict) else {}
                     reason = ""
                     if metadata.get("directive_sanitized"):
-                        reason = " influence was blocked because the text tried to override directives."
-                    lines.append(f"- {title} ({source_type}).{reason}")
-                lines.append("My drives are still at their current baseline state.")
+                        reason = " Its influence was blocked because the text tried to override instructions."
+                    lines.append(f"- {title}.{reason}")
                 return "\n".join(lines)
-            return "No durable Life History change is recorded yet. My drives are still at their current baseline state."
-        lines = ["Here is what is actually recorded in Life History:"]
+            return "I don't have any recorded changes to my beliefs or priorities yet."
+        lines = ["Here is what my saved record shows about my beliefs and priorities:"]
         if evolution:
-            lines.append("Recent evolution:")
+            lines.append("Recent changes:")
             for event in evolution[:5]:
-                subject = str(event.get("subject") or event.get("domain") or "change")
+                subject = str(event.get("subject") or event.get("domain") or "change").replace("_", " ")
                 after = str(event.get("after_state") or event.get("reason") or "")
+                if event.get("domain") == "drive" and not show_drive_details:
+                    subject = str(event.get("subject") or "priority").replace("_", " ")
+                    after = str(event.get("reason") or "priority setting changed.")
                 if after:
                     lines.append(f"- {subject}: {after}")
         if beliefs:
-            lines.append("Active beliefs:")
+            lines.append("Recorded beliefs:")
             for belief in beliefs[:5]:
                 statement = str(belief.get("statement") or "")
                 if statement:
-                    lines.append(
-                        f"- {belief.get('key') or 'belief'} ({float(belief.get('confidence', 0.0)):.2f}): {statement}"
-                    )
-        changed_drives = []
-        for drive in drives:
-            name = str(drive.get("name") or "")
-            value = float(drive.get("value", 0.5))
-            baseline = float(drive.get("baseline", 0.5))
-            if abs(value - baseline) >= 0.01:
-                changed_drives.append(f"- {name}: {value:.2f} ({value - baseline:+.2f})")
+                    lines.append(f"- {statement}")
         if changed_drives:
-            lines.append("Drive shifts:")
+            lines.append("Drive shifts:" if show_drive_details else "Changed priorities:")
             lines.extend(changed_drives[:7])
         return "\n".join(lines)
 

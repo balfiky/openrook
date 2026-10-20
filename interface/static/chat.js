@@ -1,8 +1,11 @@
+import { readJsonResponse } from "/assets/lib/http.js";
 import { createSurfaceState, renderMarkdown } from "/assets/lib/shared.js";
 import { AdminOverlayState } from "/assets/admin-overlay.js";
 import { DebugState } from "/assets/debug.js";
 import { PersonaPanelState } from "/assets/persona-panel.js";
 import { WizardState } from "/assets/wizard.js";
+import { backendLabel, healthLabel, connectionSummary, renderConnectionResult } from "/assets/lib/llm-status.js";
+import { attachModelPicker } from "/assets/lib/llm-model-picker.js";
 
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('msgInput');
@@ -16,6 +19,8 @@ const settingsOverlay = document.getElementById('settingsOverlay');
 const userId = getOrCreateId('nur_user_id', localStorage);
 const chatId = getOrCreateId('nur_chat_id', sessionStorage);
 let sending = false;
+let sessionActionPending = false;
+let currentBackend = 'The model';
 let lastEmotion = 'neutral';
 let agentName = 'OpenRook';
 let lastExplanation = null;
@@ -28,7 +33,10 @@ const ChatState = createSurfaceState({ sending: false, messageCount: 0 }, {
 });
 
 function updateSendButtonState() {
-  sendBtn.disabled = sending || !inputEl.value.trim();
+  sendBtn.disabled = sending || sessionActionPending || !inputEl.value.trim();
+  document.querySelectorAll('[data-action="end-session"], [data-action="apply-rest"]').forEach(button => {
+    button.disabled = sending || sessionActionPending;
+  });
 }
 
 function applyAgentName(name) {
@@ -94,12 +102,17 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSetting
 document.addEventListener('click', handleModuleAction);
 document.addEventListener('input', e => {
   if (e.target && e.target.id && e.target.id.startsWith('wiz-val-')) wizardUpdateSliderLabels();
+  if (e.target && ['cfg-llm_base_url','cfg-llm_api_key','wiz-llm_base_url','wiz-llm_api_key'].includes(e.target.id)) {
+    modelPickerFor(e.target.id.startsWith('wiz-') ? 'wiz' : 'cfg')?.invalidate({clear: e.target.id.endsWith('llm_base_url')});
+  }
 });
 document.addEventListener('change', e => {
   if (e.target && e.target.id === 'wiz-soul-archetype') wizardApplyArchetype(e.target.value);
   if (e.target && ['cfg-llm_backend','cfg-llm_base_url','cfg-llm_model'].includes(e.target.id)) {
-    if (e.target.id === 'cfg-llm_backend') handleLegacyBackendChange().catch(() => {});
     try { updateSoulDraftAvailability(); } catch (_) {}
+  }
+  if (e.target && ['cfg-llm_backend','cfg-llm_base_url','cfg-llm_api_key','cfg-clear_llm_api_key','wiz-llm_base_url','wiz-llm_api_key'].includes(e.target.id)) {
+    refreshDraftModels(e.target.id.startsWith('wiz-') ? 'wiz' : 'cfg', e.target.id.endsWith('llm_backend') || e.target.id.endsWith('llm_base_url'));
   }
   if (e.target && e.target.id === 'wiz-consent-checkbox') {
     const btn = document.getElementById('wiz-get-started-btn');
@@ -110,7 +123,9 @@ settingsOverlay.addEventListener('click', closeSettingsIfBackdrop);
 new MutationObserver(refreshMoodContrast)
   .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 refreshMoodContrast();
-loadSettings().catch(() => {});
+loadSettings().catch(() => {
+  document.getElementById('chatBackendStatus').textContent = 'Model status unavailable — check Settings';
+});
 
 function handleModuleAction(event) {
   const preset = event.target.closest('.wizard-preset[data-preset]');
@@ -151,6 +166,11 @@ function handleModuleAction(event) {
     'save-settings': saveSettings,
     'load-settings': () => loadSettings(),
     'send-message': sendMessage,
+    'starter-prompt': () => {
+      inputEl.value = target.dataset.prompt;
+      updateSendButtonState();
+      inputEl.focus();
+    },
     'show-why-response': showWhyResponse,
     'end-session': endSession,
     'apply-rest': applyRest,
@@ -161,13 +181,18 @@ function handleModuleAction(event) {
 
 async function sendMessage() {
   const text = inputEl.value.trim();
-  if (!text || sending) return;
+  if (!text || sending || sessionActionPending) return;
   inputEl.value = '';
   ChatState.sending = true;
 
   if (emptyState) emptyState.remove();
   addMessage(text, 'user');
   typingRow.classList.add('visible');
+  const typingLabel = document.getElementById('typingLabel');
+  typingLabel.textContent = 'Thinking…';
+  const slowReplyTimer = setTimeout(() => {
+    typingLabel.textContent = 'Still thinking — ' + currentBackend + ' can take a minute or more.';
+  }, 8000);
   document.documentElement.style.setProperty('--mood-pulse', '1.2s');
   scrollToBottom();
 
@@ -189,16 +214,18 @@ async function sendMessage() {
         });
       }
     }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Server error');
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(connectionSummary(data));
     typingRow.classList.remove('visible');
     lastEmotion = (data.debug && data.debug.emotion_label) || 'neutral';
     addMessage(data.response, 'assistant', lastEmotion);
     if (data.debug) updateDebug(data.debug);
   } catch (err) {
     typingRow.classList.remove('visible');
-    addMessage('Error: ' + err.message, 'assistant');
+    addNotice('Could not get a reply. ' + err.message, true);
   } finally {
+    clearTimeout(slowReplyTimer);
+    typingRow.classList.remove('visible');
     ChatState.sending = false;
     document.documentElement.style.setProperty('--mood-pulse', '3s');
     inputEl.focus();
@@ -230,6 +257,23 @@ function scrollToBottom() {
   requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; });
 }
 
+function addNotice(text, settingsLink = false) {
+  if (emptyState) emptyState.remove();
+  const row = document.createElement('div');
+  row.className = 'session-notice';
+  row.setAttribute('role', 'status');
+  row.textContent = text;
+  if (settingsLink) {
+    const link = document.createElement('a');
+    link.href = '/settings#settings';
+    link.textContent = ' Open Settings';
+    row.appendChild(link);
+  }
+  messagesEl.appendChild(row);
+  scrollToBottom();
+  return row;
+}
+
 // Mood color mapping
 function updateMood(d) {
   const label = d.emotion_label || 'neutral';
@@ -248,15 +292,10 @@ function updateMood(d) {
   const light = 45 + energy * 20;
   const pulse = 4 - arousal * 2.5; // higher arousal = faster pulse
   const contrast = resolveMoodContrast(hue, sat, light);
-  const pageReadsLight = document.documentElement.dataset.theme === 'light';
-  contrast.useDarkText = pageReadsLight;
 
   document.documentElement.style.setProperty('--mood-hue', hue.toFixed(0));
   document.documentElement.style.setProperty('--mood-sat', sat.toFixed(0) + '%');
   document.documentElement.style.setProperty('--mood-light', contrast.light.toFixed(0) + '%');
-  document.documentElement.style.setProperty('--text-primary', contrast.useDarkText ? '#0F0B1A' : '#FFFFFF');
-  document.documentElement.style.setProperty('--text-muted', contrast.useDarkText ? 'rgba(15, 11, 26, 0.6)' : 'rgba(255, 255, 255, 0.7)');
-  document.documentElement.style.setProperty('--surface-bg', contrast.useDarkText ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.05)');
   if (!sending) document.documentElement.style.setProperty('--mood-pulse', pulse.toFixed(1) + 's');
 
   document.getElementById('moodLabel').textContent = label;
@@ -690,127 +729,76 @@ function toggleDebug() {
 
 // Session actions
 async function endSession() {
+  if (sending || sessionActionPending) return;
+  sessionActionPending = true;
+  updateSendButtonState();
+  const notice = addNotice('Saving this conversation to memory…');
   try {
     const res = await authedFetch('/session/end', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId, chat_id: chatId}) });
-    const data = await res.json();
-    addMessage('[Session ended: ' + (data.summary || 'digested') + ']', 'assistant');
-  } catch (err) { addMessage('Error: ' + err.message, 'assistant'); }
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(connectionSummary(data));
+    const saved = Number(data.memories_written) > 0
+      ? 'Conversation saved to memory.'
+      : 'Session ended. No new summary memory was added.';
+    notice.textContent = saved + ' A fresh session has started: short-term conversation context is cleared; stored memories and preferences remain. The transcript stays here until you reload.';
+    lastExplanation = null;
+    document.getElementById('whyBtn').disabled = true;
+  } catch (err) {
+    notice.textContent = 'Could not end the session. ' + err.message;
+  } finally {
+    sessionActionPending = false;
+    updateSendButtonState();
+  }
 }
 
 async function applyRest() {
+  if (sending || sessionActionPending) return;
+  sessionActionPending = true;
+  updateSendButtonState();
   try {
     const res = await authedFetch('/rest', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({hours: 1.0, user_id: userId, chat_id: chatId}) });
-    const data = await res.json();
-    addMessage('[Rested 1hr: energy ' + data.energy_before.toFixed(2) + ' \u2192 ' + data.energy_after.toFixed(2) + ']', 'assistant');
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(connectionSummary(data));
+    addNotice('Applied one simulated hour of recovery. Modeled energy: ' + data.energy_before.toFixed(2) + ' \u2192 ' + data.energy_after.toFixed(2) + '. You can keep chatting.');
     const dr = await authedFetch('/debug?' + new URLSearchParams({user_id: userId, chat_id: chatId}));
-    const dd = await dr.json();
+    const dd = await readJsonResponse(dr);
     if (dd.modulator_snapshot) updateDebug(dd);
-  } catch (err) { addMessage('Error: ' + err.message, 'assistant'); }
-}
-
-let codexModels = [];
-let codexModelsLoaded = false;
-let codexModelsLoading = false;
-let codexModelsError = '';
-
-async function ensureCodexModels() {
-  if (codexModelsLoaded || codexModelsLoading) return;
-  codexModelsLoading = true;
-  codexModelsError = '';
-  try {
-    const res = await authedFetch('/admin/codex/models');
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'Could not load Codex models.');
-    codexModels = Array.isArray(data.models) ? data.models : [];
-  } catch (err) {
-    codexModels = [];
-    codexModelsError = err.message || String(err);
-  } finally {
-    codexModelsLoaded = true;
-    codexModelsLoading = false;
+  } catch (err) { addNotice('Could not apply rest. ' + err.message); }
+  finally {
+    sessionActionPending = false;
+    updateSendButtonState();
   }
 }
 
-function renderCodexModelControl(id, backend, value, placeholder) {
-  const current = document.getElementById(id);
-  if (!current) return;
-  const parent = current.parentElement;
-  const selected = String(value || current.value || '');
-  const shouldSelect = backend === 'codex';
-  let next = current;
-  if (shouldSelect && current.tagName !== 'SELECT') {
-    next = document.createElement('select');
-    next.id = id;
-    current.replaceWith(next);
-  } else if (!shouldSelect && current.tagName !== 'INPUT') {
-    next = document.createElement('input');
-    next.id = id;
-    next.type = 'text';
-    current.replaceWith(next);
-  }
-  if (!shouldSelect) {
-    next.value = selected;
-    next.placeholder = placeholder || '';
-    removeCodexModelHint(parent);
-    return;
-  }
-  next.innerHTML = buildCodexModelOptions(selected);
-  addCodexModelHint(parent);
+function modelPickerFor(prefix) {
+  return attachModelPicker(document.getElementById(prefix + '-llm_model'), {
+    fetchModels: authedFetch,
+    getConfig: () => ({
+      llm_backend: prefix === 'wiz' ? (WIZARD_PRESET_CONFIG[wizardPreset]?.backend || '') : gv('cfg-llm_backend'),
+      llm_base_url: gv(prefix + '-llm_base_url'),
+      llm_api_key: gv(prefix + '-llm_api_key'),
+      clear_llm_api_key: prefix === 'wiz' ? !gv('wiz-llm_api_key').trim() : !!document.getElementById('cfg-clear_llm_api_key')?.checked,
+    }),
+  });
 }
 
-function buildCodexModelOptions(selected) {
-  const known = new Set(codexModels.map((model) => model.slug));
-  const options = [`<option value="" ${selected ? '' : 'selected'}>Codex default</option>`];
-  if (selected && !known.has(selected)) {
-    options.push(`<option value="${esc(selected)}" selected>${esc(selected)} (custom)</option>`);
-  }
-  if (codexModelsLoading && !codexModels.length) {
-    options.push('<option value="" disabled>Loading Codex models...</option>');
-  }
-  for (const model of codexModels) {
-    const slug = String(model.slug || '');
-    if (!slug) continue;
-    const name = String(model.display_name || slug);
-    const label = name && name !== slug ? `${name} (${slug})` : slug;
-    options.push(`<option value="${esc(slug)}" ${selected === slug ? 'selected' : ''}>${esc(label)}</option>`);
-  }
-  return options.join('');
-}
-
-function addCodexModelHint(parent) {
-  if (!parent) return;
-  let hint = parent.querySelector('.codex-model-hint');
-  if (!hint) {
-    hint = document.createElement('div');
-    hint.className = 'settings-note codex-model-hint';
-    parent.appendChild(hint);
-  }
-  hint.textContent = codexModelsError || 'Models loaded from the installed Codex CLI.';
-}
-
-function removeCodexModelHint(parent) {
-  const hint = parent && parent.querySelector('.codex-model-hint');
-  if (hint) hint.remove();
-}
-
-async function handleLegacyBackendChange() {
-  const backend = gv('cfg-llm_backend');
-  renderCodexModelControl('cfg-llm_model', backend, gv('cfg-llm_model'), '');
-  if (backend === 'codex') {
-    await ensureCodexModels();
-    renderCodexModelControl('cfg-llm_model', backend, gv('cfg-llm_model'), '');
-  }
+function refreshDraftModels(prefix, clear = false) {
+  const picker = modelPickerFor(prefix);
+  picker?.invalidate({clear});
+  return picker?.refresh();
 }
 
 // Settings
-function openSettings() { AdminOverlayState.open = true; loadSettings().catch(e => setStatus('Failed: ' + e.message, true)); }
+function openSettings() { AdminOverlayState.open = true; loadSettings().then(() => refreshDraftModels('cfg')).catch(e => setStatus('Failed: ' + e.message, true)); }
 function closeSettings() { AdminOverlayState.open = false; }
 function closeSettingsIfBackdrop(e) { if (e.target === settingsOverlay) closeSettings(); }
 
 async function loadSettings(options = {}) {
   setStatus('Loading...');
-  const res = await authedFetch('/admin/config'); if (!res.ok) throw new Error('HTTP ' + res.status);
-  applySettings(await res.json());
+  const res = await authedFetch('/admin/config');
+  const data = await readJsonResponse(res);
+  if (!res.ok) throw new Error(connectionSummary(data));
+  applySettings(data);
   if (options.loadSoul !== false) loadSoul().catch(() => {});
 }
 
@@ -839,7 +827,7 @@ async function saveSettings() {
   try {
     setStatus('Saving...');
     const res = await authedFetch('/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     // Sync the local copy of the bearer token to whatever the server now
     // expects, so subsequent fetches do not 401 after a key rotation.
@@ -852,18 +840,17 @@ async function saveSettings() {
 
 function applySettings(payload) {
   const c = payload.config || {};
+  currentBackend = backendLabel(c);
+  const backendStatus = document.getElementById('chatBackendStatus');
+  if (backendStatus) {
+    backendStatus.textContent = currentBackend + ' · ' + (c.llm_model || (c.llm_backend === 'codex' ? 'Codex default' : 'No model selected')) + ' · ' + healthLabel(payload.llm_health);
+  }
   sv('cfg-data_dir', c.data_dir||'data'); sv('cfg-max_queue_per_user', c.max_queue_per_user??3);
   sv('cfg-max_active_sessions', c.max_active_sessions??10); sv('cfg-session_timeout_seconds', c.session_timeout_seconds??1800);
   sv('cfg-console_enabled', String(c.console_enabled)); sv('cfg-telegram_poll_timeout', c.telegram_poll_timeout??30);
   sv('cfg-dedupe_ttl', c.dedupe_ttl??60); sv('cfg-llm_backend', c.llm_backend||'auto');
   sv('cfg-llm_base_url', c.llm_base_url||'');
-  renderCodexModelControl('cfg-llm_model', c.llm_backend || 'auto', c.llm_model || '', '');
-  sv('cfg-llm_model', c.llm_model||'');
-  if ((c.llm_backend || '') === 'codex') {
-    ensureCodexModels().then(() => {
-      renderCodexModelControl('cfg-llm_model', 'codex', gv('cfg-llm_model'), '');
-    }).catch(() => {});
-  }
+  sv('cfg-llm_model', c.llm_model || '');
   sv('cfg-debug_host', c.debug_host||'127.0.0.1'); sv('cfg-debug_port', c.debug_port??8077);
   sv('cfg-cors_origins', (c.cors_origins||[]).join('\n'));
   sv('cfg-tools_enabled', String(!!c.tools_enabled)); sv('cfg-autonomy_level', c.autonomy_level||'assisted'); sv('cfg-tools_workspace', c.tools_workspace||''); sv('cfg-shell_tool_enabled', String(!!c.shell_tool_enabled));
@@ -887,6 +874,7 @@ function applySettings(payload) {
     if (detail) el.textContent = detail.configured ? 'Configured via ' + detail.source + '. Leave blank to keep.' : 'Not configured.';
     else el.textContent = ss[k] ? 'Configured. Leave blank to keep.' : 'Not configured.';
   });
+  modelPickerFor('cfg')?.invalidate();
   renderAdminOverview(payload);
   renderAdminWarnings(payload.warnings || []);
   renderSetup(payload.setup || {});
@@ -944,7 +932,7 @@ async function exportConfig() {
   el.textContent = 'Exporting config...';
   try {
     const res = await authedFetch('/admin/export/config');
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     downloadJson('openrook-runtime-config-redacted.json', data);
     el.className = 'admin-test-result ok';
@@ -1046,8 +1034,8 @@ async function loadSoul() {
   if (el) { el.hidden = false; el.className = 'admin-test-result'; el.textContent = 'Loading identity...'; }
   try {
     const res = await authedFetch('/admin/soul');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const data = await readJsonResponse(res);
+    if (!res.ok) throw new Error(connectionSummary(data));
     applySoulToForm(data.soul || {});
     if ((data.soul || {}).name) applyAgentName(data.soul.name);
     if (el) { el.hidden = true; el.textContent = ''; }
@@ -1085,7 +1073,7 @@ async function importSoulText(raw) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw }),
   });
-  const data = await res.json();
+  const data = await readJsonResponse(res);
   if (!res.ok) {
     throw new Error(typeof (data && data.detail) === 'string' ? data.detail : JSON.stringify(data && data.detail) || 'HTTP ' + res.status);
   }
@@ -1111,7 +1099,7 @@ async function saveSoul() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error((data && data.detail) || 'HTTP ' + res.status);
     el.className = 'admin-test-result ok';
     const lines = ['Identity saved to ' + data.path + (data.is_default_name ? ' (still the default name — pick something for your deployment)' : '')];
@@ -1150,7 +1138,7 @@ async function runAdminTest(name, path, payload) {
       ? {}
       : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) };
     const res = await authedFetch(path, opts);
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     el.className = 'admin-test-result ' + (data.ok ? 'ok' : 'error');
     el.textContent = formatTestResult(data);
@@ -1167,7 +1155,7 @@ function formatTestResult(data) {
     return (data.ok ? 'Storage ok' : 'Storage has issues') + (checks ? '\n' + checks : '') + (warnings ? '\n' + warnings : '');
   }
   if (data.checked === 'llm') {
-    return (data.ok ? 'LLM config ok' : 'LLM config has issues') + (data.live ? ' · live sample checked' : ' · no live remote call') + (data.sample_response ? '\n' + data.sample_response : '') + (warnings ? '\n' + warnings : '');
+    return connectionSummary(data);
   }
   if (data.checked === 'telegram') {
     return (data.ok ? 'Telegram config ok' : 'Telegram config has issues') + '\nAllowlist entries: ' + (data.allowlist_count || 0) + (warnings ? '\n' + warnings : '');
@@ -1249,11 +1237,11 @@ function renderSetup(setup) {
 // ---- Setup wizard --------------------------------------------------------
 const wizardOverlay = document.getElementById('wizardOverlay');
 const WIZARD_PRESET_CONFIG = {
-  local:       { backend: 'openai_compatible', base_url: 'http://localhost:11434/v1',    model: 'llama3.2',           model_placeholder: 'e.g. llama3.2',              label: 'Ollama / LM Studio',         key_label: 'API Key (usually blank for local)', key_placeholder: 'Often blank' },
-  vllm:        { backend: 'openai_compatible', base_url: 'http://localhost:8002/v1',     model: '',                   model_placeholder: 'Name of the model loaded in vLLM', label: 'vLLM',                  key_label: 'API Key (usually blank for vLLM)',   key_placeholder: 'Often blank' },
-  hosted:      { backend: 'openai_compatible', base_url: 'https://api.openai.com/v1',    model: 'gpt-4o-mini',        model_placeholder: 'e.g. gpt-4o-mini',           label: 'Hosted OpenAI-compatible gateway', key_label: 'API Key (blank if gateway needs none)', key_placeholder: 'Optional' },
-  openrouter:  { backend: 'provider',          base_url: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', model_placeholder: 'e.g. openai/gpt-4o-mini',    label: 'OpenRouter',                 key_label: 'OpenRouter API Key (required)',     key_placeholder: 'sk-or-v1-...' },
-  codex:       { backend: 'codex',             base_url: '',                             model: '',                   model_placeholder: 'Optional; blank uses Codex default', label: 'Codex CLI',          key_label: '',                                   key_placeholder: '', hide_base_url: true, hide_api_key: true },
+  local:       { backend: 'openai_compatible', base_url: 'http://localhost:11434/v1',    label: 'Ollama / LM Studio',         key_label: 'API Key (usually blank for local)', key_placeholder: 'Often blank' },
+  vllm:        { backend: 'openai_compatible', base_url: 'http://localhost:8002/v1',     label: 'vLLM',                  key_label: 'API Key (usually blank for vLLM)',   key_placeholder: 'Often blank' },
+  hosted:      { backend: 'openai_compatible', base_url: 'https://api.openai.com/v1',    label: 'Hosted OpenAI-compatible gateway', key_label: 'API Key (blank if gateway needs none)', key_placeholder: 'Optional' },
+  openrouter:  { backend: 'provider',          base_url: 'https://openrouter.ai/api/v1', label: 'OpenRouter',                 key_label: 'OpenRouter API Key (required)',     key_placeholder: 'sk-or-v1-...' },
+  codex:       { backend: 'codex',             base_url: '',                             label: 'Codex CLI',          key_label: '',                                   key_placeholder: '', hide_base_url: true, hide_api_key: true },
 };
 const WIZARD_ARCHETYPE_CONFIG = {
   steady: {
@@ -1358,7 +1346,6 @@ function openWizard() {
   sv('wiz-tools_enabled', 'false');
   sv('wiz-autonomy_level', 'assisted');
   sv('wiz-shell_tool_enabled', 'false');
-  sv('wiz-character_independence', 'false');
   const soulName = document.getElementById('wiz-soul-name');
   if (soulName) soulName.value = 'OpenRook';
   const lifeTitle = document.getElementById('wiz-life-title');
@@ -1396,21 +1383,19 @@ function wizardSelectPreset(preset) {
   if (testBtn) testBtn.hidden = false;
   const baseInput = document.getElementById('wiz-llm_base_url');
   const keyInput = document.getElementById('wiz-llm_api_key');
-  renderCodexModelControl('wiz-llm_model', cfg.backend, cfg.model, cfg.model_placeholder || '');
   const modelInput = document.getElementById('wiz-llm_model');
   baseInput.closest('div').hidden = !!cfg.hide_base_url;
   keyInput.closest('div').hidden = !!cfg.hide_api_key;
   baseInput.value = cfg.base_url;
-  modelInput.value = cfg.model;
-  if ('placeholder' in modelInput) modelInput.placeholder = cfg.model_placeholder || '';
+  modelInput.value = '';
   keyInput.value = '';
   keyInput.placeholder = cfg.key_placeholder;
   document.getElementById('wiz-llm_api_key_label').textContent = cfg.key_label;
-  if (preset === 'codex') {
-    ensureCodexModels().then(() => {
-      renderCodexModelControl('wiz-llm_model', 'codex', gv('wiz-llm_model'), cfg.model_placeholder || '');
-    }).catch(() => {});
-  }
+  const picker = modelPickerFor('wiz');
+  picker.invalidate({clear: true});
+  // Remote providers may need a key before discovery. Local and Codex catalogs
+  // can be read immediately; key/URL edits and Refresh models retry discovery.
+  if (preset === 'local' || preset === 'vllm' || preset === 'codex') picker.refresh();
 }
 
 async function wizardTestLLM() {
@@ -1419,7 +1404,10 @@ async function wizardTestLLM() {
     return;
   }
   const cfg = WIZARD_PRESET_CONFIG[wizardPreset];
-  wizardShowResult('wiz-llm-result', '', 'Testing LLM connection...');
+  const testButton = document.getElementById('wiz-test-llm-btn');
+  if (testButton.disabled) return;
+  testButton.disabled = true;
+  wizardShowResult('wiz-llm-result', '', 'Testing connection — this can take a minute or more…');
   try {
     const res = await authedFetch('/admin/test/llm', {
       method: 'POST',
@@ -1433,11 +1421,14 @@ async function wizardTestLLM() {
         live: true,
       }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail) || 'HTTP ' + res.status);
     wizardShowResult('wiz-llm-result', data.ok ? 'ok' : 'error', formatTestResult(data));
+    renderConnectionResult(document.getElementById('wiz-llm-result'), data);
   } catch (err) {
     wizardShowResult('wiz-llm-result', 'error', 'Test failed: ' + err.message);
+  } finally {
+    testButton.disabled = false;
   }
 }
 
@@ -1457,7 +1448,7 @@ async function wizardSaveLLM() {
   try {
     // Fetch current config so we can merge (POST /admin/config overwrites unspecified fields).
     const cur = await authedFetch('/admin/config');
-    const curJson = await cur.json();
+    const curJson = await readJsonResponse(cur);
     if (!cur.ok) throw new Error(curJson.detail || 'HTTP ' + cur.status);
     wizardConfigSnapshot = curJson.config || {};
     const cfg = WIZARD_PRESET_CONFIG[wizardPreset];
@@ -1478,7 +1469,7 @@ async function wizardSaveLLM() {
     const res = await authedFetch('/admin/config', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     applySettings(data);
     wizardPopulateRuntimeFields(data.config || {});
@@ -1499,7 +1490,6 @@ function wizardPopulateRuntimeFields(config) {
   sv('wiz-autonomy_level', c.autonomy_level || 'assisted');
   sv('wiz-tools_workspace', c.tools_workspace || '');
   sv('wiz-shell_tool_enabled', String(!!c.shell_tool_enabled));
-  sv('wiz-character_independence', String(!!c.character_independence));
   sv('wiz-api_key', '');
   sv('wiz-telegram_token', '');
 }
@@ -1508,7 +1498,7 @@ async function wizardSaveRuntimeChannels() {
   wizardShowResult('wiz-runtime-result', '', 'Saving runtime and channel settings...');
   try {
     const cur = await authedFetch('/admin/config');
-    const curJson = await cur.json();
+    const curJson = await readJsonResponse(cur);
     if (!cur.ok) throw new Error(curJson.detail || 'HTTP ' + cur.status);
     const payload = Object.assign({}, curJson.config || {}, {
       console_enabled: gb('wiz-console_enabled'),
@@ -1521,7 +1511,6 @@ async function wizardSaveRuntimeChannels() {
       autonomy_level: gv('wiz-autonomy_level') || 'assisted',
       tools_workspace: gv('wiz-tools_workspace'),
       shell_tool_enabled: gb('wiz-shell_tool_enabled'),
-      character_independence: gb('wiz-character_independence'),
       llm_api_key: '',
       clear_telegram_token: false,
       clear_llm_api_key: false,
@@ -1530,7 +1519,7 @@ async function wizardSaveRuntimeChannels() {
     const res = await authedFetch('/admin/config', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     applySettings(data);
     wizardShowResult('wiz-runtime-result', 'ok', 'Runtime and channel settings saved.');
@@ -1614,7 +1603,7 @@ async function wizardSaveSoul() {
     const res = await authedFetch('/admin/soul', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error((data && data.detail) || 'HTTP ' + res.status);
     wizardSoulDraft = payload;
     applyAgentName(payload.name);
@@ -1664,7 +1653,7 @@ async function wizardSaveLife() {
         }),
       });
     }
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error((data && data.detail) || 'HTTP ' + res.status);
     wizardLifeStatus = 'digested';
     if (uploadInput) uploadInput.value = '';
@@ -1686,18 +1675,17 @@ function wizardRenderSummary() {
     '<div>Telegram: <strong>' + esc(gv('wiz-telegram_token') ? 'Configured' : 'Not configured') + '</strong></div>' +
     '<div>Tools: <strong>' + esc(gv('wiz-tools_enabled') === 'true' ? ('Enabled / ' + (gv('wiz-autonomy_level') || 'assisted')) : 'Disabled') + '</strong></div>' +
     '<div>Shell tool: <strong>' + esc(gv('wiz-shell_tool_enabled') === 'true' ? 'Enabled' : 'Disabled') + '</strong></div>' +
-    '<div>Character Independence: <strong>' + esc(gb('wiz-character_independence') ? 'Enabled' : 'Disabled') + '</strong></div>' +
     '<div>Character mode: <strong>' + esc((WIZARD_ARCHETYPE_CONFIG[gv('wiz-soul-archetype')] || {}).label || 'Custom') + '</strong></div>' +
     '<div>First experience: <strong>' + esc(wizardLifeStatus === 'digested' ? 'Digested into Life History' : 'Skipped') + '</strong></div>' +
     (preset && preset.base_url ? '<div>Endpoint: <strong>' + esc(gv('wiz-llm_base_url') || preset.base_url) + '</strong></div>' : '') +
-    (preset && preset.model ? '<div>Model: <strong>' + esc(gv('wiz-llm_model') || preset.model) + '</strong></div>' : '');
+    (preset ? '<div>Model: <strong>' + esc(gv('wiz-llm_model') || (preset.backend === 'codex' ? 'Codex default' : 'Not selected')) + '</strong></div>' : '');
 }
 
 async function wizardFinish() {
   // Mark setup complete. Merge with current snapshot so we don't reset other fields.
   try {
     const cur = await authedFetch('/admin/config');
-    const curJson = await cur.json();
+    const curJson = await readJsonResponse(cur);
     if (!cur.ok) throw new Error(curJson.detail || 'HTTP ' + cur.status);
     const payload = Object.assign({}, curJson.config || {}, {
       setup_completed: true,
@@ -1709,7 +1697,7 @@ async function wizardFinish() {
     const res = await authedFetch('/admin/config', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res);
     if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
     applySettings(data);
     setWizardOpen(false);

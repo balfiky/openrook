@@ -19,6 +19,7 @@ from runtime.debug.mental_state import (
 from runtime.debug.persona_view import build_persona_view
 from runtime.debug.relationship_view import build_relationship_view
 from runtime.sessions.manager import SessionManager
+from runtime.llm.diagnostics import diagnose_llm_error, record_llm_health
 
 log = logging.getLogger(__name__)
 
@@ -281,13 +282,17 @@ class TelegramChannel:
             )
             if response:
                 await self._client.send_message(chat_id, response)
-        except RuntimeError as exc:
-            await self._client.send_message(chat_id, f"[busy] {exc}")
-        except Exception:
-            log.exception("Error processing Telegram message from %s", user_id)
-            await self._client.send_message(
-                chat_id, "[error] Something went wrong.",
-            )
+        except Exception as exc:
+            diagnosis = diagnose_llm_error(exc, self._manager.config)
+            if diagnosis:
+                record_llm_health(self._manager.config, diagnosis)
+                message = f"[error] {diagnosis['message']} {diagnosis['action']}"
+            elif isinstance(exc, RuntimeError):
+                message = f"[busy] {exc}"
+            else:
+                log.exception("Error processing Telegram message from %s", user_id)
+                message = "[error] Something went wrong."
+            await self._client.send_message(chat_id, message)
         finally:
             typing_task.cancel()
             try:

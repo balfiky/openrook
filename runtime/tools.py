@@ -73,7 +73,11 @@ def create_tool_executor(
         skill_config=config,
     )
     executor.own_resource(web_provider)
-    if config.llm_base_url.strip() and config.llm_model.strip():
+    if (
+        config.llm_backend != "codex"
+        and config.llm_base_url.strip()
+        and config.llm_model.strip()
+    ):
         runner = NativeToolCallRunner(
             executor=executor,
             base_url=config.llm_base_url,

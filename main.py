@@ -23,16 +23,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="openrook",
         description=(
-            "Start the OpenRook cognitive runtime (background agent). Runs the "
-            "proactive loop, Telegram channel if configured, and background "
-            "session/digest handling. Use `openrook-web` instead if you only want "
-            "the HTTP API and bundled browser UI."
+            "Start the OpenRook console runtime. Chat in the terminal, with "
+            "Telegram and proactive behavior when configured. Set console_enabled "
+            "to false in the config for a background runtime. Use `openrook-web` "
+            "for the HTTP API and bundled browser UI."
         ),
     )
     parser.add_argument(
         "--config",
         default=project_env("RUNTIME_CONFIG", "runtime_config.yaml"),
         help="Path to runtime config YAML (default: runtime_config.yaml).",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show INFO logs in the console (may interrupt the chat prompt).",
     )
     parser.add_argument(
         "--version",
@@ -44,11 +49,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    config = RuntimeConfig.from_yaml(args.config)
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.INFO if args.verbose or not config.console_enabled else logging.WARNING,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    config = RuntimeConfig.from_yaml(args.config)
     app = OpenRookApp(config)
     asyncio.run(app.run())
 

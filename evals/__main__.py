@@ -3,11 +3,11 @@
 Usage:
     python -m evals --backend mock
     python -m evals --backend provider --base-url https://provider.example/v1 --model your-model
-    python -m evals --backend minimax --tag phase11
+    python -m evals --backend minimax --model "$MODEL_ID" --tag phase11
     python -m evals --backend openai_compat --base-url http://localhost:8080/v1 --model local-model
 
     python -m evals --backend mock --list
-    python -m evals --backend minimax --tag phase11 --report reports/phase11.json
+    python -m evals --backend minimax --model "$MODEL_ID" --tag phase11 --report reports/phase11.json
 
 Provenance is recorded automatically: git sha, dirty-worktree flag,
 backend identity, config/prompt SHA256 fingerprints, and per-run
@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import os
 import sys
 import time
 from pathlib import Path

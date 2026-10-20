@@ -22,6 +22,7 @@ from runtime import outcome_learning
 from runtime.grounded_appraisal import allocate_attention
 from runtime.behavioral_dispositions import record_choice
 from runtime.life_history import LifeHistoryStore, _digest_experience, _extract_json
+from runtime.llm.diagnostics import diagnose_llm_error, record_llm_health
 from runtime.research_store import (
     ObservedBackend,
     ResearchBudgetExceeded,
@@ -1285,6 +1286,9 @@ class AgentRuntime:
                     [("session", pipeline._research_session_key, self._session_record(pipeline))],
                 )
             except Exception as error:
+                diagnosis = diagnose_llm_error(error, self.config)
+                if diagnosis:
+                    record_llm_health(self.config, diagnosis)
                 self.store.observe(
                     "autonomous_failure", {"type": type(error).__name__, "error": str(error)}
                 )

@@ -9,10 +9,10 @@ with a mock backend and drive it via FastAPI's ``TestClient``.
 from __future__ import annotations
 
 import os
-import tempfile
 import zipfile
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 
 import interface.api as interface_api
@@ -108,6 +108,77 @@ class TestHealthAndReady:
 
 
 class TestChatEndpoint:
+    @pytest.mark.parametrize("path", ["/chat", "/v1/chat"])
+    def test_missing_model_returns_actionable_503_and_updates_health(
+        self, client, temp_config, tmp_path, monkeypatch, caplog, path,
+    ):
+        RuntimeConfig(
+            data_dir=str(tmp_path / "data"),
+            llm_backend="openai_compatible",
+            llm_base_url="http://localhost:11434/v1",
+            llm_model="llama3.2",
+        ).write_yaml(str(temp_config))
+        response = requests.Response()
+        response.status_code = 404
+        response.url = "http://localhost:11434/v1/chat/completions"
+
+        async def fail(*args, **kwargs):
+            raise requests.HTTPError("model not found", response=response)
+
+        monkeypatch.setattr(interface_api.get_session_manager(), "handle_message", fail)
+        result = client.post(path, json={"message": "hello"})
+
+        assert result.status_code == 503
+        payload = result.json()
+        assert "llama3.2" in payload["detail"]  # The configured model can be identified.
+        assert "Choose an available model in Settings" in payload["detail"]
+        assert "ollama pull" not in payload["detail"]
+        assert payload["settings_url"] == "/settings"
+        assert payload["llm_error"]["code"] == "not_found"
+        assert not any(record.exc_info for record in caplog.records)
+        for endpoint in ("/admin/status", "/admin/config"):
+            status_payload = client.get(endpoint).json()
+            assert status_payload["llm_health"]["status"] == "error"
+            assert any(w["code"] == "llm_backend_error" for w in status_payload["warnings"])
+
+    @pytest.mark.parametrize("path", ["/chat", "/v1/chat"])
+    def test_codex_login_error_is_actionable(
+        self, client, temp_config, tmp_path, monkeypatch, path,
+    ):
+        RuntimeConfig(
+            data_dir=str(tmp_path / "data"),
+            llm_backend="codex",
+        ).write_yaml(str(temp_config))
+
+        async def fail(*args, **kwargs):
+            raise RuntimeError("Codex backend failed with exit code 1: 401 Unauthorized")
+
+        monkeypatch.setattr(interface_api.get_session_manager(), "handle_message", fail)
+        result = client.post(path, json={"message": "hello"})
+        assert result.status_code == 503
+        assert "codex login" in result.json()["detail"]
+
+    def test_websocket_backend_error_keeps_connection_open(
+        self, client, temp_config, tmp_path, monkeypatch,
+    ):
+        RuntimeConfig(
+            data_dir=str(tmp_path / "data"),
+            llm_backend="openai_compatible",
+            llm_base_url="http://localhost:11434/v1",
+            llm_model="llama3.2",
+        ).write_yaml(str(temp_config))
+
+        async def fail(*args, **kwargs):
+            raise requests.ConnectionError("refused")
+
+        monkeypatch.setattr(interface_api.get_session_manager(), "handle_message", fail)
+        with client.websocket_connect("/ws") as ws:
+            for _ in range(2):
+                ws.send_json({"message": "hello"})
+                payload = ws.receive_json()
+                assert payload["type"] == "error"
+                assert "ollama serve" in payload["detail"]
+
     def test_chat_returns_response_and_emotion(self, client):
         resp = client.post(
             "/v1/chat",
@@ -805,6 +876,39 @@ class TestAdminEndpoints:
         assert data["ok"] is False
         assert data["backend"] == "codex"
         assert data["warnings"][0]["code"] == "missing_codex_cli"
+
+    def test_admin_live_llm_error_explains_recovery_and_test_clears_warning(
+        self, client, temp_config, tmp_path, monkeypatch,
+    ):
+        RuntimeConfig(
+            data_dir=str(tmp_path / "data"),
+            llm_backend="codex",
+        ).write_yaml(str(temp_config))
+        monkeypatch.setattr(interface_api, "codex_cli_available", lambda: True)
+
+        class Backend:
+            failing = True
+
+            def generate(self, system, user):
+                if self.failing:
+                    raise RuntimeError("Codex backend failed: 401 Unauthorized")
+                return "ok"
+
+        backend = Backend()
+        monkeypatch.setattr(interface_api, "create_llm_backend", lambda config: backend)
+        result = client.post("/admin/test/llm", json={"live": True}).json()
+        assert result["ok"] is False
+        assert "codex login" in result["error"]
+        assert "401 Unauthorized" in result["error_detail"]
+        assert result["diagnostic"]["code"] == "authentication"
+        assert client.get("/admin/status").json()["llm_health"]["status"] == "error"
+
+        backend.failing = False
+        result = client.post("/admin/test/llm", json={"live": True}).json()
+        assert result["ok"] is True
+        status_payload = client.get("/admin/status").json()
+        assert status_payload["llm_health"]["status"] == "ok"
+        assert not any(w["code"] == "llm_backend_error" for w in status_payload["warnings"])
 
     def test_admin_codex_models_returns_cli_catalog(
         self, client, temp_config, tmp_path, monkeypatch,
