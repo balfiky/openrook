@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, Mock
 
+from httpx import ASGITransport, AsyncClient
 import pytest
 
 from interface import api as interface_api
@@ -89,16 +90,58 @@ async def test_admin_discovery_accepts_draft_without_a_model(saved_config, monke
     assert discover.call_args.kwargs["discovery_api"] == "ollama"
 
 
-def test_admin_discovery_route_requires_bearer():
-    route = next(
-        route for route in interface_api.app.routes
-        if getattr(route, "path", "") == "/admin/llm/models"
+@pytest.fixture(params=[False, True], ids=["fresh-runtime", "retained-research-session"])
+def prior_admin_session(request, monkeypatch):
+    """Exercise the auth check even after another test leaves a research session."""
+    manager = (
+        Mock(config=RuntimeConfig(research_mode=True))
+        if request.param else None
     )
-    assert route.methods == {"POST"}
-    assert any(
-        dependency.call is interface_api._require_bearer
-        for dependency in route.dependant.dependencies
-    )
+    monkeypatch.setattr(interface_api, "_session_manager", manager)
+
+
+@pytest.mark.asyncio
+async def test_admin_discovery_route_requires_bearer(
+    prior_admin_session, monkeypatch, tmp_path,
+):
+    path = tmp_path / "runtime_config.yaml"
+    RuntimeConfig(
+        data_dir=str(tmp_path / "data"), api_key="discovery-test-key",
+    ).write_yaml(str(path))
+    # Auth captures the config getter at import time, but reads this path per
+    # request. Isolate both it and the research middleware from earlier tests.
+    monkeypatch.setattr(interface_api, "RUNTIME_CONFIG_PATH", str(path))
+    monkeypatch.setattr(interface_api, "_session_manager", None)
+    payload = {"ok": True, "models": [{"id": "authorized-model"}]}
+    discover = Mock(return_value=payload)
+    monkeypatch.setattr(admin, "discover_llm_models", discover)
+
+    # FastAPI >= 0.137 keeps included routers nested in app.routes. Exercise
+    # the production app's HTTP contract instead of its internal route layout.
+    async with AsyncClient(
+        transport=ASGITransport(app=interface_api.app), base_url="http://test",
+    ) as client:
+        for headers, detail in [
+            ({}, "Missing bearer token"),
+            ({"Authorization": "Bearer wrong-key"}, "Invalid bearer token"),
+        ]:
+            response = await client.post("/admin/llm/models", json={}, headers=headers)
+            assert response.status_code == 401, response.text
+            assert response.headers["www-authenticate"] == "Bearer"
+            assert response.json() == {"detail": detail}
+        discover.assert_not_called()
+
+        headers = {"Authorization": "Bearer discovery-test-key"}
+        response = await client.get("/admin/llm/models", headers=headers)
+        assert response.status_code == 405, response.text
+        assert response.headers["allow"] == "POST"
+        discover.assert_not_called()
+
+        response = await client.post("/admin/llm/models", json={}, headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json() == payload
+    discover.assert_called_once()
+    assert discover.call_args.args[0].api_key == "discovery-test-key"
 
 
 def test_legacy_backend_requires_explicit_model_for_setup_readiness(monkeypatch):
