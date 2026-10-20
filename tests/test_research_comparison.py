@@ -295,7 +295,7 @@ async def test_batch_cancellation_stops_all_launched_process_groups(tmp_path, mo
     monkeypatch.setattr(
         "evals.research_comparison.os.killpg", lambda *arguments: signals.append(arguments)
     )
-    with pytest.raises(TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(
             run_comparison(RuntimeConfig(), design(), str(tmp_path / "batch")), 0.05
         )

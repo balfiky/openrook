@@ -195,11 +195,11 @@ The completed OpenRook rename is checked separately from the historical live stu
   formatting of new standalone files, and whitespace checks pass. Production
   runtime configuration and historical research evidence remain unchanged.
 
-An unrelated Python 3.10 test-fixture incompatibility remains outside this rename:
-`test_batch_cancellation_stops_all_launched_process_groups` expects built-in
-`TimeoutError`, while that interpreter raises the distinct `asyncio.TimeoutError`.
-The same unchanged test passes on the baseline Python 3.13 interpreter. The
-Python 3.10 full-suite check is therefore not reported as passing.
+A Python 3.10 incompatibility found at that time is now fixed: on 3.10,
+`asyncio.wait_for` raises `asyncio.TimeoutError`, which is distinct from built-in
+`TimeoutError` until 3.11. The comparison batch's SIGKILL fallback
+(`evals/research_comparison.py`) and its cancellation test now catch
+`asyncio.TimeoutError`; CI covers Python 3.10, 3.11, and 3.12.
 
 ## Where to go next in the documentation
 

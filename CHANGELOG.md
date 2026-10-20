@@ -6,6 +6,9 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ### Documentation review
 
+- Fix Python 3.10 timeout handling: the comparison batch's SIGKILL fallback
+  now catches `asyncio.TimeoutError` (distinct from built-in `TimeoutError`
+  before 3.11), and its cancellation test expects the same exception.
 - Correct storage/deletion boundaries, backend and tool routing, conditional
   inference costs, session-end consolidation, and research administration guidance.
 - Identify the checked-in structural ablations as evaluation-only mock runs;

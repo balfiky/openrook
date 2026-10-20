@@ -252,8 +252,8 @@ implementation to reproduce with a different prompt.
   are not passing security guarantees.
 - All **49 new regression cases** also pass on Python 3.10, including strict native
   replay, raw-experience isolation, control-signal propagation, and the two-process
-  persistence test. This is targeted compatibility coverage, not a claim that the
-  previously documented unrelated Python 3.10 fixture issue was fixed.
+  persistence test. The separately documented Python 3.10 timeout issue was
+  fixed afterwards in `evals/research_comparison.py` and its test.
 - Source/package validation passes; wheel and source distribution build. An
   isolated Python 3.10 wheel install passes installed-package validation and
   fingerprints exactly 199 distribution-owned files, including the required

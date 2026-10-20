@@ -444,7 +444,7 @@ async def run_comparison(
                     pass
         try:
             await asyncio.wait_for(asyncio.gather(*(process.wait() for process in processes)), 180)
-        except TimeoutError:
+        except asyncio.TimeoutError:
             for process in processes:
                 if process.returncode is None:
                     os.killpg(process.pid, signal.SIGKILL)
