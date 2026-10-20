@@ -279,7 +279,9 @@ async def _admin_delete_user_data(
             detail="Resolved user path is not inside data_dir",
         )
 
-    rows_deleted = _count_user_rows(config.user_db_path(rel_key), user_id)
+    from runtime.storage import existing_user_db_path
+
+    rows_deleted = _count_user_rows(existing_user_db_path(user_dir), user_id)
     prefix = f"{rel_key}:"
     evict_keys = [
         key for key in list(manager.active_sessions.keys())

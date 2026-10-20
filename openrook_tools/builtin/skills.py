@@ -14,7 +14,7 @@ import re
 from typing import Any
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 from runtime.config import RuntimeConfig
 from runtime.skills import (
     SkillError,

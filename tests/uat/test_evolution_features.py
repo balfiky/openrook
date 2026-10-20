@@ -1294,7 +1294,7 @@ def test_cors_origins_config_is_respected_at_startup(uat_server):
     only for the configured origin and not for unrelated ones."""
     import requests
 
-    allowed = "https://nur-allowed.example.com"
+    allowed = "https://openrook-allowed.example.com"
     expect_json(uat_server.post(
         "/admin/config",
         {"cors_origins": [allowed]},

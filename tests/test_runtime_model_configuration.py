@@ -252,7 +252,7 @@ def test_native_tool_client_is_deferred_until_selection(tmp_path, monkeypatch):
         choices=[SimpleNamespace(message={"content": "ready"})],
     )
     constructor = Mock(return_value=client)
-    monkeypatch.setattr("nur_tools.native_orchestrator.OpenAI", constructor)
+    monkeypatch.setattr("openrook_tools.native_orchestrator.OpenAI", constructor)
     config = _config(tmp_path, tools_enabled=True)
     config.llm_model = uuid4().hex
     executor = create_tool_executor(config)
@@ -271,7 +271,7 @@ def test_native_tool_client_is_deferred_until_selection(tmp_path, monkeypatch):
 @pytest.mark.parametrize("backend", ["openai_compatible", "codex"])
 def test_native_tools_available_without_native_model_client(tmp_path, monkeypatch, backend):
     constructor = Mock(side_effect=AssertionError("inspection constructed native model client"))
-    monkeypatch.setattr("nur_tools.native_orchestrator.OpenAI", constructor)
+    monkeypatch.setattr("openrook_tools.native_orchestrator.OpenAI", constructor)
     config = _config(tmp_path, tools_enabled=True)
     config.llm_backend = backend
     if backend == "codex":

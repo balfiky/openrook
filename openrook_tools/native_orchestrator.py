@@ -51,7 +51,7 @@ from core.types import (
     ToolResult,
     ToolTrace,
 )
-from nur_tools.executor import ToolExecutor
+from openrook_tools.executor import ToolExecutor
 
 
 _NO_TOOL_SAFE_NAME = "control__no_tool"

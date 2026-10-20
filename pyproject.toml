@@ -54,7 +54,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# LangGraph-backed tool orchestration (nur_tools/langgraph_orchestrator.py)
+# LangGraph-backed tool orchestration (openrook_tools/langgraph_orchestrator.py)
 # is optional: the native orchestrator covers the default path. Install
 # with `pip install openrook[langgraph]` to enable LangGraphToolRunner.
 langgraph = [
@@ -89,22 +89,22 @@ openrook-uninstall = "interface.uninstall:main"
 openrook-web = "interface.api:main"
 openrook-genesis-reset = "runtime.genesis_reset:main"
 openrook-emotional-qa = "evals.emotional_quality:main"
-openrook-uat = "nur_tools.uat:main"
-openrook-validate = "nur_tools.validate:main"
-nur = "main:main"
-nur-setup = "interface.setup:main"
-nur-uninstall = "interface.uninstall:main"
-nur-web = "interface.api:main"
-nur-genesis-reset = "runtime.genesis_reset:main"
-nur-emotional-qa = "evals.emotional_quality:main"
-nur-uat = "nur_tools.uat:main"
-nur-validate = "nur_tools.validate:main"
+openrook-uat = "openrook_tools.uat:main"
+openrook-validate = "openrook_tools.validate:main"
+nur = "openrook_tools.legacy:main"
+nur-setup = "openrook_tools.legacy:setup"
+nur-uninstall = "openrook_tools.legacy:uninstall"
+nur-web = "openrook_tools.legacy:web"
+nur-genesis-reset = "openrook_tools.legacy:genesis_reset"
+nur-emotional-qa = "openrook_tools.legacy:emotional_qa"
+nur-uat = "openrook_tools.legacy:uat"
+nur-validate = "openrook_tools.legacy:validate"
 
 [tool.setuptools]
 py-modules = ["main"]
 
 [tool.setuptools.packages.find]
-include = ["core*", "config*", "evals*", "interface*", "pipeline*", "runtime*", "nur_tools*"]
+include = ["core*", "config*", "evals*", "interface*", "pipeline*", "runtime*", "openrook_tools*", "nur_tools*"]
 exclude = ["tests*", "data*", "storage*", "reports*"]
 
 [tool.setuptools.package-data]

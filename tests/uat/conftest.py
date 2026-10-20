@@ -199,7 +199,7 @@ def page(uat_artifacts: Path, request: pytest.FixtureRequest):
             if res.status >= 500
             else None,
         )
-        page._nur_uat_events = events  # type: ignore[attr-defined]
+        page._openrook_uat_events = events  # type: ignore[attr-defined]
         try:
             yield page
         finally:
@@ -211,7 +211,7 @@ def page(uat_artifacts: Path, request: pytest.FixtureRequest):
 
 def assert_no_browser_errors(page: Page) -> None:
     events = [
-        event for event in getattr(page, "_nur_uat_events", [])
+        event for event in getattr(page, "_openrook_uat_events", [])
         if "favicon.ico" not in event
     ]
     assert events == []

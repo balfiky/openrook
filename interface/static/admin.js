@@ -162,12 +162,12 @@ const state = createSurfaceState({
   };
 
   function getApiToken() {
-    return sessionStorage.getItem("nur_api_token") || "";
+    return sessionStorage.getItem("openrook_api_token") || "";
   }
 
   function setApiToken(token) {
-    if (token) sessionStorage.setItem("nur_api_token", token);
-    else sessionStorage.removeItem("nur_api_token");
+    if (token) sessionStorage.setItem("openrook_api_token", token);
+    else sessionStorage.removeItem("openrook_api_token");
   }
 
   async function authedFetch(url, opts) {

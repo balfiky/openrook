@@ -21,7 +21,7 @@ Within `data_dir`, OpenRook writes:
 | `data/shared/self_model.db` | Shared self-model — observations and defense log for entity `__self__` |
 | `data/shared/life_history.db` | Shared life-history/evolution ledger — formative experiences, belief revisions, drive changes, self-trait observations |
 | `data/shared/agent_runtime.db` | Research subject manifest, checkpoints, intentions, goals, action/outcome history and learning records |
-| `data/<platform>_<user_id>/nur.db` | Per-user SQLite: emotional memory, relationship events, open loops, person/topic profiles, semantic memory |
+| `data/<platform>_<user_id>/openrook.db` | Per-user SQLite: emotional memory, relationship events, open loops, person/topic profiles, semantic memory |
 | `data/<platform>_<user_id>/sessions/<chat_id>.json` | Per-session engine state: `modulator_snapshot`, `saved_at`, and `unresolved_items` |
 | `data/<platform>_<user_id>/sessions/<chat_id>.history.json` | Active hot transcript for that chat, restored until the session is explicitly ended or reset |
 | `data/<platform>_<user_id>/engine_state.json` | Legacy per-user engine-state snapshot (kept for backward-compatible restore) |
@@ -33,10 +33,11 @@ receipts, replay frames, and reports under the explicitly selected study output
 directory, commonly `reports/`. Those artifacts can contain sensitive content
 even when credential fields are redacted. Custom data/output directories need
 their own ignore rules and access controls; the default `data/` rule does not
-cover every possible location. The OpenRook rename does not move these records
-or change the historical `nur.db` filename.
+cover every possible location. Existing per-user databases migrate to
+`openrook.db` when first opened; records and schemas are preserved.
+See the [migration guide](docs/OPENROOK_MIGRATION.md) for the upgrade procedure.
 
-## Tables Inside the Per-User DB (`nur.db`)
+## Tables Inside the Per-User DB (`openrook.db`)
 
 | Table | Columns of interest | Purpose |
 |-------|--------------------|---------|
@@ -47,7 +48,7 @@ or change the historical `nur.db` filename.
 | `extracted_traits` | `entity_id`, `trait`, `score` | Rolled-up traits derived from observations |
 | `semantic_memories` | `source_person`, `kind`, `topic`, `summary`, `content` | Stated preferences, decisions, episodes, facts |
 
-In the per-user `nur.db`, `entity_id` values are either a user id (person
+In the per-user `openrook.db`, `entity_id` values are either a user id (person
 profile) or a topic name (topic profile).
 
 ## Tables Inside the Shared DB (`data/shared/self_model.db`)
@@ -134,7 +135,8 @@ user on a given platform in one call:
 
 - Evicts every live session for that `platform:user_id` (drain,
   digest, close) before touching disk.
-- Deletes the per-user SQLite DB (`nur.db`) and every session JSON/transcript.
+- Deletes the per-user SQLite DB (`openrook.db`), any legacy database and
+  sidecars, and every session JSON/transcript.
 - Removes the per-user directory itself.
 - **Does not touch** `data/shared/self_model.db` — the shared self-model
   holds only rows for entity `__self__` and a defense log with no
@@ -188,7 +190,8 @@ directory:
 rm -rf data/<platform>_<user_id>
 ```
 
-This removes `nur.db` and all session JSON/transcript files in one step.
+This removes `openrook.db`, any legacy database and sidecars, and all session
+JSON/transcript files in one step.
 Shared identity and research stores, study outputs, and backups remain; inspect
 them separately for material concerning that user.
 

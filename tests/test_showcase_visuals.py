@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from nur_tools.build_showcase import (
+from openrook_tools.build_showcase import (
     RETAINED_CHOICE_INTERVAL,
     RETAINED_CHOICE_PAIRS,
     SHOWCASE,
@@ -114,7 +114,7 @@ def test_both_themes_have_transparent_canvases_and_scoped_accessibility(name):
 
 
 def test_modulator_colors_contrast_against_theme_backgrounds():
-    from nur_tools.build_showcase import THEMES
+    from openrook_tools.build_showcase import THEMES
 
     def luminance(hex_color):
         channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
@@ -133,7 +133,7 @@ def test_modulator_colors_contrast_against_theme_backgrounds():
 
 
 def test_social_cover_is_one_light_1280_by_640_image():
-    from nur_tools.build_showcase import LIGHT
+    from openrook_tools.build_showcase import LIGHT
 
     root = ET.fromstring(SHOWCASE["github-cover"]())
     assert SIZES["github-cover"] == (1280, 640)
@@ -259,7 +259,7 @@ def test_readme_pictures_follow_system_theme_with_light_default_and_png_fallback
 
 @pytest.mark.parametrize("name", ("how-it-works", "emotional-arc"))
 def test_readme_alt_text_matches_computed_description(name):
-    from nur_tools.build_showcase import arc_description, how_it_works_description
+    from openrook_tools.build_showcase import arc_description, how_it_works_description
 
     description = {
         "how-it-works": how_it_works_description,
@@ -285,7 +285,7 @@ from config.loader import get_config
 config = get_config()
 assert config.half_lives["arousal"] == 1.0
 assert config.baselines["arousal"] == 0.1
-from nur_tools.build_showcase import replay
+from openrook_tools.build_showcase import replay
 print(json.dumps(replay()[1]))
 """],
         check=True, capture_output=True, text=True,
@@ -294,7 +294,7 @@ print(json.dumps(replay()[1]))
 
 
 def test_brand_assets_are_generated_rook_marks():
-    from nur_tools.brand import ROOK_PATH, rook_icon_svg, wordmark_svg
+    from openrook_tools.brand import ROOK_PATH, rook_icon_svg, wordmark_svg
 
     static = Path("interface/static")
     assert (static / "openrook-icon.svg").read_text(encoding="utf-8") == rook_icon_svg(64)

@@ -22,9 +22,9 @@ from core.dual_process.tool_loop import (
     run_tool_loop,
 )
 from core.emotional_engine import EmotionalEngine
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools import register_builtins
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools import register_builtins
 from pipeline import (
     CognitivePipeline,
     DebugState,

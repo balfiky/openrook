@@ -6,7 +6,7 @@ test test-unit:
 
 # Full UAT suite end-to-end against a live LLM (Codex by default).
 # Override OPENROOK_UAT_BACKEND for a different backend.
-OPENROOK_UAT_BACKEND ?= $(if $(NUR_UAT_BACKEND),$(NUR_UAT_BACKEND),codex)
+OPENROOK_UAT_BACKEND ?= codex
 uat:
 	OPENROOK_UAT_LIVE=1 OPENROOK_UAT_BACKEND=$(OPENROOK_UAT_BACKEND) python -m pytest tests/uat/ -m "uat and not comprehensive" --tb=short
 

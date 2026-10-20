@@ -10,7 +10,7 @@ from datetime import datetime as SystemDateTime, timezone
 from typing import Any
 
 
-_recording: ContextVar[dict[str, Any] | None] = ContextVar("nur_transition_recording", default=None)
+_recording: ContextVar[dict[str, Any] | None] = ContextVar("openrook_transition_recording", default=None)
 
 
 class Clock:

@@ -140,7 +140,7 @@ class OpenAICompatibleLLMBackend:
         if response_schema is not None:
             payload["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {"name": "nur_output", "schema": response_schema, "strict": True},
+                "json_schema": {"name": "openrook_output", "schema": response_schema, "strict": True},
             }
             self.last_response_metadata["structured_output_requested"] = True
         response = self._post(url, payload, attempts)

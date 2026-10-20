@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from core.types import ToolResult
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from nur_tools.registry import ToolRegistry
+from openrook_tools.registry import ToolRegistry
 
 # Handler signature: takes arguments dict, returns ToolResult
 ToolHandler = Callable[[dict[str, Any]], ToolResult]

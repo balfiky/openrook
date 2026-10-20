@@ -90,8 +90,8 @@ jobs:
     if: >-
       (
         (github.event_name == 'workflow_dispatch' && inputs.run_live) ||
-        (vars.OPENROOK_RUN_LIVE_UAT || vars.NUR_RUN_LIVE_UAT) == '1' ||
-        (vars.OPENROOK_RUN_LIVE_UAT || vars.NUR_RUN_LIVE_UAT) == 'true'
+        vars.OPENROOK_RUN_LIVE_UAT == '1' ||
+        vars.OPENROOK_RUN_LIVE_UAT == 'true'
       ) &&
       (
         github.event_name != 'pull_request' ||
@@ -99,10 +99,10 @@ jobs:
       )
     env:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      OPENROOK_UAT_BACKEND: ${{ vars.OPENROOK_UAT_BACKEND || vars.NUR_UAT_BACKEND }}
-      OPENROOK_UAT_MODEL: ${{ vars.OPENROOK_UAT_MODEL || vars.NUR_UAT_MODEL }}
-      OPENROOK_UAT_BASE_URL: ${{ vars.OPENROOK_UAT_BASE_URL || vars.NUR_UAT_BASE_URL }}
-      OPENROOK_UAT_API_KEY_ENV: ${{ vars.OPENROOK_UAT_API_KEY_ENV || vars.NUR_UAT_API_KEY_ENV }}
+      OPENROOK_UAT_BACKEND: ${{ vars.OPENROOK_UAT_BACKEND }}
+      OPENROOK_UAT_MODEL: ${{ vars.OPENROOK_UAT_MODEL }}
+      OPENROOK_UAT_BASE_URL: ${{ vars.OPENROOK_UAT_BASE_URL }}
+      OPENROOK_UAT_API_KEY_ENV: ${{ vars.OPENROOK_UAT_API_KEY_ENV }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -131,7 +131,7 @@ jobs:
             echo "::error::Live UAT requires \$$key_env. Configure repository secrets/variables or run trusted PRs only."
             exit 1
           fi
-          python -m nur_tools.uat \
+          python -m openrook_tools.uat \
             --live \
             --backend "$backend" \
             --model "${OPENROOK_UAT_MODEL:-}" \

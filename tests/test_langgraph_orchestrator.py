@@ -12,10 +12,10 @@ from langchain_core.messages import AIMessage
 from core.emotional_engine import EmotionalEngine
 from core.life_influence import LifeInfluence
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools import register_builtins
-from nur_tools.executor import ToolExecutor
-from nur_tools.langgraph_orchestrator import LangGraphToolRunner
-from nur_tools.registry import ToolRegistry
+from openrook_tools import register_builtins
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.langgraph_orchestrator import LangGraphToolRunner
+from openrook_tools.registry import ToolRegistry
 
 
 def _executor() -> ToolExecutor:
@@ -340,7 +340,7 @@ def test_module_imports_without_langgraph(monkeypatch) -> None:
     import importlib
     import sys
 
-    import nur_tools.langgraph_orchestrator as lg_mod
+    import openrook_tools.langgraph_orchestrator as lg_mod
 
     blocked_prefixes = ("langgraph", "langchain_core", "langchain_openai")
     real_import = builtins.__import__
@@ -353,12 +353,12 @@ def test_module_imports_without_langgraph(monkeypatch) -> None:
     for mod_name in list(sys.modules):
         if mod_name.startswith(blocked_prefixes):
             monkeypatch.delitem(sys.modules, mod_name)
-    monkeypatch.delitem(sys.modules, "nur_tools.langgraph_orchestrator")
+    monkeypatch.delitem(sys.modules, "openrook_tools.langgraph_orchestrator")
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
     try:
         # 1. Module import must not crash when the extra is absent.
-        reloaded = importlib.import_module("nur_tools.langgraph_orchestrator")
+        reloaded = importlib.import_module("openrook_tools.langgraph_orchestrator")
         assert reloaded._LANGGRAPH_IMPORT_ERROR is not None
 
         # 2. Constructing the runner raises a clear, actionable ImportError.
@@ -371,7 +371,7 @@ def test_module_imports_without_langgraph(monkeypatch) -> None:
     finally:
         # Restore the real module for the rest of the suite.
         monkeypatch.undo()
-        sys.modules["nur_tools.langgraph_orchestrator"] = lg_mod
+        sys.modules["openrook_tools.langgraph_orchestrator"] = lg_mod
         importlib.reload(lg_mod)
 
 

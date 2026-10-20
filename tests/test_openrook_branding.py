@@ -21,7 +21,7 @@ from interface.routes_backup import (
     _resolve_admin_backup_path,
 )
 from main import _parse_args as parse_runtime_args
-from nur_tools import uat, validate
+from openrook_tools import uat, validate
 from runtime.app import NurApp, OpenRookApp
 from runtime.config import RuntimeConfig
 from runtime.security import validate_http_url
@@ -108,10 +108,10 @@ def test_private_url_opt_in_keeps_alias_without_overriding_explicit_empty(monkey
         validate_http_url(url, allow_private_env="OPENROOK_ALLOW_PRIVATE_WEB_FETCH")
 
 
-def test_database_path_stays_compatible(tmp_path):
+def test_database_and_export_use_current_names(tmp_path):
     config = RuntimeConfig(data_dir=str(tmp_path))
-    assert Path(config.user_db_path("web:alice")) == tmp_path / "web_alice" / "nur.db"
-    assert _admin_redacted_config_export(config)["format"] == "nur.runtime_config.redacted.v1"
+    assert Path(config.user_db_path("web:alice")) == tmp_path / "web_alice" / "openrook.db"
+    assert _admin_redacted_config_export(config)["format"] == "openrook.runtime_config.redacted.v1"
 
 
 def test_old_and_new_backups_remain_accessible(tmp_path, monkeypatch):
@@ -160,10 +160,10 @@ def test_distribution_and_all_command_aliases_are_declared():
     ):
         canonical = f"openrook{suffix}"
         legacy = f"nur{suffix}"
-        assert (
-            validate.EXPECTED_CONSOLE_SCRIPTS[canonical]
-            == validate.EXPECTED_CONSOLE_SCRIPTS[legacy]
-        )
+        from openrook_tools.legacy import COMMAND_TARGETS
+
+        assert validate.EXPECTED_CONSOLE_SCRIPTS[canonical] == COMMAND_TARGETS[legacy]
+        assert validate.EXPECTED_CONSOLE_SCRIPTS[legacy].startswith("openrook_tools.legacy:")
         for command in (canonical, legacy):
             target = validate.EXPECTED_CONSOLE_SCRIPTS[command]
             assert f'{command} = "{target}"' in metadata
@@ -176,12 +176,15 @@ def test_public_html_has_current_brand(filename):
     assert "Nūr" not in content
 
 
-def test_browser_identity_and_token_keys_remain_compatible():
+def test_browser_identity_and_token_keys_use_current_names_with_migration():
     static = ROOT / "interface" / "static"
     chat = (static / "chat.js").read_text(encoding="utf-8")
-    for key in ("nur_user_id", "nur_chat_id", "nur_wizard_dismissed"):
+    migration = (static / "lib/storage.js").read_text(encoding="utf-8")
+    for key in ("openrook_user_id", "openrook_chat_id", "openrook_wizard_dismissed"):
         assert key in chat
+        assert key.replace("openrook_", "nur_") in migration
     for filename in ("chat.js", "admin.js", "persona.js", "lib/shared.js"):
         content = (static / filename).read_text(encoding="utf-8")
-        assert "nur_api_token" in content
-        assert "openrook_api_token" not in content
+        assert "openrook_api_token" in content
+        assert "nur_api_token" not in content
+    assert "nur_api_token" in migration

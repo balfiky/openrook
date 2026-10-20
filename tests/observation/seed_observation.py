@@ -284,9 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.keep:
-        tmp = Path(tempfile.mkdtemp(prefix="nur-observation-"))
+        tmp = Path(tempfile.mkdtemp(prefix="openrook-observation-"))
     else:
-        tmp_obj = tempfile.TemporaryDirectory(prefix="nur-observation-")
+        tmp_obj = tempfile.TemporaryDirectory(prefix="openrook-observation-")
         tmp = Path(tmp_obj.name)
 
     workspace = tmp / "workspace"

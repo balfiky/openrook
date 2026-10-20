@@ -1,140 +1,62 @@
-"""Agentic tools package — execution surfaces for OpenRook cognition."""
+"""Deprecated import compatibility for :mod:`openrook_tools`."""
 
 from __future__ import annotations
 
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools.builtin import filesystem, shell, skills, system_info, web_search
-from nur_tools.builtin import browser as browser_mod
-from nur_tools.builtin import calendar as calendar_mod
-from nur_tools.builtin import self_actions
-from nur_tools.builtin.web_search import WebProvider
-from nur_tools.builtin.browser import BrowserProvider
-from nur_tools.builtin.calendar import CalendarProvider
-from nur_tools.mcp.adapter import register_mcp_tools
-from nur_tools.mcp.client import MCPClient
-from runtime.config import RuntimeConfig
+import importlib
+import importlib.abc
+import importlib.util
+import sys
+import warnings
+
+import openrook_tools as _canonical
+
+warnings.warn(
+    "nur_tools is deprecated; import openrook_tools instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-def register_builtins(
-    registry: ToolRegistry,
-    executor: ToolExecutor,
-    web_provider: WebProvider | None = None,
-    browser_provider: BrowserProvider | None = None,
-    calendar_provider: CalendarProvider | None = None,
-    *,
-    fs_workspace: str | None = None,
-    include_shell: bool = True,
-    shell_command_allowlist: list[str] | None = None,
-    skill_config: RuntimeConfig | None = None,
-) -> None:
-    """Register all builtin tool capabilities and handlers.
+class _AliasLoader(importlib.abc.Loader):
+    def __init__(self, canonical_name: str) -> None:
+        self.canonical_name = canonical_name
 
-    Args:
-        registry: The tool registry to register capabilities into.
-        executor: The executor to bind handlers to.
-        web_provider: Optional web provider; defaults to NullWebProvider.
-        browser_provider: Optional browser provider; defaults to NullBrowserProvider.
-        calendar_provider: Optional calendar provider; defaults to NullCalendarProvider.
-        fs_workspace: Optional workspace root; when set, filesystem tools
-            refuse paths that resolve outside this directory.
-        include_shell: Whether to register ``shell.run_command``. Defaults to
-            True to preserve existing test wiring; production callers gate
-            this on an explicit config flag.
-        shell_command_allowlist: Optional command allowlist for the shell
-            tool. None/empty = unrestricted; non-empty = only first-token
-            matches run and chaining metacharacters are rejected.
-        skill_config: Optional RuntimeConfig-like object for skill registry
-            tools. When omitted, the skill tool module uses default runtime
-            paths, preserving legacy zero-arg test wiring.
-    """
-    # System inspection
-    for cap in system_info.CAPABILITIES:
-        registry.register(cap)
-    for name, handler in system_info.HANDLERS.items():
-        executor.register_handler(name, handler)
+    def create_module(self, spec):
+        # Both spellings must share classes, registrations, and module state.
+        module = importlib.import_module(self.canonical_name)
+        self.canonical_spec = module.__spec__
+        return module
 
-    # Filesystem
-    for cap in filesystem.CAPABILITIES:
-        registry.register(cap)
-    fs_handlers = filesystem.create_handlers(workspace=fs_workspace)
-    for name, handler in fs_handlers.items():
-        executor.register_handler(name, handler)
+    def exec_module(self, module) -> None:
+        # Import machinery assigns the alias spec before calling this method.
+        # Keep reload/introspection on the real source loader and module name.
+        module.__spec__ = self.canonical_spec
 
-    # Shell — commands default to the tools workspace when ``cwd`` is omitted.
-    if include_shell:
-        for cap in shell.CAPABILITIES:
-            registry.register(cap)
-        shell_handlers = shell.create_handlers(
-            allowlist=shell_command_allowlist,
-            default_cwd=fs_workspace,
+    def get_code(self, fullname):
+        # Preserve historical `python -m` invocations as well as imports.
+        spec = importlib.util.find_spec(self.canonical_name)
+        return spec.loader.get_code(self.canonical_name)
+
+
+class _AliasFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if not fullname.startswith("nur_tools."):
+            return None
+        canonical_name = fullname.replace("nur_tools", "openrook_tools", 1)
+        spec = importlib.util.find_spec(canonical_name)
+        if spec is None:
+            return None
+        return importlib.util.spec_from_loader(
+            fullname,
+            _AliasLoader(canonical_name),
+            is_package=spec.submodule_search_locations is not None,
         )
-        for name, handler in shell_handlers.items():
-            executor.register_handler(name, handler)
-
-    # Web search/fetch/extract
-    for cap in web_search.CAPABILITIES:
-        registry.register(cap)
-    web_handlers = web_search.create_handlers(web_provider)
-    for name, handler in web_handlers.items():
-        executor.register_handler(name, handler)
-
-    # Browser
-    for cap in browser_mod.CAPABILITIES:
-        registry.register(cap)
-    browser_handlers = browser_mod.create_handlers(browser_provider)
-    for name, handler in browser_handlers.items():
-        executor.register_handler(name, handler)
-
-    # Calendar
-    for cap in calendar_mod.CAPABILITIES:
-        registry.register(cap)
-    calendar_handlers = calendar_mod.create_handlers(calendar_provider)
-    for name, handler in calendar_handlers.items():
-        executor.register_handler(name, handler)
-
-    # Skill registry
-    register_skill_builtins(registry, executor, skill_config=skill_config)
-
-    # Self-action tools — bounded actions OpenRook can invoke for itself via the
-    # self-intent stage. Always registered; handlers safely no-op until the
-    # pipeline attaches a SelfActionContext to the executor.
-    register_self_action_builtins(registry, executor)
 
 
-def register_skill_builtins(
-    registry: ToolRegistry,
-    executor: ToolExecutor,
-    *,
-    skill_config: RuntimeConfig | None = None,
-) -> None:
-    """Register only the internal skill-registry tools.
-
-    These tools mutate OpenRook's imported skill registry, not the host filesystem or
-    shell. Runtime surfaces use this when general agentic tools are disabled so
-    the assistant can still create, audit, enable, and list its own skills.
-    """
-    for cap in skills.CAPABILITIES:
-        registry.register(cap)
-    skill_handlers = skills.create_handlers(skill_config)
-    for name, handler in skill_handlers.items():
-        executor.register_handler(name, handler)
+sys.meta_path.insert(0, _AliasFinder())
+__all__ = [name for name in vars(_canonical) if not name.startswith("_")]
+globals().update({name: getattr(_canonical, name) for name in __all__})
 
 
-def register_self_action_builtins(
-    registry: ToolRegistry,
-    executor: ToolExecutor,
-) -> None:
-    """Register the bounded self.* catalog used by the self-intent stage.
-
-    Handlers read their context from ``executor.self_action_context`` at
-    call time. Until the pipeline attaches a context the tools return
-    structured failure results rather than raising.
-    """
-    for cap in self_actions.CAPABILITIES:
-        registry.register(cap)
-    handlers = self_actions.create_handlers(
-        get_context=lambda: executor.self_action_context,
-    )
-    for name, handler in handlers.items():
-        executor.register_handler(name, handler)
+def __getattr__(name: str):
+    return getattr(_canonical, name)

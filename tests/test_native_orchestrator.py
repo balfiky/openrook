@@ -9,10 +9,10 @@ from typing import Any
 from core.emotional_engine import EmotionalEngine
 from core.life_influence import LifeInfluence
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools import register_builtins, register_skill_builtins
-from nur_tools.executor import ToolExecutor
-from nur_tools.native_orchestrator import NativeToolCallRunner
-from nur_tools.registry import ToolRegistry
+from openrook_tools import register_builtins, register_skill_builtins
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.native_orchestrator import NativeToolCallRunner
+from openrook_tools.registry import ToolRegistry
 from runtime.config import RuntimeConfig
 from runtime.skills import list_skills
 
@@ -274,7 +274,7 @@ def test_native_runner_accepts_life_influence_and_records_action_effect() -> Non
 
 
 def test_install_retry_directive_gated_on_high_risk() -> None:
-    from nur_tools.native_orchestrator import _build_native_tool_system_prompt
+    from openrook_tools.native_orchestrator import _build_native_tool_system_prompt
 
     high_risk_prompt = _build_native_tool_system_prompt("high_risk")
     assisted_prompt = _build_native_tool_system_prompt("assisted")

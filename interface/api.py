@@ -1227,7 +1227,7 @@ def _config_payload(
             "Saving through this UI updates runtime_config.yaml.",
             "The standalone web server reloads its web manager and Telegram poller after save.",
             "debug_host, debug_port, and cors_origins require restarting the web server process.",
-            "Changes for nur / python3 main.py still apply after restarting that runtime.",
+            "Changes for openrook / python3 main.py still apply after restarting that runtime.",
         ],
     }
 

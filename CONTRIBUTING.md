@@ -62,25 +62,25 @@ Docs:
 
 | Change kind | Update |
 |---|---|
-| Runtime hosts, backends, or shared cognition | `nur_tools/build_diagrams.py::build_runtime_architecture` + `docs/ARCHITECTURE.md` Runtime Topology section |
-| Persistent research lifecycle | `nur_tools/build_diagrams.py::build_research_runtime_autonomy` + `docs/RESEARCH_RUNTIME.md` |
-| Pipeline stage order | `nur_tools/build_diagrams.py::build_single_turn_flow` + `docs/ARCHITECTURE.md` Single-Turn section |
-| Storage / table changes | `nur_tools/build_diagrams.py::build_memory_persistence` + `docs/ARCHITECTURE.md` + `PRIVACY.md` |
-| HTTP route or auth changes | `nur_tools/build_diagrams.py::build_auth_tool_safety` + `docs/ARCHITECTURE.md` + `SECURITY.md` |
+| Runtime hosts, backends, or shared cognition | `openrook_tools/build_diagrams.py::build_runtime_architecture` + `docs/ARCHITECTURE.md` Runtime Topology section |
+| Persistent research lifecycle | `openrook_tools/build_diagrams.py::build_research_runtime_autonomy` + `docs/RESEARCH_RUNTIME.md` |
+| Pipeline stage order | `openrook_tools/build_diagrams.py::build_single_turn_flow` + `docs/ARCHITECTURE.md` Single-Turn section |
+| Storage / table changes | `openrook_tools/build_diagrams.py::build_memory_persistence` + `docs/ARCHITECTURE.md` + `PRIVACY.md` |
+| HTTP route or auth changes | `openrook_tools/build_diagrams.py::build_auth_tool_safety` + `docs/ARCHITECTURE.md` + `SECURITY.md` |
 | Admin / wizard behavior | `docs/DEPLOYMENT_AND_ADMIN.md` |
-| New eval variant | `nur_tools/build_diagrams.py::build_evaluation_harness` + `evals/ablation_hypotheses.py` **before** running the eval + `docs/ARCHITECTURE.md` Evaluation section + `docs/OVERVIEW.md §4` results table |
-| Component evidence status changes | `nur_tools/build_diagrams.py::build_component_claim_map` + `docs/OVERVIEW.md §5` |
-| Channels, persistent state, or headline capabilities | `nur_tools/build_diagrams.py::build_feature_overview` + `README.md` Architecture At A Glance section |
-| Shared visual theme or fonts | `nur_tools/brand.py` + diagram and showcase parity tests; inspect both themes |
-| Modulator config, event impacts, or emotion labels | `nur_tools/build_showcase.py` (engine-replay hero, fingerprints, cover) — re-render; `tests/test_showcase_visuals.py` must pass |
-| New headline study result | `nur_tools/build_showcase.py` data constants + `tests/test_showcase_visuals.py` |
+| New eval variant | `openrook_tools/build_diagrams.py::build_evaluation_harness` + `evals/ablation_hypotheses.py` **before** running the eval + `docs/ARCHITECTURE.md` Evaluation section + `docs/OVERVIEW.md §4` results table |
+| Component evidence status changes | `openrook_tools/build_diagrams.py::build_component_claim_map` + `docs/OVERVIEW.md §5` |
+| Channels, persistent state, or headline capabilities | `openrook_tools/build_diagrams.py::build_feature_overview` + `README.md` Architecture At A Glance section |
+| Shared visual theme or fonts | `openrook_tools/brand.py` + diagram and showcase parity tests; inspect both themes |
+| Modulator config, event impacts, or emotion labels | `openrook_tools/build_showcase.py` (engine-replay hero, fingerprints, cover) — re-render; `tests/test_showcase_visuals.py` must pass |
+| New headline study result | `openrook_tools/build_showcase.py` data constants + `tests/test_showcase_visuals.py` |
 | Release notes | `CHANGELOG.md` under a new version header |
 
 ## Regenerating Diagrams
 
 Architecture diagrams are generated from Python by
-`nur_tools/build_diagrams.py`, rendered to SVG by the toolkit in
-`nur_tools/diagram_toolkit.py`, and rasterized to PNG by CairoSVG, included in
+`openrook_tools/build_diagrams.py`, rendered to SVG by the toolkit in
+`openrook_tools/diagram_toolkit.py`, and rasterized to PNG by CairoSVG, included in
 the `dev` extra. Each of the eight builders produces `-light.svg`, `-dark.svg`,
 `-light.png`, and `-dark.png` assets tracked in `docs/diagrams/`. The feature
 overview uses the same builder and rendering path.
@@ -108,7 +108,7 @@ resolution on systems with fontconfig.
 After editing the generator, run:
 
 ```bash
-python3 nur_tools/render_diagram_pngs.py
+python3 openrook_tools/render_diagram_pngs.py
 ```
 
 Inspect each light rendering on white and each dark rendering on `#0d1117`,
@@ -130,9 +130,9 @@ qualifications in the surrounding prose.
 
 Design language for new diagrams:
 
-- Shared `Theme`, `LIGHT`, `DARK`, and font tokens live in `nur_tools/brand.py`;
+- Shared `Theme`, `LIGHT`, `DARK`, and font tokens live in `openrook_tools/brand.py`;
   both diagram and showcase builders use them. Primitives live in
-  `nur_tools/diagram_toolkit.py`.
+  `openrook_tools/diagram_toolkit.py`.
 - Keep transparent backgrounds and the established ink, muted, rule, amber,
   plum, and modulator tokens. Use accent on at most two focal elements.
 - Delete repetition first: one idea per node, a short name and one short
@@ -159,7 +159,7 @@ Design language for new diagrams:
    live-LLM run when relevant.
 4. If a new component becomes load-bearing or shifts category, update
    `docs/OVERVIEW.md §5` and
-   `nur_tools/build_diagrams.py::build_component_claim_map`.
+   `openrook_tools/build_diagrams.py::build_component_claim_map`.
 
 ## Writing A Regression Test
 

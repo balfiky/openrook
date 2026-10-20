@@ -41,9 +41,9 @@ from core.tool_memory import (
     derive_tool_self_observations,
     is_salient_episode,
 )
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools import register_builtins
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools import register_builtins
 from pipeline import CognitivePipeline, DebugState
 from runtime.debug.mental_state import mental_health
 

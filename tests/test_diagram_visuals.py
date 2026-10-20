@@ -12,9 +12,9 @@ import zlib
 
 import pytest
 
-from nur_tools.brand import DARK, LIGHT, THEMES
-from nur_tools.build_diagrams import BUILDERS
-from nur_tools.diagram_toolkit import Canvas, loop_geometry
+from openrook_tools.brand import DARK, LIGHT, THEMES
+from openrook_tools.build_diagrams import BUILDERS
+from openrook_tools.diagram_toolkit import Canvas, loop_geometry
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 DIAGRAM_DIR = Path("docs/diagrams")
@@ -137,7 +137,7 @@ def test_single_variant_assets_and_documentation_references_are_retired(name):
     for suffix in (".svg", ".png"):
         assert not (DIAGRAM_DIR / f"{name}{suffix}").exists()
     old_reference = re.compile(rf"(?<![\w-]){re.escape(name)}\.(?:svg|png)\b")
-    reference_files = [*MARKDOWN_FILES, *Path("nur_tools").glob("*.py"), *Path("tests").glob("*.py")]
+    reference_files = [*MARKDOWN_FILES, *Path("openrook_tools").glob("*.py"), *Path("tests").glob("*.py")]
     for path in reference_files:
         assert not old_reference.search(path.read_text(encoding="utf-8")), str(path)
 

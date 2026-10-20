@@ -130,9 +130,9 @@ async def test_replay_rejects_an_unfinished_recorded_request(tmp_path):
 @pytest.mark.asyncio
 async def test_native_requests_replay_through_the_real_runner_without_external_calls(tmp_path):
     from core.types import ToolCapability, ToolCategory, ToolResult
-    from nur_tools.executor import ToolExecutor
-    from nur_tools.native_orchestrator import NativeToolCallRunner
-    from nur_tools.registry import ToolRegistry
+    from openrook_tools.executor import ToolExecutor
+    from openrook_tools.native_orchestrator import NativeToolCallRunner
+    from openrook_tools.registry import ToolRegistry
     from runtime.sessions.manager import SessionManager
     from tests.test_native_orchestrator import FakeNativeClient
 
@@ -228,9 +228,9 @@ async def test_native_requests_replay_through_the_real_runner_without_external_c
 def test_native_and_tool_execution_never_fall_back_after_resource_stop(tmp_path, monkeypatch, kind):
     from core.emotional_engine import EmotionalEngine
     from core.types import ToolCapability, ToolCategory
-    from nur_tools.executor import ToolExecutor
-    from nur_tools.native_orchestrator import NativeToolCallRunner
-    from nur_tools.registry import ToolRegistry
+    from openrook_tools.executor import ToolExecutor
+    from openrook_tools.native_orchestrator import NativeToolCallRunner
+    from openrook_tools.registry import ToolRegistry
 
     error = (
         ResearchBudgetExceeded(10**12) if kind == "daily" else ResearchStudyLimit("Study stopped")
@@ -349,8 +349,8 @@ class StoppingBackend(ResearchBackend):
 @pytest.mark.parametrize("kind", ["daily", "study", "runtime"])
 async def test_generated_artifact_preserves_resource_stops_and_ordinary_failure(tmp_path, kind):
     from core.types import ToolCapability, ToolCategory, ToolResult
-    from nur_tools.executor import ToolExecutor
-    from nur_tools.registry import ToolRegistry
+    from openrook_tools.executor import ToolExecutor
+    from openrook_tools.registry import ToolRegistry
     from runtime.sessions.manager import SessionManager
 
     error = {

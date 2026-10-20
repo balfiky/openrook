@@ -9,11 +9,11 @@ calendar API without changing OpenRook code.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 
 
 # ---------------------------------------------------------------------------

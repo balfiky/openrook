@@ -30,7 +30,7 @@ from typing import Any, Callable
 import httpx
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 
 
 # ---------------------------------------------------------------------------

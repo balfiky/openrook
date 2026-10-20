@@ -85,7 +85,7 @@ async def admin_import_skill_upload(
                 max_bytes=_MAX_SKILL_ARCHIVE_UPLOAD_BYTES,
                 label="Skill archive",
             )
-            with tempfile.TemporaryDirectory(prefix="nur-skill-upload-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="openrook-skill-upload-") as tmp:
                 extract_root = Path(tmp) / "skill"
                 extract_root.mkdir(parents=True, exist_ok=True)
                 _safe_extract_zip(payload, extract_root)

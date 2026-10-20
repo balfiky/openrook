@@ -15,11 +15,11 @@ import os
 from typing import Optional
 
 from runtime.config import RuntimeConfig
-from nur_tools import register_builtins, register_skill_builtins
-from nur_tools.executor import ToolExecutor
-from nur_tools.registry import ToolRegistry
-from nur_tools.builtin.web_provider import RequestsWebProvider
-from nur_tools.native_orchestrator import NativeToolCallRunner
+from openrook_tools import register_builtins, register_skill_builtins
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.builtin.web_provider import RequestsWebProvider
+from openrook_tools.native_orchestrator import NativeToolCallRunner
 
 
 def create_tool_executor(
@@ -33,7 +33,7 @@ def create_tool_executor(
     callers pass a ``RuntimeConfig`` so external tools honor the
     ``tools_enabled`` / ``shell_tool_enabled`` / ``tools_workspace`` gates.
     Unsandboxed filesystem handlers are never wired implicitly; they require
-    an explicit opt-in (importing ``nur_tools.builtin.filesystem.HANDLERS``
+    an explicit opt-in (importing ``openrook_tools.builtin.filesystem.HANDLERS``
     or calling ``filesystem.create_handlers(workspace=None)`` directly).
     """
     # Legacy zero-arg call path (tests/dev wiring). Every builtin registered,

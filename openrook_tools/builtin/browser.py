@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 from runtime.security import validate_http_url
 
 

@@ -28,7 +28,7 @@ from core.types import (
     ToolObservation,
 )
 from core.tool_appraisal import appraise_tool_result
-from nur_tools.executor import ToolExecutor
+from openrook_tools.executor import ToolExecutor
 
 # ---------------------------------------------------------------------------
 # Constants

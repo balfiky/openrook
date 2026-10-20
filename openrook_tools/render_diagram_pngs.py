@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Regenerate the architecture diagrams as SVG + PNG under docs/diagrams/.
 
-SVG sources are built from ``nur_tools/build_diagrams.py`` (eight structural
-figures) and ``nur_tools/build_showcase.py`` (data-driven README visuals).
+SVG sources are built from ``openrook_tools/build_diagrams.py`` (eight structural
+figures) and ``openrook_tools/build_showcase.py`` (data-driven README visuals).
 All diagrams have transparent ``-light`` and ``-dark`` SVG + PNG variants,
 selected in documentation with theme-aware picture elements. CairoSVG renders
 PNGs at 2x device pixels; the single opaque social cover stays at 1280 x 640.
@@ -10,7 +10,7 @@ Both SVGs and PNG previews are tracked. Edit the Python builders, then regenerat
 
 Usage::
 
-    python3 nur_tools/render_diagram_pngs.py
+    python3 openrook_tools/render_diagram_pngs.py
 
 Requires ``cairosvg`` (listed in the dev extras) and DejaVu Sans, DejaVu Serif,
 and DejaVu Sans Mono fonts.
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import sys
 
-# Direct script execution puts nur_tools/ first, where types.py can shadow the
+# Direct script execution puts openrook_tools/ first, where types.py can shadow the
 # standard library while pathlib imports. Restore the project root below.
 if __package__ is None:
     sys.path.pop(0)
@@ -31,13 +31,13 @@ from pathlib import Path
 
 import cairosvg
 
-# Make nur_tools importable when running the script directly.
+# Make openrook_tools importable when running the script directly.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from nur_tools.build_diagrams import BUILDERS  # noqa: E402
-from nur_tools.build_showcase import SHOWCASE, SIZES  # noqa: E402
-from nur_tools.brand import THEMES, rook_icon_svg, wordmark_svg  # noqa: E402
+from openrook_tools.build_diagrams import BUILDERS  # noqa: E402
+from openrook_tools.build_showcase import SHOWCASE, SIZES  # noqa: E402
+from openrook_tools.brand import THEMES, rook_icon_svg, wordmark_svg  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs" / "diagrams"

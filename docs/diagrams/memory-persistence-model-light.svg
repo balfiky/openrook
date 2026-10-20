@@ -32,11 +32,11 @@
 <text x="124" y="496.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">agent_runtime.db</text>
 <text x="124" y="521.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">research state + evidence</text>
 </g>
-<g data-node="nur.db" data-role="store" data-focal="false">
+<g data-node="openrook.db" data-role="store" data-focal="false">
 <rect x="680" y="260" width="496" height="108" rx="6" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
 <rect x="680" y="260" width="496" height="108" rx="6" fill="none" stroke="#D8D1E0" stroke-width="1.5"/>
 <path d="M692,268 H1164" fill="none" stroke="#D8D1E0" stroke-width="1"/>
-<text x="700" y="310.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">nur.db</text>
+<text x="700" y="310.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">openrook.db</text>
 <text x="700" y="335.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">memory · relationships · profiles</text>
 </g>
 <g data-node="Session files" data-role="step" data-focal="false">

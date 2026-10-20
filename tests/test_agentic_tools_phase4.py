@@ -34,9 +34,9 @@ from core.tool_memory import ToolMemoryEffects
 from pipeline import CognitivePipeline, DebugState
 from tests._fakes import MockLLMBackend
 from runtime.debug.api import _debug_to_dict, _build_tool_summary
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools import register_builtins
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools import register_builtins
 
 
 # ===================================================================

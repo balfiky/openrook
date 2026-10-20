@@ -7,10 +7,10 @@ from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from nur_tools.builtin import filesystem, self_actions
-from nur_tools.executor import ToolExecutor
-from nur_tools.native_orchestrator import NativeToolCallRunner
-from nur_tools.registry import ToolRegistry
+from openrook_tools.builtin import filesystem, self_actions
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.native_orchestrator import NativeToolCallRunner
+from openrook_tools.registry import ToolRegistry
 from runtime.config import RuntimeConfig
 
 

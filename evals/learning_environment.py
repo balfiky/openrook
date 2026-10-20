@@ -8,8 +8,8 @@ from dataclasses import asdict
 from typing import Any
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolExecutor
-from nur_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.registry import ToolRegistry
 from runtime.config import RuntimeConfig
 from runtime.research_store import ResearchStore, encode
 

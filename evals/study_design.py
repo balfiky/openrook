@@ -35,7 +35,7 @@ def implementation_signature(manifest: dict) -> str | None:
     runtime = {key: value for key, value in manifest["runtime"].items() if key != "data_dir"}
     fingerprints = {
         path: digest for path, digest in manifest["code_fingerprints"].items()
-        if path.startswith(("runtime/", "pipeline/", "core/", "config/", "nur_tools/"))
+        if path.startswith(("runtime/", "pipeline/", "core/", "config/", "openrook_tools/"))
         or path in {"evals/learning_environment.py", "evals/development_environment.py", "evals/research_environment.py", "evals/research.py", "evals/study_budget.py"}
     }
     if not fingerprints:

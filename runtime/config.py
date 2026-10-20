@@ -346,7 +346,9 @@ class RuntimeConfig:
         return os.path.join(self.data_dir, safe)
 
     def user_db_path(self, rel_key: str) -> str:
-        return os.path.join(self.user_data_dir(rel_key), "nur.db")
+        from runtime.storage import resolve_user_db_path
+
+        return resolve_user_db_path(self.user_data_dir(rel_key))
 
     def user_state_path(self, rel_key: str) -> str:
         """Legacy per-user engine-state path kept for backward-compatible restore."""

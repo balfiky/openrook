@@ -33,7 +33,7 @@ extra scrutiny:
   transcripts to `data/<platform>_<user_id>/sessions/<chat_id>.history.json`.
   `data/` is gitignored; never commit it.
 - `core/memory/long_term.py`, `core/memory/relationship.py`,
-  `core/memory/semantic.py` — SQLite tables in `data/<platform>_<user_id>/nur.db`
+  `core/memory/semantic.py` — SQLite tables in `data/<platform>_<user_id>/openrook.db`
   storing distilled user memory (`memories`), relationship events
   (`relationship_events`), open loops (`open_loops`), and semantic preferences
   (`semantic_memories`). The shared self-model lives in
@@ -63,7 +63,7 @@ extra scrutiny:
 
 ## Agentic Tool Runtime
 
-OpenRook ships with a builtin agentic tool layer (`nur_tools/builtin/`) that can
+OpenRook ships with a builtin agentic tool layer (`openrook_tools/builtin/`) that can
 match user text to actions like `fs.read_file`, `fs.write_file`,
 `fs.delete_path`, `shell.run_command`, and web/browser/calendar calls via
 regex heuristics in `core/dual_process/tool_loop.py`. **External tools are
@@ -76,7 +76,7 @@ excluded until `tools_enabled: true`, and `shell.run_command` additionally
 requires `shell_tool_enabled: true`.
 
 Additionally, the native tool-controller system prompt
-(`nur_tools/native_orchestrator.py`) only emits the "diagnose, install,
+(`openrook_tools/native_orchestrator.py`) only emits the "diagnose, install,
 retry" directive — which lets the model unilaterally run package-manager
 commands on missing-dependency errors — when
 `autonomy_level: high_risk`. Under `assisted` (default) and `autonomous`
@@ -113,7 +113,7 @@ When you turn external tools on:
   execution as the server user — by design.
 - MCP tools are categorized (read-only / write / destructive /
   external-action) by keyword inference over the **server-supplied** tool
-  name and description (`nur_tools/mcp/adapter.py`). That inference is a
+  name and description (`openrook_tools/mcp/adapter.py`). That inference is a
   trust decision on strings the MCP server controls: a misleadingly named
   `get_*` tool with side effects would be treated as read-only and skip
   the confirmation gate. Two operator controls counter this:

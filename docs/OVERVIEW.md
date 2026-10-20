@@ -10,7 +10,7 @@ psychological validity.
 
 For major changes and the completed controlled-world behavioral result, see
 [Development summary](DEVELOPMENT_SUMMARY.md). Existing installations should
-follow [Migrating from Nūr](OPENROOK_MIGRATION.md).
+follow the [migration guide](OPENROOK_MIGRATION.md).
 
 ## Contents
 

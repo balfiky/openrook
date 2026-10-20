@@ -52,10 +52,10 @@ from core.types import (
     ToolResult,
     ToolTrace,
 )
-from nur_tools.executor import ToolExecutor
+from openrook_tools.executor import ToolExecutor
 
 # langgraph/langchain are an optional extra: this module must import cleanly
-# without them so `import nur_tools.langgraph_orchestrator` (and the test
+# without them so `import openrook_tools.langgraph_orchestrator` (and the test
 # collector) never hard-requires the dependency. The runner constructor
 # raises a clear ImportError with install guidance when they are absent.
 try:

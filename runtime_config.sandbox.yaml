@@ -1,4 +1,4 @@
-# Project Nur character-independence sandbox profile.
+# OpenRook character-independence sandbox profile.
 data_dir: data
 console_enabled: true
 tools_enabled: true

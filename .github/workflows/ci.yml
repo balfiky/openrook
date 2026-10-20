@@ -35,7 +35,7 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Validate repository metadata and package assets
-        run: python -m nur_tools.validate --mode ci
+        run: python -m openrook_tools.validate --mode ci
 
       - name: Run tests
         run: python -m pytest

@@ -2,6 +2,9 @@
 // UI works offline and pulls no third-party script at runtime.
 import { marked } from "./marked.esm.js";
 import DOMPurify from "./dompurify.esm.js";
+import { migrateBrowserStorage } from "./storage.js";
+
+migrateBrowserStorage(localStorage, sessionStorage);
 
 marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
 
@@ -42,12 +45,12 @@ export function escapeAttr(value) {
 }
 
 export function getApiToken() {
-  return sessionStorage.getItem("nur_api_token") || "";
+  return sessionStorage.getItem("openrook_api_token") || "";
 }
 
 export function setApiToken(token) {
-  if (token) sessionStorage.setItem("nur_api_token", token);
-  else sessionStorage.removeItem("nur_api_token");
+  if (token) sessionStorage.setItem("openrook_api_token", token);
+  else sessionStorage.removeItem("openrook_api_token");
 }
 
 export function authHeaders(extra) {

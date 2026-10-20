@@ -32,9 +32,6 @@ confirms whether new summary memories were written; it does not retain the
 visible transcript after a page reload.
 
 For terminal chat, run `openrook`; `/help` lists local commands immediately.
-The eight old command aliases (`nur` and the `nur-*` commands) remain supported
-for compatibility. Prefer the matching `openrook` / `openrook-*` names in new
-scripts.
 
 <p align="center">
   <picture>
@@ -177,9 +174,9 @@ to the opt-in research runtime. The assistant's stance accumulates instead of re
 | Layer | What it does | Where it lives |
 |---|---|---|
 | **Short-term memory** | Hot turn-level memory inside the running session | in-process |
-| **Long-term memory** | Distilled summaries with valence + spike flags; retrieval is valence-weighted | `data/<user>/nur.db` |
-| **Relationship arc** | Rupture, repair, recurring tension, commitments, open loops; cross-session | `data/<user>/nur.db` |
-| **Semantic memory** | Preferences, decisions, facts; topic-scoped retrieval | `data/<user>/nur.db` |
+| **Long-term memory** | Distilled summaries with valence + spike flags; retrieval is valence-weighted | `data/<user>/openrook.db` |
+| **Relationship arc** | Rupture, repair, recurring tension, commitments, open loops; cross-session | `data/<user>/openrook.db` |
+| **Semantic memory** | Preferences, decisions, facts; topic-scoped retrieval | `data/<user>/openrook.db` |
 | **Life History** | Identity-level experience ledger; beliefs, drives, evolution events, themes | `data/shared/life_history.db` |
 | **Constitution** | Configured-mode stable orientation rendered above evolving beliefs | `data/shared/life_history.db` |
 | **Self-evolution** | Wall-clock metabolism: belief decay, theme→belief promotion, drive-gap detection | `runtime/life_history.py` |
@@ -228,8 +225,7 @@ When a user explicitly asks OpenRook to learn from a URL, the runtime fetches re
 ## Quickstart
 
 Install OpenRook from this repository; these instructions do not assume a PyPI
-release. **Formerly Nūr.** The repository moved from `balfiky/nur` to
-`balfiky/openrook`; old URLs redirect.
+release.
 Existing installations should follow the [migration guide](docs/OPENROOK_MIGRATION.md)
 to replace the old distribution without deleting their workspace.
 
@@ -356,7 +352,7 @@ applying the tracking removal; restore your backup afterward if needed.
 | Need | Document |
 |---|---|
 | Major implementation changes and measured results | [docs/DEVELOPMENT_SUMMARY.md](docs/DEVELOPMENT_SUMMARY.md) |
-| Upgrade from Nūr without losing state | [docs/OPENROOK_MIGRATION.md](docs/OPENROOK_MIGRATION.md) |
+| Upgrade an existing installation without losing state | [docs/OPENROOK_MIGRATION.md](docs/OPENROOK_MIGRATION.md) |
 | Product/concept overview | [docs/OVERVIEW.md](docs/OVERVIEW.md) |
 | Reviewer study guide | [docs/STUDY_GUIDE.md](docs/STUDY_GUIDE.md) |
 | Runtime architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |

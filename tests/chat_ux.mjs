@@ -132,7 +132,7 @@ function setup() {
     DOMPurify: { sanitize: text => text },
     AdminOverlayState: {}, DebugState: {}, PersonaPanelState: {}, WizardState: {},
   });
-  for (const name of ["lib/http.js", "lib/shared.js", "lib/llm-status.js", "lib/llm-model-picker.js", "chat.js"]) {
+  for (const name of ["lib/http.js", "lib/storage.js", "lib/shared.js", "lib/llm-status.js", "lib/llm-model-picker.js", "chat.js"]) {
     const source = readFileSync(new URL(name, staticRoot), "utf8")
       .replace(/^import .+;\r?\n/gm, "").replace(/^export /gm, "");
     vm.runInContext(source, context, { filename: name });

@@ -18,7 +18,7 @@ from core.types import (
     UnresolvedItem,
 )
 from core.action_variables import derive_action_variables
-from nur_tools.registry import ToolRegistry
+from openrook_tools.registry import ToolRegistry
 from pipeline import DebugState
 from tests._fakes import MockLLMBackend
 
@@ -428,7 +428,7 @@ class TestDebugStateToolTrace:
 
 class TestToolsTypesReexport:
     def test_imports(self):
-        from nur_tools.types import (
+        from openrook_tools.types import (
             ActionVariables,
             ToolCapability,
             ToolCategory,

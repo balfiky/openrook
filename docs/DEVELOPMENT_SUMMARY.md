@@ -1,7 +1,7 @@
 # OpenRook development summary
 
 This is the public summary of the major runtime and validation work completed
-through 2026-10-19, including the rename from Nūr to **OpenRook**. Historical
+through 2026-10-19, including the **OpenRook** rename. Historical
 plans and study artifacts keep their original names and recorded results.
 See [migration instructions](OPENROOK_MIGRATION.md) for compatibility details.
 

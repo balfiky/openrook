@@ -1,4 +1,4 @@
-# Paper Outline: Project Nūr
+# Paper Outline: Project OpenRook
 
 **Working title:** An Inspectable Hybrid Architecture for Relational Continuity in AI Assistants
 

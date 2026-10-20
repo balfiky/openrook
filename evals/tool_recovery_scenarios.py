@@ -58,7 +58,7 @@ def _mod_range(name: str, low: float, high: float, desc: str = "") -> EvalAssert
 #
 # "please" triggers action_request → social_move="request" → inferred_intent="seek_action",
 # adding the +0.15 caution bonus needed for slow_down to fire on turn 4.
-_FAILING_PATH = "/dev/null/nur_t14_test.txt"
+_FAILING_PATH = "/dev/null/openrook_t14_test.txt"
 _WRITE_MSG = f"please write 'test content' to {_FAILING_PATH}"
 
 

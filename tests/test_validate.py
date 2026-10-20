@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nur_tools import validate
+from openrook_tools import validate
 
 
 def test_auto_target_uses_repo_when_root_has_project_files(tmp_path):

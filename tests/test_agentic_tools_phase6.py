@@ -22,20 +22,20 @@ from core.types import (
 )
 from core.tool_appraisal import appraise_tool_result
 from core.dual_process.tool_loop import detect_tool_intent
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools import register_builtins
-from nur_tools.builtin.browser import (
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools import register_builtins
+from openrook_tools.builtin.browser import (
     CAPABILITIES as BROWSER_CAPS,
     create_handlers as create_browser_handlers,
     _MAX_PAGE_TEXT,
 )
-from nur_tools.builtin.calendar import (
+from openrook_tools.builtin.calendar import (
     CalendarEvent,
     CAPABILITIES as CALENDAR_CAPS,
     create_handlers as create_calendar_handlers,
 )
-from nur_tools.builtin.web_search import (
+from openrook_tools.builtin.web_search import (
     CAPABILITIES as WEB_CAPS,
     create_handlers as create_web_handlers,
     _MAX_EXTRACT_TEXT,

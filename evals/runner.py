@@ -51,9 +51,9 @@ def _make_pipeline(
     """Create a fresh pipeline configured for a scenario."""
     executor = None
     if scenario.with_tools:
-        from nur_tools.registry import ToolRegistry
-        from nur_tools.executor import ToolExecutor
-        from nur_tools import register_builtins
+        from openrook_tools.registry import ToolRegistry
+        from openrook_tools.executor import ToolExecutor
+        from openrook_tools import register_builtins
 
         registry = ToolRegistry()
         executor = ToolExecutor(registry)

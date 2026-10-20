@@ -104,7 +104,7 @@ def _code_fingerprint() -> dict[str, str]:
         paths = set()
     if not paths:
         paths = {root / "main.py", root / "pyproject.toml"}
-        for package in ("core", "config", "evals", "interface", "pipeline", "runtime", "nur_tools"):
+        for package in ("core", "config", "evals", "interface", "pipeline", "runtime", "openrook_tools"):
             paths.update((root / package).rglob("*"))
     hashes = {}
     for path in sorted(paths):

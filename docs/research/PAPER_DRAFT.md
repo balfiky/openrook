@@ -26,9 +26,9 @@ Conversational AI assistants process each interaction in isolation.
 Retrieval-augmented memory lets them remember *what* was said, but not
 *how it landed*: the same words from a trusted friend and a stranger
 produce the same response, and accumulated history does not
-detectably shape behavior. We describe Project Nūr, a cognitive
+detectably shape behavior. We describe Project OpenRook, a cognitive
 architecture that treats emotion as persistent internal state rather
-than a prompt-level style layer. Nūr combines six continuous
+than a prompt-level style layer. OpenRook combines six continuous
 modulators, dual short- and long-term memory, a separate
 relationship-memory layer, unified self/other profiling, deterministic
 social appraisal, bounded dual-process deliberation, defense
@@ -147,7 +147,7 @@ work. A reproducibility statement closes the paper.
 
 ### 3.1 Cognitive-architecture inspirations
 
-Nūr's design borrows from three cognitive architectures, each for a
+OpenRook's design borrows from three cognitive architectures, each for a
 specific engineering reason. For each we state one adopted idea and
 one explicitly non-adopted element so the scope of the borrowing is
 clear.
@@ -163,7 +163,7 @@ substrate, not a model of motivation.
 From **ACT-R** [CITE — Anderson et al., foundational reference to be
 verified] we adopt the idea that memory retrieval should be weighted
 by an activation score combining recency, frequency, and current
-context. We do not adopt the formal ACT-R activation equation; Nūr's
+context. We do not adopt the formal ACT-R activation equation; OpenRook's
 long-term store uses a simpler heuristic score (§4.2) and there is no
 symbolic rule learning.
 
@@ -171,7 +171,7 @@ From **CLARION** [CITE — Sun (2016), *Anatomy of the Mind*; verify]
 we adopt the engineering shape of bounded fast-path/slow-path
 deliberation with iterative critique (§4.6). We do not adopt
 CLARION's learned coordination between implicit and explicit paths;
-path balancing in Nūr is threshold-gated by modulator state rather
+path balancing in OpenRook is threshold-gated by modulator state rather
 than emerging from a skill-learning mechanism.
 
 ### 3.2 Adjacent affective-agent systems
@@ -189,7 +189,7 @@ sacrifices linguistic coverage for inspectability and latency.
 
 **ACT-R-inspired LLM agent memory** (HAI, 2024) [CITE — verify]
 applies activation-weighted retrieval, including human-like
-remembering-and-forgetting curves, to conversational LLM agents. Nūr
+remembering-and-forgetting curves, to conversational LLM agents. OpenRook
 shares that retrieval stance for emotional memory but adds a separate
 *relationship* layer (§4.4) that stores structured social events and
 open loops rather than folding relational meaning into a single
@@ -332,7 +332,7 @@ less distortion between felt and expressed state.
 
 The novelty we claim here is conceptual rather than algorithmic. Most
 assistants either have no self-model or have a declared, static one
-handed to them in configuration. Nūr's self-model is *earned*: the
+handed to them in configuration. OpenRook's self-model is *earned*: the
 same observation machinery that profiles others also watches the
 system's own outputs and accumulates evidence about its tendencies.
 That design choice lets self-knowledge grow from behavior rather than
@@ -505,7 +505,7 @@ one accumulated relationship while maintaining independent in-turn
 state.
 
 Persistence is split along the same boundary. Per-user state lives in
-a SQLite database at `data/<platform>_<user_id>/nur.db`. Per-session
+a SQLite database at `data/<platform>_<user_id>/openrook.db`. Per-session
 engine state is a small JSON file under `sessions/` inside that
 directory. The assistant's self-model lives in a separate shared
 SQLite database at `data/shared/self_model.db`, keyed by the literal
@@ -847,7 +847,7 @@ results?" — is not answerable from these scenarios. Phase 11
 assertions check pipeline internals: whether a specific strategy
 was selected, whether a modulator moved in the expected direction,
 whether a memory record was written. A prompt-only system has no
-pipeline internals to assert on; comparing it to Nūr on these
+pipeline internals to assert on; comparing it to OpenRook on these
 scenarios would measure which design has more testable surface, not
 which produces better responses. A fair comparison would require a
 different scenario design — open-ended dialogues graded by blinded
@@ -922,7 +922,7 @@ client-level telemetry, theory-framing fidelity — are addressed in
 lists broader limitations of the system and the scope of the paper.
 
 *No human-subject validation.* We do not claim, and the evaluation
-does not support, that Nūr produces more human-like or more
+does not support, that OpenRook produces more human-like or more
 emotionally coherent responses. A blinded user study with matched
 baselines is the obvious next experimental step.
 
@@ -1025,7 +1025,7 @@ memory affordance, then grading the results with blinded human
 raters, is a separate experimental program.
 
 *Blinded user study.* Fifteen to twenty-five participants across
-three or more sessions each, A/B comparing Nūr against the same
+three or more sessions each, A/B comparing OpenRook against the same
 base model without the cognitive layer, measuring perceived
 continuity, coherence, and creepiness. Weeks of lead time for
 recruitment, IRB review if applicable, and analysis.

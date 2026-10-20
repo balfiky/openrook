@@ -521,7 +521,7 @@ def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
 # ---------------------------------------------------------------------------
 
 _config: OpenRookConfig | None = None
-_scoped_config: ContextVar[OpenRookConfig | None] = ContextVar("nur_configuration", default=None)
+_scoped_config: ContextVar[OpenRookConfig | None] = ContextVar("openrook_configuration", default=None)
 
 
 @contextmanager

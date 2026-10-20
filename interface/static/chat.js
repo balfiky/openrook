@@ -16,8 +16,8 @@ const debugPanel = document.getElementById('debugPanel');
 const debugToggle = document.getElementById('debugToggle');
 const settingsOverlay = document.getElementById('settingsOverlay');
 
-const userId = getOrCreateId('nur_user_id', localStorage);
-const chatId = getOrCreateId('nur_chat_id', sessionStorage);
+const userId = getOrCreateId('openrook_user_id', localStorage);
+const chatId = getOrCreateId('openrook_chat_id', sessionStorage);
 let sending = false;
 let sessionActionPending = false;
 let currentBackend = 'The model';
@@ -49,16 +49,16 @@ function applyAgentName(name) {
   const emptyTitle = document.getElementById('emptyTitle');
   if (emptyTitle) emptyTitle.textContent = agentName;
   document.getElementById('msgInput').placeholder = 'Message ' + agentName + '...';
-  document.querySelectorAll('.nur-av').forEach(el => { el.textContent = initial; });
+  document.querySelectorAll('.agent-av').forEach(el => { el.textContent = initial; });
 }
 
 // ---- API-bearer token (client-side) --------------------------------------
 // Stored only for this browser session. Must match RuntimeConfig.api_key on
 // the server when set.
-function getApiToken() { return sessionStorage.getItem('nur_api_token') || ''; }
+function getApiToken() { return sessionStorage.getItem('openrook_api_token') || ''; }
 function setApiToken(tok) {
-  if (tok) sessionStorage.setItem('nur_api_token', tok);
-  else sessionStorage.removeItem('nur_api_token');
+  if (tok) sessionStorage.setItem('openrook_api_token', tok);
+  else sessionStorage.removeItem('openrook_api_token');
 }
 function authHeaders(extra) {
   const h = extra ? Object.assign({}, extra) : {};
@@ -242,7 +242,7 @@ function addMessage(text, role, emotion) {
   }
   row.innerHTML =
     '<div class="message-inner">' +
-      '<div class="msg-avatar ' + (isUser ? 'user-av' : 'nur-av') + '">' + (isUser ? 'Y' : esc(agentName.charAt(0).toUpperCase())) + '</div>' +
+      '<div class="msg-avatar ' + (isUser ? 'user-av' : 'agent-av') + '">' + (isUser ? 'Y' : esc(agentName.charAt(0).toUpperCase())) + '</div>' +
       '<div class="msg-content">' +
         '<div class="msg-header"><span class="msg-name">' + (isUser ? 'You' : esc(agentName)) + '</span>' + headerExtra + '</div>' +
         '<div class="msg-body">' + (isUser ? esc(text) : renderMarkdown(text)) + '</div>' +
@@ -885,7 +885,7 @@ function applySettings(payload) {
   const setup = payload.setup || {};
   if (
     setup.required
-    && !sessionStorage.getItem('nur_wizard_dismissed')
+    && !sessionStorage.getItem('openrook_wizard_dismissed')
     && !wizardOverlay.classList.contains('open')
     && !settingsOverlay.classList.contains('open')
     && location.pathname !== '/admin'
@@ -1358,7 +1358,7 @@ function openWizard() {
 }
 
 function wizardDismiss() {
-  sessionStorage.setItem('nur_wizard_dismissed', '1');
+  sessionStorage.setItem('openrook_wizard_dismissed', '1');
   setWizardOpen(false);
 }
 

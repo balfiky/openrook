@@ -90,7 +90,7 @@ from core.dual_process.inner_dialogue import InnerDialogue
 from core.anticipation import AnticipationEngine
 from core.defense_mechanisms import DEFENSE_INSTRUCTIONS, DefenseMechanism
 from core.self_intent import propose_self_intents
-from nur_tools.builtin.self_actions import SelfActionContext
+from openrook_tools.builtin.self_actions import SelfActionContext
 from core.dual_process.tool_loop import (
     ToolLoopResult,
     make_tool_decision,

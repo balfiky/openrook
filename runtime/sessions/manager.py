@@ -111,7 +111,7 @@ class SessionManager:
         self._accepting = True
         self._executor = ThreadPoolExecutor(
             max_workers=max(4, min(self.config.max_active_sessions + 1, 32)),
-            thread_name_prefix="nur-runtime",
+            thread_name_prefix="openrook-runtime",
         )
         self._executor_shutdown = False
         # Phase 8: proactive callback — async (session_key, user_id, message) -> None
@@ -678,7 +678,7 @@ class SessionManager:
 
     def start_background(self) -> None:
         if self.config.proactive_enabled and (self._proactive_task is None or self._proactive_task.done()):
-            self._proactive_task = asyncio.create_task(self.run_proactive_loop(), name="nur-agent-background")
+            self._proactive_task = asyncio.create_task(self.run_proactive_loop(), name="openrook-agent-background")
 
     async def _proactive_sweep(self) -> None:
         """Check all active sessions for proactive opportunities."""

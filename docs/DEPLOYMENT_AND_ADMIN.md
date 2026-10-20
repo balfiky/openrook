@@ -7,7 +7,7 @@ Use it together with:
 
 - [SECURITY.md](../SECURITY.md) for threat model and sensitive surfaces
 - [PRIVACY.md](../PRIVACY.md) for retention, inspection, and deletion
-- [OPENROOK_MIGRATION.md](OPENROOK_MIGRATION.md) before upgrading a Nūr installation
+- [OPENROOK_MIGRATION.md](OPENROOK_MIGRATION.md) before upgrading an existing installation
 - [DEVELOPMENT_SUMMARY.md](DEVELOPMENT_SUMMARY.md) for major runtime changes and recorded validation
 
 ## Recommended Local Install
@@ -153,8 +153,8 @@ Session actions are disabled while a reply or another session action is pending.
 
 For terminal chat use `openrook`; `/help` is immediate and does not call a model.
 Console INFO logging is off by default to keep prompts readable; `--verbose`
-restores it. Headless runtime logging stays at INFO. Legacy `nur` / `nur-*`
-command names remain compatibility aliases for the eight canonical commands.
+restores it. Headless runtime logging stays at INFO. Existing installations
+should review the [migration guide](OPENROOK_MIGRATION.md) for compatibility.
 
 ## Git Install
 
@@ -169,8 +169,8 @@ openrook-setup
 ```
 
 Use the source checkout, its built wheel, or the Git URL above. These instructions
-do not assume a PyPI release. The repository is `balfiky/openrook` (formerly
-`balfiky/nur`, which redirects); the distribution and primary commands use `openrook`.
+do not assume a PyPI release. The repository is `balfiky/openrook`; the
+distribution and primary commands use `openrook`.
 
 For local-only use, the default `openrook-web` command binds to `127.0.0.1`. For
 LAN/public testing, point it at a public host:

@@ -51,7 +51,7 @@ from core.types import (
     ToolResult,
     ToolTrace,
 )
-from nur_tools.executor import ToolExecutor
+from openrook_tools.executor import ToolExecutor
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -103,7 +103,7 @@ class ToolLoopResult:
 # ---------------------------------------------------------------------------
 #
 # Tool intent routing is two-tier. When an OpenAI-compatible backend is
-# configured, NativeToolCallRunner (nur_tools/native_orchestrator.py) routes
+# configured, NativeToolCallRunner (openrook_tools/native_orchestrator.py) routes
 # via real model tool-calls and this table is bypassed. The rules below are
 # the fallback for backends without a tool-call API (Codex CLI), runtimes
 # with no runner attached, and offline tests.

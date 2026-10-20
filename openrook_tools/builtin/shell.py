@@ -12,7 +12,7 @@ import subprocess
 from typing import Any, Sequence
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 
 # ---------------------------------------------------------------------------
 # Capabilities

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nur_tools.builtin.web_provider import (
+from openrook_tools.builtin.web_provider import (
     RequestsWebProvider,
     _MAX_FETCH_BYTES,
     _MAX_REDIRECT_HOPS,

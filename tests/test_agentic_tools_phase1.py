@@ -8,18 +8,18 @@ from types import SimpleNamespace
 import pytest
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools.builtin import filesystem, shell
-from nur_tools.builtin.filesystem import HANDLERS as FS_HANDLERS
-from nur_tools.builtin.shell import HANDLERS as SHELL_HANDLERS
-from nur_tools.builtin import system_info
-from nur_tools.builtin.web_search import (
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.builtin import filesystem, shell
+from openrook_tools.builtin.filesystem import HANDLERS as FS_HANDLERS
+from openrook_tools.builtin.shell import HANDLERS as SHELL_HANDLERS
+from openrook_tools.builtin import system_info
+from openrook_tools.builtin.web_search import (
     NullWebProvider,
     create_handlers,
 )
-from nur_tools.builtin.web_provider import _parse_ddg_results
-from nur_tools import register_builtins
+from openrook_tools.builtin.web_provider import _parse_ddg_results
+from openrook_tools import register_builtins
 
 
 # ===================================================================
@@ -620,7 +620,7 @@ class TestWebSearch:
 
     def test_default_handlers_error(self):
         """Default HANDLERS use NullWebProvider — errors when called."""
-        from nur_tools.builtin.web_search import HANDLERS
+        from openrook_tools.builtin.web_search import HANDLERS
         # Direct call raises; the executor would normalize this
         with pytest.raises(RuntimeError):
             HANDLERS["web.search"]({"query": "test"})

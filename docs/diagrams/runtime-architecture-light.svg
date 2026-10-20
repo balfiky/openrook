@@ -68,7 +68,7 @@
 <text x="1056" y="552.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start" fill="#1F1830">One subject owner</text>
 <text x="1056" y="577.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">background loop · saved state</text>
 </g>
-<text x="356" y="628" font-family="'DejaVu Sans Mono',monospace" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">nur.db + sessions/</text>
+<text x="356" y="628" font-family="'DejaVu Sans Mono',monospace" font-size="16" font-weight="400" text-anchor="start" fill="#655C72">openrook.db + sessions/</text>
 <text x="692" y="624" font-family="'DejaVu Sans Mono',monospace" font-size="15" font-weight="400" text-anchor="start" fill="#655C72">self_model.db</text>
 <text x="692" y="648" font-family="'DejaVu Sans Mono',monospace" font-size="15" font-weight="400" text-anchor="start" fill="#655C72">life_history.db</text>
 <text x="1056" y="634" font-family="'DejaVu Sans Mono',monospace" font-size="15" font-weight="400" text-anchor="start" fill="#655C72">shared/agent_runtime.db</text>

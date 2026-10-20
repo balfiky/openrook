@@ -114,7 +114,7 @@ def test_admin_workspace_token_dialog_auto_opens_on_401_and_saves(uat_server, pa
     page.fill("#apiTokenInput", secret)
     page.click("#saveTokenBtn")
 
-    stored = page.evaluate("() => sessionStorage.getItem('nur_api_token')")
+    stored = page.evaluate("() => sessionStorage.getItem('openrook_api_token')")
     assert stored == secret, f"Token not stored: {stored!r}"
 
 

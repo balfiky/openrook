@@ -66,7 +66,7 @@ async def admin_delete_backup(req: AdminBackupDeleteRequest) -> dict:
 
 def _admin_redacted_config_export(config: RuntimeConfig) -> dict:
     return {
-        "format": "nur.runtime_config.redacted.v1",
+        "format": "openrook.runtime_config.redacted.v1",
         "exported_at": api_mod._utc_now_iso(),
         "config_path": os.path.abspath(api_mod.RUNTIME_CONFIG_PATH),
         "config": config.to_public_dict(),

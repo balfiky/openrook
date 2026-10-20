@@ -9,8 +9,8 @@ from core.contagion import detect_emotion
 from core.types import DetectedEmotion, ToolCapability, ToolCategory, ToolResult
 from evals.replay import replay_run
 from evals.research import run_protocol
-from nur_tools.executor import ToolExecutor
-from nur_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.registry import ToolRegistry
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 from tests.test_life_history import FakeDigestLLM, _drive_digest_payload
@@ -231,7 +231,7 @@ async def test_replay_does_not_ignore_an_incomplete_transition(tmp_path):
 
 
 def test_research_native_prompt_does_not_force_participant_compliance():
-    from nur_tools.native_orchestrator import _build_native_tool_system_prompt
+    from openrook_tools.native_orchestrator import _build_native_tool_system_prompt
 
     prompt = _build_native_tool_system_prompt("autonomous", research_mode=True)
     assert "does not require compliance" in prompt

@@ -1,6 +1,6 @@
 """Small, deterministic SVG primitives for the documentation diagrams.
 
-Paint and fonts come from :mod:`nur_tools.brand`. The canvas is transparent;
+Paint and fonts come from :mod:`openrook_tools.brand`. The canvas is transparent;
 only nodes and label masks have page fills. Connectors are orthogonal elbows
 or true circular arcs, and role treatments carry meaning without a rainbow.
 """
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from math import atan2, cos, pi, sin, sqrt
 from xml.sax.saxutils import escape
 
-from nur_tools.brand import DIAGRAM_SERIF, LIGHT, MONO, SANS, Theme
+from openrook_tools.brand import DIAGRAM_SERIF, LIGHT, MONO, SANS, Theme
 
 
 def _rounded_path(points: list[tuple[float, float]]) -> str:

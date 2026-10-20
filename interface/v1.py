@@ -299,7 +299,7 @@ def build_v1_router(
         """Evict live sessions for this user and delete their on-disk data.
 
         Scope:
-          * All per-user SQLite rows under ``data/<platform>_<user_id>/nur.db``
+          * All per-user SQLite rows under ``data/<platform>_<user_id>/openrook.db``
           * All session JSONs under ``data/<platform>_<user_id>/sessions/``
           * The per-user directory itself
 
@@ -332,7 +332,9 @@ def build_v1_router(
         # Best-effort pre-delete counts. None = counting failed; partial
         # counts are OK — we must not fail the wipe just because a query
         # couldn't run.
-        rows_deleted = _count_user_rows(cfg.user_db_path(rel_key), user_id)
+        from runtime.storage import existing_user_db_path
+
+        rows_deleted = _count_user_rows(existing_user_db_path(user_dir), user_id)
 
         # Evict all live sessions for this rel_key before touching the
         # filesystem. Eviction closes the DB connection and flushes

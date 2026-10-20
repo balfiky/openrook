@@ -1,7 +1,7 @@
 """Eight reproducible documentation diagrams, in shared light and dark themes.
 
 Regenerate SVG sources and PNG previews with
-``python3 nur_tools/render_diagram_pngs.py``. Long explanations live in the
+``python3 openrook_tools/render_diagram_pngs.py``. Long explanations live in the
 adjacent documentation captions; these figures expose the central relationship.
 """
 
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from math import cos, hypot, sin
 
-from nur_tools.brand import LIGHT, MONO, Theme
-from nur_tools.diagram_toolkit import Canvas, loop_geometry
+from openrook_tools.brand import LIGHT, MONO, Theme
+from openrook_tools.diagram_toolkit import Canvas, loop_geometry
 
 
 def build_research_runtime_autonomy(theme: Theme = LIGHT) -> Canvas:
@@ -103,7 +103,7 @@ def build_runtime_architecture(theme: Theme = LIGHT) -> Canvas:
     c.node(356, 496, 288, 96, "Per-user state", "memory · profiles · relations", role="store")
     c.node(692, 496, 296, 96, "Shared identity", "self model · life history", role="store")
     c.node(1036, 508, 292, 96, "One subject owner", "background loop · saved state", role="store")
-    c.text(356, 628, "nur.db + sessions/", size=16, font=MONO, fill=theme.muted)
+    c.text(356, 628, "openrook.db + sessions/", size=16, font=MONO, fill=theme.muted)
     c.text(692, 624, "self_model.db", size=15, font=MONO, fill=theme.muted)
     c.text(692, 648, "life_history.db", size=15, font=MONO, fill=theme.muted)
     c.text(1056, 634, "shared/agent_runtime.db", size=15, font=MONO, fill=theme.muted)
@@ -275,7 +275,7 @@ def build_memory_persistence(theme: Theme = LIGHT) -> Canvas:
            "formative experience + identity", role="store", mono=True)
     c.node(104, 460, 496, 80, "agent_runtime.db",
            "research state + evidence", role="store", mono=True)
-    c.node(680, 260, 496, 108, "nur.db",
+    c.node(680, 260, 496, 108, "openrook.db",
            "memory · relationships · profiles", role="store", mono=True)
     c.node(680, 408, 496, 132, "Session files", role="step")
     c.text(700, 506, "sessions/*.json  ·  *.history.json",

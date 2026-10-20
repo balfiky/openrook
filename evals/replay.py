@@ -16,9 +16,9 @@ import requests
 from core.clock import capture
 from core.pipeline_features import PipelineFeatures
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolExecutor
-from nur_tools.native_orchestrator import NativeToolCallRunner
-from nur_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.native_orchestrator import NativeToolCallRunner
+from openrook_tools.registry import ToolRegistry
 from runtime.config import RuntimeConfig
 from runtime.research_store import ResearchStore, ResearchStudyLimit, encode
 from runtime.sessions.manager import SessionManager

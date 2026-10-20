@@ -188,7 +188,7 @@ Persistence is deliberately split:
 
 | Path | Purpose |
 |---|---|
-| `data/<platform>_<user_id>/nur.db` | per-user long-term emotional, semantic, relationship, and profile data |
+| `data/<platform>_<user_id>/openrook.db` | per-user long-term emotional, semantic, relationship, and profile data |
 | `data/<platform>_<user_id>/sessions/<chat_id>.json` | per-chat session engine state |
 | `data/<platform>_<user_id>/sessions/<chat_id>.history.json` | active hot transcript restored until session end, `/reset`, or `/new` |
 | `data/shared/self_model.db` | assistant self-model shared across users |
@@ -211,7 +211,7 @@ Best-effort database row counts may be `null`. Shared `replay_initial/`,
 study outputs, replay captures, and tool workspace files lie outside this
 boundary and may retain user-derived material.
 
-Within `nur.db`, memory and semantic records sit alongside relationship
+Within `openrook.db`, memory and semantic records sit alongside relationship
 events, open loops, and person/topic profiles. The shared self-model retains
 assistant observations, extracted traits, and defense events; Life History
 retains formative experiences and belief/drive revisions. Research storage
@@ -219,8 +219,9 @@ additionally holds goals, actions, outcomes, learning, and checkpoints.
 Global configuration is read at startup; ordinary-mode admin configuration
 writes are a separate operation.
 
-The `nur.db` filename remains intentional after the OpenRook rename; changing
-branding does not move or reset storage. See [migration](OPENROOK_MIGRATION.md).
+Existing per-user databases migrate to `openrook.db` when their path is first
+resolved. Migration preserves records and schemas; shared databases retain their
+names. See [migration](OPENROOK_MIGRATION.md) for upgrade and conflict handling.
 
 ## Life History And Evolution
 
@@ -468,7 +469,7 @@ work when the operator deliberately enables it.
 
 Tool intent routing (step 15) is two-tier. When external tools are enabled and
 an OpenAI-compatible endpoint is configured (`llm_base_url` + `llm_model`), a `NativeToolCallRunner`
-(`nur_tools/native_orchestrator.py`) is attached and routing happens through
+(`openrook_tools/native_orchestrator.py`) is attached and routing happens through
 real model tool-calls — the model sees the registered tool schemas and picks.
 The fallback is a declarative heuristic rule table: `INTENT_RULES` in
 `core/dual_process/tool_loop.py`, an ordered tuple of named regex rules
@@ -587,13 +588,13 @@ update the marked pieces in the same PR:
 
 | Code change | Update |
 |---|---|
-| Pipeline stage order | single-turn flow diagram (`nur_tools/build_diagrams.py::build_single_turn_flow`), this doc's Single-Turn section |
+| Pipeline stage order | single-turn flow diagram (`openrook_tools/build_diagrams.py::build_single_turn_flow`), this doc's Single-Turn section |
 | Storage/table changes | memory model diagram, this doc's Memory section, [PRIVACY.md](../PRIVACY.md) |
 | HTTP route / auth changes | auth-tool diagram, this doc's Auth section, [SECURITY.md](../SECURITY.md) |
 | New admin behavior | [DEPLOYMENT_AND_ADMIN.md](DEPLOYMENT_AND_ADMIN.md) |
 | New eval variant | evaluation diagram, this doc's Evaluation section, `evals/ablation_hypotheses.py` before running |
 | Component evidence status change | component claim map diagram, [OVERVIEW.md §5](OVERVIEW.md#5-what-the-evidence-supports) |
 
-Diagrams regenerate with `python3 nur_tools/render_diagram_pngs.py` after
-editing `nur_tools/build_diagrams.py`. See
+Diagrams regenerate with `python3 openrook_tools/render_diagram_pngs.py` after
+editing `openrook_tools/build_diagrams.py`. See
 [CONTRIBUTING.md](../CONTRIBUTING.md) for rendering dependencies and fonts.

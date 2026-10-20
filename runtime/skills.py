@@ -457,7 +457,7 @@ def _audit_payload(
         "errors": errors,
         "warnings": _dedupe(warnings),
         "metadata": metadata,
-        "required_tools": sorted({item["nur_tool"] for item in mappings if item["nur_tool"]}),
+        "required_tools": sorted({item["openrook_tool"] for item in mappings if item["openrook_tool"]}),
         "tool_mappings": mappings,
         "risk_flags": risk_flags,
         "unsupported_features": unsupported,
@@ -499,16 +499,16 @@ def _infer_tool_mappings(text: str, source_root: Path | None) -> list[dict[str, 
     mappings = [
         {
             "hint": hint,
-            "nur_tool": nur_tool,
+            "openrook_tool": openrook_tool,
             "status": "mapped",
         }
-        for hint, nur_tool, pattern in rules
+        for hint, openrook_tool, pattern in rules
         if re.search(pattern, lower)
     ]
     if source_root is not None and (source_root / "scripts").is_dir():
         mappings.append({
             "hint": "bundled scripts",
-            "nur_tool": "shell.run_command",
+            "openrook_tool": "shell.run_command",
             "status": "review_required",
         })
     return _dedupe_mappings(mappings)
@@ -610,6 +610,13 @@ def _read_registry(root: Path) -> dict[str, Any]:
     data.setdefault("skills", [])
     if not isinstance(data["skills"], list):
         raise SkillError("Skill registry 'skills' field must be a list.")
+    for record in data["skills"]:
+        compatibility = record.get("compatibility") or {}
+        if "tool_mappings" in compatibility:
+            compatibility["tool_mappings"] = [
+                _normalize_tool_mapping(item)
+                for item in compatibility["tool_mappings"]
+            ]
     return data
 
 
@@ -680,11 +687,20 @@ def _dedupe(values: list[str]) -> list[str]:
     return out
 
 
+def _normalize_tool_mapping(item: dict[str, Any]) -> dict[str, Any]:
+    """Read mappings from existing registries while returning current fields."""
+    normalized = dict(item)
+    legacy_tool = normalized.pop("nur_tool", None)
+    if "openrook_tool" not in normalized and legacy_tool is not None:
+        normalized["openrook_tool"] = legacy_tool
+    return normalized
+
+
 def _dedupe_mappings(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for item in values:
-        key = (str(item.get("hint")), str(item.get("nur_tool")))
+        key = (str(item.get("hint")), str(item.get("openrook_tool")))
         if key not in seen:
             out.append(item)
             seen.add(key)

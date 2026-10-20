@@ -280,7 +280,7 @@ async def test_resource_stops_are_durable_not_personality_failures_and_replay(tm
 
 
 def test_goal_relationship_schemas_remain_valid_in_native_tool_catalogs():
-    from nur_tools.native_orchestrator import _json_schema
+    from openrook_tools.native_orchestrator import _json_schema
 
     schema = _json_schema(
         {

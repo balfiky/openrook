@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from runtime.config import RuntimeConfig
+from openrook_tools.legacy import COMMAND_TARGETS
 
 
 PROJECT_NAME = "openrook"
@@ -28,18 +29,24 @@ EXPECTED_CONSOLE_SCRIPTS = {
     "openrook-web": "interface.api:main",
     "openrook-genesis-reset": "runtime.genesis_reset:main",
     "openrook-emotional-qa": "evals.emotional_quality:main",
-    "openrook-uat": "nur_tools.uat:main",
-    "openrook-validate": "nur_tools.validate:main",
+    "openrook-uat": "openrook_tools.uat:main",
+    "openrook-validate": "openrook_tools.validate:main",
 }
 EXPECTED_CONSOLE_SCRIPTS.update({
-    name.replace("openrook", "nur", 1): target
-    for name, target in tuple(EXPECTED_CONSOLE_SCRIPTS.items())
+    name: "openrook_tools.legacy:" + (
+        name.partition("-")[2].replace("-", "_") or "main"
+    )
+    for name in COMMAND_TARGETS
 })
 EXPECTED_PACKAGE_FILES = {
+    "openrook_tools/__init__.py",
+    "openrook_tools/legacy.py",
+    "nur_tools/__init__.py",
     "interface/static/index.html",
     "interface/static/admin.html",
     "interface/static/admin.js",
     "interface/static/admin.css",
+    "interface/static/lib/storage.js",
     "config/soul.yaml",
     "config/modulators.yaml",
     "config/values_seed.yaml",
@@ -74,7 +81,7 @@ DRIFT_CHECK_LIVE_FILES = {
     "docs/DEPLOYMENT_AND_ADMIN.md",
 }
 DRIFT_CHECK_EXCLUDED_FILES = {
-    "nur_tools/validate.py",
+    "openrook_tools/validate.py",
     "tests/test_validate.py",
 }
 FORBIDDEN_WHEEL_PREFIXES = ("tools/",)
@@ -430,7 +437,7 @@ def _check_ci_workflow(root: Path) -> str:
     missing_versions = [version for version in REQUIRED_PYTHONS if version not in workflow]
     if missing_versions:
         raise ValidationFailure("CI missing Python versions: " + ", ".join(missing_versions))
-    _require("python -m nur_tools.validate --mode ci" in workflow, "CI must run nur_tools.validate.")
+    _require("python -m openrook_tools.validate --mode ci" in workflow, "CI must run openrook_tools.validate.")
     _require("python -m pytest" in workflow, "CI must run pytest.")
     return "validate + pytest on 3.10/3.11/3.12"
 
@@ -457,7 +464,7 @@ def _run_pytest(root: Path) -> str:
 def _build_package(root: Path) -> str:
     _clean_build_artifacts(root)
     try:
-        with tempfile.TemporaryDirectory(prefix="nur-build-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="openrook-build-") as tmp:
             out_dir = Path(tmp) / "dist"
             _run(
                 [sys.executable, "-m", "build", "--sdist", "--wheel", "--outdir", str(out_dir)],
@@ -524,7 +531,7 @@ def _check_release_git_state(root: Path, *, strict_untracked: bool) -> str:
 
 
 def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
-    with tempfile.TemporaryDirectory(prefix="nur-wheel-smoke-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="openrook-wheel-smoke-") as tmp:
         workspace = Path(tmp) / "workspace"
         workspace.mkdir()
         venv_dir = Path(tmp) / "venv"
@@ -536,8 +543,6 @@ def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
         bin_dir = "Scripts" if os.name == "nt" else "bin"
         commands = [
             [str(venv_dir / bin_dir / "openrook"), "--version"],
-            [str(venv_dir / bin_dir / "nur"), "--version"],
-            [str(venv_dir / bin_dir / "nur-web"), "--version"],
             [str(venv_dir / bin_dir / "openrook-web"), "--version"],
             [str(venv_dir / bin_dir / "openrook-setup"), "--help"],
             [str(venv_dir / bin_dir / "openrook-uninstall"), "--help"],
@@ -551,6 +556,10 @@ def _smoke_install_wheel(root: Path, wheel_path: Path) -> str:
                 str(workspace),
             ],
         ]
+        commands.extend(
+            [str(venv_dir / bin_dir / command), "--help"]
+            for command in COMMAND_TARGETS
+        )
         for cmd in commands:
             _run(cmd, cwd=workspace)
     return "entry points import, respond, and validate installed workspace"
@@ -564,7 +573,7 @@ def _print_results(results: list[CheckResult]) -> None:
 
 
 def _clean_build_artifacts(root: Path) -> None:
-    for path in (root / "build", root / "project_nur.egg-info"):
+    for path in (root / "build", root / "openrook.egg-info"):
         if path.exists():
             shutil.rmtree(path)
 

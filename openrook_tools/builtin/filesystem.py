@@ -13,7 +13,7 @@ import shutil
 from typing import Any
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.executor import ToolHandler
+from openrook_tools.executor import ToolHandler
 
 # ---------------------------------------------------------------------------
 # Capabilities (static descriptions for the registry)

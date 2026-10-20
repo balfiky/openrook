@@ -1,8 +1,32 @@
 # Changelog
 
-All notable changes to OpenRook (formerly Nūr) are documented here.
+All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
+
+### Complete current naming and preserve upgrades
+
+- Use `openrook.db` for per-user storage and migrate existing `nur.db` data
+  before opening current stores. Preserve SQLite write-ahead state; if both
+  database names exist, prefer the current file, retain the legacy file, and
+  warn. User deletion removes both names; backups preserve existing data.
+- Move the tool package to `openrook_tools`. Keep `nur_tools` as a thin import
+  shim that emits `DeprecationWarning`. Retain legacy console commands and
+  `NUR_*` environment fallbacks with a one-line stderr notice once per process;
+  project-owned Makefile and CI settings use only the current prefix.
+- Migrate browser identity, chat, token, and wizard state to `openrook_*` keys
+  without replacing already stored current values. Remove old keys after
+  migration and rename the avatar CSS class.
+- Write `openrook.runtime_config.redacted.v1` exports, `openrook-backup-*`
+  archives, and `openrook_tool` skill metadata. Retain access to legacy archives,
+  preserve historical config envelopes during offline data restoration, and
+  continue reading the previous skill metadata field.
+- Rename runtime threads, tasks, context variables, temporary folders, and
+  structured-output schemas. Request replay of historical captures requires
+  their historical code revision because these request-level names changed.
+- Update current documentation and diagram labels, keep historical evidence
+  verbatim, and add a current-name regression guard with explicit compatibility
+  exceptions. See [migration instructions](docs/OPENROOK_MIGRATION.md).
 
 ### Installation-to-chat experience
 
@@ -64,7 +88,7 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
   a persistent-subject loop, architecture map, model-call swimlane, nested
   deletion boundaries, independent safety gates, evaluation data flow,
   historical evidence matrix, and feature layer stack.
-- Share light/dark theme and font tokens in `nur_tools/brand.py`; generate
+- Share light/dark theme and font tokens in `openrook_tools/brand.py`; generate
   transparent SVGs and PNGs for both themes and select SVGs with `<picture>`
   embeds. Replace the hand-authored feature overview with a Python builder.
 - Move detailed diagram explanations into captions, retain evidence and
@@ -75,7 +99,7 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 - The GitHub repository moved from `balfiky/nur` to `balfiky/openrook` (old URLs
   redirect); install commands, badges, project URLs, and citation metadata follow.
-- New brand mark in `nur_tools/brand.py`: a chess-rook keep with a lit window and
+- New brand mark in `openrook_tools/brand.py`: a chess-rook keep with a lit window and
   a six-modulator band. It replaces the orb in the README wordmarks, showcase hero,
   social cover, web UI header, and
   favicon. The header name now updates without removing the mark.
@@ -101,7 +125,7 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
   PNG fallback, and builder-parity coverage.
 - Allow the README version badge to be omitted; still reject a badge whose
   version differs from package metadata.
-- New data-driven README visuals in `nur_tools/build_showcase.py`: an animated
+- New data-driven README visuals in `openrook_tools/build_showcase.py`: an animated
   hero evaluating an authored rupture → repair event sequence with the real
   emotional engine (illustrative dialogue, no LLM), four-moment modulator
   "fingerprints", and the v4 retained-choice result as a paired dot plot with its
@@ -169,14 +193,14 @@ See [review fixes and test-change audit](docs/REVIEW_FIXES.md).
 
 - Rename the distribution to `openrook`, the default identity and public surfaces
   to OpenRook, and primary commands to `openrook` / `openrook-*`.
-- Keep `nur` / `nur-*` command aliases, `NurConfig`, `NurApp`, `NurClient`,
-  `NurAPIError`, the `nur_tools` module namespace, and legacy `NUR_*` settings.
+- Keep compatibility command, class, import, and environment aliases;
   `OPENROOK_*` settings take precedence, including explicitly empty values.
-- Preserve existing databases, browser identity/token keys, configured agent
-  names, export schema identifiers, and research evidence. New backups use
-  `openrook-backup-*`; existing `nur-backup-*` archives remain accessible.
-- Refresh public documentation, wordmarks, and generated diagrams. Keep the
-  actual GitHub URL until the hosted repository is renamed separately.
+  See the naming completion above for deprecation notices and migrated keys.
+- Preserve existing database records, browser identity/token values, configured
+  agent names, and research evidence. New backups use `openrook-backup-*`;
+  existing archives remain accessible.
+- Refresh public documentation, wordmarks, and generated diagrams, and use the
+  renamed GitHub repository URL.
 - Fix an installed evaluation CLI startup failure: test-only fake backends are
   imported only when explicitly requested, never when launching live evaluation
   or asking an installed command for help.

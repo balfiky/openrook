@@ -15,9 +15,9 @@ import fnmatch
 from typing import Any, Mapping
 
 from core.types import ToolCapability, ToolCategory, ToolResult
-from nur_tools.mcp.client import MCPClient, MCPToolInfo
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
+from openrook_tools.mcp.client import MCPClient, MCPToolInfo
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
 
 
 # ---------------------------------------------------------------------------

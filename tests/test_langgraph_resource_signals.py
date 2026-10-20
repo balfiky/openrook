@@ -8,9 +8,9 @@ import pytest
 from core.emotional_engine import EmotionalEngine
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.types import ToolCapability, ToolCategory
-from nur_tools import langgraph_orchestrator
-from nur_tools.executor import ToolExecutor
-from nur_tools.registry import ToolRegistry
+from openrook_tools import langgraph_orchestrator
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.registry import ToolRegistry
 
 
 pytestmark = pytest.mark.skipif(

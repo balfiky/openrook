@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from core.types import ToolResult
-from nur_tools.builtin.self_actions import (
+from openrook_tools.builtin.self_actions import (
     CAPABILITIES,
     SELF_TOOL_NAMES,
     SelfActionContext,

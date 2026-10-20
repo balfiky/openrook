@@ -15,7 +15,7 @@ petals and dots here are computed from real sources:
   retained-choice confirmation (``RETAINED_CHOICE_PAIRS`` below, copied from
   the study's ``analysis.json``).
 
-Regenerate with ``python3 nur_tools/render_diagram_pngs.py`` (requires
+Regenerate with ``python3 openrook_tools/render_diagram_pngs.py`` (requires
 ``cairosvg``). Light and dark SVGs blend into the host page. Optional one-shot
 reveals honor ``prefers-reduced-motion``; PNG fallbacks show the complete chart.
 """
@@ -33,7 +33,7 @@ from xml.sax.saxutils import escape
 from config.loader import load_config
 from core.emotional_engine import EmotionalEngine
 from core.types import EmotionalEvent, EventType, UnresolvedItem
-from nur_tools.brand import (
+from openrook_tools.brand import (
     LIGHT, SANS, SHOWCASE_SERIF as SERIF, THEMES, Theme, rook_defs, rook_mark,
 )
 

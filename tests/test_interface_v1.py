@@ -8,6 +8,7 @@ with a mock backend and drive it via FastAPI's ``TestClient``.
 
 from __future__ import annotations
 
+import json
 import os
 import zipfile
 
@@ -1076,7 +1077,7 @@ class TestAdminEndpoints:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["format"] == "nur.runtime_config.redacted.v1"
+        assert data["format"] == "openrook.runtime_config.redacted.v1"
         assert data["config"]["llm_api_key"] == ""
         assert data["secret_status"]["llm_api_key"]["configured"] is True
         assert data["secret_status"]["llm_api_key"]["source"] == "yaml"
@@ -1102,6 +1103,7 @@ class TestAdminEndpoints:
         assert data["redacted_config"] is True
         assert data["included_data"] is True
         assert os.path.exists(data["path"])
+        assert data["filename"].startswith("openrook-backup-")
         assert data["path"].startswith(str(data_dir / "backups"))
         with zipfile.ZipFile(data["path"]) as archive:
             names = set(archive.namelist())
@@ -1109,8 +1111,80 @@ class TestAdminEndpoints:
             assert "data/memory.txt" in names
             assert not any(name.startswith("data/backups/") for name in names)
             exported = archive.read("runtime_config.redacted.json").decode()
+            assert json.loads(exported)["format"] == "openrook.runtime_config.redacted.v1"
             assert "secret-key" not in exported
             assert "private memory" == archive.read("data/memory.txt").decode()
+
+    @pytest.mark.parametrize("db_names", [
+        ("nur.db",), ("openrook.db",), ("nur.db", "openrook.db"),
+    ])
+    @pytest.mark.parametrize("archive_brand", ["nur", "openrook"])
+    def test_backup_offline_restore_preserves_both_database_generations(
+        self, temp_config, tmp_path, db_names, archive_brand,
+    ):
+        from core.memory.semantic import SQLiteSemanticMemory
+        from core.types import SemanticMemoryEntry
+        from interface.routes_backup import (
+            _create_admin_backup,
+            _delete_admin_backup,
+            _list_admin_backups,
+        )
+
+        data_dir = tmp_path / "data"
+        user_dir = data_dir / "web_backup-user"
+        user_dir.mkdir(parents=True)
+        for name in db_names:
+            memory = SQLiteSemanticMemory(str(user_dir / name))
+            try:
+                memory.store(SemanticMemoryEntry(
+                    kind="fact", summary=f"Saved in {name}", content="preserved memory",
+                ))
+            finally:
+                memory.close()
+        original = {name: (user_dir / name).read_bytes() for name in db_names}
+        source_config = RuntimeConfig(data_dir=str(data_dir))
+        source_config.write_yaml(str(temp_config))
+        created = _create_admin_backup(source_config, include_data=True)
+
+        # Older archives have the same ZIP layout; restore remains an offline
+        # extraction. Neither filename nor export format can exclude the data.
+        archive_path = data_dir / "backups" / f"{archive_brand}-backup-fixture.zip"
+        with zipfile.ZipFile(created["path"]) as source:
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                for name in source.namelist():
+                    payload = source.read(name)
+                    if name == "runtime_config.redacted.json":
+                        export = json.loads(payload)
+                        export["format"] = f"{archive_brand}.runtime_config.redacted.v1"
+                        payload = json.dumps(export).encode()
+                    archive.writestr(name, payload)
+        listing = _list_admin_backups(source_config)
+        assert archive_path.name in {item["filename"] for item in listing["backups"]}
+        restored = tmp_path / "restored"
+        with zipfile.ZipFile(archive_path) as archive:
+            for name in db_names:
+                assert archive.read(f"data/web_backup-user/{name}") == original[name]
+            archive.extractall(restored)
+
+        config = RuntimeConfig(data_dir=str(restored / "data"))
+        restored_path = config.user_db_path("web:backup-user")
+        assert os.path.basename(restored_path) == "openrook.db"
+        expected_source = "openrook.db" if "openrook.db" in db_names else "nur.db"
+        memory = SQLiteSemanticMemory(restored_path)
+        try:
+            assert memory.count() == 1
+            assert memory.recent()[0].summary == f"Saved in {expected_source}"
+        finally:
+            memory.close()
+        if len(db_names) == 2:
+            assert (restored / "data/web_backup-user/nur.db").read_bytes() == original["nur.db"]
+        deleted = _delete_admin_backup(
+            source_config,
+            filename=archive_path.name,
+            confirmation=f"DELETE {archive_path.name}",
+        )
+        assert deleted["ok"] is True
+        assert not archive_path.exists()
 
     def test_admin_backups_can_be_listed_and_deleted(
         self, client, temp_config, tmp_path,
@@ -1479,7 +1553,7 @@ class TestDeleteUser:
         self._chat_once(client, user_id="alice")
         user_dir = self._user_dir(tmp_path)
         assert user_dir.is_dir()
-        assert (user_dir / "nur.db").exists()
+        assert (user_dir / "openrook.db").exists()
 
         resp = client.delete("/v1/users/web/alice")
         assert resp.status_code == 200, resp.text
@@ -1517,7 +1591,7 @@ class TestDeleteUser:
         assert resp.status_code == 200
         assert not self._user_dir(tmp_path, user_id="alice").exists()
         assert carol_dir.exists(), "carol's data must not be touched"
-        assert (carol_dir / "nur.db").exists()
+        assert (carol_dir / "openrook.db").exists()
 
     def test_delete_preserves_shared_self_model_db(self, client, tmp_path):
         self._chat_once(client, user_id="alice")
@@ -1568,7 +1642,7 @@ class TestDeleteUser:
         should still clean up and succeed."""
         self._chat_once(client, user_id="frank")
         # Simulate external DB deletion; leave the session JSON in place.
-        db = self._user_dir(tmp_path, user_id="frank") / "nur.db"
+        db = self._user_dir(tmp_path, user_id="frank") / "openrook.db"
         # Evict the live session so the DB is closed, then remove it.
         client.post("/v1/sessions/web:frank:default/reset")
         if db.exists():

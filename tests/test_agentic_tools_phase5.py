@@ -28,11 +28,11 @@ from core.types import (
 )
 from core.emotional_engine import EmotionalEngine
 from core.dual_process.tool_loop import run_tool_loop
-from nur_tools.registry import ToolRegistry
-from nur_tools.executor import ToolExecutor
-from nur_tools import register_builtins, register_mcp_tools
-from nur_tools.mcp.client import MCPClient, MCPCallResult, MCPToolInfo, NullMCPClient
-from nur_tools.mcp.adapter import MCPAdapter, infer_category
+from openrook_tools.registry import ToolRegistry
+from openrook_tools.executor import ToolExecutor
+from openrook_tools import register_builtins, register_mcp_tools
+from openrook_tools.mcp.client import MCPClient, MCPCallResult, MCPToolInfo, NullMCPClient
+from openrook_tools.mcp.adapter import MCPAdapter, infer_category
 
 
 # ===================================================================
