@@ -23,6 +23,10 @@
   <a href="#configure-an-llm"><img src="https://img.shields.io/badge/llm-ollama%20%E2%80%A2%20codex%20%E2%80%A2%20openai-1A1428?style=for-the-badge" alt="LLM backends"></a>
 </p>
 
+<p align="center">
+  <img src="docs/diagrams/emotional-arc.svg" alt="Six modulator curves from OpenRook&#39;s deterministic emotional engine evaluating an authored 90-minute rupture-and-repair event sequence (illustrative dialogue, no LLM). Arousal jumps to 0.88 at the rupture and is back near baseline within minutes; valence falls from 0.78 to 0.30, drifts up only to 0.41 over the next half hour, then rises to 0.58 at the repair; bonding dips from 0.64 to 0.54 and later returns to 0.62; unresolved tension starts at 0.76, declines only to 0.74, and the repair clears it." width="100%">
+</p>
+
 **OpenRook — a history of its own.** Formerly Nūr.
 
 A cognitive runtime for persistent agents, not just another assistant interface.
@@ -38,10 +42,6 @@ The research preset provides one persistent subject, independent activity,
 uncorrected expression, passive observation, and recorded transition replay.
 
 ---
-
-<p align="center">
-  <img src="docs/diagrams/hero-banner.png" alt="OpenRook cognitive runtime — memory, relationship arcs, and internal state persist across turns." width="1100">
-</p>
 
 > **Honest scope.** OpenRook is an experimental runtime — not a therapist, not an AGI claim, not a consciousness claim. It is engineered scaffolding that holds *the state behind* an LLM's words across turns, sessions, and time. Memory and identity state live under `data/` — use it with consent when other people are involved. See [PRIVACY.md](PRIVACY.md) for inspection, export, and deletion.
 
@@ -61,6 +61,10 @@ uncorrected expression, passive observation, and recorded transition replay.
   the manager in the same process. This is task-specific runtime-plus-model
   evidence, not isolated model learning or proof of human equivalence.
 
+<p align="center">
+  <img src="docs/diagrams/retained-choice.svg" alt="14 subject pairs (28 subjects) from the completed v4 retained-choice confirmation: after a restart, subjects that learned Ari is reliable more often direct their first work requests to Ari; mean paired difference 0.71, 95% interval 0.29 to 1.14, above the 0.2 threshold; 7 of 14 pairs show no difference." width="100%">
+</p>
+
 See the [development summary](docs/DEVELOPMENT_SUMMARY.md) for major fixes and
 the [dated validation record](docs/plans/behavioral_validation_v4.md#completed-confirmation-and-closeout)
 for the study conditions, errors, and evidence boundaries. Renaming does not rerun
@@ -77,6 +81,10 @@ verification, and replay make activity inspectable; they do not establish human
 emotion or unrestricted autonomy. See [research operation](docs/RESEARCH_RUNTIME.md).
 
 ## What State Looks Like Across Turns
+
+<p align="center">
+  <img src="docs/diagrams/emotional-fingerprints.svg" alt="Six-petal glyphs of the engine's modulator values at four moments of the same authored event sequence: calm, warmth, rupture and repair." width="100%">
+</p>
 
 Illustrative dialogue and state annotations, not transcripts from a recorded run:
 

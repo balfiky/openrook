@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Regenerate the architecture diagrams as SVG + PNG under docs/diagrams/.
 
-SVG sources are built from ``nur_tools/build_diagrams.py``; PNGs are rasterized
-with cairosvg at 2x device pixels (the social cover stays 1280 x 640).
+SVG sources are built from ``nur_tools/build_diagrams.py`` (structural diagrams)
+and ``nur_tools/build_showcase.py`` (data-driven README visuals); PNGs are
+rasterized with cairosvg at 2x device pixels (the social cover stays 1280 x 640).
 The hand-authored ``docs/diagrams/feature-overview.svg`` is also rasterized;
 edit that SVG directly, as it has no builder. Both formats are tracked in git — SVGs are the
 source of truth that GitHub and local HTML export embed, and PNGs are the
@@ -36,6 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from nur_tools.build_diagrams import BUILDERS  # noqa: E402
+from nur_tools.build_showcase import SHOWCASE, SIZES  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs" / "diagrams"
@@ -49,7 +51,7 @@ def render_one(name: str) -> None:
     svg_path = OUT_DIR / f"{name}.svg"
     png_path = OUT_DIR / f"{name}.png"
     svg_path.write_text(svg_text, encoding="utf-8")
-    scale = 1 if name == "github-cover" else PNG_SCALE
+    scale = PNG_SCALE
     cairosvg.svg2png(
         bytestring=svg_text.encode("utf-8"),
         write_to=str(png_path),
@@ -59,10 +61,28 @@ def render_one(name: str) -> None:
     print(f"wrote {svg_path.name} and {png_path.name}")
 
 
+def render_showcase(name: str) -> None:
+    svg_text = SHOWCASE[name]()
+    width, height = SIZES[name]
+    scale = 1 if name == "github-cover" else PNG_SCALE
+    svg_path = OUT_DIR / f"{name}.svg"
+    png_path = OUT_DIR / f"{name}.png"
+    svg_path.write_text(svg_text, encoding="utf-8")
+    cairosvg.svg2png(
+        bytestring=svg_text.encode("utf-8"),
+        write_to=str(png_path),
+        output_width=width * scale,
+        output_height=height * scale,
+    )
+    print(f"wrote {svg_path.name} and {png_path.name}")
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for name in BUILDERS:
         render_one(name)
+    for name in SHOWCASE:
+        render_showcase(name)
     for name in STATIC_SVGS:
         svg_path = OUT_DIR / f"{name}.svg"
         png_path = svg_path.with_suffix(".png")

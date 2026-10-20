@@ -4,6 +4,18 @@ All notable changes to OpenRook (formerly Nūr) are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Showcase visuals
+
+- New data-driven README visuals in `nur_tools/build_showcase.py`: an animated
+  hero evaluating an authored rupture → repair event sequence with the real
+  emotional engine (illustrative dialogue, no LLM), four-moment modulator
+  "fingerprints", and the v4 retained-choice result as a paired dot plot with its
+  interval and caveats. Animations share one timeline and respect
+  `prefers-reduced-motion`; PNG fallbacks show the complete static chart.
+- New dark OpenRook social cover built from the same engine replay; the text-only
+  hero banner is retired. `tests/test_showcase_visuals.py` ties the charts to the
+  engine and the published study numbers.
+
 ### Documentation review
 
 - Fix Python 3.10 timeout handling: the comparison batch's SIGKILL fallback

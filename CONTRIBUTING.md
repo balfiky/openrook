@@ -56,6 +56,8 @@ Docs:
 | Admin / wizard behavior | `docs/DEPLOYMENT_AND_ADMIN.md` |
 | New eval variant | `nur_tools/build_diagrams.py::build_evaluation_harness` + `evals/ablation_hypotheses.py` **before** running the eval + `docs/ARCHITECTURE.md` Evaluation section + `docs/OVERVIEW.md §4` results table |
 | Component evidence status changes | `nur_tools/build_diagrams.py::build_component_claim_map` + `docs/OVERVIEW.md §5` |
+| Modulator config, event impacts, or emotion labels | `nur_tools/build_showcase.py` (engine-replay hero, fingerprints, cover) — re-render; `tests/test_showcase_visuals.py` must pass |
+| New headline study result | `nur_tools/build_showcase.py` data constants + `tests/test_showcase_visuals.py` |
 | Release notes | `CHANGELOG.md` under a new version header |
 
 ## Regenerating Diagrams

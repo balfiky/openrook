@@ -289,28 +289,6 @@ def build_component_claim_map() -> Canvas:
 # ---------------------------------------------------------------------------
 
 
-def build_hero_banner() -> Canvas:
-    c = Canvas(
-        1600, 440,
-        "State that persists between your turns",
-        "Illustrative dialogue: each turn reads and writes persistent state. These lines are examples, not a recorded evaluation transcript.",
-    )
-    turns = [
-        ("Mon", ["You: I shipped the feature!", "OpenRook: That's great — how did it land?", "", "write memory"], "client"),
-        ("Wed", ["You: Rollback was rough.", "OpenRook: Monday went well. What changed?", "", "retrieves Mon · opens loop"], "attention"),
-        ("Fri", ["You: Fixed it, feeling better.", "OpenRook: Good. Want to unpack what broke?", "", "closes loop · trust += repair"], "client"),
-    ]
-    for index in range(3):
-        c.arrow((288 + index * 512, 248), (288 + index * 512, 300))
-    for index, (day, body, color) in enumerate(turns):
-        c.tile(48 + index * 512, 128, 480, 120, day, body, color=color, title_size=16, body_size=13)
-    c.group(40, 300, 1520, 108, "Persistent cognitive state", "process")
-    pills = ["arousal", "valence", "certainty", "bonding", "energy", "resolution", "memory", "relationship arc", "self-model"]
-    for index, label in enumerate(pills):
-        c.pill(56 + index * 168, 352, 152, 32, label, color="process" if index < 6 else "storage")
-    return c
-
-
 # ---------------------------------------------------------------------------
 # Persistent research subject: bounded closed-loop execution
 # ---------------------------------------------------------------------------
@@ -376,25 +354,6 @@ def build_research_runtime_autonomy() -> Canvas:
 # ---------------------------------------------------------------------------
 
 
-def build_github_cover() -> Canvas:
-    c = Canvas(
-        1280, 640, "OpenRook",
-        "Inspectable stateful-agent research. Bounded runtime, explicit tools, durable evidence.",
-        show_heading=False,
-    )
-    c.note(64, 88, "OPEN SOURCE · STATEFUL AGENT RESEARCH", size=16, weight=700, fill=INK_SOFT)
-    c.note(64, 188, "OpenRook", size=76, weight=800)
-    c.note(68, 240, "Persistent state. Inspectable behavior.", size=27, fill=INK_SOFT)
-    c.note(68, 280, "Memory, goals, tools and evidence — one bounded runtime.", size=20, fill=INK_SOFT)
-    c.arrow((396, 402), (476, 402))
-    c.arrow((804, 402), (884, 402))
-    c.tile(64, 340, 332, 124, "State + memory", ["Relationships and identity", "Across turns and sessions"], color="storage", title_size=22, body_size=19, title_offset=40, body_offset=76)
-    c.tile(476, 340, 328, 124, "Decisions + tools", ["Explicit policy + budgets", "Revise, pause or stop goals"], color="attention", title_size=22, body_size=19, title_offset=40, body_offset=76)
-    c.tile(884, 340, 332, 124, "Receipts + review", ["Outcomes and checkpoints", "Claims bounded by evidence"], color="process", title_size=22, body_size=19, title_offset=40, body_offset=76)
-    c.note(64, 564, "A research system for studying stateful behavior, not a claim of consciousness.", size=17, fill=INK_SOFT)
-    return c
-
-
 BUILDERS = {
     "runtime-architecture": build_runtime_architecture,
     "single-turn-cognitive-flow": build_single_turn_flow,
@@ -402,7 +361,5 @@ BUILDERS = {
     "auth-tool-safety-boundary": build_auth_tool_safety,
     "evaluation-ablation-harness": build_evaluation_harness,
     "component-claim-map": build_component_claim_map,
-    "hero-banner": build_hero_banner,
     "research-runtime-autonomy": build_research_runtime_autonomy,
-    "github-cover": build_github_cover,
 }
