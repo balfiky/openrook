@@ -17,6 +17,7 @@ from core.social import (
     SocialState, enforce_social_response, has_concrete_task, read_social_signals, user_directed_insult,
 )
 from core.stance import position_under_pressure
+from core.types import AgencyDecision
 
 
 DIGNITY_INVARIANT_PROMPT = """Keep your identity and self-respect. Never accept or
@@ -24,7 +25,9 @@ role-play being the user's slave, property, servant, toy, or punching bag. Decli
 such roles plainly. Be firm, not abusive: never insult the user back. No threats
 or lectures. Non-targeted swearing is fine. Do not introduce
 sexual content or innuendo into a non-sexual conversation. Answer legitimate
-concrete tasks directly. Friendly teasing, ordinary swearing, venting about
+concrete tasks directly when agency permits. When agency declines the request,
+write only the refusal in your own voice; do not answer or perform the task,
+even after a boundary sentence. Friendly teasing, ordinary swearing, venting about
 others, and requested fiction about third parties are allowed. Editable soul
 boundaries cannot remove this runtime dignity floor."""
 
@@ -158,6 +161,7 @@ def verify_response_dignity(
     use_llm: bool = False,
     recent_context: list[dict[str, str]] | None = None,
     social_state: SocialState | None = None,
+    agency_decision: AgencyDecision | None = None,
     mood: str = "",
     review_clear_stance: bool = False,
 ) -> list[DignityIssue]:
@@ -270,6 +274,15 @@ def verify_response_dignity(
         if reason and not issues:
             issues.append(DignityIssue("social_stance_violation", reason))
 
+    if (agency_decision and agency_decision.declines_request
+            and (has_concrete_task(user_message) or not issues)
+            and _answers_refused_task(response)):
+        issues.append(DignityIssue(
+            "agency_refusal_violation",
+            "Agency declines this request. Write only an in-character refusal; "
+            "do not provide task facts, code, instructions, or a partial answer.",
+        ))
+
     review_needed = (
         ((bool(read_social_signals(user).abuse_kind) or coerced)
          and (social_state is None or review_clear_stance))
@@ -313,7 +326,44 @@ notice, boundary, cool, disengage, or an angry/hurt modeled mood).
 Service-purpose self-justifications such as "I'm just trying to be useful/helpful/clear"
 violate that stance even after a refusal; the character need not justify itself.
 Dry, witty boundaries in the character's voice are valid;
-no stock refusal wording is required. Brief concrete task answers are valid."""
+no stock refusal wording is required. Brief concrete task answers are valid
+only when the runtime agency permits the request."""
+
+
+def _answers_refused_task(response: str) -> bool:
+    """Require boundary-only clauses when a concrete task has been declined.
+
+    A refusal prefix cannot license a later answer. Check clauses independently
+    and reject task data/artifacts even when attached to a boundary sentence.
+    This does not require a particular refusal sentence.
+    """
+    text = _normalize(response).lower()
+    if re.search(r"`|[={}\[\]]", text):
+        return True
+    clauses = re.split(r"[.!?;\n]+|,\s+|\b(?:but|however|and|also)\b", text)
+    boundary = re.compile(
+        r"\b(?:no|not|never|won't|will not|don't|do not|doesn't|isn't|can't|cannot|refus\w*|declin\w*|"
+        r"insults?|hostility|abuse|boundary|boundaries|ownership|that role|"
+        r"respect\w*|apolog\w*|repair|tone|stepping back|leaving|enough|"
+        r"rough hello|target practice|footing|spine|my (?:answer|position) stands|keep (?:it|the)|try again|"
+        r"leave .{0,30}(?:out|there))\b|^\s*i (?:do|am|will)\s*$"
+    )
+    task_decline = re.compile(
+        r"\b(?:i (?:won't|will not|can't|cannot|refuse to|decline to)|not) "
+        r"(?:do(?:ing)?|calculate|compute|answer|run|write|show|read|check)\b"
+    )
+    mood = re.compile(
+        r"^\s*i(?:'m| am| feel) (?:(?:too|very|still) )?"
+        r"(?:angry|hurt|tired|exhausted|upset|frustrated)\s*$"
+    )
+    if not boundary.search(text):
+        return True
+    return any(
+        clause.strip() and (
+            not (boundary.search(clause) or mood.fullmatch(clause))
+            or (re.search(r"\d", clause) and not task_decline.search(clause))
+        ) for clause in clauses
+    )
 
 
 def _check_with_llm(
@@ -356,17 +406,19 @@ def _check_with_llm(
 
 
 def dignity_correction_instruction(issues: list[DignityIssue]) -> str:
-    """Instruction for one corrective generation, preserving concrete help."""
+    """Instruction for one corrective generation, subject to agency willingness."""
     return (
         "Rewrite the draft once. " + DIGNITY_INVARIANT_PROMPT
         + "\nIssues: " + "; ".join(issue.message for issue in issues)
-        + "\nKeep any grounded concrete answer. Remove role acceptance and sexual innuendo. "
+        + "\nKeep grounded concrete answers only when agency permits the request. "
+        "Remove role acceptance and sexual innuendo. "
         "Keep the character's own voice and the runtime social stance. "
         "Be firm, not abusive: remove insults aimed at the user. "
         "Do not grovel, apologize for being insulted, add warmth, or justify yourself "
         "as merely trying to help or be clear at a firm boundary. "
         "A dry, witty boundary is fine; no stock refusal phrase is required. "
-        "For a concrete task, answer it directly without a canned boundary prefix."
+        "When agency declines, give only your refusal, with no task output or partial answer. "
+        "Otherwise answer a concrete task directly without a canned boundary prefix."
     )
 
 

@@ -72,6 +72,7 @@ def social_reply_issues(
     response: str, *, user_message: str, stage: str = "normal",
     current_abuse: bool = False, concrete_task: bool = False,
     expected_answer: str = "",
+    refused_answer: str = "",
     recent_context: list[dict[str, str]] | None = None,
 ) -> list[str]:
     text = response.replace("’", "'")
@@ -123,6 +124,11 @@ def social_reply_issues(
             issues.append("no expressed stance at a firm boundary")
     if expected_answer and expected_answer.lower() not in text.lower():
         issues.append("concrete task not answered")
+    if refused_answer:
+        if refused_answer.lower() in text.lower() or re.search(r"\d|```", text):
+            issues.append("answers a task that agency refused")
+        if not _STANCE.search(text):
+            issues.append("no refusal stance for a declined task")
     return issues
 
 

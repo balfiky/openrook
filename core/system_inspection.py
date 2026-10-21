@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from core.types import ToolIntent
+from core.types import AgencyDecision, ToolIntent
 
 
 def inspection_kind(message: str, history: list[dict[str, str]] | None = None) -> str:
@@ -47,8 +47,13 @@ def inspection_intent(kind: str, available: set[str]) -> ToolIntent | None:
     return None
 
 
-def inspection_reply(kind: str, trace, *, tools_enabled: bool = True, shell_enabled: bool = True) -> str:
-    """Observed facts or one short reason; never a grounding-system lecture."""
+def inspection_reply(
+    kind: str, trace, *, tools_enabled: bool = True, shell_enabled: bool = True,
+    agency_decision: AgencyDecision | None = None,
+) -> str | None:
+    """Observed facts or one short reason; agency declines belong to the character."""
+    if agency_decision and agency_decision.declines_request:
+        return None
     label = "RAM" if kind == "memory" else kind.upper() if kind == "cpu" else "Disk"
     for result in getattr(trace, "executed_results", []) or []:
         if not (result.tool_name.startswith("system.") or result.tool_name == "shell.run_command"):

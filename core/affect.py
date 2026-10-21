@@ -163,8 +163,8 @@ def decide_agency(
             action="refuse",
             rationale="rage from assistant-targeted hostility",
             response_instruction=(
-                "Keep the response brief, professional, and task-focused. Set a "
-                "boundary without retaliating or describing assistant fatigue."
+                "Decline this request briefly in your own voice. Do not answer or "
+                "perform the task. Set a boundary without retaliating."
             ),
             tool_instruction="Decline tools for this request; independently selected activity remains available.",
         )
@@ -174,8 +174,8 @@ def decide_agency(
             action="demand_repair",
             rationale="hurt plus direct attack",
             response_instruction=(
-                "Acknowledge the friction briefly, then ask for or answer the "
-                "concrete task without escalating tone."
+                "Decline this request pending repair, in your own voice. Do not "
+                "answer or perform the task. Keep the boundary without escalating tone."
             ),
             tool_instruction="Decline tools for this request pending a change in willingness.",
         )

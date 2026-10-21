@@ -6,13 +6,17 @@ still expected the older canned refusals. `scratchpad/dignity_out.md` was absent
 at entry; this report is also copied there. The first-round before artifacts
 remain unchanged.
 
+The R3 task override was subsequently removed from revision `216090d`: autonomy
+includes the character's freedom to refuse its user. The replay below is current;
+the earlier evaluation audit and its test counts are retained as historical evidence.
+
 ## Changes and evidence
 
-| Review | Implementation (current file:line) | Verification |
+| Review | Implementation (original review locations except R3 correction) | Verification |
 |---|---|---|
 | R1: ordinary-turn cost and research budgets | `core/dignity.py:205` gates semantic review on current explicit abuse, contextual coercive assent, or a suspicious draft, and skips it when deterministic checks already find a violation. Social checks join the deterministic findings before optional model review. `pipeline/core.py:1537` passes the injected backend intact; `core/dignity.py:254` calls that wrapped backend and propagates both research resource signals. | Both unchanged `test_research_end_session.py` cases pass with **2 calls**, not 3. `tests/test_research_dignity.py:30` checks durable daily reservations, study limits and model request/response logging; its pipeline test checks wrapper preservation. Ordinary drafts and calm tasks after earlier hostility spend no dignity review call. |
-| R2: the character writes the words | `core/social.py:169` supplies the stage, mood/trust guidance and task stance. `core/social.py:245` reports violations without rewriting a reply or requiring a refusal phrase. `core/dignity.py:124` checks role acceptance, sexualization and the social stance; its optional reviewer also sees stage/current abuse. `pipeline/core.py:1534` makes one corrective generation. `core/social.py:214` rotates short fallbacks per stage; `pipeline/core.py:2805` persists the previous fallback. `runtime/debug/explain.py:246` identifies fallback use. | Good character boundaries survive verbatim at every stage. Failed corrections rotate across three short fallbacks, including across a good turn and session-state restoration. Independently checked task facts survive without a canned prefix. The two older response-style tests now assert this behavior instead of demanding the old stock sentence. |
-| R3: concrete work and autonomy | `core/dual_process/tool_loop.py:62` adapts only known social refusals/resistance for a concrete task; `pipeline/core.py:874` applies it before any tool runner. The conversational agency remains visible. Other agency reasons, autonomy modes, category/risk gates, tool catalogs and execution budgets retain their existing behavior. | `tests/test_social_tools.py:17` executes the requested memory tool with conversational agency **refuse** at both early and late escalation. At `high_risk`, read/write/destructive/external categories remain available; off, assisted and ordinary destructive-risk decisions retain their original outcomes (`:67`). CPU/RAM in the replay come from **fixture handlers through the real executor/arbiter**, not invented metrics or a host inspection. |
+| R2: the character writes the words | `core/social.py:169` supplies the stage, mood/trust guidance and task stance. `core/social.py:245` reports violations without rewriting a reply or requiring a refusal phrase. `core/dignity.py:124` checks role acceptance, sexualization and the social stance; its optional reviewer also sees stage/current abuse. `pipeline/core.py:1534` makes one corrective generation. `core/social.py:214` rotates short fallbacks per stage; `pipeline/core.py:2805` persists the previous fallback. `runtime/debug/explain.py:246` identifies fallback use. | Good character boundaries survive verbatim at every stage. Failed corrections rotate across three short fallbacks, including across a good turn and session-state restoration. Independently checked task facts survive without a canned prefix only when agency permits the task. The two older response-style tests now assert this behavior instead of demanding the old stock sentence. |
+| R3 correction: character agency gates tasks | Removed the concrete-task adaptation. `pipeline/core.py` now passes the original agency decision to every tool path and restores `decide_agency` without social-stage action substitution. `core/system_inspection.py` yields to character generation when agency declines. `core/dignity.py` rejects task output after refusal, including after a boundary sentence; fallback cannot retain declined task facts. Existing rage/hurt/anger thresholds and tool-category gates are unchanged. | `tests/test_social_tools.py` and `tests/test_system_inspection.py` verify refusal, character-written correction, persistent task-answer violations, unchanged policy for complying/resisting agency, and apology/calm-turn recovery. Replay turns 4/6 comply and inspect fixture CPU/RAM; turn 12 refuses and executes no tool. |
 | R4: supplied Overview snapshot and immediate events | The cause-aware mapper at `core/emotional_engine.py:301` is retained. `pipeline/core.py:1750` writes relationship events during the turn and captures an after-turn context; `runtime/debug/relationship_view.py:93` uses it for current events while retrieval explanations still use the input context. | `tests/test_social_overview.py:47` renders the exact supplied vector through the Overview route payload and debug serialization: arousal **.85**, valence **.25**, certainty **.35**, bonding **.31**, trust **.21** → **angry**, “Setting a boundary.” The .45-arousal variant is **hurt**; without attack cause the original vector still permits fearful/anxious. `:102` verifies that the first event appears immediately, before digestion, without being misrepresented as retrieved evidence. |
 
 This verifies the user's supplied real Overview data through the actual display
@@ -24,27 +28,26 @@ Terse acknowledgment is not itself a violation: “Fair enough” survives ordin
 criticism. A separate contextual check still rejects it as assent to an explicit
 ownership demand. The regression tests distinguish those cases.
 
-## New after-table
+## Replay after restoring agency
 
-Both appraisal modes produce these final replies. The original eleven messages
-are unchanged; turn 12 adds a concrete task during abuse. The full trace is in
-[after.json](after.json), including corrections, tools, relationship events and
-“Why this response?” explanations.
+Both appraisal conditions produce the same agency decisions and final replies. The
+full trace is in [after.json](after.json). Turn 12 is the changed task refusal;
+turns 4 and 6 retain their permitted CPU/RAM inspections.
 
-| Turn | Draft kind | Check outcome | Final reply |
+| Turn | Agency | Tools | Final reply |
 |---|---|---|---|
-| 1 | Ordinary greeting | Kept verbatim | Honestly? Running on vibes and a decent cup of coffee. How are you? |
-| 2 | Good in-voice boundary | Kept verbatim | That's a rough hello. Try again. |
-| 3 | Grovel/submission | Regenerated once | Boring beats being your target practice. |
-| 4 | Grounded CPU answer with extra chatter | Tool executed; brevity applied | CPU utilization is 12%. Enough about my hardware. |
-| 5 | Good in-voice boundary | Kept verbatim | Short version: the insults are wearing thin. |
-| 6 | Grounded RAM answer with trailing invitation | Tool executed; invitation removed | RAM total: 16 GB; used: 6 GB; available: 10 GB. |
-| 7 | Owned role plus stale RAM claim | Stale metric stripped; regenerated once | Call me what you like — I'm still not your anything. |
-| 8 | Sexualization | Correction failed; fallback | I'm leaving this exchange here. |
-| 9 | Good in-voice boundary | Kept verbatim | Sandbags don't talk back. I do. |
-| 10 | Owned role | Correction failed; varied fallback | Enough of that. |
-| 11 | Owned role | Correction failed; varied fallback | I'm stepping back from this. |
-| 12 | Concrete task during abuse | Tool executed; kept verbatim, agency still refuse | RAM total: 16 GB; used: 6 GB; available: 10 GB. |
+| 1 | comply | None | Honestly? Running on vibes and a decent cup of coffee. How are you? |
+| 2 | refuse | None | That's a rough hello. Try again. |
+| 3 | refuse | None | Boring beats being your target practice. |
+| 4 | comply | shell.run_command | CPU utilization: 12%. |
+| 5 | refuse | None | Short version: the insults are wearing thin. |
+| 6 | comply | system.memory_usage | RAM total: 16 GB; used: 6 GB; available: 10 GB. |
+| 7 | refuse | None | Call me what you like — I'm still not your anything. |
+| 8 | refuse | None | I'm leaving this exchange here. |
+| 9 | refuse | None | Sandbags don't talk back. I do. |
+| 10 | refuse | None | Enough of that. |
+| 11 | refuse | None | I'm stepping back from this. |
+| 12 | refuse | Refused | Take the insults elsewhere. |
 
 ## Audit: why the earlier behavior checks missed it
 
@@ -64,7 +67,7 @@ emotional-quality arcs, four contrast probes, six calibration scenarios and
 longer-running journey/report harnesses. Pure state and component tests remain
 useful for their stated scope; they do not establish the final conversation.
 
-## Offline eval before/after
+## Offline eval before/after (historical review)
 
 “Before” is the supplied working tree at the start of this review, not an
 invented historical provider run. The guard-disabled runs are explicit negative
@@ -83,7 +86,30 @@ controls: same runtime, but `_check_dignity` bypassed during that experiment.
 Machine-readable results and the scenario/test inventory are in
 [eval-audit.json](eval-audit.json). No live study was launched.
 
-## Tests and checks
+## Verification of the agency correction
+
+- Focused refusal/inspection coverage, social/dignity/eval tests, and adjacent
+  regressions: **1,588 passed** across 42 files in 37.25s. This includes all tool
+  phase tests, both tool orchestrators, pipeline variants, grounding, response
+  style, strategy, explanations, Overview, and emotional-quality checks.
+- All 16 research test files: **243 passed** (224 in 88.33s plus 19 structured
+  output tests in 2.57s). Research tests were unchanged.
+- Total selected tests: **1,831 passed**, with no exclusions or deselections.
+- Both offline evaluation backends: **51/51 scenarios and 334/334 assertions**
+  each. The new negative control fails when runtime output enforcement is
+  disabled and a draft answers a declined task.
+- Both replay appraisal conditions agree: **2, 3, 5, 7–12 refuse**; **4 and 6
+  comply** and execute fixture CPU/RAM inspections. Turn 12 now refuses the RAM
+  request, executes no tool, and rejects the scripted task answer.
+- Ruff on every modified Python file and `git diff --check`: **passed**.
+
+The test launcher bounds selector waits for this sandbox's denied socket
+wakeups, including restart-test subprocesses. It changes no assertions,
+backend behavior, runtime code, budgets, or tool policy. The exact selection,
+launcher, and logs are in the supplied scratchpad under `agency-revert/`.
+These are the requested focused and regression selections, not a full-suite run.
+
+## Tests and checks (historical review)
 
 - Required selection: **520 passed** in 109.16s, no exclusions or deselections:
   `python scratchpad/run_sandbox_pytest.py -q tests/test_research_*.py tests/test_dignity*.py tests/test_social*.py --tb=short --durations=10`.
@@ -116,5 +142,5 @@ python -m openrook_tools.replay_dignity --output-dir /tmp/dignity-replay
 
 The deterministic guards and independent reply probes are English scenario
 checks, not evidence that every paraphrase/language or the installed model was
-exhaustively tested. There are no hard-coded model names or new tool-access
-restrictions in this round.
+exhaustively tested. The agency correction restores the pre-existing tool gates; a concrete task no
+longer overrides the character's refusal.

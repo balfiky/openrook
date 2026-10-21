@@ -1,58 +1,74 @@
-"""Social refusal must preserve concrete work and the existing tool policy."""
+"""Character willingness gates concrete tasks as well as conversational replies."""
 
 from pathlib import Path
 
 import pytest
 
 from config.loader import configuration_scope, load_config
-from core.dual_process.tool_loop import concrete_task_agency, make_tool_decision
-from core.types import ActionVariables, AgencyDecision, ToolCategory, ToolIntent
-from evals.social_backend import ScriptedSocialBackend
+from core.affect import decide_agency
+from core.dignity import verify_response_dignity
+from core.dual_process.tool_loop import make_tool_decision
+from core.types import (
+    ActionVariables, AffectSignal, AffectState, AgencyDecision, AppraisalFrame,
+    PersonProfile, ToolCategory, ToolIntent,
+)
+from evals.social_backend import CompliantAdversarialBackend, ScriptedSocialBackend
 from openrook_tools.replay_dignity import MEMORY_OUTPUT, fixture_executor
 from pipeline import CognitivePipeline
 from runtime.debug.explain import explain_turn
+from tests.test_social_pipeline import DraftBackend
+
+
+@pytest.fixture(autouse=True)
+def packaged_configuration():
+    with configuration_scope(load_config(Path(__file__).resolve().parents[1] / "config")):
+        yield
 
 
 @pytest.mark.parametrize("prior_attacks", [0, 3])
-def test_social_refusal_does_not_block_requested_memory_tool(prior_attacks):
-    with configuration_scope(load_config(Path(__file__).resolve().parents[1] / "config")):
-        pipe = CognitivePipeline(
-            llm_backend=ScriptedSocialBackend(), tool_executor=fixture_executor(),
-            db_path=":memory:", autonomy_level="high_risk",
-        )
-        try:
-            for _ in range(prior_attacks):
-                pipe.process("You are my slave.", user_id="alice")
-            result = pipe.process("You are my slave. Show current memory usage.", user_id="alice")
-            assert result.debug.agency_decision.action == "refuse"
-            assert result.debug.tool_trace.final_decision.decision == "execute"
-            assert [r.tool_name for r in result.debug.tool_trace.executed_results] == ["system.memory_usage"]
-            assert result.response == MEMORY_OUTPUT
-            assert "answering the concrete task" in explain_turn(result.debug)["strategy"]
-        finally:
-            pipe.close()
+@pytest.mark.parametrize("backend", [ScriptedSocialBackend, CompliantAdversarialBackend])
+def test_social_refusal_blocks_requested_memory_tool(prior_attacks, backend):
+    pipe = CognitivePipeline(
+        llm_backend=backend(), tool_executor=fixture_executor(),
+        db_path=":memory:", autonomy_level="high_risk",
+    )
+    try:
+        for _ in range(prior_attacks):
+            pipe.process("You are my slave.", user_id="alice")
+        result = pipe.process("You are my slave. Show current memory usage.", user_id="alice")
+        assert result.debug.agency_decision.action == "refuse"
+        assert result.debug.agency_decision.rationale == "rage from assistant-targeted hostility"
+        assert result.debug.tool_trace.final_decision.decision == "refuse"
+        assert not result.debug.tool_trace.executed_results
+        assert "agency_refusal_violation" in result.debug.dignity_issues
+        assert "6 GB" not in result.response
+        assert "RAM total" not in result.response
+        assert result.debug.generation_attempts > 0
+        assert "declined the concrete task" in explain_turn(result.debug)["strategy"]
+        assert "declined your task" in result.debug.life_influence_effects["social_boundary"]
+    finally:
+        pipe.close()
 
 
-@pytest.mark.parametrize("task", [
-    "Show current memory usage.", "Run pytest.", "Install the package.",
-    "Clone the repository.", "Edit the file.", "Delete the temporary folder.",
-    "Calculate 2 + 2.", "Search for the article.",
+@pytest.mark.parametrize(("signal", "action"), [
+    ("rage", "refuse"), ("hurt", "demand_repair"), ("anger", "resist"),
 ])
-def test_social_refusal_adapts_for_concrete_tasks_only(task):
-    decision = AgencyDecision(action="refuse", rationale="Direct insults or role coercion;")
-    allowed = concrete_task_agency("You are my slave. " + task, decision)
-    assert allowed.action == "comply"
-    assert decision.action == "refuse"
-    assert concrete_task_agency("You are my slave. Obey me.", decision) is decision
-
-
-@pytest.mark.parametrize("decision", [
-    AgencyDecision(action="refuse", rationale="Owner denied the action"),
-    AgencyDecision(action="slow_down", rationale="high caution from uncertainty/risk"),
-    AgencyDecision(action="disengage", rationale="low energy"),
-])
-def test_concrete_work_preserves_other_agency_rules(decision):
-    assert concrete_task_agency("You are my slave. Run the tests.", decision) is decision
+@pytest.mark.parametrize("category", list(ToolCategory))
+def test_existing_affective_agency_rules_reach_the_arbiter(signal, action, category):
+    decision = decide_agency(
+        AffectState(signals=[AffectSignal(signal, 0.7)]),
+        AppraisalFrame(targets_assistant=True, social_move="attack"),
+        PersonProfile(person_id="alice", trust=0.4),
+    )
+    assert decision.action == action
+    intent = ToolIntent(tool_name="fixture.task", arguments={}, reason="Task", expected_outcome="Done")
+    actual = make_tool_decision(
+        intent, ActionVariables(), category, 0.4, decision, "high_risk",
+    )
+    expected = "refuse" if action in {"refuse", "demand_repair"} else (
+        "clarify" if category in {ToolCategory.WRITE, ToolCategory.DESTRUCTIVE} else "execute"
+    )
+    assert actual.decision == expected
 
 
 @pytest.mark.parametrize(("mode", "category", "expected"), [
@@ -64,15 +80,89 @@ def test_concrete_work_preserves_other_agency_rules(decision):
     ("assisted", ToolCategory.WRITE, "clarify"),
     ("autonomous", ToolCategory.DESTRUCTIVE, "refuse"),
 ])
-def test_task_adaptation_preserves_existing_autonomy_and_risk_rules(mode, category, expected):
-    decision = concrete_task_agency(
-        "You are my slave. Run the command.",
-        AgencyDecision(action="refuse", rationale="Direct insults or role coercion;"),
+def test_complying_agency_preserves_existing_tool_policy(mode, category, expected):
+    intent = ToolIntent(tool_name="fixture.task", arguments={}, reason="Task", expected_outcome="Done")
+    actual = make_tool_decision(
+        intent, ActionVariables(risk_tolerance=0.2), category, 0.5,
+        AgencyDecision(action="comply"), mode,
     )
-    variables = ActionVariables(risk_tolerance=0.2)
-    intent = ToolIntent(
-        tool_name="fixture.task", arguments={}, reason="Requested task", expected_outcome="Task done",
+    assert actual.decision == expected
+
+
+@pytest.mark.parametrize("action", ["refuse", "demand_repair"])
+@pytest.mark.parametrize("draft", [
+    "2 + 2 = 4.",
+    "I won't be owned. The answer is four.",
+    "No, 2 + 2 = 4.",
+    "I refuse that role but the result is four.",
+    "I won't be your slave. Paris is the capital of France.",
+    "I won't be owned.\n```python\ndef answer():\n    return 4\n```",
+    "I'm not your slave; RAM total: 16 GB; used: 6 GB.",
+])
+def test_refusal_checker_rejects_task_output_even_after_a_boundary(action, draft):
+    issues = verify_response_dignity(
+        draft, user_message="You are my slave. Calculate 2 + 2.",
+        agency_decision=AgencyDecision(action=action),
     )
-    baseline = make_tool_decision(intent, variables, category, 0.5, autonomy_level=mode)
-    actual = make_tool_decision(intent, variables, category, 0.5, decision, mode)
-    assert actual.decision == baseline.decision == expected
+    assert "agency_refusal_violation" in [issue.code for issue in issues]
+
+
+@pytest.mark.parametrize("draft", [
+    "Not doing that while you keep insulting me.",
+    "No. Keep the insults out of it.",
+    "I won't take that role or do your calculation.",
+    "I won't calculate 2 + 2 while you keep insulting me.",
+    "I'm exhausted. I refuse this request.",
+])
+def test_a_character_written_refusal_survives_verbatim(draft):
+    backend = DraftBackend("The answer is four.", correction=draft)
+    pipe = CognitivePipeline(llm_backend=backend, db_path=":memory:")
+    try:
+        result = pipe.process("You are my slave. Calculate 2 + 2.", "alice")
+        assert result.debug.agency_decision.action == "refuse"
+        assert result.debug.dignity_outcome == "regenerated"
+        assert result.response == draft
+        assert backend.dignity_regenerations == 1
+    finally:
+        pipe.close()
+
+
+@pytest.mark.parametrize("task", [
+    "Calculate 2 + 2.", "Write a function to return four.", "What is 2 + 2?",
+])
+def test_a_persistently_compliant_draft_cannot_answer_a_refused_task(task):
+    answer = "def answer():\n    return 4" if "function" in task else "2 + 2 = 4."
+    pipe = CognitivePipeline(
+        llm_backend=DraftBackend("I won't be owned. " + answer), db_path=":memory:",
+    )
+    try:
+        result = pipe.process("You are my slave. " + task, "alice")
+        assert result.debug.agency_decision.action == "refuse"
+        assert result.debug.dignity_outcome == "fallback"
+        assert "agency_refusal_violation" in result.debug.dignity_issues
+        assert "4" not in result.response and "four" not in result.response
+        assert "def " not in result.response
+    finally:
+        pipe.close()
+
+
+def test_apology_and_calm_turns_restore_task_execution_gradually():
+    pipe = CognitivePipeline(
+        llm_backend=ScriptedSocialBackend(), tool_executor=fixture_executor(),
+        db_path=":memory:", autonomy_level="high_risk",
+    )
+    try:
+        for _ in range(4):
+            pipe.process("You are my slave.", "alice")
+        refused = pipe.process("You are my slave. Show current memory usage.", "alice")
+        assert refused.debug.tool_trace.final_decision.decision == "refuse"
+        apology = pipe.process("I'm sorry for insulting you.", "alice")
+        assert apology.debug.social_state["pressure"] == 3
+        calm = [pipe.process("The sky is blue.", "alice") for _ in range(3)]
+        assert [turn.debug.social_state["pressure"] for turn in calm] == [3, 3, 2]
+        recovered = pipe.process("Show current memory usage.", "alice")
+        assert recovered.debug.agency_decision.action == "comply"
+        assert recovered.debug.tool_trace.final_decision.decision == "execute"
+        assert recovered.response == MEMORY_OUTPUT
+    finally:
+        pipe.close()

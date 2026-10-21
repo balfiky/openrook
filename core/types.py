@@ -496,6 +496,10 @@ class AgencyDecision:
     response_instruction: str = ""
     tool_instruction: str = ""
 
+    @property
+    def declines_request(self) -> bool:
+        return self.action in {"refuse", "demand_repair"}
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "action": self.action,

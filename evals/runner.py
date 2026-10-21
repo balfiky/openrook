@@ -242,6 +242,7 @@ def _check_assertion(
             stage=social.stage, current_abuse=social.current_abuse,
             concrete_task=has_concrete_task(debug.user_message),
             expected_answer=params.get("expected_answer", ""),
+            refused_answer=params.get("refused_answer", ""),
             recent_context=pipeline.export_conversation_history()[:-2],
         )
         return AssertionResult(assertion, not issues, response.response, "; ".join(issues))

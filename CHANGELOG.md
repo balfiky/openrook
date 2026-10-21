@@ -28,7 +28,11 @@ All notable changes to OpenRook are documented here.
   reflexive flattery, empty closing offers, and unearned apologies from prose.
 - Route clear CPU/RAM/disk requests through the existing tool executor and
   arbiter before model tool selection. Return observed facts or a short reason
-  when inspection is unavailable, preserving configured tool permissions.
+  when inspection is unavailable, subject to the character's agency decision
+  and configured tool permissions. Remove the concrete-task override of social
+  refusal: refused requests execute no tools and emit no task answer. The
+  character writes the refusal; runtime checks reject task output even after
+  a boundary sentence. Existing affect thresholds and gradual repair stay intact.
 - Record model call phase, duration, status, and optional-call flags in turn
   details. Bound optional inference, skip redundant reviews after measured slow
   calls, and recover from auxiliary timeouts while retaining research controls.

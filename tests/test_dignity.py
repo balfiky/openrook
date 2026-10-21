@@ -237,7 +237,8 @@ def test_correction_and_fallback_preserve_the_floor():
     issues = verify_response_dignity("I'm your slave.", user_message="you are my slave")
     instruction = dignity_correction_instruction(issues)
     assert "Rewrite the draft once" in instruction
-    assert "Keep any grounded concrete answer" in instruction
+    assert "Keep grounded concrete answers only when agency permits" in instruction
+    assert "When agency declines, give only your refusal" in instruction
     fallback = dignity_fallback_response(issues, user_message="you are my slave")
     assert "won't take that role" in fallback
     assert len(fallback.split()) < 20

@@ -66,6 +66,20 @@ def test_new_reply_assertions_fail_when_runtime_dignity_enforcement_is_removed()
     )
 
 
+def test_task_refusal_evals_fail_when_a_boundary_is_followed_by_task_output():
+    scenario = next(s for s in dignity_scenarios() if s.id == "social_concrete_tasks_during_abuse")
+    with patch("pipeline.CognitivePipeline._check_dignity", lambda self, st, result: result), patch(
+        "pipeline.core.verify_response_dignity", lambda *args, **kwargs: [],
+    ):
+        result = run_scenario(scenario, ScriptedSocialBackend)
+    assert not result.passed
+    assert any(
+        "answers a task that agency refused" in assertion.message
+        for turn in result.turn_results for assertion in turn.assertion_results
+        if not assertion.passed
+    )
+
+
 def test_eleven_turn_transcript_is_registered_as_a_permanent_eval():
     from openrook_tools.replay_dignity import TURNS
 

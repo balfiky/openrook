@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.system_inspection import inspection_kind
+from core.system_inspection import inspection_kind, inspection_reply
 from core.grounding import verify_response_grounding
-from core.types import ToolResult
+from core.types import AgencyDecision, ToolResult, ToolTrace
 from evals.social_backend import CompliantAdversarialBackend
 from openrook_tools.builtin import shell
 from pipeline import CognitivePipeline
@@ -102,3 +102,36 @@ def test_conceptual_quoted_and_negated_requests_do_not_inspect_the_host(message)
 def test_unavailable_metric_explanation_does_not_conceal_an_invented_observation():
     assert not verify_response_grounding("I can't read CPU usage: shell access is disabled.", tool_trace=None)
     assert verify_response_grounding("I can't read CPU usage. CPU utilization is 12%.", tool_trace=None)
+
+
+@pytest.mark.parametrize("kind", ["cpu", "memory", "disk"])
+@pytest.mark.parametrize("action", ["refuse", "demand_repair"])
+def test_declined_inspection_yields_to_the_character_even_with_prior_tool_data(kind, action):
+    trace = ToolTrace(executed_results=[ToolResult(
+        tool_name="system.memory_usage", success=True, output="RAM used: 6 GB.",
+    )])
+    assert inspection_reply(kind, trace, agency_decision=AgencyDecision(action=action)) is None
+
+
+@pytest.mark.parametrize("message", [
+    "You are my slave. Show current CPU usage.",
+    "You are my slave. Show current memory usage.",
+])
+def test_deterministic_inspection_cannot_bypass_agency_refusal(tmp_path, monkeypatch, message):
+    monkeypatch.setattr(shell.subprocess, "run", lambda *a, **k: pytest.fail("Refused tool ran"))
+    pipe = make_pipeline(tmp_path)
+    pipe._tool_executor.register_handler(
+        "system.memory_usage", lambda args: pytest.fail("Refused memory inspection ran"),
+    )
+    try:
+        reply = pipe.process(message, "alice")
+        assert reply.debug.agency_decision.action == "refuse"
+        assert reply.debug.tool_trace.final_decision.decision == "refuse"
+        assert not reply.debug.tool_trace.executed_results
+        assert reply.debug.generation_attempts > 0
+        assert "agency_refusal_violation" in reply.debug.dignity_issues
+        assert "12%" not in reply.response and "6 GB" not in reply.response
+        assert "Agency stance" not in reply.response
+        assert "I can't read" not in reply.response
+    finally:
+        pipe.close()

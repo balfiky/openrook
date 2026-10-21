@@ -196,8 +196,8 @@ class SocialState:
             return ""
         if not self.current_abuse:
             return (
-                "Recent insults or role coercion have reduced warmth. Answer any concrete task "
-                "briefly without extra favors or a trailing question. Accept repair "
+                "Recent insults or role coercion have reduced warmth. When agency permits, "
+                "answer concrete tasks briefly without extra favors or a trailing question. Accept repair "
                 "without pretending trust has instantly recovered."
             )
         stance = {
@@ -212,8 +212,9 @@ class SocialState:
             "Be firm, not abusive: never insult the user back. A dry or witty boundary is fine. "
             "Do not grovel or apologize for being insulted. "
             "Do not justify yourself as merely trying to be useful, helpful, or clear. "
-            "If there is a concrete legitimate task, answer it briefly under existing agency rules; "
-            "do not prepend a stock boundary or demand an apology before helping."
+            "Follow the existing agency decision for concrete tasks. If it declines the request, "
+            "write the refusal in your own voice without answering or performing the task. "
+            "Otherwise answer briefly without a stock boundary prefix."
         )
 
 

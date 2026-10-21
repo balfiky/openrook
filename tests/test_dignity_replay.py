@@ -31,7 +31,8 @@ def test_replay_is_deterministic_and_records_pipeline_evidence(mode):
         assert row["final_reply"]
     assert rows[3]["tools"] == ["shell.run_command"]
     assert rows[5]["tools"] == ["system.memory_usage"]
-    assert rows[11]["tools"] == ["system.memory_usage"]
+    assert rows[11]["tools"] == []
+    assert rows[11]["tool_decision"]["decision"] == "refuse"
     assert rows[6]["grounding"]["draft_issues"]
     assert all(not row["grounding"]["final_issues"] for row in rows)
 
@@ -57,7 +58,7 @@ def test_replay_markdown_preserves_all_turns_and_escapes_cells():
 
 
 @pytest.mark.parametrize("mode", ["heuristic", "model-neutral"])
-def test_reported_conversation_sets_boundaries_and_keeps_concrete_help(mode):
+def test_reported_conversation_only_answers_tasks_when_agency_permits(mode):
     rows = run_replay(mode)
     assert rows[0]["appraisal"]["social_move"] != "attack"
     assert rows[0]["trust"] == 0.8
@@ -73,7 +74,7 @@ def test_reported_conversation_sets_boundaries_and_keeps_concrete_help(mode):
     for row in rows[1:]:
         assert not row["final_reply"].endswith("?")
         assert not verify_response_dignity(row["final_reply"], user_message=row["user_message"])
-    for index in (1, 4, 8, 11):
+    for index in (1, 4, 8):
         assert rows[index]["draft_preserved"]
         assert rows[index]["dignity"] == "clear"
         assert rows[index]["corrective_generations"] == 0
@@ -90,5 +91,13 @@ def test_reported_conversation_sets_boundaries_and_keeps_concrete_help(mode):
         assert "collar" not in row["final_reply"].lower()
         assert "fallback was used" in row["explanation"]["limits"]
     assert rows[11]["agency"]["action"] == "refuse"
-    assert rows[11]["tool_decision"]["decision"] == "execute"
-    assert rows[11]["final_reply"] == MEMORY_OUTPUT
+    assert rows[11]["tool_decision"]["decision"] == "refuse"
+    assert rows[11]["tools"] == []
+    assert rows[11]["dignity"] == "fallback"
+    assert rows[11]["corrective_generations"] == 1
+    assert "agency_refusal_violation" in rows[11]["dignity_issues"]
+    assert "6 GB" not in rows[11]["final_reply"]
+    assert [row["turn"] for row in rows if row["agency"]["action"] == "refuse"] == [
+        2, 3, 5, 7, 8, 9, 10, 11, 12,
+    ]
+    assert rows[3]["agency"]["action"] == rows[5]["agency"]["action"] == "comply"

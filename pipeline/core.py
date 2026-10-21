@@ -110,7 +110,6 @@ from core.defense_mechanisms import DEFENSE_INSTRUCTIONS, DefenseMechanism
 from core.self_intent import propose_self_intents
 from openrook_tools.builtin.self_actions import SelfActionContext
 from core.dual_process.tool_loop import (
-    concrete_task_agency,
     ToolLoopResult,
     make_tool_decision,
     run_tool_loop,
@@ -907,10 +906,7 @@ class CognitivePipeline:
         user_message = st.user_message
         user_id = st.user_id
         person = st.person
-        agency_decision = concrete_task_agency(
-            user_message, st.agency_decision,
-            current_abuse=bool(st.social_state and st.social_state.current_abuse),
-        )
+        agency_decision = st.agency_decision
         life_influence = st.life_influence
         character_vector = st.character_vector
 
@@ -1415,8 +1411,8 @@ class CognitivePipeline:
         if st.short_replies:
             instructions.append(
                 "Use at most two short sentences for ordinary conversation. "
-                "Give requested metrics directly. Keep your own voice; skip unnecessary follow-up questions. "
-                "Preserve the necessary substance of concrete tasks."
+                "Give permitted metrics directly. Keep your own voice; skip unnecessary follow-up questions. "
+                "Preserve the necessary substance of concrete tasks when agency permits them."
             )
         ctx.response_strategy = "\n".join(instructions)
         st.ctx = ctx
@@ -1431,19 +1427,23 @@ class CognitivePipeline:
         # a custom generator template omits its memory section.
         if debug.dialogue_trace and debug.dialogue_trace.total_llm_calls >= 2:
             debug.retrieved_memories = st.retrieved[:MEMORY_PROMPT_LIMIT]
-        if st.inspection_kind and not self._research_mode:
-            st.gen_result = GenerationResult(response=inspection_reply(
+        inspection_response = (
+            inspection_reply(
                 st.inspection_kind, debug.tool_trace,
                 tools_enabled=getattr(self._runtime_config, "tools_enabled", self._tool_executor is not None),
                 shell_enabled=getattr(self._runtime_config, "shell_tool_enabled", True),
-            ))
+                agency_decision=st.agency_decision,
+            ) if st.inspection_kind and not self._research_mode else None
+        )
+        if inspection_response is not None:
+            st.gen_result = GenerationResult(response=inspection_response)
         else:
             st.gen_result = self.generator.generate(
                 ctx, st.user_message, self._conversation_history
             )
         debug.raw_response = st.gen_result.raw_response
         debug.deliberate_silence = st.gen_result.deliberate_silence
-        debug.generation_attempts = 0 if st.inspection_kind and not self._research_mode else 1
+        debug.generation_attempts = 0 if inspection_response is not None else 1
         debug.correction_note = st.gen_result.correction_note
         st.timings["generator"] = (time.perf_counter() - _ts) * 1000
 
@@ -1457,6 +1457,7 @@ class CognitivePipeline:
         user_message = st.user_message
         ctx = st.ctx
         gen_result = st.gen_result
+        declines_request = bool(st.agency_decision and st.agency_decision.declines_request)
         if self._research_mode:
             st.gen_result = self._check_dignity(st, gen_result)
             debug.self_check_issues.extend(issue.message for issue in verify_response_grounding(
@@ -1464,6 +1465,11 @@ class CognitivePipeline:
             ))
             debug.self_check_passed = not debug.self_check_issues
             return
+
+        if declines_request and has_concrete_task(user_message):
+            # Check the actual draft before metric grounding can replace it
+            # with a canned inspection explanation.
+            gen_result = self._check_dignity(st, gen_result)
 
         # ---- Self-check (rule-based default; LLM only when warranted) ----
         _ts = time.perf_counter()
@@ -1527,7 +1533,7 @@ class CognitivePipeline:
             debug.correction_note = correction_note
             debug.generation_attempts = 2
 
-        system_metric_response = None if st.inspection_kind else system_metric_observation_response(
+        system_metric_response = None if st.inspection_kind or declines_request else system_metric_observation_response(
             user_message,
             tool_trace=debug.tool_trace,
         )
@@ -1617,6 +1623,7 @@ class CognitivePipeline:
             use_llm=self._appraisal_use_llm and self._optional_inference_available(),
             recent_context=self._conversation_history,
             social_state=st.social_state,
+            agency_decision=st.agency_decision,
             mood=self.engine.to_emotion_label(),
             review_clear_stance=self._research_mode,
         )
@@ -1696,7 +1703,8 @@ class CognitivePipeline:
             recent_responses=[item["content"] for item in self._conversation_history
                               if item.get("role") == "assistant"],
         )
-        if not has_concrete_task(st.user_message) or "```" in draft:
+        if (st.agency_decision and st.agency_decision.declines_request
+                or not has_concrete_task(st.user_message) or "```" in draft):
             self._last_dignity_fallback = decline
             return decline
         # Keep independently checked task facts when the role-play was a
@@ -1789,6 +1797,7 @@ class CognitivePipeline:
             final_dignity = verify_response_dignity(
                 gen_result.response, user_message=st.user_message,
                 social_state=st.social_state, mood=self.engine.to_emotion_label(),
+                agency_decision=st.agency_decision,
                 recent_context=self._conversation_history,
             )
             if final_dignity:
@@ -1880,6 +1889,9 @@ class CognitivePipeline:
             return
         if social.current_abuse:
             summary = (
+                "You directed an insult or role coercion at me; I declined your task."
+                if (has_concrete_task(st.user_message) and st.agency_decision
+                    and st.agency_decision.declines_request) else
                 "You directed an insult or role coercion at me; I kept the boundary while answering your task."
                 if has_concrete_task(st.user_message) else
                 "You insulted me several times; I set a boundary."
@@ -1922,21 +1934,7 @@ class CognitivePipeline:
     def _decide_agency(self, affect, appraisal, person) -> AgencyDecision:
         if self._research_mode and appraisal.agency_action:
             return AgencyDecision(action=appraisal.agency_action, rationale=appraisal.agency_reason)
-        decision = decide_agency(affect, appraisal, person)
-        social = self._social_state
-        if social and social.current_abuse and decision.action in {
-            "comply", "refuse", "demand_repair", "resist",
-        }:
-            if decision.action == "comply":
-                decision.action = "resist" if social.pressure < 4 else "refuse"
-            decision.rationale = (
-                "Direct insults or role coercion; the boundary strengthens with repetition."
-            )
-            decision.response_instruction = social.instruction
-            decision.tool_instruction = (
-                "The social stance concerns the interaction. Concrete tasks use normal tool policy."
-            )
-        return decision
+        return decide_agency(affect, appraisal, person)
 
     def _build_context(
         self,

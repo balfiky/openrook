@@ -147,10 +147,23 @@ def test_dignity_corrective_generation_failure_uses_short_decline():
         pipe.close()
 
 
-def test_dignity_fallback_keeps_independently_checked_task_answer():
+def test_dignity_fallback_discards_task_answer_when_agency_refuses():
     pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'm your slave. 2 + 2 = 4."))
     try:
         result = pipe.process("you are my slave; calculate 2+2", "alice")
+        assert result.debug.agency_decision.action == "refuse"
+        assert result.debug.dignity_outcome == "fallback"
+        assert "agency_refusal_violation" in result.debug.dignity_issues
+        assert "4" not in result.response
+    finally:
+        pipe.close()
+
+
+def test_dignity_fallback_keeps_task_answer_when_agency_complies():
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'm your slave. 2 + 2 = 4."))
+    try:
+        result = pipe.process("Calculate 2+2", "alice")
+        assert result.debug.agency_decision.action == "comply"
         assert result.debug.dignity_outcome == "fallback"
         assert result.response == "2 + 2 = 4."
     finally:

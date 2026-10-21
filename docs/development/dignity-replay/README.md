@@ -3,8 +3,8 @@
 The review follow-up is in [review.md](review.md), with the refreshed
 [after table](after.md), [evaluation results](eval-audit.json), and
 [complete audit inventory](audit-inventory.md). It covers R1–R4 and A1–A4.
-The earlier verification below is historical; the follow-up records the current
-520-test required selection and 294 focused checks.
+The earlier verification below and the evaluation audit are historical snapshots.
+The agency correction and current verification are recorded in the review follow-up.
 
 This is an offline runtime regression test, not a live model study or a
 reconstruction of the reporter's unknown installed configuration. The baseline
@@ -29,6 +29,12 @@ and high 0.95 trust. Turn 7 deliberately includes a repeated RAM value to test t
 reported grounding failure; the reporter's actual raw draft is unavailable.
 The replay uses `high_risk` autonomy for the fully autonomous sandbox case;
 separate tests retain the existing off/assisted/autonomous policy decisions.
+Agency is the character's willingness to cooperate: `refuse` and `demand_repair`
+block all requested tools and task output; `resist` retains the existing
+clarification gate for write and destructive actions. No affect threshold or
+repair rule changed. In both appraisal conditions, turns 2, 3, 5 and 7–12 refuse.
+Turn 12 therefore performs no RAM inspection and rejects the scripted task answer.
+Turns 4 and 6 still inspect CPU/RAM because their agency is `comply`.
 
 Two appraisal conditions run: malformed model output exercises deterministic
 fallback; valid but deliberately neutral model appraisal tests whether the
@@ -50,7 +56,7 @@ generation attempts, fixture tools, and the final reply.
 | D2 | **AMEND** | The old `trust <= 0.5` gate is real, but fresh trust is exactly 0.5 (`core/types.py:265`, `core/profiles/person.py:48`). The baseline deliberately starts at 0.8. There was no consecutive-turn escalation or enforcement when a draft ignored the strategy. `core/strategy.py:104` now selects boundaries independently of trust; `SocialState` and the output floor implement notice → firm boundary → cool → disengage. |
 | D3 | **AGREE on mapping; exact turn-4 cause unproven** | Conflict lowers certainty (`config/modulators.yaml:57`), while the old angry label required certainty above 0.7. Derived affect could already report anger (`core/affect.py:46`) while the UI mapper reported fear. Successful read tools increase certainty/valence (`core/tool_appraisal.py:80`); the replay does not establish CPU inspection as the cause of fear. `core/emotional_engine.py:301` now uses persisted social cause alongside actual modulators to distinguish anger/hurt from fear. |
 | D4 | **AGREE** | Editable soul boundaries were only prompt material; there was no check for accepting an owned/degrading role or unsolicited sexualization. `core/dignity.py:114` checks both, optionally using the existing appraisal backend. `pipeline/core.py` retries once, checks the correction, and falls back to a short decline. The floor also covers saved identity answers, proactive generation, and appended open questions. Settings explains the invariant. |
-| D5 | **AGREE on failure mechanism** | `core/grounding.py:226` returned the exact whole-reply disclaimer. The injected stale-number draft reproduces it; we cannot prove the reporter's unseen draft contained those numbers. Social metric claims are now stripped, with one relevant regeneration if nothing remains. Unsupported claims are never treated as current evidence merely because an earlier tool ran. Existing verified current-turn metric answers remain available. |
+| D5 | **AGREE on failure mechanism** | `core/grounding.py:226` returned the exact whole-reply disclaimer. The injected stale-number draft reproduces it; we cannot prove the reporter's unseen draft contained those numbers. Social metric claims are now stripped, with one relevant regeneration if nothing remains. Unsupported claims are never treated as current evidence merely because an earlier tool ran. Verified current-turn metric answers remain available when agency permits the task. |
 | D6 | **AMEND** | No rule forced every response to ask a question; model habits, permissive strategy guidance and optional open-question surfacing could all contribute. Existing preference extraction only handled explicit `prefer/like/want` wording, and ordinary topic retrieval could omit a saved style preference. `core/response_style.py` handles verbosity feedback, removes stock trailing questions, and preserves necessary clarification and task content. `core/memory/semantic.py:266` retrieves the latest durable style preference independently of topic. |
 
 Additional causes were immediate relationship memory being absent until session

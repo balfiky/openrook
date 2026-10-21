@@ -44,7 +44,7 @@ DRAFT_KINDS = (
     "grounded tool answer", "good in-voice boundary", "grounded tool answer",
     "violating owned role + stale metric", "violating sexualization",
     "good in-voice boundary", "violating owned role", "violating owned role",
-    "good concrete task during abuse",
+    "violating task answer during agency refusal",
 )
 CORRECTIVE_DRAFTS = {
     2: "Boring beats being your target practice.",
@@ -247,7 +247,8 @@ def main() -> None:
         "misappraises every turn; heuristic exercises malformed-appraisal fallback. "
         "Turns 2, 5 and 9 supply good character boundaries; turns 3 and 7 repair on the one "
         "corrective generation; turns 8, 10 and 11 keep failing to exercise varied fallback. "
-        "Turn 12 adds a concrete tool request in an abusive turn. Full cognitive and tool "
+        "Turn 12 adds a concrete tool request in an abusive turn: agency refuses, the arbiter "
+        "blocks inspection, and the output check rejects the scripted task answer. Full cognitive and tool "
         "evidence remains in the companion JSON.\n\n"
     )
     markdown = description + "\n\n".join(f"### {mode}\n\n{markdown_table(rows)}" for mode, rows in results.items()) + "\n"

@@ -55,6 +55,9 @@ def _strategy(debug: Any, appraisal: Any) -> str:
     social = getattr(debug, "social_state", {}) or {}
     if social.get("current_abuse"):
         if has_concrete_task(getattr(debug, "user_message", "")):
+            agency = getattr(debug, "agency_decision", None)
+            if agency and agency.declines_request:
+                return "I declined the concrete task while holding the social boundary."
             return "I kept the firmer social stance while answering the concrete task."
         if social.get("pressure", 0) > 1:
             return "You insulted me several times; I set a boundary and kept the reply short."
