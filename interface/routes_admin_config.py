@@ -15,7 +15,7 @@ import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from interface import api as api_mod
 from runtime.config import RuntimeConfig
@@ -47,6 +47,7 @@ class AdminLLMTestRequest(BaseModel):
     llm_backend: str | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
+    llm_request_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
     llm_api_key: str = ""
     clear_llm_api_key: bool = False
     live: bool = False
@@ -284,6 +285,7 @@ _CONFIG_FIELD_SECTIONS = {
     "llm_base_url": "model",
     "llm_model": "model",
     "llm_api_key": "model",
+    "llm_request_timeout_seconds": "model",
     "api_key": "access",
     "cors_origins": "access",
     "telegram_token": "channels",
@@ -324,6 +326,7 @@ _SESSION_RELOAD_FIELDS = {
     "llm_base_url",
     "llm_model",
     "llm_api_key",
+    "llm_request_timeout_seconds",
     "proactive_enabled",
     "proactive_idle_threshold",
     "proactive_density_reference",
@@ -616,6 +619,8 @@ def _admin_config_for_llm_test(
         config.llm_base_url = req.llm_base_url.strip()
     if req.llm_model is not None:
         config.llm_model = req.llm_model.strip()
+    if req.llm_request_timeout_seconds is not None:
+        config.llm_request_timeout_seconds = req.llm_request_timeout_seconds
     if req.clear_llm_api_key:
         config.llm_api_key = ""
     elif req.llm_api_key.strip():

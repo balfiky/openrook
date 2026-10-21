@@ -354,6 +354,7 @@ class ConfigUpdateRequest(BaseModel):
     llm_backend: str | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
+    llm_request_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
     debug_host: str | None = None
     debug_port: int | None = Field(default=None, ge=1, le=65535)
     proactive_enabled: bool | None = None
@@ -653,6 +654,7 @@ async def update_config(req: ConfigUpdateRequest) -> dict:
             else req.llm_model.strip()
         ),
         llm_api_key=existing.llm_api_key,
+        llm_request_timeout_seconds=_keep(req.llm_request_timeout_seconds, existing.llm_request_timeout_seconds),
         debug_host=_keep_str(req.debug_host, existing.debug_host, fallback="127.0.0.1"),
         debug_port=_keep(req.debug_port, existing.debug_port),
         proactive_enabled=_keep(req.proactive_enabled, existing.proactive_enabled),

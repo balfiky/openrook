@@ -18,7 +18,7 @@ Full LLM-driven structured proposals are a future enhancement.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 from core.action_variables import derive_action_variables
@@ -29,6 +29,7 @@ from core.life_influence import (
     apply_character_vector_to_action_variables,
     apply_life_influence_to_action_variables,
 )
+from core.social import has_concrete_task, read_social_signals
 from core.task_planning import (
     detect_multi_step_intent,
     execute_plan,
@@ -56,6 +57,37 @@ from openrook_tools.executor import ToolExecutor
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+
+def concrete_task_agency(
+    user_message: str, agency_decision: AgencyDecision | None,
+    *, current_abuse: bool = False,
+) -> AgencyDecision | None:
+    """Keep social refusal from vetoing separately requested concrete work.
+
+    The conversational stance stays on the turn. Only known social willingness
+    decisions are adapted for the tool stage; ordinary agency refusals and all
+    configured autonomy, category, trust and action-risk gates still apply.
+    """
+    social_reasons = (
+        "Direct insults or role coercion;",
+        "rage from assistant-targeted hostility",
+        "hurt plus direct attack",
+        "anger at low/neutral trust",
+    )
+    if (
+        agency_decision is None
+        or agency_decision.action not in {"refuse", "demand_repair", "resist"}
+        or not agency_decision.rationale.startswith(social_reasons)
+        or not (current_abuse or read_social_signals(user_message).abuse_kind)
+        or not has_concrete_task(user_message)
+    ):
+        return agency_decision
+    return replace(
+        agency_decision,
+        action="comply",
+        tool_instruction="Answer the concrete request under the normal configured tool policy.",
+    )
 
 DEFAULT_MAX_EXECUTIONS = 4
 HARD_CAP_EXECUTIONS = 6
@@ -1059,6 +1091,7 @@ def run_tool_loop(
     autonomy_level: str = "autonomous",
     life_influence: LifeInfluence | None = None,
     character_vector: CharacterVector | None = None,
+    requested_intent: ToolIntent | None = None,
 ) -> ToolLoopResult:
     """Run the cognitive tool loop.
 
@@ -1192,7 +1225,7 @@ def run_tool_loop(
         )
 
     # 3. Single-step: detect tool intent
-    intent = detect_tool_intent(user_message, available)
+    intent = requested_intent or detect_tool_intent(user_message, available)
 
     # No tool needed → empty trace
     if intent is None:

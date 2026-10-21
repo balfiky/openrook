@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests._fakes import MockLLMBackend
+from tests._fakes import ScriptedSocialBackend
 from evals.emotional_quality import (
     emotional_quality_scenarios,
     markdown_report,
@@ -22,7 +22,7 @@ def test_emotional_quality_scenarios_cover_core_arcs():
 
 def test_emotional_quality_mock_run_passes_state_regression():
     report = run_quality_suite(
-        lambda: MockLLMBackend(),
+        ScriptedSocialBackend,
         backend_label="mock",
         model_label="",
     )
@@ -34,7 +34,7 @@ def test_emotional_quality_mock_run_passes_state_regression():
 
 def test_emotional_quality_report_contains_state_columns():
     report = run_quality_suite(
-        lambda: MockLLMBackend(),
+        ScriptedSocialBackend,
         backend_label="mock",
         model_label="",
     )

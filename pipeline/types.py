@@ -72,6 +72,8 @@ class DebugState:
     life_influence_effects: dict[str, Any] = field(default_factory=dict)
     skill_context: dict[str, Any] = field(default_factory=dict)
     relationship_context: RelationshipContext | None = None
+    # Current ledger for display; keep retrieved context as evidence of memory used.
+    relationship_context_after_turn: RelationshipContext | None = None
 
     # Step 8: Profiles
     person_profile: PersonProfile | None = None
@@ -89,6 +91,11 @@ class DebugState:
     generation_attempts: int = 0
     raw_response: str = ""
     deliberate_silence: bool = False
+    social_state: dict[str, Any] = field(default_factory=dict)
+    short_replies: bool = False
+    grounding_outcome: str = "clear"
+    dignity_outcome: str = "clear"
+    dignity_issues: list[str] = field(default_factory=list)
     decision_snapshots: list[dict[str, Any]] = field(default_factory=list)
 
     # Step 14: Energy
@@ -133,6 +140,7 @@ class DebugState:
 
     # Timing instrumentation (ms)
     stage_timings_ms: dict[str, float] = field(default_factory=dict)
+    llm_calls: list[dict[str, Any]] = field(default_factory=list)
 
 # ---------------------------------------------------------------------------
 # Pipeline response
@@ -155,6 +163,9 @@ class _TurnState:
     user_message: str
     user_id: str
     debug: DebugState
+    social_state: Any = None
+    short_replies: bool = False
+    inspection_kind: str = ""
     timings: dict[str, float] = field(default_factory=dict)
     t_total: float = 0.0
     turn_started_at: float = 0.0

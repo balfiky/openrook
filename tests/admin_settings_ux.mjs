@@ -109,6 +109,14 @@ if (scenario === 'tool_inventory_error') {
   }
   const payload = admin.collectConfigPayload();
   for (const [name, value] of Object.entries(values)) assert.equal(payload[name], value);
+} else if (scenario === 'llm_timeout') {
+  const {admin, elements} = setupAdmin();
+  assert.equal(vm.runInContext('fieldSections.models.some(([name]) => name === "llm_request_timeout_seconds")', admin), true);
+  elements.set('llm_request_timeout_seconds', {value: '1200.5', type: 'number'});
+  assert.equal(admin.collectConfigPayload().llm_request_timeout_seconds, 1200.5);
+  const markup = admin.renderConfigInput('llm_request_timeout_seconds', 'number', 600, {});
+  assert.match(markup, /min="1" step="any"/);
+  assert.match(markup, /value="600"/);
 } else if (scenario === 'advanced_deep_link') {
   const {admin, elements} = setupAdmin();
   const advanced = {tagName: 'DETAILS', open: false, parentElement: null};

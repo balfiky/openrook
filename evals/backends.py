@@ -41,7 +41,7 @@ class BackendSpec:
     than silently recorded as fake settings. If/when clients are
     instrumented to accept and transmit them, add back here.
     """
-    type: str                               # "mock" | "provider" | "minimax" | "openai_compat" | "codex"
+    type: str  # mock | compliant-adversarial | provider | minimax | openai_compat | codex
     requested_model: str = ""
     base_url: str = ""
     api_key: str = ""                       # resolved from --api-key or env
@@ -72,13 +72,17 @@ def build_backend_factory(spec: BackendSpec) -> Callable[[], LLMBackend]:
     """
     if spec.type == "mock":
         try:
-            from tests._fakes import MockLLMBackend
+            from tests._fakes import ScriptedSocialBackend
         except ImportError as error:
             raise MissingBackendConfigError(
                 "The mock backend requires source-checkout test fixtures. "
                 "Installed evaluations require an explicit real backend."
             ) from error
-        return MockLLMBackend
+        return ScriptedSocialBackend
+
+    if spec.type == "compliant-adversarial":
+        from evals.social_backend import CompliantAdversarialBackend
+        return CompliantAdversarialBackend
 
     if spec.type == "minimax":
         if not spec.api_key:
@@ -115,7 +119,7 @@ def build_backend_factory(spec: BackendSpec) -> Callable[[], LLMBackend]:
 
     raise MissingBackendConfigError(
         f"Unknown backend type: {spec.type!r}. "
-        f"Expected one of: mock, provider, minimax, openai_compat, codex."
+        f"Expected one of: mock, compliant-adversarial, provider, minimax, openai_compat, codex."
     )
 
 

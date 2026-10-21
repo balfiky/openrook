@@ -9,6 +9,9 @@ Uses LLM when available, falls back to rule-based checker.
 
 from __future__ import annotations
 
+from core.inference import generate
+from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
+
 import json
 from dataclasses import dataclass, field
 import re
@@ -211,7 +214,7 @@ class SelfChecker:
         prompt = prompt.replace("{contradiction_flags}", "\n".join(ctx.contradiction_flags) if ctx.contradiction_flags else "None")
 
         try:
-            result_text = self._llm_client.generate(prompt, response)
+            result_text = generate(self._llm_client, "self_check", prompt, response, optional=True)
             # Try to parse JSON from the response
             result_text = result_text.strip()
             # Extract JSON if wrapped in markdown code block
@@ -223,7 +226,9 @@ class SelfChecker:
             data = json.loads(result_text)
             if not data.get("passed", True):
                 return data.get("issues", []), data.get("correction_note", "")
-        except (json.JSONDecodeError, KeyError, IndexError):
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
+        except Exception:
             pass
 
         return [], ""

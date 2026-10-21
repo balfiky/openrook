@@ -75,6 +75,7 @@ const state = createSurfaceState({
       ["llm_base_url", "LLM Base URL", "text", true],
       ["llm_api_key", "LLM API Key", "secret"],
       ["llm_model", "LLM Model", "text", true],
+      ["llm_request_timeout_seconds", "Request timeout (seconds)", "number"],
     ],
     tools: [
       ["tools_enabled", "Agentic Tools", "boolean"],
@@ -107,6 +108,7 @@ const state = createSurfaceState({
     "llm_backend",
     "llm_base_url",
     "llm_model",
+    "llm_request_timeout_seconds",
     "debug_host",
     "debug_port",
     "proactive_enabled",
@@ -241,6 +243,8 @@ const state = createSurfaceState({
       const secret = secretFields.has(name) ? secretStatusText(fieldMeta.secret_status) : "";
       const description = name === "character_independence"
         ? "An informational flag; does not change behavior, grant tool access, or prevent identity edits. "
+        : name === "llm_request_timeout_seconds"
+        ? "Default 600 seconds. Increase for slow local generation. Auxiliary calls use at most 8 seconds. "
         : "";
       const help = `${description}${restart}${live}${secret}`.trim();
       return `
@@ -308,7 +312,8 @@ const state = createSurfaceState({
       `;
     }
     const inputType = type === "number" ? "number" : "text";
-    return `<input id="cfg-${name}" data-config-field="${name}" type="${inputType}" value="${escapeAttr(value ?? "")}">`;
+    const constraints = name === "llm_request_timeout_seconds" ? ' min="1" step="any"' : "";
+    return `<input id="cfg-${name}" data-config-field="${name}" type="${inputType}"${constraints} value="${escapeAttr(value ?? "")}">`;
   }
 
   function settingsModelPicker() {
@@ -1502,6 +1507,7 @@ const state = createSurfaceState({
           llm_backend: payload.llm_backend,
           llm_base_url: payload.llm_base_url,
           llm_model: payload.llm_model,
+          llm_request_timeout_seconds: payload.llm_request_timeout_seconds,
           llm_api_key: payload.llm_api_key,
           live: true,
         } : { live: true }),

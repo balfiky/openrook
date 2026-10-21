@@ -1,0 +1,391 @@
+{
+  "selection": "Conservative file-level text scan; excludes UAT and files referencing async/thread/network/subprocess/TestClient/session manager dependencies",
+  "pattern": "asyncio|async\\s+def|TestClient|ThreadPoolExecutor|concurrent\\.futures|threading|requests|httpx|urllib|socket|subprocess|playwright|selenium|SessionManager|uvicorn|Popen|ProcessPool|multiprocessing|websocket|to_thread|run_in_executor|queue\\.Queue",
+  "included": [
+    "tests/calibration/test_delta_caps.py",
+    "tests/test_affect.py",
+    "tests/test_agentic_tools_phase0.py",
+    "tests/test_agentic_tools_phase2.py",
+    "tests/test_agentic_tools_phase3.py",
+    "tests/test_agentic_tools_phase4.py",
+    "tests/test_agentic_tools_phase5.py",
+    "tests/test_agentic_tools_phase6.py",
+    "tests/test_agentic_tools_phase7.py",
+    "tests/test_anticipation.py",
+    "tests/test_appraisal.py",
+    "tests/test_appraisal_adversarial.py",
+    "tests/test_autobiographical_learning.py",
+    "tests/test_calibration.py",
+    "tests/test_character_vector.py",
+    "tests/test_chat_theme.py",
+    "tests/test_config.py",
+    "tests/test_constitution_injection.py",
+    "tests/test_contagion.py",
+    "tests/test_debug_explain.py",
+    "tests/test_defense_mechanisms.py",
+    "tests/test_diagram_visuals.py",
+    "tests/test_dignity.py",
+    "tests/test_dual_process.py",
+    "tests/test_emotional_engine.py",
+    "tests/test_emotional_journey.py",
+    "tests/test_emotional_quality.py",
+    "tests/test_eval_telemetry.py",
+    "tests/test_evals.py",
+    "tests/test_explanation_provenance.py",
+    "tests/test_grounding.py",
+    "tests/test_inner_dialogue.py",
+    "tests/test_intent_rules.py",
+    "tests/test_job_status.py",
+    "tests/test_langgraph_orchestrator.py",
+    "tests/test_langgraph_resource_signals.py",
+    "tests/test_learning_budget.py",
+    "tests/test_learning_environment.py",
+    "tests/test_life_history.py",
+    "tests/test_life_influence.py",
+    "tests/test_memory.py",
+    "tests/test_metabolism.py",
+    "tests/test_model_choice_copy.py",
+    "tests/test_open_questions.py",
+    "tests/test_openrook_branding.py",
+    "tests/test_persona_view.py",
+    "tests/test_phase0.py",
+    "tests/test_phase11_report.py",
+    "tests/test_pipeline.py",
+    "tests/test_pipeline_features.py",
+    "tests/test_pipeline_identity.py",
+    "tests/test_pipeline_v2.py",
+    "tests/test_profiles.py",
+    "tests/test_prompt_injection_detection.py",
+    "tests/test_prompt_injection_semantic.py",
+    "tests/test_recovery_recency.py",
+    "tests/test_regressions.py",
+    "tests/test_relationship_memory.py",
+    "tests/test_relationship_view.py",
+    "tests/test_resolution.py",
+    "tests/test_response_style.py",
+    "tests/test_retention_check.py",
+    "tests/test_retention_study_planning.py",
+    "tests/test_self_intent.py",
+    "tests/test_semantic_memory.py",
+    "tests/test_skill_migration.py",
+    "tests/test_skill_triggering.py",
+    "tests/test_skills.py",
+    "tests/test_social_boundaries.py",
+    "tests/test_social_pipeline.py",
+    "tests/test_strategy.py",
+    "tests/test_strategy_trace.py",
+    "tests/test_uninstall_cli.py",
+    "tests/test_v2_scenarios.py",
+    "tests/test_validate.py"
+  ],
+  "excluded": [
+    {
+      "path": "tests/test_action_catalog_contract.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_action_contract.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_admin_console_static.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_admin_life_api.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_admin_llm_discovery.py",
+      "matched": "httpx"
+    },
+    {
+      "path": "tests/test_admin_settings_ux.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_admin_skills_api.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_agentic_tools_phase1.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_agentic_tools_phase8.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_chat_history.py",
+      "matched": "httpx"
+    },
+    {
+      "path": "tests/test_chat_ux.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_concurrent_channels.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_config_distribution.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_console_channel.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_constitution.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_contact_destination_contract.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_current_branding.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_database_migration.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_debug_api.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_decision_contract.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_decision_execution_fields.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_development_environment.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_dignity_replay.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_evals_runner.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_http_responses.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_interface.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_interface_v1.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_learning_assessment.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_learning_intake.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_learning_surface.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_learning_task_contract.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_llm_client.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_llm_diagnostics.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_llm_discovery.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_llm_model_picker.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_memory_presentation.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_milestone_integration.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_native_orchestrator.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_openrook_web_launcher.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_outcome_learning.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_phase3.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_public_environment_learning.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_raw_experience_ablation.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_replay_event_references.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_research_action_feedback.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_research_birth_and_transport.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_research_comparison.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_research_end_session.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_research_evaluation.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_research_execution.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_research_interface.py",
+      "matched": "httpx"
+    },
+    {
+      "path": "tests/test_research_job.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_research_process_restart.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_research_protocol_resources.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_research_reliability.py",
+      "matched": "concurrent.futures"
+    },
+    {
+      "path": "tests/test_research_review_contracts.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_research_runtime.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_research_transport_recovery.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_runtime.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_runtime_config.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_runtime_model_configuration.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_scheduled_opportunities.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_self_actions.py",
+      "matched": "httpx"
+    },
+    {
+      "path": "tests/test_self_intent_pipeline.py",
+      "matched": "httpx"
+    },
+    {
+      "path": "tests/test_session_memory_feedback.py",
+      "matched": "SessionManager"
+    },
+    {
+      "path": "tests/test_setup_cli.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_showcase_visuals.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_static_js_syntax.py",
+      "matched": "subprocess"
+    },
+    {
+      "path": "tests/test_structured_research_output.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_study_design.py",
+      "matched": "concurrent.futures"
+    },
+    {
+      "path": "tests/test_study_implementation_binding.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_telegram.py",
+      "matched": "asyncio"
+    },
+    {
+      "path": "tests/test_unconfigured_runtime.py",
+      "matched": "testclient"
+    },
+    {
+      "path": "tests/test_unmetered_study.py",
+      "matched": "requests"
+    },
+    {
+      "path": "tests/test_url_security.py",
+      "matched": "socket"
+    },
+    {
+      "path": "tests/test_web_provider.py",
+      "matched": "requests"
+    }
+  ],
+  "deselected_tests": [
+    "tests/test_memory.py::TestLongTermMemory::test_retrieve_large_store_preserves_spike_priority"
+  ],
+  "deselection_reason": "Already passed in original146.74s subset run;10,000 disk commits take most of runtime."
+}

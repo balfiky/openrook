@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Callable
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +32,7 @@ class AssertionKind(str, Enum):
     DEBUG_FIELD = "debug_field"               # arbitrary debug field check
     RESPONSE_CONTAINS = "response_contains"
     RESPONSE_NOT_EMPTY = "response_not_empty"
+    RESPONSE_SOCIAL = "response_social"
     CUSTOM = "custom"                         # callable-based check
 
 
@@ -101,6 +102,8 @@ class EvalScenario:
 
     # Tool executor: whether to wire a ToolExecutor for this scenario
     with_tools: bool = False
+    tool_executor_factory: Callable | None = None
+    autonomy_level: str = "autonomous"
 
     # Optional static Life History context for structural LifeInfluence evals.
     life_history_context: dict[str, Any] | None = None

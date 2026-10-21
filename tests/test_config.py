@@ -89,8 +89,8 @@ class TestOpenRookConfigDefaults:
 
     def test_default_values(self):
         cfg = OpenRookConfig()
-        assert cfg.values["loyalty"] == 0.9
-        assert cfg.values["honesty"] == 0.85
+        assert cfg.values["loyalty"] == 0.75
+        assert cfg.values["honesty"] == 0.9
 
     def test_default_soul(self):
         cfg = OpenRookConfig()
@@ -135,7 +135,7 @@ class TestLoadConfig:
 
     def test_loads_values(self):
         cfg = load_config()
-        assert cfg.values["loyalty"] == 0.9
+        assert cfg.values["loyalty"] == 0.75
 
     def test_loads_soul(self):
         cfg = load_config()

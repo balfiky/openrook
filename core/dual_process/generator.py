@@ -6,6 +6,8 @@ LLM backend is swappable: OpenAI, Anthropic, Ollama, MiniMax, or a callable.
 
 from __future__ import annotations
 
+from core.inference import generate
+
 from dataclasses import dataclass, replace
 import json
 import re
@@ -15,6 +17,8 @@ from config.loader import get_config
 from core.character_vector import assemble_character_vector, format_character_vector_prompt
 from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT, RELATIONSHIP_DETAIL_LIMIT
 from core.types import LongTermEntry, PipelineContext, RelationshipContext, SemanticMemoryEntry
+from core.dignity import DIGNITY_INVARIANT_PROMPT
+from core.response_style import STYLE_INSTRUCTION
 
 _INTERNAL_MARKER_RE = re.compile(
     r"^\s*\[(?:Defense instruction|Self-check correction):.*?\]\s*$",
@@ -138,12 +142,12 @@ def build_system_prompt(ctx: PipelineContext) -> str:
             prompt = prompt.rstrip() + "\n\n" + life_history_section
         if self_intents_section and "{self_intents}" not in template:
             prompt = prompt.rstrip() + "\n\n" + self_intents_section
-        return prompt
+        return prompt.rstrip() + "\n\n" + DIGNITY_INVARIANT_PROMPT + "\n" + STYLE_INSTRUCTION
 
     # Fallback: build in code (for backwards compatibility)
     parts: list[str] = []
-    parts.append(f"You are {agent_name}, an assistant with a seeded soul and persistent emotional state.")
-    parts.append("Let soul, current feelings, and remembered context shape the response naturally.")
+    parts.append(f"You are {agent_name}, an independent character with an authored identity and modeled mood.")
+    parts.append("Speak with your own judgment, voice, and preferences. Revise your views for reasons, not pressure.")
     parts.append("")
     parts.append(character_vector_section)
     parts.append(modulator_section)
@@ -166,6 +170,7 @@ def build_system_prompt(ctx: PipelineContext) -> str:
     parts.append(intake_receipt_section)
     parts.append(strategy_section)
     parts.append(defense_section)
+    parts.extend([DIGNITY_INVARIANT_PROMPT, STYLE_INSTRUCTION])
     return "\n".join(parts)
 
 
@@ -427,8 +432,8 @@ def _build_candidate_section(ctx: PipelineContext) -> str:
     lines = ["## Draft Response to Refine"]
     lines.append(f"{ctx.candidate_response}")
     lines.append("")
-    lines.append("Preserve the intent of this draft. Refine for tone and polish,")
-    lines.append("but do not replace it with an unrelated response.")
+    lines.append("Keep useful substance. Refine for tone and polish; runtime stance and identity take precedence.")
+    lines.append("Discard appeasement, reflexive agreement, and service boilerplate.")
     lines.append("")
     return "\n".join(lines)
 
@@ -621,7 +626,7 @@ class ResponseGenerator:
             )
             full_message = f"Recent conversation:\n{history_text}\n\nUser: {user_message}"
 
-        raw_response = self._backend.generate(system_prompt, full_message) or ""
+        raw_response = generate(self._backend, "generation", system_prompt, full_message) or ""
         deliberate_silence = ctx.research_mode and raw_response.strip() == "[[SILENCE]]"
         response = ("" if deliberate_silence else raw_response) if ctx.research_mode else _strip_internal_markers(raw_response)
         correction_note = ""

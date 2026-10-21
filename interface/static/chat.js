@@ -899,6 +899,7 @@ async function saveSettings() {
     telegram_allowlist: gv('cfg-telegram_allowlist').split('\n').map(s=>s.trim()).filter(Boolean),
     telegram_poll_timeout: gi('cfg-telegram_poll_timeout'), dedupe_ttl: gf('cfg-dedupe_ttl'),
     llm_backend: gv('cfg-llm_backend'), llm_base_url: gv('cfg-llm_base_url'), llm_model: gv('cfg-llm_model'),
+    llm_request_timeout_seconds: gf('cfg-llm_request_timeout_seconds'),
     debug_host: gv('cfg-debug_host'), debug_port: gi('cfg-debug_port'),
     cors_origins: lines('cfg-cors_origins'),
     tools_enabled: gb('cfg-tools_enabled'), autonomy_level: gv('cfg-autonomy_level'), tools_workspace: gv('cfg-tools_workspace'), shell_tool_enabled: gb('cfg-shell_tool_enabled'),
@@ -941,6 +942,7 @@ function applySettings(payload) {
   sv('cfg-dedupe_ttl', c.dedupe_ttl??60); sv('cfg-llm_backend', c.llm_backend||'auto');
   sv('cfg-llm_base_url', c.llm_base_url||'');
   sv('cfg-llm_model', c.llm_model || '');
+  sv('cfg-llm_request_timeout_seconds', c.llm_request_timeout_seconds ?? 600);
   sv('cfg-debug_host', c.debug_host||'127.0.0.1'); sv('cfg-debug_port', c.debug_port??8077);
   sv('cfg-cors_origins', (c.cors_origins||[]).join('\n'));
   sv('cfg-tools_enabled', String(!!c.tools_enabled)); sv('cfg-autonomy_level', c.autonomy_level||'assisted'); sv('cfg-tools_workspace', c.tools_workspace||''); sv('cfg-shell_tool_enabled', String(!!c.shell_tool_enabled));
@@ -989,6 +991,7 @@ function applySettings(payload) {
 async function testLLM() {
   await runAdminTest('llm', '/admin/test/llm', {
     llm_backend: gv('cfg-llm_backend'), llm_base_url: gv('cfg-llm_base_url'), llm_model: gv('cfg-llm_model'),
+    llm_request_timeout_seconds: gf('cfg-llm_request_timeout_seconds'),
     llm_api_key: gv('cfg-llm_api_key'),
     clear_llm_api_key: document.getElementById('cfg-clear_llm_api_key').checked,
     live: true,

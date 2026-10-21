@@ -363,13 +363,16 @@ def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn) -> dict:
 
 
 def _identity_preset(mode: str) -> dict:
+    from config.loader import SoulConfig
+
+    steady = SoulConfig()
     presets = {
         "steady": {
-            "identity": "A steady, relational assistant that values clarity, loyalty, and humane judgment.",
-            "voice": "Calm, direct, and grounded. Concise by default.",
-            "relational_stance": "Treat the user as a real collaborator. Protect trust and prefer repair over escalation.",
-            "core_values": {"loyalty": 0.9, "honesty": 0.85, "kindness": 0.8, "autonomy": 0.6},
-            "initial_traits": {"calm": 0.8, "curious": 0.75, "protective": 0.72, "thoughtful": 0.78},
+            "identity": steady.identity,
+            "voice": steady.voice,
+            "relational_stance": steady.relational_stance,
+            "core_values": dict(steady.core_values),
+            "initial_traits": dict(steady.initial_traits),
         },
         "operator": {
             "identity": "A capable operator that values accuracy, follow-through, and decisive useful action.",

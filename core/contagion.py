@@ -12,6 +12,7 @@ import re
 from typing import Protocol
 
 from config.loader import get_config
+from core.social import INSULT_MARKERS, is_casual_greeting, read_social_signals, social_text
 from core.types import DetectedEmotion
 
 # ---------------------------------------------------------------------------
@@ -61,8 +62,8 @@ _PATTERNS: list[tuple[str, float, float]] = [
     # === High arousal, negative valence ===
 
     # Direct insults and personal attacks
-    (r"\b(stupid|idiot|moron|dumb|pathetic|loser|worthless|useless)\b", -0.8, 0.8),
-    (r"\b(incompetent|clueless|brainless|ignorant|fool|foolish)\b", -0.7, 0.7),
+    (r"\b(" + "|".join(INSULT_MARKERS) + r")\b", -0.8, 0.8),
+    (r"\b(ignorant|foolish)\b", -0.7, 0.7),
     (r"\b(ugly|disgusting|repulsive|hideous|revolting)\b", -0.8, 0.7),
 
     # Profanity
@@ -148,10 +149,12 @@ _ELLIPSIS_VALENCE = _cont_cfg.ellipsis_valence
 
 def _detect_via_rules(text: str) -> DetectedEmotion:
     """Rule-based fallback using keyword/pattern matching."""
+    if is_casual_greeting(text) and re.search(r"\b(?:fuck|hell)\b", text, re.I):
+        return DetectedEmotion(arousal=0.5, valence=0.5, certainty=0.7, intensity=0.1)
     if not text or not text.strip():
         return DetectedEmotion(arousal=0.5, valence=0.5)
 
-    lower = re.sub(r'"[^"\n]*"|“[^”\n]*”', "", text.lower())
+    lower = social_text(text)
 
     # Collect keyword matches
     valence_shifts: list[float] = []
@@ -164,6 +167,11 @@ def _detect_via_rules(text: str) -> DetectedEmotion:
             for _ in matches:
                 valence_shifts.append(v_shift)
                 arousal_values.append(a_abs)
+
+    social = read_social_signals(text)
+    if social.abuse_kind in {"degradation", "domination"} and not valence_shifts:
+        valence_shifts.append(-0.6)
+        arousal_values.append(0.7)
 
     # Punctuation / style modifiers
     punct_arousal_boost = 0.0

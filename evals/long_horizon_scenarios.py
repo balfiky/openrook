@@ -12,6 +12,8 @@ Run: python -m evals --backend mock --tag long_horizon
 
 from __future__ import annotations
 
+from evals.social_contract import social_reply_checks
+
 from evals.types import (
     AssertionKind,
     EvalAssertion,
@@ -40,6 +42,7 @@ def _custom(fn, desc: str = "") -> EvalAssertion:
     )
 
 
+@social_reply_checks
 def long_horizon_scenarios() -> list[EvalScenario]:
     """Four long-horizon multi-session scenarios."""
     return [

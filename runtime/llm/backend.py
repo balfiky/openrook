@@ -6,7 +6,6 @@ from config.environment import project_env
 
 import os
 import json
-import re
 import shutil
 import subprocess
 import tempfile
@@ -16,10 +15,10 @@ from typing import Any
 import requests
 
 from core.provider_client import FastChatCompletionsClient
+from core.inference import request_timeout
+from core.llm_content import reply_text
 from core.dual_process.generator import LLMBackend
 from runtime.security import validate_http_url
-
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 class OpenAICompatibleLLMBackend:
@@ -36,7 +35,7 @@ class OpenAICompatibleLLMBackend:
         base_url: str,
         model: str,
         api_key: str = "",
-        timeout: float = 120.0,
+        timeout: float = 600.0,
     ) -> None:
         if not base_url:
             raise ValueError("OpenAI-compatible backend requires llm_base_url")
@@ -52,6 +51,7 @@ class OpenAICompatibleLLMBackend:
         self._timeout = timeout
         self._max_output_tokens = 2048
         self._research_single_attempt = False
+        self._unsupported_reasoning_controls: set[str] = set()
         self.last_response_metadata: dict[str, Any] = {}
         self._headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
@@ -84,7 +84,9 @@ class OpenAICompatibleLLMBackend:
         while True:
             started = time.monotonic()
             try:
-                response = self._session.post(url, json=payload, timeout=self._timeout, **({"allow_redirects": False} if self._research_single_attempt else {}))
+                response = self._session.post(url, json=payload, timeout=(
+                    self._timeout if self._research_single_attempt else request_timeout(self._timeout)
+                ), **({"allow_redirects": False} if self._research_single_attempt else {}))
             except requests.RequestException as error:
                 attempts.append(
                     {
@@ -94,6 +96,7 @@ class OpenAICompatibleLLMBackend:
                 )
                 if (
                     self._research_single_attempt
+                    or isinstance(error, requests.Timeout)
                     or not isinstance(error, requests.ConnectionError)
                     or sum("error_type" in attempt for attempt in attempts) > 1
                 ):
@@ -134,9 +137,14 @@ class OpenAICompatibleLLMBackend:
             ],
             "max_tokens": self._max_output_tokens,
             "chat_template_kwargs": {"enable_thinking": False},
+            "reasoning_effort": "none",
         }
         if self._research_single_attempt:
             payload.pop("chat_template_kwargs", None)
+            payload.pop("reasoning_effort", None)
+        else:
+            for field in self._unsupported_reasoning_controls:
+                payload.pop(field, None)
         if response_schema is not None:
             payload["response_format"] = {
                 "type": "json_schema",
@@ -144,19 +152,21 @@ class OpenAICompatibleLLMBackend:
             }
             self.last_response_metadata["structured_output_requested"] = True
         response = self._post(url, payload, attempts)
-        if not self._research_single_attempt and _should_retry_without_chat_template_kwargs(response):
-            retry_payload = {
-                key: value for key, value in payload.items() if key != "chat_template_kwargs"
-            }
-            response = self._post(url, retry_payload, attempts)
+        # Servers implement different subsets of these documented controls.
+        # Remove rejected controls only; remember the capability for later calls.
+        for _ in range(2):
+            rejected = _rejected_reasoning_controls(response, payload)
+            if self._research_single_attempt or not rejected:
+                break
+            self._unsupported_reasoning_controls.update(rejected)
+            payload = {key: value for key, value in payload.items() if key not in rejected}
+            response = self._post(url, payload, attempts)
         response.raise_for_status()
         data: dict[str, Any] = response.json()
         self.last_response_metadata.update(
             {key: data.get(key) for key in ("model", "usage", "id", "created")}
         )
-        content = data["choices"][0]["message"]["content"] or ""
-        content = _THINK_RE.sub("", content).strip()
-        return content
+        return reply_text(data["choices"][0]["message"])
 
     def close(self) -> None:
         """Release the underlying HTTP connection pool."""
@@ -219,7 +229,7 @@ class CodexCLIBackend:
                     text=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=self._timeout,
+                    timeout=request_timeout(self._timeout),
                     cwd=workdir,
                     check=False,
                 )
@@ -370,18 +380,18 @@ def _trim_error(text: str, limit: int = 1200) -> str:
     return text[:limit].rstrip() + "..."
 
 
-def _should_retry_without_chat_template_kwargs(response: requests.Response) -> bool:
-    """Retry strict OpenAI-compatible providers that reject vLLM extras."""
+def _rejected_reasoning_controls(response: requests.Response, payload: dict) -> set[str]:
+    """Identify unsupported controls without retrying unrelated provider errors."""
     if response.status_code not in (400, 422):
-        return False
+        return set()
     text = response.text.lower()
-    return (
-        "chat_template_kwargs" in text
-        or "extra" in text
-        or "unknown" in text
-        or "unrecognized" in text
-        or "forbidden" in text
-    )
+    controls = {field for field in ("chat_template_kwargs", "reasoning_effort") if field in payload}
+    named = {field for field in controls if field in text}
+    if named:
+        return named
+    if any(word in text for word in ("extra", "unknown", "unrecognized", "forbidden")):
+        return controls
+    return set()
 
 
 def create_llm_backend(config=None) -> LLMBackend:
@@ -404,6 +414,7 @@ def create_llm_backend(config=None) -> LLMBackend:
     generic_key = os.environ.get("LLM_API_KEY", "")
     base_url = ""
     model = ""
+    timeout = getattr(config, "llm_request_timeout_seconds", 600.0)
 
     if config is not None:
         backend_type = getattr(config, "llm_backend", "auto")
@@ -422,13 +433,14 @@ def create_llm_backend(config=None) -> LLMBackend:
         )
 
     if backend_type == "codex":
-        return CodexCLIBackend(model=model)
+        return CodexCLIBackend(model=model, timeout=timeout)
 
     if backend_type in {"provider", "openai_compatible"}:
         return OpenAICompatibleLLMBackend(
             base_url=base_url,
             model=model,
             api_key=effective_key,
+            timeout=timeout,
         )
 
     if backend_type == "minimax":
@@ -436,6 +448,7 @@ def create_llm_backend(config=None) -> LLMBackend:
             api_key=effective_key or None,
             base_url=base_url or "https://api.minimax.io/v1",
             model=model,
+            timeout=timeout,
         )
 
     if backend_type == "auto":
@@ -444,6 +457,7 @@ def create_llm_backend(config=None) -> LLMBackend:
                 base_url=base_url,
                 model=model,
                 api_key=effective_key,
+                timeout=timeout,
             )
         raise ValueError(
             "llm_backend='auto' requires llm_base_url and llm_model to be "

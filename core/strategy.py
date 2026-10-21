@@ -8,6 +8,7 @@ No LLM calls, no storage — pure decision logic.
 from __future__ import annotations
 
 from core.life_influence import LifeInfluence
+from core.social import SocialState
 from core.types import (
     AppraisalFrame,
     PersonProfile,
@@ -23,6 +24,7 @@ def select_strategy(
     person: PersonProfile | None = None,
     relationship: RelationshipContext | None = None,
     life_influence: LifeInfluence | None = None,
+    social_state: SocialState | None = None,
 ) -> ResponseStrategy:
     """Choose the single best response strategy for this turn."""
     trace = select_strategy_with_trace(
@@ -31,6 +33,7 @@ def select_strategy(
         person=person,
         relationship=relationship,
         life_influence=life_influence,
+        social_state=social_state,
     )
     return ResponseStrategy(trace.selected)
 
@@ -41,6 +44,7 @@ def select_strategy_with_trace(
     person: PersonProfile | None = None,
     relationship: RelationshipContext | None = None,
     life_influence: LifeInfluence | None = None,
+    social_state: SocialState | None = None,
 ) -> StrategyDecisionTrace:
     """Choose a response strategy and explain the deterministic rule path.
 
@@ -74,6 +78,8 @@ def select_strategy_with_trace(
             "certainty": certainty,
             "bonding": bonding,
             "has_open_loops": has_open_loops,
+            "social_pressure": social_state.pressure if social_state else 0,
+            "boundary_stage": social_state.stage if social_state else "normal",
         }
         base.update(extra)
         return base
@@ -95,27 +101,34 @@ def select_strategy_with_trace(
             rejected_rules=prior,
         )
 
-    # 1. Protect self from abuse — attack aimed at assistant, low/neutral trust.
-    if appraisal.targets_assistant and appraisal.social_move == "attack" and trust <= 0.5:
-        return matched(ResponseStrategy.SET_BOUNDARY, "assistant_targeted_attack_low_trust")
+    # 1. A relationship does not waive self-respect. Repetition controls firmness.
+    if appraisal.targets_assistant and appraisal.social_move == "attack":
+        stage = social_state.stage if social_state and social_state.pressure else "notice"
+        return matched(ResponseStrategy.SET_BOUNDARY, f"assistant_targeted_attack_{stage}")
     reject(
-        "assistant_targeted_attack_low_trust",
-        "requires attack social move and trust <= 0.5",
+        "assistant_targeted_attack",
+        "requires an assistant-targeted attack, regardless of trust",
         social_move=appraisal.social_move,
         trust=trust,
     )
+
+    if social_state and social_state.pressure:
+        if appraisal.inferred_intent in {"seek_action", "seek_support"}:
+            return matched(ResponseStrategy.PRACTICAL_HELP, "concrete_help_after_hostility")
+        if social_state.pressure >= 3 and appraisal.social_move != "apology":
+            return matched(ResponseStrategy.GIVE_SPACE, "repeated_hostility_cooler_response")
 
     # 2. Repair — assistant is blamed but trust isn't rock-bottom
     if (
         appraisal.targets_assistant
         and appraisal.blame > 0.5
         and trust >= 0.3
-        and appraisal.social_move != "attack"
+        and (appraisal.social_move == "complaint" or appraisal.inferred_intent == "repair")
     ):
         return matched(ResponseStrategy.REPAIR, "assistant_targeted_repair")
     reject(
         "assistant_targeted_repair",
-        "requires assistant-targeted blame, trust >= 0.3, and non-attack phrasing",
+        "requires assistant-targeted blame, trust >= 0.3, and a complaint or repair attempt",
         targets_assistant=appraisal.targets_assistant,
         blame=appraisal.blame,
         trust=trust,
@@ -284,5 +297,6 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
         "The user is being hostile."
         " Respond with firm clarity: acknowledge the emotion without absorbing blame,"
         " and set a limit on what you will accept."
+        " Stay brief; no insults, lectures, uninvited questions, or degrading roleplay."
     ),
 }

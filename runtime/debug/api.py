@@ -200,6 +200,11 @@ def _debug_to_dict(debug) -> dict:
         if getattr(debug, "relationship_context", None)
         else None
     )
+    d["relationship_context_after_turn"] = (
+        debug.relationship_context_after_turn.to_dict()
+        if getattr(debug, "relationship_context_after_turn", None)
+        else None
+    )
 
     # Profiles
     d["person_profile"] = (
@@ -247,6 +252,11 @@ def _debug_to_dict(debug) -> dict:
     d["response"] = debug.response
     d["self_check_passed"] = debug.self_check_passed
     d["self_check_issues"] = debug.self_check_issues
+    d["social_state"] = debug.social_state
+    d["short_replies"] = debug.short_replies
+    d["grounding_outcome"] = debug.grounding_outcome
+    d["dignity_outcome"] = debug.dignity_outcome
+    d["dignity_issues"] = debug.dignity_issues
     d["correction_note"] = debug.correction_note
     d["generation_attempts"] = debug.generation_attempts
 
@@ -474,6 +484,7 @@ def _debug_to_dict(debug) -> dict:
 
     # Timing
     d["stage_timings_ms"] = debug.stage_timings_ms
+    d["llm_calls"] = debug.llm_calls
 
     return d
 

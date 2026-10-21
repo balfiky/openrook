@@ -125,6 +125,9 @@ class EmotionalEngine:
         }
         # Context shift: resting target offset for current relationship
         self._context_shift: BaselineShift | None = None
+        # Social cause distinguishes indignation from fear at equal activation.
+        # The pipeline restores this per-person state from relationship memory.
+        self.social_pressure = 0
 
     # ------------------------------------------------------------------
     # State restore (Phase 0 — runtime support)
@@ -135,6 +138,7 @@ class EmotionalEngine:
         snapshot: dict[str, float],
         saved_at: float | None = None,
         unresolved_items: list[UnresolvedItem] | None = None,
+        social_pressure: int | None = None,
     ) -> None:
         """Restore modulator state from a snapshot dict.
 
@@ -148,6 +152,8 @@ class EmotionalEngine:
             if mod.value in snapshot:
                 val = max(0.0, min(1.0, snapshot[mod.value]))
                 setattr(self.state, mod.value, val)
+        if social_pressure is not None:
+            self.social_pressure = max(0, min(4, int(social_pressure)))
 
         if unresolved_items is not None:
             self.unresolved_items = [
@@ -289,11 +295,14 @@ class EmotionalEngine:
             "modulator_snapshot": self.snapshot(),
             "unresolved_items": [item.to_dict() for item in self.unresolved_items],
             "context_shift": self._context_shift.to_dict() if self._context_shift else None,
+            "social_pressure": self.social_pressure,
         }
 
     def to_emotion_label(self) -> str:
-        """Best-fit emotion label from current modulator state. For logging only."""
+        """Best-fit modeled mood from modulators and their known social cause."""
         s = self.state
+        if self.social_pressure > 0 and s.valence < 0.5:
+            return "angry" if s.arousal >= 0.6 else "hurt"
         # Simple heuristic matching against known patterns
         if s.energy < 0.2:
             if s.arousal > 0.5:

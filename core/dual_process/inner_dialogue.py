@@ -9,6 +9,8 @@ No pure math here — this is where LLM calls live.
 
 from __future__ import annotations
 
+from core.inference import generate
+
 from core.clock import identifiers as uuid
 from core.clock import datetime
 from datetime import timezone
@@ -473,7 +475,7 @@ class InnerDialogue:
 
     def _call_llm(self, system_prompt: str, user_message: str) -> str:
         self._llm_calls += 1
-        return self._backend.generate(system_prompt, user_message)
+        return generate(self._backend, "inner_dialogue", system_prompt, user_message, optional=True)
 
     def _build_trace(
         self,

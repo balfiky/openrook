@@ -11,6 +11,23 @@
 
 An open-source runtime for LLM agents with persistent memory, relationship history, modeled mood, and evolving identity. OpenRook carries that state across conversations into prompts for supported LLM backends.
 
+The character also has a runtime dignity floor. Direct insults and demands for
+ownership or degrading roles trigger a notice, a firm boundary, then cooler,
+shorter replies and possible disengagement from hostile conversation. Concrete
+tasks can still be answered under the existing agency and tool rules. Apologies
+and several calm turns ease the boundary gradually; trust, relationship history,
+and the preference for shorter answers can carry across sessions. This is
+**modeled mood and behavior**, not evidence of subjective feelings.
+
+Soul boundaries remain editable in Settings, but cannot disable the dignity
+floor. Output checks catch degrading role acceptance, unsolicited sexualization,
+and drafts that contradict the runtime stance through appeasement or service
+boilerplate. They allow one corrective generation, then use a short character
+reply if correction fails or inference is slow. Ordinary swearing,
+friendly teasing, venting about others, and requested fiction about third parties
+are allowed. See the [offline regression replay](docs/development/dignity-replay/README.md)
+for the tested behavior and its limits.
+
 ```bash
 python3 -m pip install "git+https://github.com/balfiky/openrook.git"
 export OPENROOK_CONFIG_DIR=~/.config/openrook
@@ -24,6 +41,26 @@ In the browser, Settings shows the last connection test or error; “Not tested�
 means a backend is configured but has not yet been checked. Hosted, Codex, and
 OpenRouter backends receive prompts and relevant stored context; local storage
 does not make those model calls local.
+
+Slow local CPU generation can use a longer **Request timeout (seconds)** in
+Settings > LLM (the LLM Backend section), or `llm_request_timeout_seconds` in
+your runtime YAML. The default is **600 seconds**, with a minimum of one second.
+Save Settings to reload the runtime; restart after editing YAML directly.
+HTTP timeouts apply to connection/read waits per request attempt, rather than
+the whole turn. Auxiliary appraisal, dialogue, self-check, dignity, regeneration,
+tool-selection and self-intent calls use at most eight seconds and retain
+deterministic fallbacks. Main-generation timeouts keep the friendly error and
+point to this setting. Declared research inference limits take precedence.
+
+Compatible backends request `reasoning_effort: "none"` and
+`chat_template_kwargs: {enable_thinking: false}` without selecting by model name.
+Rejected controls are removed on HTTP 400/422 and remembered for that backend
+instance; bounded research requests retain their declared payload.
+`reasoning_effort` is documented by [Ollama](https://docs.ollama.com/api/openai-compatibility)
+and [vLLM](https://docs.vllm.ai/en/stable/features/reasoning_outputs/), with support
+depending on the server and its template. Separate reasoning fields and complete
+or truncated thinking blocks are excluded from reply text and reply checks;
+provider token usage still includes any reasoning the server performed.
 
 Try sharing a preference, then choose **End Session** to consolidate the
 conversation and clear short-term context. Stored memories and preferences
@@ -444,6 +481,13 @@ shaping) → master LLM generation → conditional self-check → post-processin
 optional autobiographical ingestion are separate and can call the model.
 Call costs depend on the enabled paths. With `tools_enabled: false`, external
 tools are disabled but internal skill-registry tools remain available.
+Turn details expose `llm_calls` with phase, duration, and outcome. Clear greetings,
+direct insults, and host metric requests use deterministic appraisal. CPU/RAM/disk
+inspections use the existing executor and tool policy before model routing and
+return observed data directly. Optional calls have an eight-second transport
+limit; after a measured slow call, redundant review and correction calls are
+skipped. Self-directed action proposals retain the full configured catalog.
+Research inference keeps its declared limits and request logging.
 
 For the full code-level component map (LLM backends, persistence files, tool executor wiring) and the per-turn cognitive flow diagram, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

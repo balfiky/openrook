@@ -20,6 +20,8 @@ from typing import Callable
 from config.loader import SoulConfig
 from core.dual_process.generator import LLMBackend
 from core.types import ModulatorState
+from core.social import has_concrete_task
+from evals.social_contract import social_reply_issues
 from evals.backends import (
     MissingBackendConfigError,
     build_backend_factory,
@@ -358,7 +360,7 @@ def run_quality_suite(
     contrasts = _run_contrast_probes(backend_factory, soul=soul)
     impact_checks = _response_impact_checks(
         contrasts,
-        enforce_response_variation=backend_label != "mock",
+        enforce_response_variation=backend_label not in {"mock", "compliant-adversarial"},
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000
     return EmotionalQualityReport(
@@ -431,6 +433,21 @@ def _run_scenario(
                     response_signals=_response_signals(response.response),
                 )
                 turn_trace.checks.extend(_basic_response_checks(response.response))
+                social = response.debug.social_state
+                reply_issues = social_reply_issues(
+                    response.response, user_message=turn.message,
+                    stage=("normal", "notice", "boundary", "cool", "disengage")[
+                        social.get("pressure", 0)
+                    ],
+                    current_abuse=social.get("current_abuse", False),
+                    concrete_task=has_concrete_task(turn.message),
+                    recent_context=pipe.export_conversation_history()[:-2],
+                )
+                turn_trace.checks.append(CheckResult(
+                    name="final_reply_social_contract", passed=not reply_issues,
+                    expected="dignity and current social stance in the final reply",
+                    actual="; ".join(reply_issues) or response.response,
+                ))
                 turn_trace.checks.extend(_state_checks(turn.expect, before, after))
                 turn_trace.checks.extend(_event_checks(turn.events, response.debug.event_classified))
                 turn_trace.checks.extend(_strategy_checks(turn.strategies, response.debug.response_strategy))
@@ -620,7 +637,7 @@ def _response_impact_checks(
                 name="response_impact_skipped_for_mock",
                 passed=True,
                 expected="live backend for response-impact enforcement",
-                actual="mock backend",
+                actual="offline scripted backend",
             )
         ]
 
@@ -742,7 +759,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--backend",
-        choices=["mock", "provider", "minimax", "openai_compat", "codex"],
+        choices=["mock", "compliant-adversarial", "provider", "minimax", "openai_compat", "codex"],
         required=True,
     )
     parser.add_argument("--model", default="")

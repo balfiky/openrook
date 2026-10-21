@@ -235,6 +235,27 @@ def grounding_correction_response(
     )
 
 
+def strip_unsupported_metric_claims(response: str, *, tool_trace: Any | None) -> str:
+    """Remove unsupported metric sentences without replacing the social reply.
+
+    Check sentences independently: a disclaimer or negation elsewhere in the
+    reply must not conceal an unsupported observation. Empty output asks the
+    caller to regenerate a relevant reply once.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", response.strip())
+    kept = []
+    for sentence in sentences:
+        issues = verify_response_grounding(sentence, tool_trace=tool_trace)
+        if any("system_metric" in issue.required_categories for issue in issues):
+            continue
+        kept.append(sentence)
+    return " ".join(kept)
+
+
+def is_system_metric_request(text: str) -> bool:
+    return _looks_system_metric_request(text)
+
+
 def _successful_registry_write(tool_trace: Any | None) -> dict[str, str] | None:
     executed = list(getattr(tool_trace, "executed_results", []) or [])
     for result in executed:
@@ -403,6 +424,10 @@ def _seen_claim_text(text: str, seen: set[str]) -> bool:
 
 def _is_negated_or_evidence_warning(text: str) -> bool:
     lower = text.lower()
+    if re.search(
+        r"\bi (?:can't|cannot) (?:read|measure|obtain) (?:cpu|ram|memory|disk)(?: usage)?\b", lower,
+    ) and not re.search(r"\d+(?:\.\d+)?\s*(?:%|[kmgt]b\b)", lower):
+        return True
     if "no tool execution result" in lower:
         return True
     if "without tool execution result" in lower:
@@ -451,13 +476,17 @@ def _is_non_assistant_actor_statement(lower: str) -> bool:
 
 
 def _looks_system_metric_request(user_message: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:memory|ram|cpu|disk|storage|utili[sz]ation|usage)\b",
-            user_message or "",
-            re.IGNORECASE,
-        )
+    text = user_message or ""
+    if re.search(
+        r"\b(?:stop|don't|do not|enough|no need)\b.{0,40}\b(?:memory|ram|cpu|metrics?)\b"
+        r"|\bmemory (?:of|about)\b", text, re.I,
+    ):
+        return False
+    metric = re.search(r"\b(?:memory|ram|cpu|disk|storage|utili[sz]ation|usage)\b", text, re.I)
+    request = re.search(
+        r"\b(?:what|how much|how many|show|check|tell|give|report|current)\b", text, re.I,
     )
+    return bool(metric and (request or text.strip().lower() in {"cpu", "ram", "memory"}))
 
 
 def _external_or_system_results(tool_trace: Any | None) -> list[Any]:

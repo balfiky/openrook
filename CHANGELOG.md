@@ -4,6 +4,35 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Character boundaries and modeled mood
+
+- Share directed-abuse cues across appraisal and contagion; recognize degrading
+  role demands without treating casual swearing, teasing, or third-party fiction
+  as attacks. Explicit social evidence survives a mistaken model appraisal.
+- Escalate boundaries independently of starting trust, persist the relationship
+  state immediately, and ease it gradually after apologies or calm turns. Show
+  anger/hurt for modeled hostility pressure instead of inferring fear from low
+  certainty. Explain the boundary in turn details and record runtime evidence
+  in Life History when that store is connected.
+- Enforce a dignity floor after generation, including a single corrective retry
+  and short decline fallback. Editable identity boundaries cannot disable it.
+- Strip unsupported metric claims on social turns without replacing the entire
+  reply with a tool disclaimer. Remember brevity feedback and remove stock
+  trailing questions while preserving necessary clarifications and task content.
+- Add an offline eleven-turn replay with adversarial scripted drafts, recorded
+  before/after traces, and regression tests. No live model study is implied.
+- Reject soft agreement with insults, service boilerplate at a boundary, and
+  replies that evade the runtime stance. Hold reasoned opinions under bare
+  pressure; allow new arguments and relevant preferences to change the answer.
+- Seed an independent character with a modeled mood and a candid voice. Remove
+  reflexive flattery, empty closing offers, and unearned apologies from prose.
+- Route clear CPU/RAM/disk requests through the existing tool executor and
+  arbiter before model tool selection. Return observed facts or a short reason
+  when inspection is unavailable, preserving configured tool permissions.
+- Record model call phase, duration, status, and optional-call flags in turn
+  details. Bound optional inference, skip redundant reviews after measured slow
+  calls, and recover from auxiliary timeouts while retaining research controls.
+
 ### Chat explanations and continuity
 
 - Include recalled facts and preferences, long-term summaries, relationship

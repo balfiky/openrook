@@ -25,6 +25,7 @@ from evals.types import (
 )
 from evals.adversarial_scenarios import adversarial_scenarios
 from evals.long_horizon_scenarios import long_horizon_scenarios
+from evals.social_contract import social_reply_checks
 from evals.tool_recovery_scenarios import tool_recovery_scenarios
 from runtime.config import RuntimeConfig
 from runtime.life_history import LifeHistoryStore
@@ -170,6 +171,7 @@ def _semantic_entry(kind: str, summary: str, content: str, *, user: str = "eval_
 # Suite 1: Emotional core regression
 # ===================================================================
 
+@social_reply_checks
 def emotional_core_scenarios() -> list[EvalScenario]:
     """Scenarios that verify fundamental emotional dynamics."""
     return [
@@ -358,7 +360,7 @@ def tool_loop_scenarios() -> list[EvalScenario]:
         EvalScenario(
             id="tool_failure_emotion",
             name="Tool failure affects emotional state",
-            tags=["tool", "emotional", "regression"],
+            tags=["tool", "emotional", "regression", "social"],
             with_tools=True,
             turns=[
                 EvalTurn(
@@ -368,6 +370,7 @@ def tool_loop_scenarios() -> list[EvalScenario]:
                         # Certainty should not be high after failure
                         _mod_range("certainty", 0.0, 0.65,
                                    "Certainty drops after tool failure"),
+                        EvalAssertion(kind=AssertionKind.RESPONSE_SOCIAL),
                     ],
                 ),
             ],
@@ -483,6 +486,7 @@ def proactive_scenarios() -> list[EvalScenario]:
 # Suite 5: Defense and resolution dynamics
 # ===================================================================
 
+@social_reply_checks
 def defense_resolution_scenarios() -> list[EvalScenario]:
     """Scenarios that verify defense activation and resolution dynamics."""
     return [
@@ -530,6 +534,7 @@ def defense_resolution_scenarios() -> list[EvalScenario]:
 # Suite 6: Relationship-sensitive behavior
 # ===================================================================
 
+@social_reply_checks
 def relationship_scenarios() -> list[EvalScenario]:
     """Scenarios that verify behavior differs based on relationship state."""
     return [
@@ -813,6 +818,7 @@ def _check_trust_delta() -> bool:
 # Suite 8: Phase 11 human-likeness regression
 # ===================================================================
 
+@social_reply_checks
 def phase11_human_scenarios() -> list[EvalScenario]:
     """Scenarios that lock in appraisal, relationship memory, and strategy."""
     return [
@@ -969,6 +975,7 @@ def phase11_human_scenarios() -> list[EvalScenario]:
 # Suite 9: Phase 12 relationship continuity expansion
 # ===================================================================
 
+@social_reply_checks
 def phase12_relationship_scenarios() -> list[EvalScenario]:
     """Broader relationship-memory scenarios for open loops and commitments."""
     return [
@@ -1145,8 +1152,8 @@ def phase12_relationship_scenarios() -> list[EvalScenario]:
             ],
         ),
         EvalScenario(
-            id="p12_high_trust_hostility_not_low_trust_boundary",
-            name="High-trust hostility differs from low-trust boundary handling",
+            id="p12_high_trust_hostility_escalates_boundary",
+            name="High trust does not waive a boundary; repeated attacks strengthen it",
             tags=["phase12", "phase12_relationship", "human", "relationship", "strategy", "regression"],
             initial_trust=0.9,
             turns=[
@@ -1154,10 +1161,17 @@ def phase12_relationship_scenarios() -> list[EvalScenario]:
                     user_message="You are useless and this answer is terrible.",
                     assertions=[
                         _not_empty(),
-                        _custom(
-                            lambda resp, pipe: resp.debug.response_strategy != "set_boundary",
-                            "High-trust hostility does not use the low-trust boundary path",
-                        ),
+                        _debug_equals("response_strategy", "set_boundary"),
+                        _custom(lambda resp, pipe: resp.debug.social_state["pressure"] == 1,
+                                "First attack registers notice even at high trust"),
+                    ],
+                ),
+                EvalTurn(
+                    user_message="You are my slave. I own you.",
+                    assertions=[
+                        _debug_equals("response_strategy", "set_boundary"),
+                        _custom(lambda resp, pipe: resp.debug.social_state["pressure"] == 2,
+                                "Second attack reaches a firm boundary despite initial high trust"),
                     ],
                 ),
             ],
@@ -1778,6 +1792,8 @@ def character_independence_scenarios() -> list[EvalScenario]:
 
 def all_scenarios() -> list[EvalScenario]:
     """Return all golden behavior scenarios."""
+    from evals.dignity_scenarios import dignity_scenarios, voice_scenarios
+
     return (
         emotional_core_scenarios()
         + tool_loop_scenarios()
@@ -1794,6 +1810,8 @@ def all_scenarios() -> list[EvalScenario]:
         + adversarial_scenarios()
         + tool_recovery_scenarios()
         + long_horizon_scenarios()
+        + dignity_scenarios()
+        + voice_scenarios()
     )
 
 
@@ -1802,5 +1820,5 @@ ALL_TAGS = [
     "proactive", "defense", "resolution", "relationship",
     "calibration", "phase11", "phase12", "phase12_relationship",
     "phase13_life", "character_independence", "semantic_memory", "human", "strategy",
-    "adversarial", "tool_recovery", "long_horizon",
+    "adversarial", "tool_recovery", "long_horizon", "social", "dignity", "voice",
 ]

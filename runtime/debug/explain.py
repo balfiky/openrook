@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.social import has_concrete_task
 from runtime.debug.labels import social_move_phrase, strategy_label, strategy_reason_label
 from runtime.life_history import DEFAULT_DRIVES
 
@@ -30,7 +31,7 @@ def explain_turn(debug: Any) -> dict[str, str]:
         ),
         "life_history": _life_history(life, influence, life_effects),
         "tools": _tools(tool_trace),
-        "limits": _limits(defense, self_check_issues),
+        "limits": _limits(defense, self_check_issues, getattr(debug, "dignity_outcome", "clear")),
     }
 
 
@@ -51,6 +52,15 @@ def _interpretation(appraisal: Any) -> str:
 
 
 def _strategy(debug: Any, appraisal: Any) -> str:
+    social = getattr(debug, "social_state", {}) or {}
+    if social.get("current_abuse"):
+        if has_concrete_task(getattr(debug, "user_message", "")):
+            return "I kept the firmer social stance while answering the concrete task."
+        if social.get("pressure", 0) > 1:
+            return "You insulted me several times; I set a boundary and kept the reply short."
+        return "I read this as a direct insult or role coercion; I named a boundary."
+    if social.get("pressure", 0):
+        return "Earlier insults still affect the modeled relationship; I kept this reply brief while trust recovers."
     strategy = getattr(debug, "response_strategy", "") or ""
     if not strategy:
         return "No explicit response strategy was selected."
@@ -233,7 +243,9 @@ def _life_history(life: dict[str, Any], influence: Any, effects: dict[str, Any])
     return " ".join([summary, *details])
 
 
-def _limits(defense: Any, self_check_issues: list[str]) -> str:
+def _limits(defense: Any, self_check_issues: list[str], dignity_outcome: str = "clear") -> str:
+    if dignity_outcome == "fallback":
+        return "A short fallback was used because the draft violated the character's stance and one correction did not resolve it."
     if defense is None and not self_check_issues:
         return "No response safeguard or self-check correction was triggered."
     parts: list[str] = []

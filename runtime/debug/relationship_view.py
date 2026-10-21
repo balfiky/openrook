@@ -91,7 +91,9 @@ def _delta(
 
 
 def _relationship_items(debug: Any, field_name: str) -> list[dict[str, Any]]:
-    context = getattr(debug, "relationship_context", None)
+    context = getattr(debug, "relationship_context_after_turn", None)
+    if context is None:
+        context = getattr(debug, "relationship_context", None)
     if context is None:
         return []
     items = getattr(context, field_name, []) or []

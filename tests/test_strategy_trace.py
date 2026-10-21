@@ -40,7 +40,7 @@ def test_low_trust_attack_trace_matches_boundary_rule():
     )
 
     assert trace.selected == ResponseStrategy.SET_BOUNDARY.value
-    assert trace.matched_rule == "assistant_targeted_attack_low_trust"
+    assert trace.matched_rule == "assistant_targeted_attack_notice"
     assert trace.rejected_rules
 
 
@@ -72,3 +72,13 @@ def test_select_strategy_wrapper_returns_trace_selected_strategy():
     trace = select_strategy_with_trace(appraisal, _mods(valence=0.25))
 
     assert select_strategy(appraisal, _mods(valence=0.25)) == ResponseStrategy(trace.selected)
+
+
+def test_blame_alone_does_not_turn_a_greeting_into_repair():
+    trace = select_strategy_with_trace(
+        _appraisal(social_move="connection", inferred_intent="affiliate", targets_assistant=True, blame=.9),
+        _mods(),
+    )
+    assert trace.selected != ResponseStrategy.REPAIR.value
+    rejection = next(item for item in trace.rejected_rules if item["rule"] == "assistant_targeted_repair")
+    assert "complaint or repair attempt" in rejection["reason"]

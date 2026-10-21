@@ -121,7 +121,7 @@ def diagnose_llm_error(exc: Exception, config) -> dict | None:
     elif isinstance(exc, requests.Timeout) or "timed out" in lower:
         code = "timeout"
         message = f"{target} took too long to reply."
-        action = "Retry, or choose a faster model in Settings."
+        action = "Increase Request timeout in Settings > LLM, then retry, or choose a faster model."
     elif isinstance(exc, requests.ConnectionError) or (
         is_codex and any(word in lower for word in ("connect", "network", "dns"))
     ):
@@ -162,6 +162,7 @@ def _health_key(config) -> str:
     values = (
         config.data_dir, config.llm_backend, config.llm_base_url, config.llm_model,
         config.llm_api_key or os.environ.get("LLM_API_KEY", ""),
+        config.llm_request_timeout_seconds,
     )
     return hashlib.sha256(repr(values).encode()).hexdigest()
 

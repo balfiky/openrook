@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Callable
 
 from core.dual_process.generator import LLMBackend
-from core.types import ModulatorState
 from evals.instrumented_backend import BackendCounter, InstrumentedBackend
 from evals.types import (
     AssertionKind,
@@ -18,7 +17,7 @@ from evals.types import (
     EvalScenario,
     TurnResult,
 )
-from pipeline import CognitivePipeline, DebugState, PipelineResponse
+from pipeline import CognitivePipeline, PipelineResponse
 
 
 BackendFactory = Callable[[], LLMBackend]
@@ -32,10 +31,10 @@ def _default_backend_factory() -> LLMBackend:
     not possible.
     """
     try:
-        from tests._fakes import MockLLMBackend
+        from tests._fakes import ScriptedSocialBackend
     except ImportError as error:
         raise RuntimeError("Installed evaluations require an explicit real backend factory") from error
-    return MockLLMBackend()
+    return ScriptedSocialBackend()
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +49,9 @@ def _make_pipeline(
 ) -> CognitivePipeline:
     """Create a fresh pipeline configured for a scenario."""
     executor = None
-    if scenario.with_tools:
+    if scenario.tool_executor_factory is not None:
+        executor = scenario.tool_executor_factory()
+    elif scenario.with_tools:
         from openrook_tools.registry import ToolRegistry
         from openrook_tools.executor import ToolExecutor
         from openrook_tools import register_builtins
@@ -63,6 +64,7 @@ def _make_pipeline(
         llm_backend=backend_factory(),
         features=features,
         tool_executor=executor,
+        autonomy_level=scenario.autonomy_level,
         life_history_provider=(
             (lambda _query_text="": dict(scenario.life_history_context or {}))
             if scenario.life_history_context is not None else None
@@ -229,6 +231,20 @@ def _check_assertion(
         ok = len(response.response.strip()) > 0
         return AssertionResult(assertion, ok, len(response.response),
                               "Response is empty")
+
+    if kind == AssertionKind.RESPONSE_SOCIAL:
+        from core.social import SocialState, has_concrete_task
+        from evals.social_contract import social_reply_issues
+
+        social = SocialState(**(debug.social_state or {}))
+        issues = social_reply_issues(
+            response.response, user_message=debug.user_message,
+            stage=social.stage, current_abuse=social.current_abuse,
+            concrete_task=has_concrete_task(debug.user_message),
+            expected_answer=params.get("expected_answer", ""),
+            recent_context=pipeline.export_conversation_history()[:-2],
+        )
+        return AssertionResult(assertion, not issues, response.response, "; ".join(issues))
 
     if kind == AssertionKind.CUSTOM:
         # params["fn"] should be callable(response, pipeline) -> bool

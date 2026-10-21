@@ -12,6 +12,8 @@ backend is configured.
 
 from __future__ import annotations
 
+from evals.social_backend import ScriptedSocialBackend as ScriptedSocialBackend
+
 
 class MockLLMBackend:
     """Records the last prompt / message and returns a fixed string.

@@ -20,8 +20,6 @@ import hashlib
 from pathlib import Path
 from typing import Any, Protocol
 
-log = logging.getLogger(__name__)
-
 from config.loader import get_config, research_configuration
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from runtime.config import RuntimeConfig
@@ -30,6 +28,8 @@ from runtime.evolution_policy import (
     detect_prompt_injection_markers,
     source_openness_coefficient,
 )
+
+log = logging.getLogger(__name__)
 
 
 class LLMBackend(Protocol):
@@ -234,6 +234,18 @@ class LifeHistoryStore:
                 **(metadata or {}),
             },
         )
+
+    def record_social_boundary(self, user_id: str, summary: str, pressure: int) -> int:
+        """Record an observed runtime boundary without inventing learned beliefs."""
+        with self._conn:
+            return self._insert_experience(
+                title="A conversational boundary", source_type="runtime_boundary",
+                source_ref=f"relationship:{user_id}", participants=[user_id],
+                summary=summary, raw_excerpt="", salience=min(1.0, pressure / 4),
+                emotional_valence=-0.5, emotional_impact="Modeled anger or hurt after direct abuse.",
+                confidence=1.0, metadata={"boundary_pressure": pressure, "runtime_observation": True},
+                batch_id="",
+            )
 
     def overview(self) -> dict[str, Any]:
         counts = {

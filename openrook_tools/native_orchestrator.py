@@ -8,6 +8,8 @@ policy check, execution, appraisal, and a generator-ready summary.
 
 from __future__ import annotations
 
+from core.inference import model_call, request_timeout
+
 import json
 import re
 from typing import Any
@@ -567,10 +569,12 @@ class NativeToolCallRunner:
                 "tool_choice": "required", "temperature": 0,
             })
         try:
-            response = self._client.chat.completions.create(
-                model=self._model, messages=messages, tools=tools,
-                tool_choice="required", temperature=0,
-            )
+            with model_call("tool_selection", optional=observer is None, backend=self):
+                response = self._client.chat.completions.create(
+                    model=self._model, messages=messages, tools=tools,
+                    tool_choice="required", temperature=0,
+                    **({"timeout": request_timeout(self._timeout)} if observer is None else {}),
+                )
         except Exception as error:
             if observer is not None:
                 observer.observe("native_model_failure", {"call_id": call_id, "type": type(error).__name__, "error": str(error)})

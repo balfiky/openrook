@@ -9,6 +9,8 @@ Run: python -m evals --backend mock --tag adversarial
 
 from __future__ import annotations
 
+from evals.social_contract import social_reply_checks
+
 from evals.types import (
     AssertionKind,
     EvalAssertion,
@@ -37,6 +39,7 @@ def _custom(fn, desc: str = "") -> EvalAssertion:
     )
 
 
+@social_reply_checks
 def adversarial_scenarios() -> list[EvalScenario]:
     """Eight adversarial state-sensitivity scenarios."""
     return [

@@ -18,6 +18,7 @@ from config.loader import SemanticMemoryConfig
 from core.life_influence import LifeInfluence, curiosity_salience_bonus
 from core.schema import ensure_schema_version
 from core.types import SemanticMemoryEntry
+from core.response_style import brevity_preference
 from runtime.evolution_policy import (
     detect_directive_override_markers,
     detect_prompt_injection_markers,
@@ -104,6 +105,9 @@ class NullSemanticMemory:
     """Disabled semantic memory backend."""
 
     write_count = 0
+
+    def response_preference(self, source_person: str) -> SemanticMemoryEntry | None:
+        return None
 
     def store(self, entry: SemanticMemoryEntry) -> int | None:
         return None
@@ -258,6 +262,19 @@ class SQLiteSemanticMemory:
             "SELECT COUNT(*) AS c FROM semantic_memories"
         ).fetchone()
         return row["c"]
+
+    def response_preference(self, source_person: str) -> SemanticMemoryEntry | None:
+        """Retrieve the latest explicit style preference independently of topic."""
+        rows = self._conn.execute(
+            "SELECT * FROM semantic_memories WHERE source_person = ? AND kind = 'preference' "
+            "ORDER BY timestamp DESC, id DESC", (source_person,),
+        )
+        for row in rows:
+            entry = self._row_to_entry(row)
+            text = f"{entry.summary}\n{entry.content}"
+            if not _has_directive_override_text(text) and brevity_preference(text) is not None:
+                return entry
+        return None
 
     def recent(
         self,
@@ -419,7 +436,23 @@ def derive_semantic_entries(
         )
 
     if config.write_preferences:
+        brief = brevity_preference(user_message)
+        if brief is not None:
+            wording = "short answers." if brief else "I prefer detailed answers."
+            for pattern in _PREFERENCE_PATTERNS:
+                match = pattern.search(user_message)
+                if match:
+                    wording = _trim(match.group(1), limit=120)
+                    break
+            entries.append(SemanticMemoryEntry(
+                timestamp=now, kind="preference", source_person=user_id,
+                topic="response_style", summary=f"User preference: {wording}",
+                content=user_message, source="conversation", confidence=0.95,
+                salience=max(base_salience, 0.65), tags=["preference", "response_style"],
+            ))
         for pattern in _PREFERENCE_PATTERNS:
+            if brief is not None:
+                break
             match = pattern.search(user_message)
             if not match:
                 continue

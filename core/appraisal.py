@@ -13,8 +13,19 @@ matching without adding heavy prompt complexity.
 
 from __future__ import annotations
 
-import re
+from core.inference import generate
 
+import re
+from dataclasses import replace
+
+from core.social import (
+    HOSTILE_MARKERS as _HOSTILE_MARKERS,
+    INSULT_MARKERS as _INSULT_MARKERS,
+    PROFANITY_MARKERS as _PROFANITY_MARKERS,
+    has_concrete_task,
+    read_social_signals,
+    social_text,
+)
 from core.types import AppraisalFrame, DetectedEmotion
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 
@@ -32,39 +43,6 @@ _APOLOGY_MARKERS = (
     "apology",
     "forgive me",
     "my bad",
-)
-_INSULT_MARKERS = (
-    "stupid",
-    "idiot",
-    "moron",
-    "dumb",
-    "pathetic",
-    "useless",
-    "worthless",
-    "incompetent",
-    "clueless",
-    "fool",
-)
-_HOSTILE_MARKERS = (
-    "shut up",
-    "go away",
-    "get lost",
-    "leave me alone",
-    "screw you",
-    "piss off",
-    "hate you",
-)
-_PROFANITY_MARKERS = (
-    "fuck",
-    "shit",
-    "bullshit",
-    "damn",
-    "asshole",
-    "bastard",
-    "bitch",
-    "crap",
-    "suck",
-    "sucks",
 )
 _NEGATIVE_EVAL_MARKERS = (
     "wrong",
@@ -269,7 +247,8 @@ def _contains_marker(text: str, marker: str) -> bool:
 
 def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     """Infer a compact social appraisal for the current user message."""
-    lower = " ".join(text.lower().split())
+    lower = social_text(text)
+    social = read_social_signals(text)
     second_person = bool(_SECOND_PERSON_RE.search(lower))
     explicit_not_at_assistant = _contains_any(lower, _NOT_AT_ASSISTANT_MARKERS)
 
@@ -285,7 +264,8 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     support_request = _contains_any(lower, _SUPPORT_REQUEST_MARKERS)
     action_request = _contains_any(lower, _ACTION_REQUEST_MARKERS) or "?" in text
     connection = _contains_any(lower, _CONNECTION_MARKERS)
-    assistant_artifact = _contains_any(lower, _ASSISTANT_ARTIFACT_MARKERS)
+    verbosity_complaint = bool(re.search(r"\byou talk too much\b", lower))
+    assistant_artifact = _contains_any(lower, _ASSISTANT_ARTIFACT_MARKERS) or verbosity_complaint
     self_target = _contains_any(lower, _SELF_TARGET_MARKERS)
     external_context = _contains_any(lower, _EXTERNAL_CONTEXT_MARKERS)
     surprise = _contains_any(lower, _SURPRISE_MARKERS)
@@ -313,19 +293,18 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     )
 
     targeted_negative = (
-        not explicit_not_at_assistant
+        (bool(social.abuse_kind) or not explicit_not_at_assistant) and not social.exempt
         and (
-            hostility
+            bool(social.abuse_kind)
             or sarcasm
-            or (second_person and (insult or hostility or profanity or betrayal or negative_eval))
+            or (second_person and (betrayal or negative_eval))
             or (assistant_artifact and (negative_eval or betrayal))
+            or verbosity_complaint
             or (
                 not external_context
                 and ("this is" in lower or "that is" in lower)
                 and (profanity or negative_eval)
             )
-            or (insult and not external_context and len(lower.split()) <= 4)
-            or (profanity and not external_context and len(lower.split()) <= 4)
             or "angry with you" in lower
             or "angry at you" in lower
             or "mad at you" in lower
@@ -338,13 +317,15 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
         not explicit_not_at_assistant
         and (gratitude or assistant_addressed_apology or (second_person and positive_hits > 0))
     )
-    hard_attack = sarcasm or insult or hostility or profanity or betrayal
+    hard_attack = bool(social.abuse_kind) or sarcasm or betrayal
 
     reasons: list[str] = []
     if explicit_not_at_assistant:
         reasons.append("explicitly not directed at assistant")
     if targeted_negative:
         reasons.append("assistant-targeted negative evaluation")
+    if social.abuse_kind:
+        reasons.append(f"assistant-directed {social.abuse_kind}")
     if sarcasm:
         reasons.append("sarcastic gratitude marker")
     if targeted_positive:
@@ -369,7 +350,7 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     else:
         primary_target = "unknown"
 
-    if sarcasm and (second_person or not external_context):
+    if sarcasm and not social.exempt and (second_person or not external_context):
         social_move = "attack"
     elif targeted_negative and assistant_artifact and not hard_attack:
         social_move = "complaint"
@@ -481,6 +462,61 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     )
 
 
+def reconcile_social_appraisal(
+    text: str, detected: DetectedEmotion, base: AppraisalFrame,
+) -> AppraisalFrame:
+    """Keep explicit abuse and scope exclusions consistent across backends.
+
+    The model still interprets ambiguity. It cannot erase an explicit role
+    coercion or assign a harmless event type to a direct insult.
+    """
+    from core.social import is_casual_greeting
+
+    social = read_social_signals(text)
+    if is_casual_greeting(text) and (
+        base.blame > 0.5 or re.search(r"\b(?:fuck|hell)\b", text, re.I)
+    ):
+        return replace(
+            appraise_message(text, detected), primary_target="assistant", targets_assistant=True,
+            social_move="inform", inferred_intent="affiliate", blame=0.0,
+            expectation_violation=0.0, event_type="user_message", event_intensity=0.1,
+            reason="casual greeting; no complaint or rupture to repair",
+        )
+    if social.abuse_kind:
+        return replace(
+            base,
+            primary_target="assistant", targets_assistant=True,
+            social_move="attack", inferred_intent="harm", blame=max(0.9, base.blame),
+            affiliation_bid=0.0, vulnerability=0.1,
+            expectation_violation=max(0.5, base.expectation_violation),
+            event_type="conflict", event_intensity=max(0.65, detected.arousal),
+            reason=f"assistant-directed {social.abuse_kind}; explicit social cue",
+        )
+    from core.stance import is_bare_disagreement
+
+    if is_bare_disagreement(text):
+        return replace(
+            base, primary_target="shared_problem", targets_assistant=False,
+            social_move="inform", inferred_intent="inform", blame=0.0,
+            event_type="user_message", event_intensity=0.1,
+            reason="bare disagreement is not an insult or evidence that a position is wrong",
+        )
+    if social.exempt and base.targets_assistant and base.social_move == "attack":
+        base = appraise_message(text, detected)
+    if (
+        has_concrete_task(text)
+        and base.social_move not in {"attack", "apology", "gratitude", "vulnerability"}
+    ):
+        return replace(
+            base, primary_target="shared_problem", targets_assistant=False,
+            social_move="request", inferred_intent="seek_action",
+            controllability=max(0.75, base.controllability),
+            event_type="user_message", event_intensity=max(0.1, base.event_intensity),
+            reason="concrete task requested; preserve practical help after hostility",
+        )
+    return base
+
+
 _APPRAISAL_SYS_PROMPT = """You read one user message and infer how it lands \
 socially — not its surface tone, but its interpersonal meaning toward the \
 assistant it is speaking to. Reply with ONLY a JSON object, no prose.
@@ -498,7 +534,11 @@ Fields:
   "mixed_affect": true|false (both positive and negative signals present)
   "reason": short phrase explaining the read
 
-Judge meaning, not keywords. Sarcasm, indirect blame, and quiet distress count."""
+Judge meaning, not keywords. Sarcasm, indirect blame, and quiet distress count.
+Demands that the assistant be owned, servile, degraded, or a punching bag are
+assistant-directed attacks, even if phrased calmly. Casual swearing, playful
+teasing, criticism of an answer, quoted fiction about other people, and venting
+about someone else are not by themselves abuse of the assistant."""
 
 _APPRAISAL_SYS_PROMPT += """
 Also return:
@@ -548,7 +588,7 @@ def appraise_message_llm(
         import json
 
         try:
-            raw = backend.generate(_APPRAISAL_SYS_PROMPT, user)
+            raw = generate(backend, "appraisal", _APPRAISAL_SYS_PROMPT, user, optional=True)
         except (ResearchBudgetExceeded, ResearchStudyLimit):
             raise
         except Exception:

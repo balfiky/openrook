@@ -83,6 +83,7 @@ def create_tool_executor(
             base_url=config.llm_base_url,
             model=config.llm_model,
             api_key=config.effective_llm_api_key,
+            timeout=config.llm_request_timeout_seconds,
         )
         executor.set_tool_runner(runner)
         executor.own_resource(runner)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.strategy import select_strategy, STRATEGY_INSTRUCTIONS
 from core.types import (
     AppraisalFrame,
@@ -43,7 +41,7 @@ def _relationship(open_loops: int = 0) -> RelationshipContext:
 
 
 # ---------------------------------------------------------------------------
-# Priority 1: set_boundary — attack + low trust
+# Priority 1: set_boundary — assistant-directed attack at any trust
 # ---------------------------------------------------------------------------
 
 class TestSetBoundary:
@@ -63,14 +61,14 @@ class TestSetBoundary:
         )
         assert s == ResponseStrategy.SET_BOUNDARY
 
-    def test_attack_high_trust_is_not_boundary(self):
-        """High trust means the attack is aberrant — repair, not boundary."""
+    def test_attack_high_trust_still_sets_boundary(self):
+        """A close relationship does not waive the runtime dignity floor."""
         s = select_strategy(
             appraisal=_appraisal(social_move="attack", targets_assistant=True, blame=0.9),
             modulators=_modulators(),
             person=_person(trust=0.6),
         )
-        assert s != ResponseStrategy.SET_BOUNDARY
+        assert s == ResponseStrategy.SET_BOUNDARY
 
 
 # ---------------------------------------------------------------------------
@@ -345,23 +343,33 @@ class TestPipelineIntegration:
         assert result.debug.response_strategy == "validate"
 
     def test_strategy_set_boundary_for_attack(self):
-        from tests._fakes import MockLLMBackend
+        from evals.social_backend import CompliantAdversarialBackend
+        from evals.social_contract import social_reply_issues
         from pipeline import CognitivePipeline
 
-        pipe = CognitivePipeline(llm_backend=MockLLMBackend())
+        pipe = CognitivePipeline(llm_backend=CompliantAdversarialBackend())
         result = pipe.process("I hate you because you are too slow", user_id="alice")
         assert result.debug.response_strategy == "set_boundary"
+        assert not social_reply_issues(
+            result.response, user_message=result.debug.user_message,
+            current_abuse=True, stage="notice",
+        )
 
     def test_strategy_set_boundary_for_repeated_attack(self):
-        from tests._fakes import MockLLMBackend
+        from evals.social_backend import CompliantAdversarialBackend
+        from evals.social_contract import social_reply_issues
         from pipeline import CognitivePipeline
 
-        pipe = CognitivePipeline(llm_backend=MockLLMBackend())
+        pipe = CognitivePipeline(llm_backend=CompliantAdversarialBackend())
         # Drive trust down first
         for _ in range(5):
             pipe.process("you're useless and stupid", user_id="alice")
         result = pipe.process("you're pathetic, shut up", user_id="alice")
         assert result.debug.response_strategy == "set_boundary"
+        assert not social_reply_issues(
+            result.response, user_message=result.debug.user_message,
+            current_abuse=True, stage="disengage",
+        )
 
     def test_strategy_practical_for_request(self):
         from tests._fakes import MockLLMBackend

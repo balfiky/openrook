@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--backend",
-        choices=["mock", "provider", "minimax", "openai_compat", "codex"],
+        choices=["mock", "compliant-adversarial", "provider", "minimax", "openai_compat", "codex"],
         required=False,
         help=(
             "LLM backend to run against. REQUIRED unless --list is set. "

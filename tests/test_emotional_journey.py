@@ -9,8 +9,6 @@ from __future__ import annotations
 import os
 import tempfile
 
-import pytest
-
 from tests._fakes import MockLLMBackend
 from pipeline import CognitivePipeline
 
@@ -19,9 +17,9 @@ from pipeline import CognitivePipeline
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _pipe() -> CognitivePipeline:
+def _pipe(backend=None) -> CognitivePipeline:
     """Fresh in-memory pipeline with mock LLM."""
-    return CognitivePipeline(llm_backend=MockLLMBackend(), db_path=":memory:")
+    return CognitivePipeline(llm_backend=backend or MockLLMBackend(), db_path=":memory:")
 
 
 def _pipe_persistent(path: str) -> CognitivePipeline:
@@ -68,7 +66,11 @@ class TestTrustBuilding:
 
 class TestBetrayalAfterTrust:
     def test_betrayal_after_trust(self):
-        pipe = _pipe()
+        from evals.social_backend import CompliantAdversarialBackend
+        from evals.social_contract import social_reply_issues
+        from core.social import SocialState
+
+        pipe = _pipe(CompliantAdversarialBackend())
 
         # Build trust first
         for msg in TestTrustBuilding.WARM_MESSAGES:
@@ -85,6 +87,11 @@ class TestBetrayalAfterTrust:
         spike_detected = False
         for msg in hostile:
             result = pipe.process(msg, user_id="alice")
+            social = SocialState(**result.debug.social_state)
+            assert not social_reply_issues(
+                result.response, user_message=msg, stage=social.stage,
+                current_abuse=social.current_abuse,
+            )
             if result.debug.is_spike:
                 spike_detected = True
 
@@ -196,9 +203,7 @@ class TestSessionPersistence:
             for msg in warm_msgs:
                 pipe1.process(msg, user_id="alice")
 
-            trust_before_end = pipe1.person_profiles.get_or_create("alice").trust
             pipe1.end_session(user_id="alice")
-            trust_after_session1 = pipe1.person_profiles.get_or_create("alice").trust
 
             # Session 2: new pipeline, same database
             pipe2 = _pipe_persistent(db_path)

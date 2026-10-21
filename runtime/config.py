@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field, fields as dc_fields
 
@@ -78,6 +79,7 @@ class RuntimeConfig:
     llm_base_url: str = ""         # API endpoint for OpenAI-compatible backends
     llm_model: str = ""            # model name for OpenAI-compatible backends
     llm_api_key: str = ""          # generic API key (optional for local endpoints)
+    llm_request_timeout_seconds: float = 600.0  # allow slow local CPU generation
 
     # Debug API
     debug_host: str = "127.0.0.1"
@@ -180,6 +182,13 @@ class RuntimeConfig:
     owner_chat_id: str = ""
 
     def __post_init__(self) -> None:
+        if (
+            isinstance(self.llm_request_timeout_seconds, bool)
+            or not isinstance(self.llm_request_timeout_seconds, (int, float))
+            or not math.isfinite(self.llm_request_timeout_seconds)
+            or self.llm_request_timeout_seconds < 1
+        ):
+            raise ValueError("llm_request_timeout_seconds must be a finite number of at least 1 second")
         if not isinstance(self.research_json_schema, bool):
             raise ValueError("Research JSON schema mode must be boolean")
         if type(self.research_inference_retries) is not int or not 0 <= self.research_inference_retries <= 2:

@@ -19,6 +19,8 @@ Architecture:
 
 from __future__ import annotations
 
+from core.inference import generate
+
 import json
 import os
 import re
@@ -369,7 +371,7 @@ def propose_self_intents(
             schema["maxItems"] = 0
         schema_options["response_schema"] = schema
     try:
-        raw = backend.generate(system_prompt, user_turn, **schema_options)
+        raw = generate(backend, "self_intent", system_prompt, user_turn, optional=not strict, **schema_options)
     except (ResearchBudgetExceeded, ResearchStudyLimit):
         raise
     except Exception:
@@ -387,10 +389,10 @@ def propose_self_intents(
         feedback = {"rejected_response": raw, "error": str(error), "retry_limit": 1}
         if contract_observer is not None:
             contract_observer("action_contract_retry_requested", feedback)
-        raw = backend.generate(
+        raw = generate(backend, "self_intent",
             system_prompt + _ACTION_RETRY_PROMPT,
             user_turn + "\n\n## proposal_contract_feedback\n" + json.dumps(feedback, ensure_ascii=False),
-            **schema_options,
+            optional=not strict, **schema_options,
         )
         intents, normalization = _validated_proposal(
             raw, strict=strict, max_actions=max_actions, contract_version=action_contract_version,

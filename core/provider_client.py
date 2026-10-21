@@ -6,8 +6,10 @@ be chosen explicitly by the caller.
 
 from __future__ import annotations
 
+from core.inference import request_timeout
+from core.llm_content import reply_text
+
 import os
-import re
 
 import requests
 
@@ -27,6 +29,7 @@ class ChatCompletionsClient:
         base_url: str = "https://api.minimax.io/v1",
         model: str = "",
         thinking: bool = True,
+        timeout: float = 600.0,
     ) -> None:
         if not model.strip():
             raise ValueError("Chat-completions backend requires llm_model; choose a model in Settings.")
@@ -39,6 +42,7 @@ class ChatCompletionsClient:
         self._base_url = safe_base_url.rstrip("/").removesuffix("/chat/completions")
         self._model = model.strip()
         self._thinking = thinking
+        self._timeout = timeout
         self._session = requests.Session()
         self._session.headers.update({
             "Authorization": f"Bearer {self._api_key}",
@@ -62,9 +66,11 @@ class ChatCompletionsClient:
 
         # Retry once on connection error (server closes idle keep-alive connections)
         try:
-            resp = self._session.post(url, json=payload, timeout=60)
-        except (requests.ConnectionError, requests.exceptions.ConnectionError):
-            resp = self._session.post(url, json=payload, timeout=60)
+            resp = self._session.post(url, json=payload, timeout=request_timeout(self._timeout))
+        except requests.ConnectionError as error:
+            if isinstance(error, requests.Timeout):
+                raise
+            resp = self._session.post(url, json=payload, timeout=request_timeout(self._timeout))
         if resp.status_code != 200:
             import logging
 
@@ -74,9 +80,7 @@ class ChatCompletionsClient:
         resp.raise_for_status()
 
         data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-        return content.strip()
+        return reply_text(data["choices"][0]["message"])
 
     def close(self) -> None:
         """Release the underlying HTTP connection pool."""
@@ -91,5 +95,6 @@ class FastChatCompletionsClient(ChatCompletionsClient):
         api_key: str | None = None,
         base_url: str = "https://api.minimax.io/v1",
         model: str = "",
+        timeout: float = 600.0,
     ) -> None:
-        super().__init__(api_key=api_key, base_url=base_url, model=model, thinking=False)
+        super().__init__(api_key=api_key, base_url=base_url, model=model, thinking=False, timeout=timeout)

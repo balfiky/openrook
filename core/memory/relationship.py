@@ -7,6 +7,7 @@ relational loops that should carry across sessions.
 from __future__ import annotations
 
 import sqlite3
+import json
 from core.clock import clock as time
 
 from core.schema import ensure_schema_version
@@ -24,6 +25,9 @@ class NullRelationshipMemory:
     """
 
     write_count = 0
+
+    def social_state(self, source_person: str) -> dict:
+        return {}
 
     def record_event(self, event: RelationshipEvent) -> int:
         return 0
@@ -66,6 +70,19 @@ class RelationshipMemory:
         ensure_schema_version(self._conn)
         # Count saved events; their associated open loops are not extra memories.
         self.write_count = 0
+
+    def social_state(self, source_person: str) -> dict:
+        """Load the last runtime boundary state from the existing event ledger."""
+        row = self._conn.execute(
+            "SELECT related_key FROM relationship_events WHERE source_person = ? "
+            "AND related_key LIKE 'social:%' ORDER BY id DESC LIMIT 1", (source_person,),
+        ).fetchone()
+        if not row:
+            return {}
+        try:
+            return json.loads(row["related_key"][len("social:"):])
+        except (ValueError, TypeError):
+            return {}
 
     def record_event(self, event: RelationshipEvent) -> int:
         """Persist a relationship event and return its row id."""
