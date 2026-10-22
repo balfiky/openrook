@@ -1409,7 +1409,7 @@ class CognitivePipeline:
             grounded_context=st.life_history_context if not st.turn_decision or not st.turn_decision.declined else {})
         review_cache = {}
 
-        def review(candidate, *, local_only=False):
+        def review(candidate, *, local_only=False, excision_source=""):
             needs_review = (bool(debug.expression_reviews) or constrained
                 or _is_identity_question(st.user_message)
                 or needs_semantic_review(candidate.response, recent_context=self._conversation_history,
@@ -1417,8 +1417,9 @@ class CognitivePipeline:
                 or bool(verify_response_grounding(candidate.response, tool_trace=debug.tool_trace))
                 or bool(debug.tool_trace and (debug.tool_trace.executed_results or debug.tool_trace.final_decision)))
             local = review_response(candidate.response, **review_context, use_llm=False,
-                raw_response=candidate.raw_response, private_instructions=candidate.system_prompt)
-            key = (candidate.response, candidate.raw_response, local.issues, local_only)
+                raw_response=candidate.raw_response, private_instructions=candidate.system_prompt,
+                excision_source=excision_source)
+            key = (candidate.response, candidate.raw_response, local.issues, local_only, excision_source)
             reused = review_cache.get(key)
             if reused:
                 result, source_attempt = reused
@@ -1428,7 +1429,8 @@ class CognitivePipeline:
                 # semantic opinion about whether that floor may be ignored.
                 if not local_only and not result.unusable and remaining_calls() > 0 and needs_review:
                     result = review_response(candidate.response, **review_context, use_llm=True,
-                        raw_response=candidate.raw_response, private_instructions=candidate.system_prompt)
+                        raw_response=candidate.raw_response, private_instructions=candidate.system_prompt,
+                        excision_source=excision_source)
                 source_attempt = len(debug.expression_reviews) + 1
                 review_cache[key] = (result, source_attempt)
             # A different reviewer verdict cannot make an identical failed
@@ -1442,6 +1444,7 @@ class CognitivePipeline:
                                  issues=tuple(dict.fromkeys((*result.issues, *retained))))
             debug.expression_reviews.append({"attempt": len(debug.expression_reviews) + 1,
                                               "draft": candidate.response, **result.to_dict(),
+                                              **({"excision_source": excision_source} if excision_source else {}),
                                               **({"reused_from_attempt": source_attempt} if reused else {})})
             return result
         candidates = []
@@ -1463,8 +1466,9 @@ class CognitivePipeline:
                 if not remainder or remainder == candidate.response:
                     debug.expression_excision["reason"] = "empty remainder or unverifiable spans; generate fresh expression"
                     return
+                source = candidate.response
                 candidate = replace(candidate, response=remainder)
-                verdict = review(candidate, local_only=local_only)
+                verdict = review(candidate, local_only=local_only, excision_source=source)
                 candidates.append((candidate, verdict))
                 debug.expression_excision["local_status"] = verdict.status
             # Non-floor findings remain recorded and may require correction;
@@ -1558,7 +1562,7 @@ class CognitivePipeline:
                     "source_attempt": candidates.index((candidate, candidate_review)) + 1}
                 if removed and remainder:
                     trimmed = replace(candidate, response=remainder, raw_response=remainder)
-                    local = review(trimmed, local_only=True)
+                    local = review(trimmed, local_only=True, excision_source=candidate.response)
                     debug.expression_excision["local_status"] = local.status
                     if not local.issues:
                         selected, verdict = trimmed, local

@@ -29,6 +29,14 @@ The current conversational policy is `willingness-1.2`. See
   deliver only a nonempty remainder passing local checks, with excision telemetry
   and semantic uncertainty. Recheck that a role decline remains legible and that
   surviving service offers fit the frozen reserve. Otherwise retain degraded delivery.
+  A remainder must independently address the current request: detached participant
+  questions are ineligible after excision, while complete brief replies remain valid.
+  Whole stale copies require fresh expression, including their short sentence tags.
+  Follow the user's conversation language unless another language was requested.
+  Large script/diacritic distribution changes relative to user prose require fresh
+  expression; code, quoted/requested literals and observed output are evidence,
+  not a conversation-language baseline. Similar distributions still need semantic
+  review. A known local language mismatch cannot become degraded delivery.
   Known unverified execution/output claims and unsolicited copied user openings
   are ineligible for delivery, including degraded delivery. Excise their exact
   spans before spending rewrite calls; review the independent remainder. An empty

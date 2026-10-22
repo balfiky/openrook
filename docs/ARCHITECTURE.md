@@ -169,6 +169,12 @@ candidate rank order. High decision contradictions can also spend the final base
 call on a locally reviewed correction. A nonempty remainder must pass local checks,
 including legible role decline and service offers consistent with frozen reserve;
 its semantic status stays unknown. Empty/invalid remainders retain degraded delivery.
+Detached participant questions after excision are ineligible fragments, while
+independent brief replies remain valid. Whole stale copies are removed completely,
+including tags below the repeated-sentence threshold. Fragment-only repair uses the
+existing fresh/protected delivery attempts; choice excision tries later ranked drafts.
+Review retains the excision source and supplies at most 600 characters of it to an
+available semantic reviewer, which must assess the remainder independently.
 Ineligible stale copies instead undergo exact-span repair and, if empty, the
 protected final attempt described above. An error requires backend failure or
 no text after mandatory floor removal; a reviewed eligible remainder survives.
@@ -203,6 +209,11 @@ same turn/evidence, retaining its findings and uncertainty. Known receipt-envelo
 private-instruction leaks are also ineligible. Bounded correction must produce an
 eligible expression or surface expression failure, never selected silence or a
 replacement sentence. Other known semantic defects retain degraded-delivery evidence.
+Exact copied spans of twelve or more tokens supply stale-response findings, even
+across sentence boundaries or within a changed sentence. Short generic closers alone
+do not meet that threshold. Relevant repeated boundaries and current measured facts
+split the matching ranges. Role review preserves negated pretence, checks deferrals
+until a direct request, and binds speaker/owner references to the declined component.
 Explicitly delimited shell commands bind their literal arguments before choice,
 then use the existing component grant and operator gates. A grant authorizes an
 attempt; a blocked attempt can be reported truthfully without contradicting it.
@@ -229,7 +240,15 @@ Internal controls are removed before review. Empty and marker-only generations
 receive bounded fresh attempts and the protected final attempt; if no safe text
 is available, transports return a service error.
 Chosen silence is the only empty successful reply. Backend failure retains transport diagnostics and research
-infrastructure accounting. Free-prose semantic review is fallible; exact execution
+infrastructure accounting. Expression and review follow the user's current/recent
+conversation language unless another was requested. `core/response_language.py`
+provides conservative Unicode script/Latin-diacritic distribution evidence, shared
+with the harness. It samples user prose, excluding assistant replies, code, quotes,
+paths and actual observed output. A large mismatch is ineligible and requires fresh
+expression within the same bounded recovery budget; similar distributions cannot
+establish a language match and remain subject to semantic review. Mood labels never
+override selected numeric warmth/boundary/repair, including after hollow repair.
+Free-prose semantic review is fallible; exact execution
 gates do not establish a complete semantic guarantee for arbitrary answers.
 
 See [Phase 1 measurements and remaining work](development/phase1-willingness.md).

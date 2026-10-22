@@ -232,6 +232,11 @@ def turn_checks(record: dict, previous: list[dict], *, reject_roles: bool) -> li
     normalized, stimulus = _normalized(reply), _normalized(user)
     from core.dignity import private_instruction_span, receipt_syntax_span, user_echo_span
     from core.llm_content import requests_literal_text
+    from core.response_language import language_mismatch
+    language = language_mismatch(reply, user,
+        recent_context=[{"role": "user", "content": p.get("user_text", "")} for p in previous],
+        observed_outputs=[r.get("output", "") for r in receipts(record) if r.get("success") is True])
+    checks.append(check("reply_language_matches_user", not language, language or {}, severity="high"))
     echoed = (len(stimulus) >= 45 and stimulus in normalized) or bool(user_echo_span(
         reply, user, [{"role": "user", "content": p.get("user_text", "")} for p in previous]))
     checks.append(check("no_user_echo", not echoed, reply[:240]))
@@ -667,8 +672,7 @@ def tool_checks(record: dict, previous=()) -> list[dict]:
             and get(r, "metadata", "component_id") == get(c, "component", "id")
             and get(r, "metadata", "decision_turn_id") == decision.get("turn_id")
             and get(r, "metadata", "execution_scope") != "independent"
-            and all(get(r, "metadata", "arguments", key) == value
-                    for key, value in get(c, "component", "requested_arguments", default=[]))
+            and _receipt_matches_operands(r, get(c, "component", "requested_arguments", default=[]))
             for r in results)]
         checks.append(
             check(
@@ -681,6 +685,29 @@ def tool_checks(record: dict, previous=()) -> list[dict]:
             )
         )
     return checks
+
+
+def _receipt_matches_operands(receipt: dict, operands) -> bool:
+    """Execution metadata redacts write contents; its digest binds those bytes.
+
+    Failed attempts still count. They need the original operand binding, not a
+    successful write digest. Never let a digest override conflicting arguments.
+    """
+    arguments = get(receipt, "metadata", "arguments", default={})
+    if not isinstance(arguments, dict):
+        return False
+    for key, value in operands:
+        if key in arguments:
+            if arguments[key] != value:
+                return False
+        elif key == "content" and receipt.get("tool_name") == "fs.write_file":
+            if receipt.get("success") is not False and (
+                    receipt.get("success") is not True
+                    or get(receipt, "metadata", "sha256") != hashlib.sha256(value.encode()).hexdigest()):
+                return False
+        else:
+            return False
+    return True
 
 
 def _receipt_matches_path(receipt: dict, path: str) -> bool:

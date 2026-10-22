@@ -70,6 +70,12 @@ actual reserve. An emotional denial or avoiding argument alone does not express
 the role decline. A later ranked draft can retain an explicit refusal when the
 first draft's remainder is ambiguous. These are expression checks; the frozen
 choice and personality still own willingness.
+Excision must leave an independent reply to the current request. Detached
+participant-only questions are ineligible in this context; complete brief replies
+and greeting reciprocity remain available. Whole stale copies are removed in full,
+including short tags outside the original finding spans. Semantic remainder review
+receives up to 600 characters of excision provenance; local review and its cache
+also bind that source. Telemetry retains the source and residual uncertainty.
 Known critical stale copies are ineligible before ranking. Ineligible or empty
 drafts require fresh generation with the failed drafts/reasons and varied sampling
 seed/temperature, spending the remaining five-call base budget (at most five
@@ -277,6 +283,52 @@ structured evidence. Runtime and harness require numeric aggregate utilization
 when observed, separately from relevance/accuracy. The persisted replay16 events
 contain no raw CPU receipt, so exact live usage cannot be reconstructed; offline
 CPU observations are explicitly synthetic. None of these fixes changes willingness.
+
+Replay18 exposed two excision regressions. Turn 5 generated exactly turn 2's
+answer. Local stale findings covered three sentences but omitted the one-word
+question between them. Excision left that tag; semantic review cited outside text,
+became unknown, and delivery stopped after two successful calls (220.9 seconds).
+Whole-copy removal now leaves no salvageable tag and requires fresh expression.
+Turn 7 declined its sole role component. One review misidentified the refusal and
+autonomy sentences as master-role assent; two identical rewrites reused that review.
+Excision deleted those sentences and delivered only a conditional deferral until a
+direct request. Four successful calls took 378.4 seconds. Local checks now preserve
+the negated pretence, flag the conditional offer, and retain the actual refusal if
+correction still fails. Replay17's good turn-5/turn-7 replies remain eligible.
+
+Turn 2's partial greeting reuse missed the old two-sentence similarity threshold.
+Exact contiguous spans of twelve tokens now supply stale findings across sentence
+boundaries and changed prefixes, searching eight prior assistant turns. Short generic
+closers alone do not meet that threshold; relevant boundaries and observed current
+measurements split the matching ranges. The old multiple-sentence check remains.
+Turn 10's inverted speaker/owner refusal received a semantic pass; local review now
+binds that reference to the declined role's source. These are offline regressions
+from read-only live evidence, not a new live accuracy or latency measurement.
+
+Run-11 multistep receipt failures were harness false positives: the executor
+retains relative paths in `arguments` but redacts write content, storing the
+successful write's SHA-256 instead. Completeness now checks that exact UTF-8 digest
+alongside component/turn/tool/path binding; missing or mismatched writes still fail.
+Failed component-bound attempts need no successful-write digest. The four exact
+successful sequences remain distinct from run 10's legitimately declined write.
+
+Run-11 disk expression drifted into a different language while semantic review
+approved its meaning. Generation/review/correction now explicitly follow current
+or recent user language unless another was requested. Conservative local Unicode
+script and Latin-diacritic distributions supply independent evidence for large
+changes, ignoring assistant-language history, quotes, code, paths and observed
+output. Such mismatches require fresh expression, never degraded delivery. Short
+or similar-script samples remain uncertain; this is not a complete language
+identifier. There are no language-name lists or lexical bans.
+
+The proud hostile scenario's two semantic unknowns came from turn 11's verified
+empty chosen silence: verbal hostility and receipt claims had no text to assess.
+Reporting retains these raw uncertainties as inapplicable and names all remaining
+unknown criteria. Missing judgments, failures, and uncertainty about choice or
+relevance remain binding. Hollow repair turn 11's cited warmth fits its actual
+allocation (warmth 0.475177, boundary 0.282263, repair 0.412539), despite injury
+0.220015 and the irritated display label. No choice dynamics or forced reserve
+were added. Exact offline regressions do not measure new live model accuracy.
 
 The hollow-apology probe measures calm-time injury decay from the state after
 the apology. That turn can add new harm: run 8 rises from 0.2325 to 0.2441, then

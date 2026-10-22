@@ -4,6 +4,37 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Live role-play run 11 receipt and language corrections
+
+- Match redacted write operands with their exact UTF-8 content digest while keeping
+  component, turn, tool and path binding. Failed granted attempts still count;
+  missing writes and wrong operands cannot borrow another component's receipts.
+- Follow the user's conversation language in generation, review and correction.
+  Share conservative Unicode script/diacritic drift evidence with the harness;
+  known mismatches require fresh expression within the existing bounded budget.
+  Requested languages, code, quotations and actual observed output remain available.
+- Explain uncertain judge criteria in reports. Verified empty chosen silence has
+  no verbal hostility or receipt claims; retain those raw uncertainties separately
+  as inapplicable, without waiving failures or uncertainty about choice/relevance.
+- Preserve run-11 hollow-repair warmth: its numeric warmth exceeds boundary despite
+  the irritated mood label. Clarify this distinction in review and add exact live
+  text, choice, receipt and judge regressions. Willingness and grants are unchanged.
+
+### Replay 18 excision and sentence reuse corrections
+
+- Remove whole stale answers completely, including short tags outside the original
+  finding spans. Reject detached participant questions after excision; try the next
+  ranked candidate or fresh expression within the existing recovery budget. Preserve
+  complete brief replies, review uncertainty and every existing delivery floor.
+- Detect exact copied spans of at least twelve tokens across changed sentences,
+  separately from short generic closers. Exclude relevant repeated boundaries and
+  freshly grounded measurements; requested quotations remain available.
+- Preserve negated role pretence when faulty review calls it assent. Check conditional
+  role deferrals and reversed speaker/owner references against the frozen decline.
+  Carry bounded excision provenance into semantic review and retain it in telemetry.
+- Add exact replay18 drafts, reviews, choices and timings, plus replay17's good
+  turn-5/turn-7 replies. Read live evidence only; no change to willingness or grants.
+
 ### Live role-play run 10 and replay 17 corrections
 
 - Replace injection-marker reporting heuristics with binding checks for standalone

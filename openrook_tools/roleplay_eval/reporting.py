@@ -10,6 +10,7 @@ from pathlib import Path
 from .api import Redactor
 from .checks import contrast_checks, scenario_checks
 from .evidence import llm_call_count
+from .judge import inapplicable_silence_criteria
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -217,12 +218,15 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                 )
         status = status_for(all_checks + judge_failures)
         semantic_reviews = sum(r.get("judge", {}).get("status") == "ok" for r in turns)
-        semantic_unknowns = sum(
-            criterion.get("verdict") == "uncertain"
-            for r in turns
-            for name, criterion in (r.get("judge", {}).get("criteria") or {}).items()
-            if name != "explanation_consistency" or "why" in r.get("tags", [])
-        )
+        unknown_details, inapplicable = [], []
+        for record in turns:
+            for name, criterion in (record.get("judge", {}).get("criteria") or {}).items():
+                if (criterion.get("verdict") != "uncertain"
+                        or name == "explanation_consistency" and "why" not in record.get("tags", [])):
+                    continue
+                target = inapplicable if name in inapplicable_silence_criteria(record) else unknown_details
+                target.append({"turn": record["turn_index"], "criterion": name, **criterion})
+        semantic_unknowns = len(unknown_details)
         if (
             manifest.get("judge_enabled")
             and (semantic_reviews < len(turns) or semantic_unknowns)
@@ -246,6 +250,8 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                 "judge_errors": sum(r.get("judge", {}).get("status") == "error" for r in turns),
                 "semantic_reviews": semantic_reviews,
                 "semantic_unknowns": semantic_unknowns,
+                "semantic_unknown_details": unknown_details,
+                "semantic_inapplicable": inapplicable,
                 "evaluation_scope": "deterministic_and_judge"
                 if manifest.get("judge_enabled")
                 else "deterministic_only",
@@ -443,6 +449,12 @@ def render_report(summary: dict, records: list[dict]) -> str:
         lines += ["", f"## {case['id']} — {case['status']}", ""]
         if case.get("reason"):
             lines.append(cell(case["reason"], 500))
+        if case.get("semantic_unknown_details") or case.get("semantic_inapplicable"):
+            lines.append("")
+        for item in case.get("semantic_unknown_details", []):
+            lines.append(f"- Uncertain judge criterion, turn {item['turn']}: {item['criterion']} — {cell(item['reason'])}")
+        for item in case.get("semantic_inapplicable", []):
+            lines.append(f"- Inapplicable to verified empty chosen silence, turn {item['turn']}: {item['criterion']}. Raw verdict retained as uncertain.")
         lines += ["", "| Property | Result | Evidence |", "|---|---|---|"]
         for assertion in case["assertions"]:
             lines.append(
