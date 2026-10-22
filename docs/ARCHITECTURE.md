@@ -163,10 +163,12 @@ count and confidence. Ungranted role assent has critical severity. Delivery incl
 uncertainty with a residual-risk record. Known
 contradictions that survive correction remain recorded; the best nonempty draft
 is delivered as `delivered_degraded`, without a fallback sentence or withholding.
-If every usable draft retains critical role-assent or stale-answer findings,
-exact reviewed spans may authorize removal of their whole sentences from the
-best draft. A nonempty remainder must pass local checks; its semantic status
-stays unknown. Empty/invalid role-assent remainders retain degraded delivery.
+If every usable draft retains decision contradictions or critical role-assent/
+stale-answer findings, exact reviewed spans may authorize sentence removal in
+candidate rank order. High decision contradictions can also spend the final base
+call on a locally reviewed correction. A nonempty remainder must pass local checks,
+including legible role decline and service offers consistent with frozen reserve;
+its semantic status stays unknown. Empty/invalid remainders retain degraded delivery.
 Ineligible stale copies instead undergo exact-span repair and, if empty, the
 protected final attempt described above. An error requires backend failure or
 no text after mandatory floor removal; a reviewed eligible remainder survives.

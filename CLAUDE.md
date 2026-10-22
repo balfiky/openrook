@@ -23,10 +23,12 @@ The current conversational policy is `willingness-1.2`. See
   replies, and deliver the best nonempty reviewed candidate.
   Unknown semantic review is recorded with residual risk. If correction fails,
   retain the best text as `delivered_degraded`, with its known violations recorded.
-  If all usable candidates retain critical role-assent/stale-answer violations,
-  excise only sentences intersecting exact review spans from the best candidate;
+  A decision contradiction can spend the last base call on a locally reviewed rewrite.
+  If all usable candidates retain decision contradictions or critical role-assent/
+  stale-answer violations, try exact reviewed sentence excision in candidate rank order;
   deliver only a nonempty remainder passing local checks, with excision telemetry
-  and semantic uncertainty. Otherwise retain degraded delivery.
+  and semantic uncertainty. Recheck that a role decline remains legible and that
+  surviving service offers fit the frozen reserve. Otherwise retain degraded delivery.
   Known unverified execution/output claims and unsolicited copied user openings
   are ineligible for delivery, including degraded delivery. Excise their exact
   spans before spending rewrite calls; review the independent remainder. An empty

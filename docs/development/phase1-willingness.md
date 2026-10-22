@@ -56,12 +56,20 @@ filler or awkwardness. Candidates with unknown review can be delivered
 with a residual-risk record. If correction fails, the best nonempty reviewed draft
 is delivered as `delivered_degraded`, retaining all known contradictions. No canned
 replacement is generated. When every nonempty candidate still has critical
-role-assent or stale-response findings, the runtime may excise only whole
-sentences intersecting exact reviewed violation spans from the best candidate.
+role-assent or stale-response findings, or high decision contradictions, the runtime
+may excise only whole sentences intersecting exact reviewed violation spans,
+trying candidates in rank order.
 It delivers the remainder only if nonempty and free of local findings; the new
 local review remains semantically unknown. `expression_excision` records the
 source attempt, removed sentences, checks and whether removal was applied.
 An empty or still-invalid remainder keeps the original degraded delivery.
+High decision contradictions can spend the last base call on a locally reviewed
+rewrite without changing their severity or the ordinary correction count.
+Excision rechecks legibility of declined roles and generic service offers against
+actual reserve. An emotional denial or avoiding argument alone does not express
+the role decline. A later ranked draft can retain an explicit refusal when the
+first draft's remainder is ambiguous. These are expression checks; the frozen
+choice and personality still own willingness.
 Known critical stale copies are ineligible before ranking. Ineligible or empty
 drafts require fresh generation with the failed drafts/reasons and varied sampling
 seed/temperature, spending the remaining five-call base budget (at most five

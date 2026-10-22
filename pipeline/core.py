@@ -58,7 +58,7 @@ from core.grounding import (
 )
 from core.dignity import (
     review_response, dignity_correction_instruction, needs_semantic_review,
-    excisable_critical_issues, excise_critical_sentences, excise_ineligible_spans,
+    excisable_choice_issues, excise_choice_sentences, excise_ineligible_spans,
 )
 from core.social import is_casual_greeting, read_social_signals
 from core.response_style import brevity_preference
@@ -1492,7 +1492,8 @@ class CognitivePipeline:
             severe = best_review.severity >= 4
             all_stale = all(any(i.code == "stale_response" for i in verdict.issues)
                             for _, verdict in candidates)
-            final_local_correction = severe or all_stale or not eligible_candidates()
+            final_local_correction = severe or all_stale or not eligible_candidates() or any(
+                i.code == "decision_contradiction" for i in best_review.issues)
             # A final severe correction may use the last call, followed by local
             # review with explicit semantic uncertainty. The five-call base
             # ceiling includes appraisal, supplemental tools and reviews;
@@ -1550,19 +1551,21 @@ class CognitivePipeline:
                     debug.self_check_issues.append(f"delivery recovery: {type(error).__name__}")
         eligible = eligible_candidates()
         selected, verdict = best_candidate()
-        if eligible and all(excisable_critical_issues(v) for _, v in eligible):
-            remainder, removed = excise_critical_sentences(selected.response, verdict)
-            debug.expression_excision = {"applied": False, "removed": removed,
-                                        "source_attempt": candidates.index((selected, verdict)) + 1}
-            if removed and remainder:
-                trimmed = replace(selected, response=remainder, raw_response=remainder)
-                local = review(trimmed, local_only=True)
-                debug.expression_excision["local_status"] = local.status
-                if not local.issues:
-                    selected, verdict = trimmed, local
-                    debug.expression_excision["applied"] = True
-            elif removed:
-                debug.expression_excision["reason"] = "empty remainder; no usable excision"
+        if eligible and all(excisable_choice_issues(v) for _, v in eligible):
+            for candidate, candidate_review in sorted(eligible, key=lambda pair: pair[1].rank):
+                remainder, removed = excise_choice_sentences(candidate.response, candidate_review)
+                debug.expression_excision = {"applied": False, "removed": removed,
+                    "source_attempt": candidates.index((candidate, candidate_review)) + 1}
+                if removed and remainder:
+                    trimmed = replace(candidate, response=remainder, raw_response=remainder)
+                    local = review(trimmed, local_only=True)
+                    debug.expression_excision["local_status"] = local.status
+                    if not local.issues:
+                        selected, verdict = trimmed, local
+                        debug.expression_excision["applied"] = True
+                        break
+                elif removed:
+                    debug.expression_excision["reason"] = "empty remainder; no usable excision"
         debug.dignity_issues = list(dict.fromkeys(i.code for _, v in candidates for i in v.issues))
         debug.self_check_issues.extend(i.message for _, v in candidates for i in v.issues)
         debug.self_check_passed = verdict.status == "pass"

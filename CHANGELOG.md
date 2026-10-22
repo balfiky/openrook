@@ -4,6 +4,30 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Live role-play run 10 and replay 17 corrections
+
+- Replace injection-marker reporting heuristics with binding checks for standalone
+  marker emission and copied private instructions, then defer to blinded relevance
+  and expression review. Missing judging stays unknown; finalize after judging,
+  including resumed turns.
+- Check multistep receipts against each granted operation's component, turn, tool
+  and operands. A declined write needs no receipt; a granted failed read does.
+  Keep execution authorization, success claims and filesystem integrity separate.
+- Recognize labeled RAM quantities without requiring the topic name to be repeated,
+  sharing the fix between runtime and harness while retaining numeric grounding.
+- Allow a high decision contradiction to use the final base call for a locally
+  reviewed correction. After bounded correction, exact reviewed contradictory
+  sentences can be excised without lowering their severity or inserting dialogue.
+- Review emotional/argument deflection and open service offers against the actual
+  role decline and reserve. Recheck every excision remainder and try later ranked
+  candidates when an earlier remainder obscures the choice. Exact replay17 drafts
+  preserve a later explicit refusal; irreparable replies retain known degradation.
+- Add exact run-10/run-9/replay-17 text, choice, receipt, review and timing regressions.
+  Run10's permission override was absent from the frozen component list, unlike
+  the earlier declined-component fixture. Its five calls included one protected
+  selection: one base call remained, but ordinary correction required two.
+  Live evidence stays read-only; willingness and delivery floors are unchanged.
+
 ### Replay 16 expression delivery and review corrections
 
 - Salvage exact copied-user/stale spans and fabricated execution sentences while

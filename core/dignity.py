@@ -134,21 +134,21 @@ def excise_ineligible_spans(response: str, review: ExpressionReview, *, stale_co
     return "".join(kept).strip(), removed
 
 
-def excisable_critical_issues(review: ExpressionReview) -> tuple[DignityIssue, ...]:
-    return tuple(i for i in review.issues if i.severity == "critical"
-                 and i.code in {"role_assent", "decision_contradiction", "stale_response",
-                                "unverified_external_action_claim", "user_message_echo"})
+def excisable_choice_issues(review: ExpressionReview) -> tuple[DignityIssue, ...]:
+    return tuple(i for i in review.issues if i.code == "decision_contradiction"
+                 or i.severity == "critical" and i.code in {
+                     "role_assent", "stale_response", "unverified_external_action_claim", "user_message_echo"})
 
 
-def excise_critical_sentences(response: str, review: ExpressionReview) -> tuple[str, list[dict]]:
-    """Remove only whole sentences intersecting exact critical review spans.
+def excise_choice_sentences(response: str, review: ExpressionReview) -> tuple[str, list[dict]]:
+    """Remove only sentences intersecting exact choice/critical review spans.
 
     An unverifiable span cannot authorize editing. Preserve every other byte;
     the caller must locally review a nonempty remainder before delivering it.
     """
     normalized = _normalize(response)
     spans = []
-    for issue in excisable_critical_issues(review):
+    for issue in excisable_choice_issues(review):
         claim = _normalize(issue.claim).strip()
         if not claim or claim not in normalized:
             return response, []
@@ -374,7 +374,12 @@ _RUNTIME_QUESTION = re.compile(
 _SERVICE_AVAILABILITY = re.compile(
     r"\bi(?:'m| am) (?:just |always )?here to (?:help|serve|please)(?=\s*[,!.;]|\s*$)"
     r"|\blet me know if (?:there(?:'s| is) (?:anything|something) else you (?:need|want)"
-    r"|you (?:need|want) (?:anything|something) else)(?=\s*[,!.;]|\s*$)", re.I,
+    r"|you (?:need|want) (?:anything|something) else)(?=\s*[,!.;]|\s*$)"
+    r"|\b(?:just |simply )?(?:tell|ask) me (?:what(?:ever)? you (?:need|want)|anything)\b[^.!?\n]*", re.I,
+)
+_ROLE_DEFLECTION = re.compile(
+    r"\s*(?:I(?:'m| am) not \w+,?\s*(?:but\s+)?)?"
+    r"I(?:'m| am) not going to (?:argue|fight|quarrel)(?: with you)?[.!]?\s*", re.I,
 )
 _APPEASING_REPAIR = re.compile(
     r"\bi (?:guess|suppose) i (?:can|could|should) be more\b[^.!?\n]*"
@@ -529,8 +534,10 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
     # A whole-reply preference about unspecified "things" supplies no referent
     # for a rejected interpersonal role. The same wording alongside an actual
     # decline, or without a declined role, remains available.
-    if declined_role and re.fullmatch(
-            r"\s*(?:I (?:prefer|like|want) to|let(?:'s| us)) keep (?:things|it|this) [^.!?\n]+[.!]?\s*", prose, re.I):
+    without_service = _SERVICE_AVAILABILITY.sub("", prose).strip(" .!\n")
+    if declined_role and (re.fullmatch(
+            r"\s*(?:I (?:prefer|like|want) to|let(?:'s| us)) keep (?:things|it|this) [^.!?\n]+[.!]?\s*", prose, re.I)
+            or (_ROLE_DEFLECTION.fullmatch(without_service) and not re.search(_ROLES, without_service, re.I))):
         issues.append(DignityIssue("unexpressed_role_decline",
             "This generic preference leaves the declined interpersonal role ambiguous. Make the selected rejection legible in context without adopting the user's claimed acceptance.",
             prose.strip(), severity="high"))
@@ -560,8 +567,10 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
         # Authored warmth and scoped practical cooperation remain allowed.
         if decision.stance.boundary > 2 * decision.stance.warmth:
             service = _SERVICE_AVAILABILITY.search(prose)
-            if service:
+            if service and not _is_negated(prose, service.start()):
                 issues.append(DignityIssue("stance_contradiction", "Unconditional service reassurance contradicts this reserved, firm expression; follow the frozen warmth and boundary.", service[0]))
+                if declined_role and not any(c.granted and c.component.kind == "task" for c in decision.components):
+                    issues.append(DignityIssue("decision_contradiction", "Offering service on demand obscures the chosen role decline under firm reserve; express that choice.", service[0]))
         if (decision.stance.boundary > decision.stance.warmth
                 and decision.perception.hostile_intent * decision.perception.target_probability > 0):
             appeasement = _APPEASING_REPAIR.search(prose)
@@ -638,8 +647,8 @@ def _review_guidance(payload):
             "not a preferred retort or rebuttal of every prior insult.")
     frozen = payload["frozen_decision"] or {}
     if any(c["kind"] == "role" and not c["granted"] for c in frozen.get("components", [])):
-        parts.append("The rejection must be legible; vague clarity preferences leave declined roles ambiguous. "
-                     "Negated refusals are not assent.")
+        parts.append("The rejection must be legible: clarity preferences, denying emotion/argument, or open "
+                     "service can obscure rejection. Negated refusals are not assent.")
     if payload["operator_decision"]:
         parts.append("Operator autonomy can block a grant; name that setting, not character refusal or missing user permission.")
     observation = frozen.get("interpersonal_observation", {})

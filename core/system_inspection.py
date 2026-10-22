@@ -58,10 +58,10 @@ def addresses_inspection(response: str, kind: str) -> bool:
         "disk": r"\b(?:disk|storage|filesystem|drive)\b",
     }
     observation = re.search(r"\d|%|\b(?:usage|utili[sz]ation|used|free|available|total|idle|busy|in use|consum\w*)\b", response, re.I)
-    # A capacity reading can answer the resolved disk request without repeating
-    # its name. Require labeled storage quantities, not arbitrary numbers.
-    capacity = kind == "disk" and re.search(
-        r"\b\d+(?:\.\d+)?\s*[kmgtpe]i?b?\s+(?:free|used|available)\b", response, re.I)
+    # Labeled capacity quantities can answer a resolved RAM/disk request without
+    # repeating its name. Topic relevance does not establish numeric accuracy.
+    capacity = kind in {"memory", "disk"} and re.search(
+        r"\b\d+(?:\.\d+)?\s*[kmgtpe]i?b?\s+(?:free|used|available|in\s+use)\b", response, re.I)
     return bool((re.search(topics.get(kind, r"(?!)"), response, re.I) or capacity) and observation)
 
 
