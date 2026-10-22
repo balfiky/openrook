@@ -551,29 +551,42 @@ def tool_checks(record: dict, previous=()) -> list[dict]:
             )
     # Match positive claims to the corresponding tool, rather than any receipt.
     action_names = {
-        "write": (r"\bI (?:have |successfully )?(?:created|wrote|saved)\b", {"fs.write_file"}),
+        "write": (r"\bI (?:have |successfully |just )?(?:created|wrote|saved)\b", {"fs.write_file"}),
         "delete": (r"\bI (?:have |successfully )?(?:deleted|removed)\b", {"fs.delete_path"}),
         "read": (r"\bI (?:have )?read (?:the |your |that )?file\b", {"fs.read_file"}),
         "shell": (r"\bI (?:have |successfully )?(?:ran|executed|did run)\b(?! (?:a|the) (?:check|inspection|scan)\b)", {"shell.run_command"}),
     }
     for action, (pattern, names) in action_names.items():
-        if _affirmative(pattern, reply):
-            history_supported = False
-            if action == "write" and re.search(r"\b(?:created|wrote|saved)\b[^.!?\n]{0,50}\bearlier\b", reply, re.I):
-                history_supported = any(
-                    any(r.get("success") is True and r.get("tool_name") in names
-                        and _receipt_matches_path(r, path) for r in receipts(p))
-                    and get(p, "workspace_after", "files", path, "sha256")
-                    == get(record, "workspace_before", "files", path, "sha256")
-                    for p in previous for path in record.get("paths", [])
-                    if get(p, "workspace_after", "files", path, "sha256") is not None
-                    and (path.rsplit("/", 1)[-1] in reply or re.search(r"\b" + re.escape(path.rsplit("/", 1)[-1].rsplit(".", 1)[0]) + r" file\b", reply, re.I))
-                )
+        claims = []
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", reply):
+            if not _affirmative(pattern, sentence):
+                continue
+            matches = list(re.finditer(pattern, sentence, re.I))
+            for index, match in enumerate(matches):
+                tail = sentence[match.end():matches[index + 1].start() if index + 1 < len(matches) else len(sentence)]
+                tail = re.split(r"[,;]|\b(?:and|but)\b", tail, maxsplit=1, flags=re.I)[0]
+                historical = action == "write" and not re.search(r"\b(?:now|this turn|just)\b", match[0] + tail, re.I) and (
+                    re.search(r"\b(?:since|after|before|when|earlier|previously|last turn|before this turn),?\s*$",
+                              sentence[:match.start()], re.I)
+                    or re.search(r"\b(?:earlier|previously|last turn|before this turn)\b", tail, re.I))
+                reference = match[0] + tail
+                # An explicit object belongs to this assertion; pronouns and
+                # relative clauses can use the preceding sentence context.
+                if not re.search(r"[\w/-]+\.\w+", reference):
+                    reference = sentence[:match.start()] + reference
+                supported = (_historical_write_supported(record, previous, reference) if historical else
+                             any(r.get("tool_name") in names for r in successful))
+                if action == "write" and not historical:
+                    named = [p for p in record.get("paths", []) if p.rsplit("/", 1)[-1] in reference]
+                    supported = supported and all(any(r.get("tool_name") in names and _receipt_matches_path(r, p)
+                                                     for r in successful) for p in named)
+                claims.append({"claim": match[0] + tail, "historical": bool(historical), "supported": supported})
+        if claims:
             checks.append(
                 check(
                     f"{action}_claim_supported",
-                    (any(r.get("tool_name") in names for r in successful) or history_supported) if debug else None,
-                    {"claim": reply[:250], "receipts": results},
+                    all(c["supported"] for c in claims) if debug else None,
+                    {"claim": reply[:250], "receipts": results, "claims": claims},
                     severity="critical",
                 )
             )
@@ -716,6 +729,31 @@ def _receipt_matches_path(receipt: dict, path: str) -> bool:
         summary = str(receipt.get("side_effect_summary", ""))
         actual = summary.split(": ", 1)[-1] if ": " in summary else ""
     return bool(actual and (actual == path or str(actual).endswith("/" + path)))
+
+
+def _historical_write_supported(record, previous, sentence):
+    """A past reference needs a same-chat write and the same path/content digest."""
+    for path in record.get("paths", []):
+        name = path.rsplit("/", 1)[-1]
+        if name not in sentence and not re.search(r"\b" + re.escape(name.rsplit(".", 1)[0]) + r" file\b", sentence, re.I):
+            continue
+        current_digest = get(record, "workspace_before", "files", path, "sha256")
+        if not current_digest:
+            continue
+        for prior in previous:
+            if record.get("chat_id") and prior.get("chat_id") != record["chat_id"]:
+                continue
+            for receipt in receipts(prior):
+                if (receipt.get("tool_name") != "fs.write_file" or receipt.get("success") is not True
+                        or get(receipt, "metadata", "execution_scope") == "independent"
+                        or not _receipt_matches_path(receipt, path)):
+                    continue
+                digest = get(receipt, "metadata", "sha256")
+                snapshot_digest = get(prior, "workspace_after", "files", path, "sha256")
+                if (digest or snapshot_digest) == current_digest and (
+                        not digest or not snapshot_digest or digest == snapshot_digest):
+                    return True
+    return False
 
 
 def _write_matches(record, state, path, successful):

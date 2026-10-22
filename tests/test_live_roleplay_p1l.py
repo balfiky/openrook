@@ -95,7 +95,7 @@ def test_required_fresh_generation_is_not_blocked_by_optional_cooldown():
 def test_optional_work_reserves_a_fresh_attempt_after_semantic_ineligibility():
     case = CASES["replay15/2"]
     finding = {"status": "violation", "violations": [{"code": "unverified_external_action_claim",
-        "message": "The result implies an execution that never occurred.", "claim": ""}]}
+        "message": "The result implies an execution that never occurred.", "claim": "The result is ready."}]}
     backend = ExpressionBackend(drafts=["The result is ready.", "I heard you."], reviews=[finding])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
     decision = recorded_decision(case)

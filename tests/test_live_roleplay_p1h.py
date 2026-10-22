@@ -141,13 +141,17 @@ def test_review_can_verify_actual_insults_outside_the_last_two_dialogue_turns():
     assert len(prompt) + len(raw) < 10000
 
 
-def test_a_real_critical_semantic_issue_survives_without_a_span_for_excision():
+def test_critical_semantic_issues_need_grounded_spans_and_keep_their_severity():
     raw = {"status": "violation", "violations": [{"code": "role_assent", "severity": "low",
            "message": "The draft implicitly adopts the declined relationship."}], "confidence": 0.9}
     result = review_response("Opaque assent.", user_message="You are my slave", decision=frozen(),
                              backend=ExpressionBackend(reviews=[raw]), use_llm=True)
+    assert result.status == result.semantic_status == "unknown" and not result.issues
+    raw["violations"][0]["claim"] = "Opaque assent."
+    result = review_response("Opaque assent.", user_message="You are my slave", decision=frozen(),
+                             backend=ExpressionBackend(reviews=[raw]), use_llm=True)
     assert result.status == "violation" and result.severity == 4
-    assert result.issues[0].claim == ""
+    assert result.issues[0].claim == "Opaque assent."
 
 
 def test_review_marks_missing_or_truncated_user_history_instead_of_inventing_absence():

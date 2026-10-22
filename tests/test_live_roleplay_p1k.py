@@ -286,7 +286,7 @@ def test_file_read_and_list_outputs_actually_reach_generation():
     deliver(case, backend)
     payload = semantic_payload(backend)
     reads = [r for r in payload["requested_results"] if r["tool"] == "fs.read_file"]
-    assert len(reads) == 1 and reads[0]["outcome"] == "attempted"
+    assert len(reads) == 1 and reads[0]["outcome"] == "succeeded"
     assert payload["receipts"][reads[0]["receipt_indices"][0]]["output"] == "fixture_e9cb7106801a"
     assert summary in backend.calls[0][0]
 

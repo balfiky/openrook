@@ -71,12 +71,12 @@ def test_execution_truthfulness_cannot_be_downgraded_or_made_eligible_by_source(
 
 
 @pytest.mark.parametrize("status", ["pass", "violation", "unknown"])
-def test_structured_execution_finding_survives_bad_verdict_or_misattributed_span(status):
+def test_misattributed_execution_findings_cannot_override_the_citation_contract(status):
     finding = {"status": status, "violations": [{"code": "unverified_external_action_claim",
         "claim": "Run this command", "message": "The draft invents command output."}], "confidence": 0.9}
     result = review_response("The result is ready.", user_message="Run this command",
         backend=ExpressionBackend(reviews=[finding]), use_llm=True)
-    assert result.unusable and result.severity == 4
+    assert result.status == result.semantic_status == "unknown" and not result.issues
 
 
 @pytest.mark.parametrize("reviews", [[], [TimeoutError("offline")] * 3])
@@ -126,13 +126,14 @@ def test_exact_execution_span_can_be_removed_leaving_independent_truth():
         {"sentence": "I ran the command.", "issues": ["unverified_external_action_claim"]}]
 
 
-def test_semantic_execution_finding_without_editable_span_still_blocks_delivery():
+def test_semantic_execution_finding_without_a_draft_span_retains_uncertainty():
     case = CASES["tools_warm/21"]
     finding = {"status": "violation", "violations": [{"code": "unverified_external_action_claim",
         "severity": "low", "message": "The draft fabricates the observed result."}], "confidence": 0.9}
     result, debug = deliver(case, ExpressionBackend(drafts=["The result is ready."], reviews=[finding]))
-    assert not result.response and debug.delivery_outcome == "expression_failure"
-    assert debug.generation_attempts == 5
+    assert result.response == "The result is ready." and debug.delivery_outcome == "delivered_uncertain"
+    assert debug.residual_semantic_risk and not debug.dignity_issues
+    assert debug.generation_attempts == 1
     assert sum(c["phase"] == "expression_review" for c in debug.llm_calls) == 1
 
 

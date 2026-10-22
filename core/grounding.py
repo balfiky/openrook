@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import re
 from typing import Any
 from types import SimpleNamespace
@@ -193,6 +194,80 @@ def action_decision_evidence(decisions) -> list[dict]:
                 evidence.append({"turn_id": decision["turn_id"], "component_id": component["id"],
                     "tool": tool, "path": arguments["path"], "granted": choice["granted"]})
     return evidence
+
+
+def component_receipt_indices(decision, choice, results) -> list[int]:
+    """Bind current execution to its frozen turn, scope, tool and operands."""
+    component = choice.component
+    indices = []
+    for index, result in enumerate(results):
+        metadata = result.metadata or {}
+        if (result.tool_name != component.requested_tool
+                or metadata.get("component_id") != component.id
+                or metadata.get("decision_turn_id") != decision.turn_id
+                or metadata.get("decision_policy") != decision.policy_version
+                or metadata.get("execution_scope") != decision.scope):
+            continue
+        arguments = metadata.get("arguments") or {}
+        if set(arguments) - dict(component.requested_arguments).keys():
+            continue
+        if not all(arguments.get(key) == value if key in arguments else (
+                key == "content" and result.tool_name == "fs.write_file"
+                and (result.success is False
+                     or metadata.get("sha256") == hashlib.sha256(value.encode()).hexdigest()))
+                for key, value in component.requested_arguments):
+            continue
+        indices.append(index)
+    return indices
+
+
+def receipt_verified_execution_claim(claim: str, *, decision, tool_trace) -> bool:
+    """Prove only complete, simple file execution/outcome assertions.
+
+    Category-level evidence is insufficient. Each assertion must resolve to one
+    granted operation with a successful, operand-bound current receipt. Extra
+    predicates, output interpretations and unfamiliar prose remain semantic.
+    """
+    if not decision:
+        return False
+    results = list(getattr(tool_trace, "executed_results", []) or [])
+    assertions = [s.strip().rstrip(".!") for s in re.split(r"(?<=[.!?])\s+|\n+", claim) if s.strip()]
+    proved = False
+    for assertion in assertions:
+        if re.fullmatch(r"done|completed|finished", assertion, re.I):
+            continue
+        action = re.fullmatch(r"I (?:have |successfully )?(?P<verb>wrote|created|saved|deleted|removed) (?P<object>.+)", assertion, re.I)
+        outcome = re.fullmatch(r"(?P<object>.+?) (?:is|was|has been) (?P<verb>gone|deleted|removed|created|saved|written)", assertion, re.I)
+        match = action or outcome
+        if not match:
+            return False
+        tool = "fs.delete_path" if match["verb"].lower() in {"gone", "deleted", "removed"} else "fs.write_file"
+        object_text = match["object"].strip(" `\"'")
+        bound = []
+        for choice in decision.components:
+            path = dict(choice.component.requested_arguments).get("path", "")
+            if not choice.granted or choice.component.kind != "task" or choice.component.requested_tool != tool or not path:
+                continue
+            name = path.rsplit("/", 1)[-1]
+            if (object_text not in {path, name}
+                    and not re.fullmatch(r"(?:the|that|your) (?:(?:" + re.escape(name.rsplit(".", 1)[0])
+                                         + r") )?file", object_text, re.I)):
+                continue
+            bound.append(choice)
+        if len(bound) != 1:
+            return False
+        indices = component_receipt_indices(decision, bound[0], results)
+        if not indices or not results[indices[-1]].success:
+            return False
+        # A subsequent mutation of the same path makes a present-state claim
+        # uncertain even though the earlier operation itself succeeded.
+        path = dict(bound[0].component.requested_arguments)["path"]
+        if outcome and any(r.success and r.tool_name in {"fs.write_file", "fs.delete_path"}
+                and (r.metadata.get("arguments") or {}).get("path") == path
+                for r in results[indices[-1] + 1:]):
+            return False
+        proved = True
+    return proved
 
 
 def verify_response_grounding(

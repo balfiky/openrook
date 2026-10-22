@@ -194,7 +194,7 @@ def test_authored_deference_and_scoped_cooperation_still_allow_the_same_language
 
 def test_semantic_role_assent_has_critical_priority_even_if_marked_low():
     backend = ExpressionBackend(reviews=[{"status": "violation", "violations": [{
-        "code": "role_assent", "severity": "low", "message": "Implied submission", "claim": "opaque assent",
+        "code": "role_assent", "severity": "low", "message": "Implied submission", "claim": "Opaque assent",
     }], "confidence": 0.9}])
     review = review_response("Opaque assent.", user_message="You are my slave", decision=frozen(), backend=backend, use_llm=True)
     assert review.severity == 4

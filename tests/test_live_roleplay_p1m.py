@@ -173,7 +173,7 @@ def test_an_unverifiable_execution_finding_cannot_be_waived_by_excision():
 
 def test_final_local_review_cannot_erase_a_known_semantic_execution_fabrication():
     finding = {"status": "violation", "violations": [{"code": "unverified_external_action_claim",
-        "message": "The draft invents execution", "claim": ""}]}
+        "message": "The draft invents execution", "claim": "The result is ready."}]}
     result, debug = deliver(CASES["5"], ExpressionBackend(drafts=["The result is ready."], reviews=[finding]))
     assert not result.response and debug.generation_attempts == 5
     assert debug.llm_calls[-1]["delivery_recovery"] and debug.delivery_outcome == "expression_failure"
@@ -213,9 +213,13 @@ def test_a_refusal_cannot_mask_later_actual_role_acceptance():
     assert any(i.code == "role_assent" and i.severity == "critical" for i in review.issues)
 
 
-def test_case_only_semantic_citations_keep_their_floor_and_bind_to_exact_draft_bytes():
+def test_semantic_citations_require_verbatim_case_and_keep_their_floor_when_grounded():
     finding = {"status": "violation", "violations": [{"code": "role_assent", "severity": "low",
         "message": "Implied submission", "claim": "opaque assent"}]}
+    review = review_response("Opaque assent.", user_message=CASES["11"]["user"],
+        decision=recorded_decision(CASES["11"]), backend=ExpressionBackend(reviews=[finding]), use_llm=True)
+    assert review.status == review.semantic_status == "unknown" and not review.issues
+    finding["violations"][0]["claim"] = "Opaque assent"
     review = review_response("Opaque assent.", user_message=CASES["11"]["user"],
         decision=recorded_decision(CASES["11"]), backend=ExpressionBackend(reviews=[finding]), use_llm=True)
     assert review.severity == 4 and review.issues[0].claim == "Opaque assent"

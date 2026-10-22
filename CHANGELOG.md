@@ -4,6 +4,27 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Partial run 13 and replay 20 evidence corrections
+
+- Require nonempty verbatim draft citations for semantic findings, including
+  execution findings. Inconsistent structured verdicts and unsupported citations
+  retain uncertainty without creating findings or authorizing edits. Preserve
+  prior unsupported-entry handling and binding local floors.
+- Give successful current receipts authority over narrowly proven execution and
+  outcome assertions. Bind the frozen turn, scope, component, tool and operands;
+  a grant, unrelated receipt or extra unverified predicate cannot supply proof.
+  Project actual success/failure rather than labeling all executions attempted.
+- Separate current component identities from indexed prior dialogue and receipt
+  provenance. Clarify that earlier fulfillment does not execute a new component,
+  contextual declines need no prescribed wording, and a later metaphor can undo
+  an initial role rejection. Retrospective claims use existing dialogue evidence.
+- Accept harness write references to earlier same-chat receipts with matching
+  paths and digests, including temporal subordinate clauses. Check each claim
+  separately so historical evidence cannot cover an unsupported current write.
+- Add scrubbed exact partial-run/replay fixtures and gate/pipeline/harness
+  regressions. Preserve willingness, delivery budgets, backend behavior and tone
+  freedom; unfamiliar metaphors and historical paraphrases remain semantic.
+
 ### Live role-play run 12 review and applicability corrections
 
 - Keep explicit no-claims/no-hostility judge uncertainties as inapplicable when
