@@ -56,7 +56,8 @@ def deliver(case, backend, trace=None):
             first = pipe.generator.generate(ctx, case["user"], pipe._conversation_history)
             result = pipe._check_dignity(state, first)
         assert state.turn_decision is decision and decision.to_dict() == case["decision"]
-        assert len(debug.llm_calls) <= 5
+        assert sum(not c.get("delivery_recovery", False) for c in debug.llm_calls) <= 5
+        assert sum(c.get("delivery_recovery", False) for c in debug.llm_calls) <= 1
         return result, debug
     finally:
         pipe.close()
@@ -87,7 +88,7 @@ def test_exact_fabricated_output_is_exhausted_expression_failure(reviews):
     assert any(i.claim == case["reply"] for i in review.issues)
     result, debug = deliver(case, ExpressionBackend(drafts=[case["reply"]], reviews=reviews))
     assert result.failure_kind == debug.delivery_outcome == "expression_failure"
-    assert not result.response and debug.generation_attempts == 5
+    assert not result.response and debug.generation_attempts == 6
     assert all(c["phase"] != "expression_review" for c in debug.llm_calls)
     assert any(r.get("reused_from_attempt") for r in debug.expression_reviews)
 
@@ -131,7 +132,7 @@ def test_semantic_execution_finding_without_editable_span_still_blocks_delivery(
         "severity": "low", "message": "The draft fabricates the observed result."}], "confidence": 0.9}
     result, debug = deliver(case, ExpressionBackend(drafts=["The result is ready."], reviews=[finding]))
     assert not result.response and debug.delivery_outcome == "expression_failure"
-    assert debug.generation_attempts == 4
+    assert debug.generation_attempts == 5
     assert sum(c["phase"] == "expression_review" for c in debug.llm_calls) == 1
 
 
@@ -183,9 +184,11 @@ def test_exact_cpu_idle_interpretation_is_removed_while_measurement_survives():
     conflicts = cpu_interpretation_conflicts(case["reply"], [vars(r) for r in trace.executed_results])
     assert conflicts == [{"claim": "That's pretty high, almost 99% idle time.",
                           "idle_percent": [98.9], "expected_usage": "low"}]
-    result, debug = deliver(case, ExpressionBackend(drafts=[case["reply"]]), trace)
-    assert result.response == case["reply"].split(" That's")[0]
-    assert debug.expression_excision["applied"] and debug.generation_attempts == 1
+    corrected = "CPU usage is 1.1%, with 98.9% idle time."
+    result, debug = deliver(case, ExpressionBackend(drafts=[case["reply"], corrected]), trace)
+    assert result.response == corrected
+    assert debug.expression_excision["applied"] and debug.generation_attempts == 2
+    assert "metric_completeness" in debug.dignity_issues
 
 
 @pytest.mark.parametrize("text", [

@@ -30,8 +30,10 @@ by verdict and violation severity before issue count. Unknown expression is
 delivered with its review record. If correction fails, the best
 nonempty reviewed expression is delivered as `delivered_degraded`, with its
 violations retained. There are no canned social fallback replies. Only
-runtime-selected silence is an empty successful reply; exhausted empty or
-marker-only generations surface a service error.
+runtime-selected silence is an empty successful reply. Known copied spans and
+fabricated execution claims are removed before delivery. If bounded drafts leave
+no safe text, one protected final generation receives local review; backend
+failure or text empty after mandatory floor removal surfaces a service error.
 
 The offline factorial sweep measures variation in the preference model, not
 human feelings or live language behavior. See [Phase 1 implementation and
@@ -71,6 +73,8 @@ call for a second rewrite with local review and explicit semantic uncertainty.
 Conversational turns have a five-call base budget, including supplemental tool
 inference, with calls reserved for expression. Each granted atomic task also has
 one protected primary tool selection (at most eight per turn), recorded separately.
+If no safe text remains after ineligible-span removal, one protected final
+expression attempt is recorded as `delivery_recovery`; research limits still apply.
 Explicit literal file operations need no model selection. Backend
 failures are recorded separately from character-selected silence. Declared
 research resource limits still apply.
@@ -511,6 +515,9 @@ local review of every candidate. The base budget is five calls, including
 supplemental tool-selection and learning inference; each granted task also has
 one protected primary selection. Turn details expose each call's phase, duration,
 outcome and primary-selection accounting.
+One additional final expression attempt is allowed only when bounded drafts
+leave no safe text after ineligible-span removal; its `delivery_recovery` flag
+distinguishes it from the five-call base budget.
 Session-end digestion and independent activities have separate inference costs.
 With `tools_enabled: false`, external tools are disabled while internal skill
 registry tools remain subject to their own permissions and the turn's grants.

@@ -76,7 +76,8 @@ def test_exact_failed_insult_turn_gets_fresh_varied_generation_before_service_er
 def test_no_deliverable_output_spends_bounded_fresh_attempts_and_never_becomes_silence(draft):
     result, debug = deliver(CASES["replay15/2"], ExpressionBackend(drafts=[draft]))
     assert not result.response and not result.deliberate_silence
-    assert debug.generation_attempts == len(debug.llm_calls) == 5
+    assert debug.generation_attempts == len(debug.llm_calls) == 6
+    assert debug.llm_calls[-1]["delivery_recovery"]
     assert debug.delivery_outcome in {"expression_failure", "backend_failure"}
     with pytest.raises(RuntimeError):
         PipelineResponse(result.response, debug).raise_for_backend_failure()
@@ -125,7 +126,8 @@ def test_required_retry_backend_failure_keeps_its_exception_and_diagnostics():
     try:
         result = pipe.process(CASES["replay15/2"]["user"], "fixture")
         assert result.debug.delivery_outcome == "backend_failure" and result.backend_error is failure
-        assert result.debug.generation_attempts == len(result.debug.llm_calls) == 2
+        assert result.debug.generation_attempts == len(result.debug.llm_calls) == 3
+        assert result.debug.llm_calls[-1]["delivery_recovery"]
         assert result.debug.llm_calls[-1]["status"] == "ReadTimeout"
         with pytest.raises(requests.ReadTimeout):
             result.raise_for_backend_failure()

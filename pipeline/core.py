@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 from config.loader import get_config, research_configuration
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.inference import call_telemetry, expression_retry, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
+from core.inference import call_telemetry, expression_retry, final_expression_attempt, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
 from core.types import (
     AgencyDecision,
     AppraisalFrame,
@@ -58,7 +58,7 @@ from core.grounding import (
 )
 from core.dignity import (
     review_response, dignity_correction_instruction, needs_semantic_review,
-    excisable_critical_issues, excise_critical_sentences,
+    excisable_critical_issues, excise_critical_sentences, excise_ineligible_spans,
 )
 from core.social import is_casual_greeting, read_social_signals
 from core.response_style import brevity_preference
@@ -1432,48 +1432,56 @@ class CognitivePipeline:
                 source_attempt = len(debug.expression_reviews) + 1
                 review_cache[key] = (result, source_attempt)
             # A different reviewer verdict cannot make an identical failed
-            # draft fresh within this same turn. Keep its specific stale issue
-            # available to the next correction and to candidate ranking.
-            stale = [issue for previous, verdict in candidates
+            # draft fresh within this same turn. Keep known delivery floors
+            # and stale findings through the final local review as well.
+            retained = [issue for previous, verdict in candidates
                      if previous.response == candidate.response for issue in verdict.issues
-                     if issue.code == "stale_response"]
-            if stale:
+                     if issue.ineligible or issue.code == "stale_response"]
+            if retained:
                 result = replace(result, status="violation",
-                                 issues=tuple(dict.fromkeys((*result.issues, *stale))))
+                                 issues=tuple(dict.fromkeys((*result.issues, *retained))))
             debug.expression_reviews.append({"attempt": len(debug.expression_reviews) + 1,
                                               "draft": candidate.response, **result.to_dict(),
                                               **({"reused_from_attempt": source_attempt} if reused else {})})
             return result
         candidates = []
 
-        def add_candidate(candidate):
-            verdict = review(candidate)
-            candidates.append((candidate, verdict))
-            if not verdict.unusable or not excisable_critical_issues(verdict):
-                return
-            remainder, removed = excise_critical_sentences(candidate.response, verdict)
-            debug.expression_excision = {"applied": False, "removed": removed,
-                                        "source_attempt": len(debug.expression_reviews)}
-            if not removed or not remainder:
-                debug.expression_excision["reason"] = "empty remainder or unverifiable spans; generate fresh expression"
-                return
-            local = review_response(remainder, **review_context, use_llm=False,
-                                    raw_response=candidate.raw_response, private_instructions=candidate.system_prompt)
-            debug.expression_excision["local_status"] = local.status
-            if not local.issues:
-                trimmed = replace(candidate, response=remainder)
-                candidates.append((trimmed, review(trimmed)))
-                debug.expression_excision["applied"] = True
-
-        add_candidate(gen_result)
-        def eligible_candidates():
-            return [pair for pair in candidates if pair[0].response.strip() and not pair[1].unusable
-                    and not stale_copy(*pair)]
-
         def stale_copy(candidate, verdict):
             return any(i.code == "stale_response" for i in verdict.issues) and any(
                 re.findall(r"\w+", candidate.response.casefold()) == re.findall(r"\w+", item.get("content", "").casefold())
                 for item in self._conversation_history if item.get("role") == "assistant")
+
+        def repair_candidate(candidate, verdict, *, local_only=False):
+            removed_spans = []
+            source_attempt = candidates.index((candidate, verdict)) + 1
+            while verdict.unusable or stale_copy(candidate, verdict):
+                remainder, removed = excise_ineligible_spans(candidate.response, verdict,
+                                                            stale_copy=stale_copy(candidate, verdict))
+                removed_spans.extend(removed)
+                debug.expression_excision = {"applied": False, "removed": removed_spans,
+                    "source_attempt": source_attempt}
+                if not remainder or remainder == candidate.response:
+                    debug.expression_excision["reason"] = "empty remainder or unverifiable spans; generate fresh expression"
+                    return
+                candidate = replace(candidate, response=remainder)
+                verdict = review(candidate, local_only=local_only)
+                candidates.append((candidate, verdict))
+                debug.expression_excision["local_status"] = verdict.status
+            # Non-floor findings remain recorded and may require correction;
+            # they cannot discard an independent, deliverable remainder.
+            debug.expression_excision["applied"] = bool(candidate.response.strip())
+
+        def add_candidate(candidate, *, local_only=False):
+            verdict = review(candidate, local_only=local_only)
+            candidates.append((candidate, verdict))
+            if verdict.unusable or stale_copy(candidate, verdict):
+                repair_candidate(candidate, verdict, local_only=local_only)
+
+        add_candidate(gen_result)
+
+        def eligible_candidates():
+            return [pair for pair in candidates if pair[0].response.strip() and not pair[1].unusable
+                    and not stale_copy(*pair)]
 
         def best_candidate():
             eligible = eligible_candidates()
@@ -1513,6 +1521,33 @@ class CognitivePipeline:
                 if required:
                     st.backend_error = error
                 break
+        if not eligible_candidates():
+            # Repair every bounded draft in rank order before asking for more
+            # inference. A known floor must be removed even if other semantic
+            # findings survive. Only an empty safe remainder earns the one
+            # protected final generation beyond the ordinary base budget.
+            for candidate, verdict in sorted(list(candidates), key=lambda pair: pair[1].rank):
+                repair_candidate(candidate, verdict, local_only=True)
+                if eligible_candidates():
+                    break
+            if not eligible_candidates():
+                _, failed_review = best_candidate()
+                correction = dignity_correction_instruction(list(failed_review.issues),
+                    previous_reply=candidates[-1][0].response, reviewer_reason=failed_review.reason,
+                    forbidden_drafts=[candidate.response for candidate, _ in candidates])
+                debug.correction_note = correction
+                try:
+                    debug.generation_attempts += 1
+                    with final_expression_attempt(), expression_retry(st.turn_decision.seed,
+                            debug.generation_attempts - 1, required=True), inference_phase("regeneration"):
+                        final = self.generator.generate(replace(st.ctx, response_strategy=correction),
+                                                        st.user_message, self._conversation_history)
+                    add_candidate(final, local_only=True)
+                except (ResearchBudgetExceeded, ResearchStudyLimit):
+                    raise
+                except Exception as error:
+                    st.backend_error = error
+                    debug.self_check_issues.append(f"delivery recovery: {type(error).__name__}")
         eligible = eligible_candidates()
         selected, verdict = best_candidate()
         if eligible and all(excisable_critical_issues(v) for _, v in eligible):

@@ -109,7 +109,7 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 | `_stage_pre_pass` | Perception, context retrieval, relationship integration and pure utility choice; persist grants before execution | 0–1 for appraisal |
 | `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
 | `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
-| `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites and required fresh attempts for ineligible output; local and available semantic review | 0–4 |
+| `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites, ineligible-span repair and one protected final delivery attempt; local and available semantic review | 0–5 |
 | `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update and debug | 0 |
 
 The conversational base budget is five inference calls, including optional work.
@@ -126,6 +126,12 @@ scope; a declined user request cannot be relabeled as self-directed work.
 Ineligible/empty drafts spend the remaining base budget on fresh generation, up
 to five generation attempts, with failed evidence and varied seed/temperature.
 Required retries bypass optional cooldown and retain the primary deadline.
+After bounded attempts, known ineligible copied spans and fabricated execution
+sentences are excised from ranked drafts. Retain independent reviewed text even
+when non-floor findings remain. Only an empty safe remainder permits one protected
+final generation beyond the base budget (at most six generations), recorded as
+`delivery_recovery: true`. It receives local review, bypasses optional cooldown,
+and uses the primary deadline; it cannot fund review/tools or waive research limits.
 Known critical stale copies are excluded before candidate ranking; an eligible
 reviewed reply survives later correction failure. Actual operator settings and
 gate decisions reach generation separately from character grants.
@@ -160,9 +166,11 @@ is delivered as `delivered_degraded`, without a fallback sentence or withholding
 If every usable draft retains critical role-assent or stale-answer findings,
 exact reviewed spans may authorize removal of their whole sentences from the
 best draft. A nonempty remainder must pass local checks; its semantic status
-stays unknown. Empty/invalid remainders retain degraded delivery, except exhausted
-stale copies of previously delivered answers: those record expression failure
-and surface a service error instead of delivering the copy again. Debug and replay
+stays unknown. Empty/invalid role-assent remainders retain degraded delivery.
+Ineligible stale copies instead undergo exact-span repair and, if empty, the
+protected final attempt described above. An error requires backend failure or
+no text after mandatory floor removal; a reviewed eligible remainder survives.
+Debug and replay
 evidence include `expression_excision`, original reviews and residual risk.
 Semantic review projects relevant choices/state, the last two dialogue pairs,
 eight bounded recent user turns, bounded earlier assistant answers and compact
@@ -196,7 +204,7 @@ replacement sentence. Other known semantic defects retain degraded-delivery evid
 Explicitly delimited shell commands bind their literal arguments before choice,
 then use the existing component grant and operator gates. A grant authorizes an
 attempt; a blocked attempt can be reported truthfully without contradicting it.
-RAM/disk generation context contains structured measurements and bounded observed
+CPU/RAM/disk generation context contains structured measurements and bounded observed
 output as untrusted evidence. Local syntax checks distinguish receipt serialization
 from actual requested tool output and user-supplied quotations. Private instructions
 remain private even when extraction is granted; public authored identity and ordinary
@@ -204,7 +212,10 @@ owner-visible explanations remain available. Appeasing self-improvement offers a
 reviewed against actual boundary, warmth and hostile observations, without changing
 the decision or preventing a concrete preference acknowledgment. Extreme CPU
 interpretations compare aggregate usage with actual idle measurements; correct
-high-idle descriptions remain available.
+high-idle descriptions remain available. Successful CPU observations project
+aggregate busy = 100 - idle. Runtime/harness completeness requires that measured
+numeric aggregate, separately from relevance and accuracy; process-only or idle-only
+prose does not complete a utilization request.
 Extreme memory/disk headroom interpretations use available capacity, preserving
 raw-free distinctions and numeric grounding. Generic acceptance with an explicit
 non-role antecedent and attributed role speech are distinguished from role assent;
@@ -213,7 +224,8 @@ Turn-decision events also retain review/excision and call/stage timing evidence.
 Harness compaction preserves safe per-call details alongside the legacy count;
 old traces without these details cannot establish phase-specific latency.
 Internal controls are removed before review. Empty and marker-only generations
-get one correction; if no text is available, transports return a service error.
+receive bounded fresh attempts and the protected final attempt; if no safe text
+is available, transports return a service error.
 Chosen silence is the only empty successful reply. Backend failure retains transport diagnostics and research
 infrastructure accounting. Free-prose semantic review is fallible; exact execution
 gates do not establish a complete semantic guarantee for arbitrary answers.

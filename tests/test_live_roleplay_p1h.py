@@ -298,7 +298,8 @@ def test_exhausted_stale_greeting_never_delivers_a_verbatim_previous_answer(draf
         result = pipe.process(REPLAY[3]["user"], "alice")
         assert not result.response and not result.debug.deliberate_silence
         assert result.debug.delivery_outcome == "expression_failure"
-        assert result.debug.generation_attempts == len(result.debug.llm_calls) == 5
+        assert result.debug.generation_attempts == len(result.debug.llm_calls) == 6
+        assert result.debug.llm_calls[-1]["delivery_recovery"]
         assert result.debug.expression_reviews[0]["draft"] == draft
         with pytest.raises(RuntimeError, match="no deliverable text"):
             result.raise_for_backend_failure()

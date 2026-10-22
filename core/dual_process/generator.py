@@ -132,6 +132,8 @@ def build_system_prompt(ctx: PipelineContext) -> str:
             "does not complete the summary. Do not invent motives or prior context for the document. "
             "Preserve metric column meanings and units. Derive percentages from raw receipt "
             "metadata, preserving the distinction between used, free, available and cached quantities. "
+            "A requested current CPU utilization needs its measured aggregate percentage: "
+            "derive busy as 100 minus idle, separately from each process share. "
             "The selected stance values are strengths from zero to one: engagement is involvement, "
             "boundary is firmness about your limits, candor is directness, warmth is friendliness, "
             "repair is openness to reconciliation, and delay is willingness to postpone activity. "

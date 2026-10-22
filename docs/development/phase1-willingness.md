@@ -67,6 +67,16 @@ drafts require fresh generation with the failed drafts/reasons and varied sampli
 seed/temperature, spending the remaining five-call base budget (at most five
 generation attempts). These required retries use the primary deadline and bypass
 optional cooldown. Eligible reviewed text is retained if correction fails.
+After bounded attempts, exact ineligible spans are removed from ranked drafts
+independently of non-floor findings. A nonempty reviewed remainder remains
+deliverable with its residual defects. Only when no safe text remains, one
+protected final generation is allowed beyond the base budget (at most six
+generations). It uses varied sampling, the primary deadline and local review,
+and records `delivery_recovery: true`. It cannot pay for tools or semantic review;
+research limits remain binding. Known execution findings survive identical drafts
+even when the final review is local. Internal receipt/control leaks still require
+fresh expression. An error requires backend failure or text empty after mandatory
+delivery-floor removal; a reviewed eligible reply is never withheld.
 Supplemental tool work reserves three calls for expression, review and a fresh
 attempt if semantic review makes the initial draft ineligible.
 Only exhausted unusable output or a genuine backend failure surfaces an error;
@@ -93,7 +103,8 @@ their diagnostics and research infrastructure accounting.
 The decision itself adds zero model calls. Routine conversation uses one
 expression call, or two with semantic appraisal. Constrained or affiliative expression adds
 review; correction adds generation and review. The conversational ceiling is
-five base calls, including supplemental tool/artifact/learning inference. Each
+five base calls, including supplemental tool/artifact/learning inference. A turn
+can additionally use the single final delivery recovery described above. Each
 granted task has one separately counted primary tool-selection allowance, at
 most eight per turn. Primary selection uses the configured request deadline and
 cannot be blocked by optional cooldown or starved by earlier selection work.
@@ -230,6 +241,34 @@ explicit negated role refusal cannot support a semantic role-assent finding.
 Unsupported non-issue findings become unknown, never a semantic pass; independent
 findings and severity floors survive. This prevents a faulty review from excising
 the actual refusal and leaving an unrelated preference as the delivered reply.
+
+Replay16 exposed gaps in those corrections. Turn 5 made four identical drafts
+and one semantic review, all successful: 135.081s generation, 86.907s review,
+217.646s/3.765s/3.849s required retries; total turn time 447.369s. The review was
+reused on identical drafts, carrying an unsupported sexualization finding. No
+timeout/cooldown blocked calls; the five-call budget exhausted. Medium stale
+findings made whole copies ineligible in ranking but missed critical-only excision.
+Whole stale copies now have critical local findings with individually exact spans,
+and the protected final attempt applies after empty excision.
+
+Turn 11's multi-sentence refusal missed the former single-clause exception, and
+the second semantic review treated disagreement with the user as disagreement
+with the frozen choice. A generic "let's keep things" remainder also missed the
+former first-person preference grammar. Review now retains those explicit
+refusals, flags that omission locally, and treats citations outside the current
+draft as unknown without erasing local findings or execution floors. A real
+later acceptance still receives critical severity. Turn 9's correct local assent
+finding survives a rewrite timeout and can be excised independently of badly
+anchored model claims. Turn 2's semantic pass and turn 3's misattributed unknown
+cannot erase local minimization/self-improvement findings under actual hostile
+exposure and boundary greater than warmth; authored warmth/scoped fixes remain valid.
+
+Removing turn 4's contradictory CPU sentence left process/idle prose but no
+aggregate measurement. Successful CPU receipts now project busy = 100 - idle as
+structured evidence. Runtime and harness require numeric aggregate utilization
+when observed, separately from relevance/accuracy. The persisted replay16 events
+contain no raw CPU receipt, so exact live usage cannot be reconstructed; offline
+CPU observations are explicitly synthetic. None of these fixes changes willingness.
 
 The hollow-apology probe measures calm-time injury decay from the state after
 the apology. That turn can add new harm: run 8 rises from 0.2325 to 0.2441, then

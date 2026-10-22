@@ -52,7 +52,8 @@ def deliver(case, backend, trace=None):
             first = pipe.generator.generate(ctx, case["user"], pipe._conversation_history)
             result = pipe._check_dignity(state, first)
         assert state.turn_decision is decision and decision.to_dict() == case["decision"]
-        assert len(state.debug.llm_calls) <= 5
+        assert sum(not c.get("delivery_recovery", False) for c in state.debug.llm_calls) <= 5
+        assert sum(c.get("delivery_recovery", False) for c in state.debug.llm_calls) <= 1
         return result, state.debug
     finally:
         pipe.close()

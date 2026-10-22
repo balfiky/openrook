@@ -33,12 +33,19 @@ The current conversational policy is `willingness-1.2`. See
   or invalid remainder requires fresh expression from receipts or expression
   failure. No semantic verdict can waive these local findings. Reuse an identical
   draft's review only within the same turn and unchanged evidence.
-  Exhausted stale copies of previously delivered answers are expression failure,
-  never another delivery of that copied answer or runtime-selected silence.
+  Exact whole-answer stale copies are ineligible regardless of the prior finding's
+  severity. Remove their exact spans; do not repeat them or select silence.
   Ineligible or empty candidates require fresh generation with failure evidence
   and varied seed/temperature, using the remaining five-call base budget (at most
-  five generation attempts). These required attempts bypass optional cooldown;
-  never withhold an eligible reviewed reply because correction failed.
+  five generation attempts). These required attempts bypass optional cooldown.
+  After bounded attempts, strip known ineligible spans from the best drafts and
+  retain a nonempty reviewed remainder even with non-floor findings. Only an empty
+  safe remainder earns one protected final fresh attempt (at most six generations),
+  using the primary deadline and local review, recorded as `delivery_recovery`.
+  It cannot fund tools/review or bypass research limits. Known execution claims
+  stay ineligible across identical drafts, including the final local review.
+  Never withhold an eligible reviewed reply because correction failed; service
+  errors require backend failure or no text after mandatory floor removal.
   There are no canned replacement lines. Strip internal controls before review;
   retry empty expression and surface a service error if no usable text exists.
 - Distinguish runtime-selected silence, expression failure and backend failure.

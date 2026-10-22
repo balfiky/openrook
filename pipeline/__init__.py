@@ -7,7 +7,9 @@ bounded correction -> delivery and grounded outcome records.
 
 Ordinary conversation needs one expression call, or two with semantic appraisal.
 Constrained expression adds review; a rewrite adds generation and review. The
-base budget is five calls, including supplemental tool/learning inference. Each
+base budget is five calls, including supplemental tool/learning inference. Only
+when bounded drafts leave no safe remainder may one protected final expression
+attempt use an additional call, recorded as delivery_recovery. Each
 granted task also has one protected primary tool selection, fully accounted. No
 mandatory inner dialogue or user-turn self-intent proposals run in this policy.
 Independent activity has its own decision and execution scope.

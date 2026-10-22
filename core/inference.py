@@ -22,6 +22,8 @@ _reserved_calls = ContextVar("reserved_expression_calls", default=0)
 _primary_tool_calls = ContextVar("primary_tool_calls", default=0)
 _expression_sampling = ContextVar("expression_sampling", default=None)
 _required_expression = ContextVar("required_expression", default=False)
+_delivery_recovery = ContextVar("delivery_recovery", default=False)
+_delivery_recovery_used = ContextVar("delivery_recovery_used", default=False)
 SLOW_CALL_SECONDS = 5.0
 OPTIONAL_TIMEOUT_SECONDS = 8.0
 AUXILIARY_TIMEOUT_THRESHOLD = 2
@@ -76,6 +78,7 @@ def inference_turn(calls, *, research=False, max_calls=None, request_timeout_sec
     call_token = _calls.set(calls)
     research_token = _research.set(research)
     limit_token = _limit.set(max_calls)
+    recovery_token = _delivery_recovery_used.set(False)
     policy_token = _auxiliary_policy.set(_AuxiliaryPolicy(
         request_timeout_seconds, auxiliary_timeout_seconds, auxiliary_cooldown_seconds))
     try:
@@ -83,6 +86,7 @@ def inference_turn(calls, *, research=False, max_calls=None, request_timeout_sec
     finally:
         _auxiliary_policy.reset(policy_token)
         _limit.reset(limit_token)
+        _delivery_recovery_used.reset(recovery_token)
         _research.reset(research_token)
         _calls.reset(call_token)
 
@@ -186,6 +190,20 @@ def sampling_parameters() -> dict:
 
 
 @contextmanager
+def final_expression_attempt():
+    """One protected delivery attempt after bounded drafts excise to empty.
+
+    It cannot fund appraisal, semantic review or tools. Research limits still
+    apply at the backend, and telemetry records this extra call separately.
+    """
+    token = _delivery_recovery.set(True)
+    try:
+        yield
+    finally:
+        _delivery_recovery.reset(token)
+
+
+@contextmanager
 def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
     phase = _phase.get() or phase
     primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
@@ -195,7 +213,11 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
     optional = optional or phase == "regeneration"
     if phase == "regeneration" and _required_expression.get():
         optional = False
-    if not primary_tool and remaining_calls() == 0:
+    recovery = phase == "regeneration" and _delivery_recovery.get() and not _delivery_recovery_used.get()
+    if recovery:
+        _delivery_recovery_used.set(True)
+        optional = False
+    if not primary_tool and not recovery and remaining_calls() == 0:
         raise OptionalInferenceCooldown("Per-turn inference budget exhausted")
     health = _health_for(backend, phase) if optional and not _research.get() else None
     latency = _health_for(backend, "generation_latency") if not _research.get() else None
@@ -236,6 +258,8 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
             item["sampling"] = dict(_expression_sampling.get())
         if primary_tool:
             item["primary_tool"] = True
+        if recovery:
+            item["delivery_recovery"] = True
         if deadline is not None:
             item["timeout_seconds"] = deadline
         calls = _calls.get()

@@ -4,6 +4,29 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Replay 16 expression delivery and review corrections
+
+- Salvage exact copied-user/stale spans and fabricated execution sentences while
+  retaining independent reviewed text, even with other recorded defects. If
+  bounded drafts leave no safe text, make one protected final fresh attempt with
+  local review and the primary deadline. Record `delivery_recovery`; retain the
+  five-call base budget and binding research/tool permissions. Known fabrication
+  findings survive repeated drafts and cannot become degraded delivery.
+- Preserve multi-sentence role refusals when review mistakes rejection for assent
+  or a contradiction of the user's imposed role. Check generic clarity-only
+  remainders locally. Keep leading ambiguous assent removable after a rewrite
+  timeout; badly anchored semantic findings cannot block exact local excision.
+- Review hostile minimization and vague self-improvement against frozen reserve
+  locally, even when semantic review approves or returns unknown. Authored warmth,
+  scoped corrections and role grants remain available; choice dynamics are unchanged.
+- Supply aggregate CPU utilization derived from observed idle time. Runtime and
+  harness check numeric measurement completeness separately from topic relevance
+  and accuracy, including after a contradictory number was removed.
+- Add exact replay16 dialogue/state/review/timing regressions. Turn 5 exhausted
+  five successful calls over 447.4 seconds, with four identical stale drafts;
+  no timeout or cooldown blocked generation. Raw CPU receipts were not persisted;
+  CPU regressions label their synthetic evidence. Live sources remain read-only.
+
 ### Live role-play run 8 and replay 15 corrections
 
 - Spend the remaining five-call budget on fresh expression when drafts are empty

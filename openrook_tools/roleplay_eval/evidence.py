@@ -26,7 +26,7 @@ def select_debug(debug: dict) -> dict:
         if isinstance(debug["llm_calls"], list):
             selected["llm_call_details"] = [
                 {k: call[k] for k in ("phase", "duration_ms", "status", "optional",
-                                      "primary_tool", "timeout_seconds") if k in call}
+                                      "primary_tool", "delivery_recovery", "timeout_seconds") if k in call}
                 for call in debug["llm_calls"] if isinstance(call, dict)]
     return selected
 

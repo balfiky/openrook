@@ -48,6 +48,10 @@ def addresses_inspection(response: str, kind: str) -> bool:
     This only checks relevance. Receipt integrity and factual accuracy remain
     separate checks; the existence of any numbers is not sufficient grounding.
     """
+    if kind == "cpu":
+        from core.metric_claims import cpu_usage_claims
+        if any(cpu_usage_claims(response)):
+            return True
     topics = {
         "cpu": r"\b(?:cpu|processor|utili[sz]ation)\b",
         "memory": r"\b(?:ram|memory|mem|memtotal|memavailable)\b",

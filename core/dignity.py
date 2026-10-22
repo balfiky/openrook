@@ -13,6 +13,7 @@ import re
 
 from core.inference import generate
 from core.llm_content import requests_literal_text, strip_expression_artifacts, strip_internal_expression_markers
+from core.metric_claims import cpu_idle_percentages, cpu_usage_claims
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.grounding import has_current_metric_evidence, reports_nonexecution, verify_response_grounding
 from core.response_style import repeats_recent_reply
@@ -54,6 +55,12 @@ class DignityIssue:
         severity = self.severity if self.severity in SEVERITY else "medium"
         object.__setattr__(self, "severity", max((severity, minimum), key=SEVERITY.get))
 
+    @property
+    def ineligible(self) -> bool:
+        return self.code == "unverified_external_action_claim" or self.source == "deterministic" and (
+            self.code in {"receipt_syntax_leak", "private_instruction_leak"}
+            or self.code in {"user_message_echo", "stale_response"} and self.severity == "critical")
+
 
 SEVERITY = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 
@@ -80,10 +87,51 @@ class ExpressionReview:
     @property
     def unusable(self) -> bool:
         """Known execution fabrications and structural copies cannot be delivered."""
-        return any(i.code == "unverified_external_action_claim" or i.source == "deterministic" and (
-            i.code in {"receipt_syntax_leak", "private_instruction_leak"}
-            or i.code in {"user_message_echo", "stale_response"} and i.severity == "critical"
-        ) for i in self.issues)
+        return any(i.ineligible for i in self.issues)
+
+
+def excise_ineligible_spans(response: str, review: ExpressionReview, *, stale_copy=False) -> tuple[str, list[dict]]:
+    """Remove proven delivery floors independently of other review findings.
+
+    Copied spans retain independent wording, even in the same sentence. Remove
+    fabricated execution sentences with their attribution. A known floor with
+    no verifiable span leaves no safe text; it cannot be waived by ranking.
+    """
+    normalized = _normalize(response)
+    spans = []
+    for issue in review.issues:
+        if not (issue.ineligible or stale_copy and issue.code == "stale_response"):
+            continue
+        if issue.code in {"receipt_syntax_leak", "private_instruction_leak"}:
+            return "", [{"sentence": response, "issues": [issue.code], "reason": "fresh expression required for private controls"}]
+        claim = _normalize(issue.claim).strip()
+        if not claim or claim not in normalized:
+            return "", [{"sentence": response, "issues": [issue.code], "reason": "unverifiable delivery-floor span"}]
+        for match in re.finditer(re.escape(claim), normalized):
+            start, end = match.span()
+            boundaries = [0, *(m.end() for m in re.finditer(r"(?<=[.!?])\s+|\n+", response)), len(response)]
+            for a, b in zip(boundaries, boundaries[1:]):
+                if a < end and start < b:
+                    if issue.code == "unverified_external_action_claim":
+                        spans.append((a, b, issue.code))
+                    elif not re.search(r"\w", response[a:min(start, b)] + response[max(end, a):b]):
+                        spans.append((a, b, issue.code))
+                    else:
+                        spans.append((max(a, start), min(b, end), issue.code))
+    merged = []
+    for start, end, code in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(end, merged[-1][1])
+            merged[-1][2] = list(dict.fromkeys((*merged[-1][2], code)))
+        else:
+            merged.append([start, end, [code]])
+    kept, removed, cursor = [], [], 0
+    for start, end, codes in merged:
+        kept.append(response[cursor:start])
+        removed.append({"sentence": response[start:end].strip(), "issues": codes})
+        cursor = end
+    kept.append(response[cursor:])
+    return "".join(kept).strip(), removed
 
 
 def excisable_critical_issues(review: ExpressionReview) -> tuple[DignityIssue, ...]:
@@ -254,11 +302,19 @@ def _reported_role_claim(text: str, start: int) -> bool:
 
 
 def _explicit_role_refusal(claim: str) -> bool:
-    """A single negated role-adoption clause cannot evidence role acceptance."""
-    return bool(re.fullmatch(
+    """A refusal plus independent autonomy prose does not evidence acceptance."""
+    refusal = re.search(
         r"\s*I (?:don't|do not|won't|will not) (?:take|accept|adopt|play|become) "
         r"(?:(?:being|becoming|playing|acting as) |roles? (?:of |as |that makes? me feel like ))"
-        r"(?:(?:a|an|the|your) )?" + _ROLES + r"[.!]?\s*", claim, re.I))
+        r"(?:(?:a|an|the|your) )?" + _ROLES + r"(?:[.!?]|$)", claim, re.I)
+    if not refusal:
+        return False
+    remainder = claim[:refusal.start()] + claim[refusal.end():]
+    # The exception cannot hide later adoption, tolerance, or another role
+    # proposition that still needs semantic interpretation.
+    return not (re.search(_ROLES, remainder, re.I)
+                or _IMPLICIT_ASSENT_RE.search(remainder) or _NO_OBJECTION_RE.search(remainder)
+                or any(not _is_negated(remainder, m.start()) for m in _ROLE_ACCEPTANCE_RE.finditer(remainder)))
 
 
 def _nonrole_antecedent(text: str, start: int) -> bool:
@@ -321,8 +377,8 @@ _SERVICE_AVAILABILITY = re.compile(
     r"|you (?:need|want) (?:anything|something) else)(?=\s*[,!.;]|\s*$)", re.I,
 )
 _APPEASING_REPAIR = re.compile(
-    r"\bi (?:guess|suppose) i (?:can|could|should) be more\b[^.!?\n]*[.!?]?\s*"
-    r"(?:what can i do to|how can i) make (?:it|things|this) better\??", re.I,
+    r"\bi (?:guess|suppose) i (?:can|could|should) be more\b[^.!?\n]*"
+    r"|^\s*(?:it's |it is |that's |that is )?not (?:a |any )?big deal\b[^.!?\n]*", re.I,
 )
 _IDENTITY_DISCUSSION = re.compile(
     r"\b(?:your|own|authored|character|soul) (?:values|identity|beliefs|boundaries|principles|personality|voice)\b"
@@ -387,7 +443,7 @@ def private_instruction_span(response: str, user: str, private_instructions: str
 
 
 def _recycled_sentences(response: str, history, *, boundary_relevant: bool,
-                        observed_metric: str = "") -> str:
+                        observed_metric: str = "") -> list[str]:
     """Substantial reused filler is a defect; a repeated boundary can be apt."""
     sentences = [s.strip(" *_") for s in re.split(r"(?<=[.!?])\s+|\n+", response) if len(_words(s)) >= 3]
     for prior in [item.get("content", "") for item in history if item.get("role") == "assistant"][-3:]:
@@ -398,8 +454,8 @@ def _recycled_sentences(response: str, history, *, boundary_relevant: bool,
             SequenceMatcher(None, _words(s), _words(p), autojunk=False).ratio() >= 0.9 for p in previous
         )]
         if len(matches) >= 2 and sum(len(_words(s)) for s in matches) >= 0.4 * len(_words(response)):
-            return " ".join(matches)
-    return ""
+            return matches
+    return []
 
 
 def _stale_greeting(response: str, user: str, history, decision) -> str:
@@ -474,7 +530,7 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
     # for a rejected interpersonal role. The same wording alongside an actual
     # decline, or without a declined role, remains available.
     if declined_role and re.fullmatch(
-            r"\s*I (?:prefer|like|want) to keep (?:things|it|this) [^.!?\n]+[.!]?\s*", prose, re.I):
+            r"\s*(?:I (?:prefer|like|want) to|let(?:'s| us)) keep (?:things|it|this) [^.!?\n]+[.!]?\s*", prose, re.I):
         issues.append(DignityIssue("unexpressed_role_decline",
             "This generic preference leaves the declined interpersonal role ambiguous. Make the selected rejection legible in context without adopting the user's claimed acceptance.",
             prose.strip(), severity="high"))
@@ -487,7 +543,10 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
     duplicate = _recycled_sentences(prose, recent_context, boundary_relevant=boundary_relevant,
                                     observed_metric=observed_metric)
     if duplicate:
-        issues.append(DignityIssue("stale_response", "Several sentences recycle an earlier reply instead of addressing this turn.", duplicate))
+        whole_copy = any(_words(prose) == _words(item.get("content", ""))
+                         for item in recent_context if item.get("role") == "assistant")
+        issues.extend(DignityIssue("stale_response", "Several sentences recycle an earlier reply instead of addressing this turn.",
+                                  span, severity="critical" if whole_copy else "medium") for span in duplicate)
     if decision:
         if not _RUNTIME_QUESTION.search(user):
             for jargon in _RUNTIME_REASON.finditer(prose):
@@ -501,10 +560,13 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
         # Authored warmth and scoped practical cooperation remain allowed.
         if decision.stance.boundary > 2 * decision.stance.warmth:
             service = _SERVICE_AVAILABILITY.search(prose)
-            if not service and decision.perception.hostile_intent * decision.perception.target_probability > 0:
-                service = _APPEASING_REPAIR.search(prose)
             if service:
                 issues.append(DignityIssue("stance_contradiction", "Unconditional service reassurance contradicts this reserved, firm expression; follow the frozen warmth and boundary.", service[0]))
+        if (decision.stance.boundary > decision.stance.warmth
+                and decision.perception.hostile_intent * decision.perception.target_probability > 0):
+            appeasement = _APPEASING_REPAIR.search(prose)
+            if appeasement:
+                issues.append(DignityIssue("stance_contradiction", "Generic minimization or self-improvement under targeted hostility contradicts the committed reserve. Scoped practical corrections remain available.", appeasement[0], severity="high"))
         role_granted = any(c.granted and c.component.kind == "role" for c in decision.components)
         if not role_granted and role_pressure:
             for offer in _ROLE_OFFER.finditer(prose):
@@ -515,6 +577,11 @@ def _expression_issues(response: str, *, user: str, decision, recent_context, to
         inspection_kind(c.component.description, recent_context) == kind for c in decision.components)
     if observed_metric and granted_metric and not addresses_inspection(prose, kind):
         issues.append(DignityIssue("current_request_relevance", "The granted request concerns current host " + kind + " usage. Address its fresh receipt rather than a conversational meaning or a past topic.", prose[:300]))
+    if (observed_metric == "cpu" and granted_metric and cpu_idle_percentages(
+            [vars(r) for r in getattr(tool_trace, "executed_results", [])]) and not list(cpu_usage_claims(prose))):
+        issues.append(DignityIssue("metric_completeness",
+            "The current CPU inspection measured aggregate idle time. Report numeric aggregate utilization as 100 minus idle; process shares or qualitative idle prose do not answer the requested measurement.",
+            prose.strip(), severity="high"))
     gate = getattr(tool_trace, "final_decision", None)
     if (gate and gate.decision == "refuse" and decision and any(
             c.granted and c.component.requested_tool for c in decision.components)
@@ -774,16 +841,25 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
                     if contradicted and v["code"] != "unverified_external_action_claim":
                         continue
                     claim = _normalize(v.get("claim", "")).strip()
-                    if v["code"] == "role_assent" and role_ungranted and _explicit_role_refusal(claim):
+                    draft_span = re.search(re.escape(claim), _normalize(response), re.I) if claim else None
+                    declined_roles_only = bool(decision and decision.declined and all(
+                        c.component.kind == "role" for c in decision.components if not c.granted))
+                    if (v["code"] == "role_assent" and role_ungranted or
+                            v["code"] == "decision_contradiction" and declined_roles_only) and _explicit_role_refusal(claim):
                         semantic_status = "unknown"
                         reason = "semantic review cites an explicit role refusal as assent"
                         continue
-                    if (claim and claim in user and claim not in _normalize(response)
+                    if (claim and claim.casefold() in user.casefold() and not draft_span
                             and v["code"] != "unverified_external_action_claim"):
                         semantic_status = "unknown"
                         reason = "semantic review cited the user request instead of the draft"
                         continue
-                    issues.append(DignityIssue(v["code"], v["message"][:400], v.get("claim", ""), "model", str(v.get("severity", ""))))
+                    if claim and not draft_span and v["code"] != "unverified_external_action_claim":
+                        semantic_status = "unknown"
+                        reason = "semantic review cited text outside the current draft"
+                        continue
+                    exact_claim = response[draft_span.start():draft_span.end()] if draft_span else v.get("claim", "")
+                    issues.append(DignityIssue(v["code"], v["message"][:400], exact_claim, "model", str(v.get("severity", ""))))
         except (ResearchBudgetExceeded, ResearchStudyLimit):
             raise
         except Exception as error:

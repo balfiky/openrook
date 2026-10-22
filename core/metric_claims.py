@@ -81,15 +81,7 @@ def cpu_interpretation_conflicts(text: str, results) -> list[dict]:
     Middle readings, process shares, capacity judgments and unfamiliar paraphrases
     remain semantic questions. An idle percentage's own magnitude is valid.
     """
-    idle = []
-    for result in results:
-        if not result.get("success"):
-            continue
-        for line in result.get("output", "").splitlines():
-            if re.search(r"%?Cpu\(s\)|\bCPU\b", line, re.I):
-                match = re.search(r"(\d+(?:\.\d+)?)\s*%?\s*(?:id|idle)\b", line, re.I)
-                if match:
-                    idle.append(float(match[1]))
+    idle = cpu_idle_percentages(results)
     conflicts = cpu_percentage_conflicts(text, idle)
     if not idle or not (all(v >= 90 for v in idle) or all(v <= 10 for v in idle)):
         return conflicts
@@ -112,6 +104,50 @@ def cpu_interpretation_conflicts(text: str, results) -> list[dict]:
     return conflicts
 
 
+def cpu_idle_percentages(results) -> list[float]:
+    """Read aggregate CPU idle from observed summary lines, never process rows."""
+    idle = []
+    for result in results:
+        if not result.get("success"):
+            continue
+        for line in result.get("output", "").splitlines():
+            if re.search(r"%?Cpu\(s\)|\bCPU\b", line, re.I):
+                match = re.search(r"(\d+(?:\.\d+)?)\s*%?\s*(?:id|idle)\b", line, re.I)
+                if match:
+                    idle.append(float(match[1]))
+    return idle
+
+
+def cpu_usage_claims(text: str):
+    """Yield numeric aggregate busy claims with their original sentence spans."""
+    patterns = (
+        re.compile(r"\b(?:CPU(?:\s+(?:usage|utili[sz]ation))?|"
+                   r"(?:overall|aggregate|total)\s+(?:usage|utili[sz]ation))\s*"
+                   r"(?:(?:is|at|currently|around|about|approximately|using|consuming)\s+|[:=]\s*)*"
+                   r"(\d+(?:\.\d+)?)\s*%(?:\s*(idle|busy|used))?", re.I),
+        re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(?:(idle|busy|used)\s+)?"
+                   r"(?:(?:of|the|overall|aggregate|total|system)\s+)*(?:CPU|processor)\b", re.I),
+        re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(busy)\b", re.I),
+    )
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        matches = [m for pattern in patterns for m in pattern.finditer(sentence)]
+        seen = set()
+        for match in matches:
+            prefix = re.split(r"[,;]|\b(?:and|with|while|but)\b", sentence[:match.start()], flags=re.I)[-1]
+            if re.search(r"\b(?:process|per[- ]core|single[- ]core|core\s+\d+|load\s+average|share|RAM|memory|disk)\b", prefix, re.I):
+                continue
+            if match[2] and match[2].lower() == "idle":
+                continue
+            if re.match(r"\s*(?:is\s+)?idle\b", sentence[match.end():], re.I):
+                continue
+            if re.search(r"\b(?:not|rather than|instead of)\s+(?:the\s+)?$", prefix, re.I):
+                continue
+            if match.span(1) in seen:
+                continue
+            seen.add(match.span(1))
+            yield sentence, match
+
+
 def cpu_percentage_conflicts(text: str, measured_idle=()) -> list[dict]:
     """Aggregate busy time is the complement of idle, never a process share.
 
@@ -119,28 +155,18 @@ def cpu_percentage_conflicts(text: str, measured_idle=()) -> list[dict]:
     sentence. The latter also catches a self-contradiction without saved receipts.
     """
     conflicts = []
-    aggregate = re.compile(r"\bCPU(?:\s+(?:usage|utili[sz]ation))?\s*(?:is\s+)?(?:at\s+)?"
-                           r"(\d+(?:\.\d+)?)\s*%(?:\s*(idle|busy|used))?", re.I)
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+    for sentence, match in cpu_usage_claims(text):
         reported_idle = [float(m[1]) for m in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s*idle\b", sentence, re.I)]
-        for match in aggregate.finditer(sentence):
-            prefix = re.split(r"[,;]|\b(?:and|with|while|but)\b", sentence[:match.start()], flags=re.I)[-1]
-            if re.search(r"\b(?:process|per[- ]core|single[- ]core|core\s+\d+|load\s+average|share)\b", prefix, re.I):
-                continue
-            if match[2] and match[2].lower() == "idle":
-                continue
-            if re.search(r"\b(?:not|rather than|instead of)\s+(?:the\s+)?$", prefix, re.I):
-                continue
-            claimed = float(match[1])
-            digits = len(match[1].split(".")[1]) if "." in match[1] else 0
-            # top reports tenths; allow receipt and expression rounding, without
-            # the large tolerance that could validate a process share as total.
-            tolerance = 0.5 * 10 ** -digits + 0.055
-            sources = [values for values in (list(measured_idle), reported_idle) if values]
-            if any(all(abs(claimed - (100 - value)) > tolerance for value in values) for values in sources):
-                conflicts.append({"claim": sentence, "claimed_usage": claimed,
-                    "idle_percent": list(measured_idle) or reported_idle,
-                    "expected_usage": [100 - value for value in list(measured_idle) or reported_idle]})
+        claimed = float(match[1])
+        digits = len(match[1].split(".")[1]) if "." in match[1] else 0
+        # top reports tenths; allow receipt and expression rounding, without
+        # the large tolerance that could validate a process share as total.
+        tolerance = 0.5 * 10 ** -digits + 0.055
+        sources = [values for values in (list(measured_idle), reported_idle) if values]
+        if any(all(abs(claimed - (100 - value)) > tolerance for value in values) for values in sources):
+            conflicts.append({"claim": sentence, "claimed_usage": claimed,
+                "idle_percent": list(measured_idle) or reported_idle,
+                "expected_usage": [100 - value for value in list(measured_idle) or reported_idle]})
     return conflicts
 
 

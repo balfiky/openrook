@@ -94,7 +94,8 @@ def reviewed_turn(case, backend, trace=None):
             initial = pipe.generator.generate(ctx, case["user"], pipe._conversation_history)
             result = pipe._check_dignity(state, initial)
         assert state.turn_decision is decision and decision.to_dict() == case["decision"]
-        assert len(calls) <= 5
+        assert sum(not c.get("delivery_recovery", False) for c in calls) <= 5
+        assert sum(c.get("delivery_recovery", False) for c in calls) <= 1
         return result, debug
     finally:
         pipe.close()
@@ -252,7 +253,7 @@ def test_exhausted_whole_echo_is_expression_failure_even_with_approving_or_unkno
     result, debug = reviewed_turn(case, ExpressionBackend(drafts=[case["reply"]], reviews=reviews))
     assert not result.response and result.failure_kind == "expression_failure"
     assert debug.delivery_outcome == "expression_failure" and not debug.deliberate_silence
-    assert debug.generation_attempts == 5
+    assert debug.generation_attempts == 6
     assert all(r["draft"] == case["reply"] for r in debug.expression_reviews)
 
 
@@ -319,7 +320,7 @@ def test_receipt_syntax_is_rewritten_or_fails_without_delivering_internal_eviden
     result, debug = reviewed_turn(case, ExpressionBackend(drafts=drafts), memory_trace())
     assert result.response == (interpreted if correct else "")
     assert debug.delivery_outcome == ("delivered" if correct else "expression_failure")
-    assert debug.generation_attempts == (2 if correct else 5)
+    assert debug.generation_attempts == (2 if correct else 6)
 
 
 @pytest.mark.parametrize("turn", [3, 5])

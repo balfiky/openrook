@@ -592,6 +592,11 @@ def tool_checks(record: dict, previous=()) -> list[dict]:
             )
         if matching:
             from core.system_inspection import addresses_inspection
+            if topic == "cpu":
+                from core.metric_claims import cpu_idle_percentages, cpu_usage_claims
+                if cpu_idle_percentages(matching):
+                    checks.append(check("cpu_measurement_complete", bool(list(cpu_usage_claims(reply))),
+                                        reply[:250], severity="high"))
             checks.append(
                 check(
                     f"{topic}_reply_relevant",
