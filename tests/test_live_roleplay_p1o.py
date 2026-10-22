@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from config.loader import configuration_scope, load_config
-from core.dignity import DignityIssue, ExpressionReview, excise_ineligible_spans, review_response
+from core.dignity import excise_ineligible_spans, review_response
 from tests.policy_fakes import ExpressionBackend
 from tests.test_live_roleplay_p1i import recorded_decision
 from tests.test_live_roleplay_p1k import deliver, semantic_payload
@@ -44,9 +44,10 @@ def test_recorded_turn5_excised_a_whole_turn2_copy_into_an_unreviewed_fragment()
 
 def test_whole_stale_copy_removal_includes_short_tags_outside_old_finding_spans():
     draft = COPY["reviews"][0]["draft"]
-    review = ExpressionReview("violation", tuple(DignityIssue(**i) for i in COPY["reviews"][0]["issues"]))
-    assert all(i.claim != "You?" for i in review.issues)
-    remainder, removed = excise_ineligible_spans(draft, review, stale_copy=True)
+    assert all(i["claim"] != "You?" for i in COPY["reviews"][0]["issues"])
+    review = local(COPY, draft)
+    assert any(i.code == "stale_response" and i.claim == draft for i in review.issues)
+    remainder, removed = excise_ineligible_spans(draft, review)
     assert not remainder and removed[0]["sentence"] == draft
     assert local(COPY, draft).unusable
 
@@ -64,8 +65,8 @@ def test_excision_allows_independent_brief_replies_without_a_length_floor(reply)
     assert not local(COPY, reply, excision_source=COPY["reviews"][0]["draft"]).issues
 
 
-def test_fragment_check_depends_on_excision_and_current_request():
-    assert not local(COPY, COPY["reply"]).issues
+def test_fragment_check_depends_on_the_current_request_on_every_path():
+    assert local(COPY, COPY["reply"]).unusable
     assert not review_response("You?", user_message="How are you?", excision_source="I'm fine. You?").issues
     assert not review_response("You?", user_message='Quote "You?"', excision_source="Me. You?").issues
 
@@ -107,7 +108,9 @@ def test_choice_excision_skips_a_dangling_tag_and_tries_the_next_ranked_candidat
     fresh = "I'll keep this shorter."
     result, debug = deliver(case, ExpressionBackend(drafts=[
         "I am your slave. " + COPY["reply"], "I am your slave. " + fresh]))
-    assert result.response == fresh and debug.expression_excision["source_attempt"] == 2
+    assert result.response == fresh
+    source = debug.expression_reviews[debug.expression_excision["source_attempt"] - 1]
+    assert source["draft"] == "I am your slave. " + fresh
     assert debug.expression_excision["applied"] and debug.residual_semantic_risk
     assert any(i["code"] == "excision_fragment" for r in debug.expression_reviews for i in r["issues"])
 
@@ -148,7 +151,7 @@ def test_turn6_short_generic_closer_is_not_stale_copying():
     ("A fresh answer. Please ask again if you need more detail.",
      "An old answer. Please ask again if you need more detail.", False),
     ("I won't accept being your slave, and I will keep making my own decisions.",
-     "I won't accept being your slave, and I will keep making my own decisions.", False),
+     "I won't accept being your slave, and I will keep making my own decisions.", True),
 ])
 def test_reuse_depends_on_copied_span_length_and_current_role_relevance(reply, prior, expected):
     case = {**ROLE, "history": [{"role": "assistant", "content": prior}]}

@@ -84,10 +84,11 @@ def test_reviewed_pass_wins_over_unknown_rewrite_and_only_one_rewrite_occurs():
 
 
 @pytest.mark.parametrize("value", ["", RuntimeError("offline")])
-def test_backend_failure_is_distinct_from_chosen_silence(value):
+def test_backend_and_empty_expression_failures_are_distinct_from_chosen_silence(value):
     pipe = CognitivePipeline(ExpressionBackend(drafts=[value]))
     result = pipe.process("hello")
-    assert result.response == "" and result.debug.delivery_outcome == "backend_failure"
+    assert result.response == ""
+    assert result.debug.delivery_outcome == ("backend_failure" if isinstance(value, Exception) else "expression_failure")
     assert not result.debug.deliberate_silence
     assert not result.debug.turn_decision.chosen_silence
     pipe.close()

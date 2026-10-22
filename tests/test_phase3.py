@@ -22,7 +22,7 @@ import time
 
 import pytest
 
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 from core.profiles.base import ProfileStore
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
@@ -274,10 +274,10 @@ class TestBackpressure:
     def test_queue_full_rejects_message(self):
         """Exceeding max_queue_per_user raises RuntimeError."""
 
-        class SlowBackend:
+        class SlowBackend(MockLLMBackend):
             def generate(self, system_prompt: str, user_message: str) -> str:
                 time.sleep(0.2)
-                return "ok"
+                return super().generate(system_prompt, user_message)
 
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -537,10 +537,10 @@ class TestTimeoutSemantics:
     def test_queued_messages_prevent_eviction(self):
         """A session with queued messages must not be evicted by timeout."""
 
-        class SlowBackend:
+        class SlowBackend(MockLLMBackend):
             def generate(self, system_prompt: str, user_message: str) -> str:
                 time.sleep(0.15)
-                return "ok"
+                return super().generate(system_prompt, user_message)
 
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -594,10 +594,10 @@ class TestTimeoutSemantics:
     def test_timer_resets_on_acceptance_not_just_completion(self):
         """Timer resets when a message is accepted (enqueued), not only on completion."""
 
-        class MediumBackend:
+        class MediumBackend(MockLLMBackend):
             def generate(self, system_prompt: str, user_message: str) -> str:
                 time.sleep(0.1)
-                return "ok"
+                return super().generate(system_prompt, user_message)
 
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:

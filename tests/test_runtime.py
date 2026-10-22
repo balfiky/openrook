@@ -20,7 +20,7 @@ import time
 
 import pytest
 
-from tests._fakes import MockLLMBackend
+from tests._fakes import MockLLMBackend, VaryingMockLLMBackend
 from core.types import UnresolvedItem
 from runtime.config import RuntimeConfig
 from runtime.learning_intake import LearningIntakeResult
@@ -47,7 +47,7 @@ def _make_config(tmpdir: str, **overrides) -> RuntimeConfig:
 
 
 def _mock_factory():
-    return MockLLMBackend()
+    return VaryingMockLLMBackend()
 
 
 async def _send(manager: SessionManager, text: str,
@@ -410,7 +410,7 @@ class TestPerUserSerialization:
         current = 0
         lock = threading.Lock()
 
-        class TrackingBackend:
+        class TrackingBackend(VaryingMockLLMBackend):
             def generate(self, system_prompt: str, user_message: str) -> str:
                 nonlocal max_concurrent, current
                 with lock:
@@ -419,7 +419,7 @@ class TestPerUserSerialization:
                 time.sleep(0.03)  # simulate work
                 with lock:
                     current -= 1
-                return "ok"
+                return super().generate(system_prompt, user_message)
 
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -696,10 +696,10 @@ class TestSessionLifecycle:
     def test_queue_backpressure(self):
         """Exceeding max_queue_per_user raises RuntimeError."""
 
-        class SlowBackend:
+        class SlowBackend(VaryingMockLLMBackend):
             def generate(self, system_prompt: str, user_message: str) -> str:
                 time.sleep(0.2)
-                return "ok"
+                return super().generate(system_prompt, user_message)
 
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:

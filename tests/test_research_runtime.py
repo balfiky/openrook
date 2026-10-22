@@ -258,7 +258,7 @@ def test_observing_a_missing_run_does_not_create_storage(tmp_path):
 async def test_failed_generation_preserves_an_episode_for_automatic_learning(tmp_path):
     runtime, _ = manager(tmp_path, ResearchBackend(response=""), research_episode_max_turns=1)
     try:
-        with pytest.raises(RuntimeError, match="no expression"):
+        with pytest.raises(RuntimeError, match="no deliverable text"):
             await runtime.handle_message("web", "alice", "a", "You betrayed me.")
         assert (
             runtime._agent.store.list("episode")[0]["messages"][0]["content"] == "You betrayed me."

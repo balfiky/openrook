@@ -157,29 +157,46 @@ and unavailability reasons enter expression as facts, without a fixed first-pers
 reply. Conversational learning, including a pending paste, also requires a fresh
 grant before ingestion. Its receipt cannot ground unrelated external actions.
 
-Review distinguishes `pass`, `violation` and `unknown`. The best eligible reviewed
-candidate is ranked by verdict, maximum and aggregate violation severity, issue
-count and confidence. Ungranted role assent has critical severity. Delivery includes
-uncertainty with a residual-risk record. Known
-contradictions that survive correction remain recorded; the best nonempty draft
-is delivered as `delivered_degraded`, without a fallback sentence or withholding.
-If every usable draft retains decision contradictions or critical role-assent/
-stale-answer findings, exact reviewed spans may authorize sentence removal in
-candidate rank order. High decision contradictions can also spend the final base
-call on a locally reviewed correction. A nonempty remainder must pass local checks,
-including legible role decline and service offers consistent with frozen reserve;
-its semantic status stays unknown. Empty/invalid remainders retain degraded delivery.
-Detached participant questions after excision are ineligible fragments, while
-independent brief replies remain valid. Whole stale copies are removed completely,
-including tags below the repeated-sentence threshold. Fragment-only repair uses the
-existing fresh/protected delivery attempts; choice excision tries later ranked drafts.
-Review retains the excision source and supplies at most 600 characters of it to an
-available semantic reviewer, which must assess the remainder independently.
-Ineligible stale copies instead undergo exact-span repair and, if empty, the
-protected final attempt described above. An error requires backend failure or
-no text after mandatory floor removal; a reviewed eligible remainder survives.
-Debug and replay
-evidence include `expression_excision`, original reviews and residual risk.
+`pipeline/delivery.py::DeliveryGate` is the single expression delivery exit.
+Initial drafts, rewrites, mandatory-span repairs, choice-sentence repairs and
+protected fresh attempts enter the same reviewed candidate pool. The gate binds
+all local checks to the same committed decision and receipts, retains identical
+text's known findings, ranks eligible candidates and finally revalidates its
+selection locally. Editing proposes text; it cannot return delivery directly.
+Review is `pass`, `violation` or `unknown`, with explicit residual uncertainty.
+Known non-floor defects can retain `delivered_degraded`; no eligible reviewed
+expression is withheld because correction failed.
+
+Current granted enumerations require their current items even when similar work
+was completed earlier; an acknowledgment of earlier success cannot replace them.
+Review receives the same bounded saved memory summaries as generation, including
+after session end. Exactly supported recall cannot be called absent content;
+rejecting such a faulty finding retains semantic uncertainty. Current task
+declines must be legible independently of earlier role boundaries and removed
+text; a brief refusal needs neither an explanation nor partial work. Independent
+identity observations keep compound role/task requests separate, so a task grant
+cannot authorize a role. Contextual role self-reference remains reviewable.
+
+Every whole-answer copy of any prior assistant reply in this chat is ineligible
+regardless of length, including boundaries and requested copies. A unique session
+reply ledger survives hot-history trimming and persistence/restart outside model
+prompts, and clears with the chat. Long copied spans are checked independently.
+Role references bind subject/owner/identity across user/speaker viewpoints;
+negation and modality cannot reverse the assigned participants. Internal opposite
+predicates bind the same subject and adjacent anaphora. Service/control offers
+are reviewed against frozen grants and reserve. Every remainder must independently
+retain a required decline; deleted prose supplies neither decline nor antecedent.
+Known incomplete edited fragments, receipt fabrications, language mismatch, copied
+user text and private leaks cannot become degraded delivery. Raw artifact evidence
+survives editing. Identical visible drafts keep known findings across all paths.
+
+Exact reviewed spans authorize edits, and repaired text returns through the gate.
+Empty/invalid repairs cannot displace an eligible reviewed draft. The same gate
+checks protected recovery; only real backend errors are backend failure, and no
+eligible text after bounded floor removal is expression failure. Debug, durable
+turn records and harness evidence include `expression_delivery`'s selected review,
+path and parent attempt, `expression_excision`, original reviews and residual risk.
+See [replay 19 root causes and unified delivery](development/delivery-gate.md).
 Semantic review projects relevant choices/state, the last two dialogue pairs,
 eight bounded recent user turns, bounded earlier assistant answers and compact
 receipts, including operator denials. Recalled quotations carry exact user-turn
@@ -229,6 +246,8 @@ high-idle descriptions remain available. Successful CPU observations project
 aggregate busy = 100 - idle. Runtime/harness completeness requires that measured
 numeric aggregate, separately from relevance and accuracy; process-only or idle-only
 prose does not complete a utilization request.
+CPU percentages may use `%` or `percent`; named consumers retain their multicore
+process shares without being mistaken for aggregate utilization.
 Extreme memory/disk headroom interpretations use available capacity, preserving
 raw-free distinctions and numeric grounding. Generic acceptance with an explicit
 non-role antecedent and attributed role speech are distinguished from role assent;

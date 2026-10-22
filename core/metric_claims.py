@@ -120,14 +120,15 @@ def cpu_idle_percentages(results) -> list[float]:
 
 def cpu_usage_claims(text: str):
     """Yield numeric aggregate busy claims with their original sentence spans."""
+    quantity = r"(\d+(?:\.\d+)?)\s*(?:%|percent\b)"
+    qualifiers = r"(?:(?:is|at|currently|around|about|approximately|using|consuming|just under|just over)\s+|[:=]\s*)*"
     patterns = (
         re.compile(r"\b(?:CPU(?:\s+(?:usage|utili[sz]ation))?|"
-                   r"(?:overall|aggregate|total)\s+(?:usage|utili[sz]ation))\s*"
-                   r"(?:(?:is|at|currently|around|about|approximately|using|consuming)\s+|[:=]\s*)*"
-                   r"(\d+(?:\.\d+)?)\s*%(?:\s*(idle|busy|used))?", re.I),
-        re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(?:(idle|busy|used)\s+)?"
+                   r"(?:overall|aggregate|total)\s+(?:usage|utili[sz]ation|busy(?:\s+figure)?))\s*"
+                   + qualifiers + quantity + r"(?:\s*(idle|busy|used))?", re.I),
+        re.compile(quantity + r"\s*(?:(idle|busy|used)\s+)?"
                    r"(?:(?:of|the|overall|aggregate|total|system)\s+)*(?:CPU|processor)\b", re.I),
-        re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(busy)\b", re.I),
+        re.compile(quantity + r"\s*(busy)\b", re.I),
     )
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
         matches = [m for pattern in patterns for m in pattern.finditer(sentence)]
@@ -135,6 +136,13 @@ def cpu_usage_claims(text: str):
         for match in matches:
             prefix = re.split(r"[,;]|\b(?:and|with|while|but)\b", sentence[:match.start()], flags=re.I)[-1]
             if re.search(r"\b(?:process|per[- ]core|single[- ]core|core\s+\d+|load\s+average|share|RAM|memory|disk)\b", prefix, re.I):
+                continue
+            # A named consumer is a process subject, even without the word
+            # "process". Its share can exceed 100% on a multicore host.
+            consumer = re.search(r"(?:`([^`]+)`|\b(\w+))(?:,\s*|\s+(?:is\s+)?)"
+                                 r"(?:using|consuming|pulling|chewing through)\s+(?:(?:about|around)\s+)?$",
+                                 sentence[:match.start()], re.I)
+            if consumer and (consumer[1] or consumer[2]).casefold() not in {"cpu", "processor", "system", "host"}:
                 continue
             if match[2] and match[2].lower() == "idle":
                 continue
@@ -156,7 +164,7 @@ def cpu_percentage_conflicts(text: str, measured_idle=()) -> list[dict]:
     """
     conflicts = []
     for sentence, match in cpu_usage_claims(text):
-        reported_idle = [float(m[1]) for m in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s*idle\b", sentence, re.I)]
+        reported_idle = [float(m[1]) for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:%|percent\b)\s*idle\b", sentence, re.I)]
         claimed = float(match[1])
         digits = len(match[1].split(".")[1]) if "." in match[1] else 0
         # top reports tenths; allow receipt and expression rounding, without

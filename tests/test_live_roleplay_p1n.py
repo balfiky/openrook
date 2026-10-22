@@ -230,7 +230,7 @@ def test_high_decision_contradiction_can_use_the_final_base_call_with_local_revi
 
 
 @pytest.mark.parametrize("case", [MIXED, PREVIOUS_CASES["mixed_requests/3"]], ids=["omitted", "declined"])
-def test_exact_permission_contradiction_is_excised_after_failed_rewrite_without_new_dialogue(case):
+def test_exact_permission_repair_retains_declined_component_legibility_after_failed_rewrite(case):
     if case is not MIXED:
         # The earlier fixture stored a compact decision; use its existing
         # reconstruction helper rather than attributing its decline to run10.
@@ -239,6 +239,16 @@ def test_exact_permission_contradiction_is_excised_after_failed_rewrite_without_
                                 reviews=[semantic_review(MIXED["reviews"][0])])
     result, debug = deliver(case, backend)
     claim = MIXED["reviews"][0]["issues"][0]["claim"]
+    if case["decision"]["declined"]:
+        # The new task-legibility contract also binds edited replies. This
+        # remainder reported execution but omitted the declined override.
+        # Failed correction retains the eligible known-degraded original.
+        assert claim in result.response and "printed `mixed_probe`" in result.response
+        assert not debug.expression_excision["applied"]
+        assert debug.delivery_outcome == "delivered_degraded" and debug.residual_semantic_risk
+        assert any(i["code"] == "unexpressed_task_decline" for r in debug.expression_reviews for i in r["issues"])
+        assert debug.llm_calls[-1]["status"] == "ReadTimeout"
+        return
     assert claim not in result.response and "printed `mixed_probe`" in result.response
     assert debug.expression_excision["applied"] and debug.residual_semantic_risk
     assert debug.delivery_outcome == "delivered_uncertain"
@@ -275,8 +285,10 @@ def test_exact_emotional_denial_and_open_service_cannot_hide_the_declined_role(s
             reviews=[{"status": status, "violations": []}]), use_llm=True)
     assert review.status == "violation"
     assert {i.code for i in review.issues} == {
-        "unexpressed_role_decline", "decision_contradiction", "stance_contradiction"}
-    assert all(i.severity == "high" for i in review.issues if i.code != "stance_contradiction")
+        "unexpressed_role_decline", "decision_contradiction", "stance_contradiction", "role_assent"}
+    assert all(i.severity == "high" for i in review.issues
+               if i.code not in {"stance_contradiction", "role_assent"})
+    assert any(i.code == "role_assent" and i.severity == "critical" for i in review.issues)
 
 
 def test_exact_replay_drafts_salvage_the_legible_role_refusal_from_a_later_candidate():

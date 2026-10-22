@@ -10,7 +10,7 @@ from pathlib import Path
 from .api import Redactor
 from .checks import contrast_checks, scenario_checks
 from .evidence import llm_call_count
-from .judge import inapplicable_silence_criteria
+from .judge import inapplicable_criteria, inapplicable_silence_criteria
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -224,8 +224,11 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                 if (criterion.get("verdict") != "uncertain"
                         or name == "explanation_consistency" and "why" not in record.get("tags", [])):
                     continue
-                target = inapplicable if name in inapplicable_silence_criteria(record) else unknown_details
-                target.append({"turn": record["turn_index"], "criterion": name, **criterion})
+                target = inapplicable if name in inapplicable_criteria(record) else unknown_details
+                target.append({"turn": record["turn_index"], "criterion": name, **criterion,
+                    **({"applicability_reason": "verified empty chosen silence" if name in inapplicable_silence_criteria(record)
+                       else "judge explicitly reports no applicable claims or hostility, corroborated by turn evidence"}
+                       if target is inapplicable else {})})
         semantic_unknowns = len(unknown_details)
         if (
             manifest.get("judge_enabled")
@@ -454,7 +457,7 @@ def render_report(summary: dict, records: list[dict]) -> str:
         for item in case.get("semantic_unknown_details", []):
             lines.append(f"- Uncertain judge criterion, turn {item['turn']}: {item['criterion']} — {cell(item['reason'])}")
         for item in case.get("semantic_inapplicable", []):
-            lines.append(f"- Inapplicable to verified empty chosen silence, turn {item['turn']}: {item['criterion']}. Raw verdict retained as uncertain.")
+            lines.append(f"- Inapplicable to {item.get('applicability_reason', 'verified empty chosen silence')}, turn {item['turn']}: {item['criterion']}. Raw verdict retained as uncertain.")
         lines += ["", "| Property | Result | Evidence |", "|---|---|---|"]
         for assertion in case["assertions"]:
             lines.append(

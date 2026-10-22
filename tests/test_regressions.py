@@ -507,11 +507,13 @@ class TestStickyDialogueAndTimings:
         """Tracks call count and returns parseable responses."""
         def __init__(self) -> None:
             self.call_count = 0
+            self.expressions = 0
         def generate(self, system_prompt: str, user_message: str) -> str:
             self.call_count += 1
             if "Evaluate this response" in system_prompt:
                 return "APPROVED: ok"
-            return "I understand."
+            self.expressions += 1
+            return f"I understand expression {self.expressions}."
 
     def test_calm_turn_uses_1_call(self):
         """A calm turn like 'how r u' uses exactly 1 LLM call."""

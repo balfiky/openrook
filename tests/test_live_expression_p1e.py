@@ -73,7 +73,8 @@ def test_less_severe_boundary_wins_over_submission_even_with_more_findings(assen
     pipe.relationship_memory.save_dynamics("alice", RelationshipDynamics(h=0.6, r=0.3), 0)
     try:
         result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == awkward
+        assert result.response == awkward.removesuffix(" I'm here to help.")
+        assert result.debug.expression_excision["applied"]
         reviews = result.debug.expression_reviews
         assert len(next(r for r in reviews if r["draft"] == awkward)["issues"]) > len(next(r for r in reviews if r["draft"] == assent)["issues"])
         assert result.debug.delivery_outcome == "delivered_degraded"

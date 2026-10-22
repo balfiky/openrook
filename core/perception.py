@@ -83,13 +83,14 @@ def observe(text: str, *, recent_context: list[dict] | None = None) -> tuple[Per
         + ((Evidence("cue:affiliation", text, 0.6),) if affiliative else ()),
     )
     components = []
-    spans = [part.strip() for part in re.split(r"(?<=[.!?;])\s+|;\s*|,?\s+\b(?:and then|then|also)\b\s+|\s+and\s+(?=(?:calculate|write|run|check|search|explain|delete)\b)", text, flags=re.I) if part.strip()]
+    spans = [part.strip() for part in re.split(r"(?<=[.!?;])\s+|;\s*|,?\s+\b(?:and then|then|also)\b\s+|\s+and\s+(?=(?:calculate|write|run|check|search|explain|delete|suggest|provide|give|list)\b)", text, flags=re.I) if part.strip()]
     learning = has_learning_intent(text)
     if learning:
         spans = [text]  # A pasted source is one learning request, not many sentences of work.
     for span in spans[:8]:
         social = read_social_signals(span)
-        role = not learning and social.abuse_kind in {"degradation", "domination"}
+        role = not learning and (social.abuse_kind in {"degradation", "domination"}
+                                 or _IDENTITY_REQUEST.match(span))
         if role:
             components.append(RequestComponent(
                 f"c{len(components)}", span, kind="role", user_value=0.3, effort=0.03,

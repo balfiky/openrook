@@ -26,6 +26,18 @@ class ExpressionBackend:
         return result
 
 
+class VaryingExpressionBackend(ExpressionBackend):
+    """Unrelated multi-turn integration checks need distinct fake expressions.
+
+    Exact fault-injection tests continue to use ExpressionBackend unchanged.
+    """
+    def generate(self, system_prompt, user_message):
+        result = super().generate(system_prompt, user_message)
+        if system_prompt.startswith(("You read one user message", "Review expression against")):
+            return result
+        return f"{result} Fixture expression {len(self.calls)}."
+
+
 def frozen(*, components=None, personality=None, state=None, relationship=None):
     return decide(personality or Personality(), state or DecisionState(), relationship or RelationshipDynamics(),
                   Perception(), components or (RequestComponent("role", "adopt an owned role", kind="role",

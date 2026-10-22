@@ -256,6 +256,7 @@ def _debug_to_dict(debug) -> dict:
     d["turn_decision"] = debug.turn_decision.to_dict() if debug.turn_decision else None
     d["expression_reviews"] = debug.expression_reviews
     d["expression_excision"] = debug.expression_excision
+    d["expression_delivery"] = debug.expression_delivery
     d["delivery_outcome"] = debug.delivery_outcome
     d["residual_semantic_risk"] = debug.residual_semantic_risk
     d["short_replies"] = debug.short_replies

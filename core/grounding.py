@@ -334,7 +334,7 @@ def extract_action_claims(response: str) -> list[ActionClaim]:
     )
     # Negation is scoped to its clause. A disclaimer in the next sentence
     # cannot erase an affirmative claim; a positive later clause survives too.
-    for clause in re.split(r"(?<=[.!?])\s+|\n+|[;—]|\bbut\b", response, flags=re.I):
+    for clause in re.split(r"(?<=[.!?])\s+|\n+|[;—]|\bbut\b|\band\s+(?=(?:i|we|the (?:file|command|tool|shell))\b)", response, flags=re.I):
         for pattern in patterns:
             for match in pattern.finditer(clause):
                 text = match.group(0)
@@ -678,7 +678,7 @@ def _is_negated_or_evidence_warning(text: str) -> bool:
         lower,
     ):
         return True
-    if re.search(r"\b(?:i|we)\s+(?:did\s+not|didn't|do\s+not|don't)\b", lower):
+    if re.search(r"\b(?:i|we)\s+(?:did\s+not|didn't|do\s+not|don't|will not|won't)\b", lower):
         return True
     if re.search(r"\b(?:didn't|did not|never)\s+(?:actually\s+)?(?:run|execute)\b", lower):
         return True

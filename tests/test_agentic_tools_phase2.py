@@ -33,7 +33,7 @@ from pipeline import (
     _message_for_model_tool_routing,
     _message_for_tool_detection,
 )
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 
 
 # ===================================================================

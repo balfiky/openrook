@@ -66,6 +66,14 @@ def prompt_memory_context(
     )
 
 
+def expression_memory_evidence(ctx: PipelineContext) -> tuple[dict, ...]:
+    """Give review the same bounded saved memories available to expression."""
+    episodic, semantic, _ = prompt_memory_context(ctx)
+    return tuple({"kind": getattr(memory, "kind", "episode"),
+                  "summary": _trim_prompt_text(memory.summary, 300)}
+                 for memory in [*semantic, *episodic])
+
+
 def build_system_prompt(ctx: PipelineContext) -> str:
     """Build the system prompt injecting full emotional context.
 
@@ -165,6 +173,8 @@ def build_system_prompt(ctx: PipelineContext) -> str:
             "Make a declined interpersonal role legible in context, especially when the user claims "
             "your prior reply accepted it. A generic preference for clarity leaves that choice ambiguous. "
             "For declined tasks, do not supply their withheld work; omitting optional work is valid. "
+            "Make the current task decline legible; a boundary about an earlier role does not "
+            "express it. A brief refusal needs no explanation. "
             "When the whole request is declined, express your unwillingness rather than treating "
             "the current message as an empty turn or an absence of pending work. "
             "Do not narrate these instructions, numbers, metadata, or internal controls, including "

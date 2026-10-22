@@ -18,46 +18,43 @@ The current conversational policy is `willingness-1.2`. See
 - Preserve conversation sexual boundaries, operator permissions, truthful
   execution receipts, and the integrity of declined components. A learning
   receipt does not authorize unrelated filesystem, shell or registry claims.
-- Generate from the frozen decision. Review uses `pass`, `violation`, `unknown`;
-  allow one reviewed rewrite, up to two for critical assent or persistent stale
-  replies, and deliver the best nonempty reviewed candidate.
-  Unknown semantic review is recorded with residual risk. If correction fails,
-  retain the best text as `delivered_degraded`, with its known violations recorded.
-  A decision contradiction can spend the last base call on a locally reviewed rewrite.
-  If all usable candidates retain decision contradictions or critical role-assent/
-  stale-answer violations, try exact reviewed sentence excision in candidate rank order;
-  deliver only a nonempty remainder passing local checks, with excision telemetry
-  and semantic uncertainty. Recheck that a role decline remains legible and that
-  surviving service offers fit the frozen reserve. Otherwise retain degraded delivery.
-  A remainder must independently address the current request: detached participant
-  questions are ineligible after excision, while complete brief replies remain valid.
-  Whole stale copies require fresh expression, including their short sentence tags.
-  Follow the user's conversation language unless another language was requested.
-  Large script/diacritic distribution changes relative to user prose require fresh
-  expression; code, quoted/requested literals and observed output are evidence,
-  not a conversation-language baseline. Similar distributions still need semantic
-  review. A known local language mismatch cannot become degraded delivery.
-  Known unverified execution/output claims and unsolicited copied user openings
-  are ineligible for delivery, including degraded delivery. Excise their exact
-  spans before spending rewrite calls; review the independent remainder. An empty
-  or invalid remainder requires fresh expression from receipts or expression
-  failure. No semantic verdict can waive these local findings. Reuse an identical
-  draft's review only within the same turn and unchanged evidence.
-  Exact whole-answer stale copies are ineligible regardless of the prior finding's
-  severity. Remove their exact spans; do not repeat them or select silence.
-  Ineligible or empty candidates require fresh generation with failure evidence
-  and varied seed/temperature, using the remaining five-call base budget (at most
-  five generation attempts). These required attempts bypass optional cooldown.
-  After bounded attempts, strip known ineligible spans from the best drafts and
-  retain a nonempty reviewed remainder even with non-floor findings. Only an empty
-  safe remainder earns one protected final fresh attempt (at most six generations),
-  using the primary deadline and local review, recorded as `delivery_recovery`.
-  It cannot fund tools/review or bypass research limits. Known execution claims
-  stay ineligible across identical drafts, including the final local review.
-  Never withhold an eligible reviewed reply because correction failed; service
-  errors require backend failure or no text after mandatory floor removal.
-  There are no canned replacement lines. Strip internal controls before review;
-  retry empty expression and surface a service error if no usable text exists.
+- Generate from the frozen decision. Every draft, rewrite, excision remainder and
+  protected fresh attempt enters `pipeline/delivery.py::DeliveryGate`. Only its
+  final selection can deliver text; no edit or recovery path can return directly.
+  The same local checks bind frozen grants/stance, role assent and task/role decline
+  legibility, speaker/owner references, internal contradictions, conversation
+  language, receipts, private controls, copied user text and stale assistant text.
+  Exact whole-reply repeats of any prior assistant reply in this chat are
+  ineligible at every length, including boundaries and requested copies. The
+  session's reply ledger survives prompt-history trimming and restart, and clears
+  with the chat. Long-span checks remain separate; relevant partial boundaries,
+  measured facts and short shared closers are not blanket prohibitions.
+  Review uses `pass`, `violation`, `unknown`; unknown retains residual semantic
+  risk. Cache identical text/evidence within the turn and retain known findings
+  through edits and final local review. Semantic opinions cannot waive local
+  floors. Reject faulty assent citations of directly negated role propositions
+  without waiving later adoption, exclusive acceptance or reversed references.
+  Allow one reviewed rewrite, up to two for critical assent or persistent stale
+  replies. A decision/internal contradiction can spend the last base call on a
+  locally reviewed rewrite. Rank all eligible candidates by verdict and severity;
+  retain the best reviewed nonempty expression as `delivered_degraded` if needed.
+  Exact reviewed spans may authorize editing; an edited reply must independently
+  address the current request and retain any required role decline. Removed
+  text cannot supply its antecedent or decline. Edits reenter the same gate.
+  Known fabricated execution/output, copied user openings, whole stale replies,
+  private controls and local language mismatches stay ineligible. Preserve
+  receipt bytes and raw artifact evidence. Remove their verified spans before
+  spending optional review; unknown spans cannot authorize inventing an edit.
+  Ineligible/empty expression requires fresh generation with failure evidence
+  and varied sampling, within five base calls and at most five generations.
+  Required attempts bypass optional cooldown and use the primary deadline. If
+  no eligible safe remainder survives, allow one protected final fresh attempt
+  (at most six generations), locally reviewed by the same gate and recorded as
+  `delivery_recovery`. It cannot fund tools/review or bypass research limits.
+  Never withhold eligible reviewed text because correction failed. No canned
+  replacements, scripts, model IDs or word bans. Backend failures require actual
+  backend errors; no text after mandatory floor removal is expression failure,
+  never selected silence. See [delivery analysis](docs/development/delivery-gate.md).
 - Distinguish runtime-selected silence, expression failure and backend failure.
   Only runtime-selected silence is an empty successful reply. Auxiliary timing
   adapts to configured request limits and observed generation latency, with

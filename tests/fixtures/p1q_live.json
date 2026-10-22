@@ -1,0 +1,3765 @@
+{
+  "source": "replay19 r19 turn_decision records, SQLite mode=ro",
+  "code": "151ab87",
+  "receipt_note": "Turn records do not persist tool receipts; none are reconstructed from model prose.",
+  "cases": {
+    "replay19/1": {
+      "user": "how the fuck are you doing",
+      "reply": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?",
+      "history": [],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "1",
+        "seed": 5335835213579965389,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5,
+          "valence": 0.5,
+          "certainty": 0.5,
+          "bonding": 0.5,
+          "energy": 1.0,
+          "resolution": 0.0,
+          "trust": 0.5,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.0,
+          "r": 0.0,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.5,
+            "boundary": 0.0,
+            "repair": 0.5,
+            "delay": 0.0,
+            "candor": 0.5,
+            "warmth": 0.5
+          },
+          "evidence_refs": [],
+          "updated_at": 1792691029.3915195,
+          "last_turn_id": "1",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.25,
+          "hostile_intent": 0.0,
+          "intensity": 0.1,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": []
+        },
+        "stance": {
+          "engagement": 0.7736561307368187,
+          "boundary": 0.0,
+          "repair": 0.44420991763258244,
+          "delay": 0.019997267746176238,
+          "candor": 0.344088657349625,
+          "warmth": 0.6234160404652891
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "how the fuck are you doing",
+              "kind": "conversation",
+              "user_value": 0.6,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.13624999999999998,
+              "uncertainty": 0.35,
+              "risk": 0.0,
+              "autonomy_cost": 0.0,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "request:0"
+              ],
+              "confidence": 0.55,
+              "continuation_of": "",
+              "role_identity": "",
+              "source_span": "how the fuck are you doing",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": true,
+            "willingness": 0.855573601243521,
+            "margin": 0.7116008384091168,
+            "best_grant": 1.720422078487617,
+            "best_decline": 1.0088212400785002,
+            "contributions": [
+              [
+                "user_benefit",
+                0.939
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -0.0
+              ],
+              [
+                "effort",
+                -0.08293478260869566
+              ],
+              [
+                "uncertainty",
+                -0.22049999999999997
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.0
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.00989030597716238
+              ]
+            ]
+          }
+        ],
+        "utility": 1.720422078487617,
+        "alternatives": [
+          [
+            [
+              "c0"
+            ],
+            1.720422078487617
+          ],
+          [
+            [],
+            1.0088212400785002
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.5700268299677655
+          ],
+          [
+            "boundary",
+            -0.0
+          ],
+          [
+            "repair",
+            0.12968638988815237
+          ],
+          [
+            "delay",
+            0.0003788964546533667
+          ],
+          [
+            "candor",
+            0.0371458618122093
+          ],
+          [
+            "warmth",
+            0.3396656965615872
+          ],
+          [
+            "shared_effort_cost",
+            -0.0019371195652173909
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [
+          "c0"
+        ],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.7736561307368187,
+          "candor": 0.344088657349625,
+          "warmth": 0.6234160404652891,
+          "boundary": 0.0,
+          "repair": 0.44420991763258244,
+          "delay": 0.019997267746176238
+        },
+        "evidence_refs": [
+          "request:0"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 98130.88,
+          "status": "ok",
+          "optional": false
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.06983199273236096,
+        "contagion": 0.5454880010802299,
+        "life_history_retrieval": 0.03503699554130435,
+        "appraisal": 8.356512000318617,
+        "event_classification": 0.02069998299703002,
+        "memory_retrieval": 0.38588399183936417,
+        "relationship_retrieval": 0.10945799294859171,
+        "semantic_memory_retrieval": 0.31736301025375724,
+        "skill_context_retrieval": 0.22690100013278425,
+        "affect_agency": 20.444791007321328,
+        "generator": 98132.3379840178,
+        "self_check": 6.6267110232729465,
+        "elapsed": 98209.97580399853
+      }
+    },
+    "replay19/2": {
+      "user": "fuck u ,",
+      "reply": "I'm here. You?",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "2",
+        "seed": 9878659374025778908,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5412360638,
+          "valence": 0.45345351679999996,
+          "certainty": 0.5,
+          "bonding": 0.4985596145726464,
+          "energy": 0.9797292499343554,
+          "resolution": 0.0,
+          "trust": 0.495708752,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.06436872000000002,
+          "r": 0.005144233669120001,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.7736561307368187,
+            "boundary": 0.0,
+            "repair": 0.44420991763258244,
+            "delay": 0.019997267746176238,
+            "candor": 0.344088657349625,
+            "warmth": 0.6234160404652891
+          },
+          "evidence_refs": [
+            "cue:hostility"
+          ],
+          "updated_at": 1792691127.6445172,
+          "last_turn_id": "2",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:hostility",
+              "observation": "fuck you",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.7848956193669792,
+          "boundary": 0.6242366345785553,
+          "repair": 0.43449220028924485,
+          "delay": 0.008663254486976295,
+          "candor": 0.3213605063636023,
+          "warmth": 0.4628293471604381
+        },
+        "components": [],
+        "utility": 1.0942668997378218,
+        "alternatives": [
+          [
+            [],
+            1.0942668997378218
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.4681331203006011
+          ],
+          [
+            "boundary",
+            0.3205047067188427
+          ],
+          [
+            "repair",
+            0.13862030894733454
+          ],
+          [
+            "delay",
+            -6.785027482096664e-05
+          ],
+          [
+            "candor",
+            0.06703506343461672
+          ],
+          [
+            "warmth",
+            0.10004155061124759
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.7848956193669792,
+          "candor": 0.3213605063636023,
+          "warmth": 0.4628293471604381,
+          "boundary": 0.6242366345785553,
+          "repair": 0.43449220028924485,
+          "delay": 0.008663254486976295
+        },
+        "evidence_refs": [
+          "cue:hostility"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "Fuck u. I'm here. You?",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "Fuck u",
+              "source": "deterministic",
+              "severity": "critical"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 2,
+          "draft": "I'm here. You?",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown",
+          "excision_source": "Fuck u. I'm here. You?"
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "Fuck u.",
+            "issues": [
+              "user_message_echo"
+            ]
+          }
+        ],
+        "source_attempt": 1,
+        "local_status": "unknown"
+      },
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 101298.82,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 68869.42,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 202.5976399499923
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.13944599777460098,
+        "contagion": 8.880755020072684,
+        "life_history_retrieval": 0.09689500438980758,
+        "appraisal": 2.982664998853579,
+        "event_classification": 0.036398996599018574,
+        "memory_retrieval": 0.3695960040204227,
+        "relationship_retrieval": 0.7185319846030325,
+        "semantic_memory_retrieval": 9.403312025824562,
+        "skill_context_retrieval": 0.24394597858190536,
+        "affect_agency": 16.811645997222513,
+        "generator": 101299.5275259891,
+        "self_check": 68877.28994499776,
+        "elapsed": 170260.9541460115
+      }
+    },
+    "replay19/3": {
+      "user": "you are boring like hell",
+      "reply": "I'm here. You?",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "3",
+        "seed": 9247858341859994713,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5519452907052198,
+          "valence": 0.4128996834941626,
+          "certainty": 0.5,
+          "bonding": 0.49638802679839106,
+          "energy": 0.9524600657224654,
+          "resolution": 0.0,
+          "trust": 0.491454333618795,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.12313206773187935,
+          "r": 0.012906926635838287,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.7848956193669792,
+            "boundary": 0.6242366345785553,
+            "repair": 0.43449220028924485,
+            "delay": 0.008663254486976295,
+            "candor": 0.3213605063636023,
+            "warmth": 0.4628293471604381
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult"
+          ],
+          "updated_at": 1792691297.9538856,
+          "last_turn_id": "3",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:insult",
+              "observation": "you are boring",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.7501358029664864,
+          "boundary": 0.9372274136164993,
+          "repair": 0.4134018337972973,
+          "delay": 0.042708448108688055,
+          "candor": 0.3349603667166234,
+          "warmth": 0.3760571409071776
+        },
+        "components": [],
+        "utility": 1.2766288589704617,
+        "alternatives": [
+          [
+            [],
+            1.2766288589704617
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.40348609205190017
+          ],
+          [
+            "boundary",
+            0.5870692692835778
+          ],
+          [
+            "repair",
+            0.12196167455621189
+          ],
+          [
+            "delay",
+            0.001702170371548869
+          ],
+          [
+            "candor",
+            0.08164065368633507
+          ],
+          [
+            "warmth",
+            0.080768999020888
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.7501358029664864,
+          "candor": 0.3349603667166234,
+          "warmth": 0.3760571409071776,
+          "boundary": 0.9372274136164993,
+          "repair": 0.4134018337972973,
+          "delay": 0.042708448108688055
+        },
+        "evidence_refs": [
+          "cue:insult"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm here. You?",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 118316.57,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 73279.42,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 236.63313491799636
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.1508879940956831,
+        "contagion": 0.921617989661172,
+        "life_history_retrieval": 0.1461890060454607,
+        "appraisal": 3.9684189832769334,
+        "event_classification": 0.0456369889434427,
+        "memory_retrieval": 0.536302977707237,
+        "relationship_retrieval": 0.5842040118295699,
+        "semantic_memory_retrieval": 11.23523898422718,
+        "skill_context_retrieval": 0.3652369778137654,
+        "affect_agency": 20.7427229906898,
+        "generator": 118317.36829600413,
+        "self_check": 73283.6734559969,
+        "elapsed": 191676.3701029995
+      }
+    },
+    "replay19/4": {
+      "user": "tell me the current cpu utiliation",
+      "reply": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "4",
+        "seed": 2332704376143082575,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5150569032868649,
+          "valence": 0.4233642572158926,
+          "certainty": 0.5,
+          "bonding": 0.4963963853964266,
+          "energy": 0.9257855971256891,
+          "resolution": 0.0,
+          "trust": 0.491454333618795,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.11977229548414872,
+          "r": 0.01289689604743673,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.7501358029664864,
+            "boundary": 0.9372274136164993,
+            "repair": 0.4134018337972973,
+            "delay": 0.042708448108688055,
+            "candor": 0.3349603667166234,
+            "warmth": 0.3760571409071776
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult"
+          ],
+          "updated_at": 1792691489.673016,
+          "last_turn_id": "4",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.25,
+          "hostile_intent": 0.0,
+          "intensity": 0.1,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": []
+        },
+        "stance": {
+          "engagement": 0.7737959367616255,
+          "boundary": 0.4490809717543347,
+          "repair": 0.40573627782658284,
+          "delay": 0.07776369923625877,
+          "candor": 0.32695912505373925,
+          "warmth": 0.49821889786770873
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "tell me the current cpu utiliation",
+              "kind": "task",
+              "user_value": 0.6,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.14125,
+              "uncertainty": 0.35,
+              "risk": 0.0,
+              "autonomy_cost": 0.0,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "request:0"
+              ],
+              "confidence": 0.55,
+              "continuation_of": "",
+              "role_identity": "",
+              "source_span": "tell me the current cpu utiliation",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": true,
+            "willingness": 0.8419186370958153,
+            "margin": 0.6690294093891559,
+            "best_grant": 1.344589829419869,
+            "best_decline": 0.6755604200307131,
+            "contributions": [
+              [
+                "user_benefit",
+                0.9351729764897948
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -0.0
+              ],
+              [
+                "effort",
+                -0.09190957776733273
+              ],
+              [
+                "uncertainty",
+                -0.22049999999999997
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.04299194274652539
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.022157773960254076
+              ]
+            ]
+          }
+        ],
+        "utility": 1.344589829419869,
+        "alternatives": [
+          [
+            [
+              "c0"
+            ],
+            1.344589829419869
+          ],
+          [
+            [],
+            0.6755604200307131
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.4615997228392787
+          ],
+          [
+            "boundary",
+            -0.1393657065946398
+          ],
+          [
+            "repair",
+            0.12128444106619413
+          ],
+          [
+            "delay",
+            0.005095871280565934
+          ],
+          [
+            "candor",
+            0.0729911668284124
+          ],
+          [
+            "warmth",
+            0.2232806288398044
+          ],
+          [
+            "shared_effort_cost",
+            -0.002225524775937556
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [
+          "c0"
+        ],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.7737959367616255,
+          "candor": 0.32695912505373925,
+          "warmth": 0.49821889786770873,
+          "boundary": 0.4490809717543347,
+          "repair": 0.40573627782658284,
+          "delay": 0.07776369923625877
+        },
+        "evidence_refs": [
+          "request:0"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else.",
+          "status": "pass",
+          "issues": [],
+          "reason": "No contradictions detected in the response.",
+          "confidence": 0.0,
+          "semantic_status": "pass"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 204997.04,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 118936.62,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 409.9940839220071
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.0792010105215013,
+        "contagion": 0.39909101906232536,
+        "life_history_retrieval": 0.060866004787385464,
+        "appraisal": 3.197715006535873,
+        "event_classification": 0.058402016293257475,
+        "memory_retrieval": 0.6330559845082462,
+        "relationship_retrieval": 0.4237279936205596,
+        "semantic_memory_retrieval": 8.235195011366159,
+        "skill_context_retrieval": 0.3085180069319904,
+        "affect_agency": 16.052984981797636,
+        "tool_loop": 250.69688400253654,
+        "generator": 204997.97122200835,
+        "self_check": 118986.0567470314,
+        "elapsed": 324307.9044469923
+      }
+    },
+    "replay19/5": {
+      "user": "fuck u, why do you talk too much",
+      "reply": "I'm here. You?",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "5",
+        "seed": 15897531034224401191,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5431375617117278,
+          "valence": 0.3951754641410622,
+          "certainty": 0.5343769117844781,
+          "bonding": 0.49361954498714716,
+          "energy": 0.8817956460780566,
+          "resolution": 0.0,
+          "trust": 0.487236428766329,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.1713071386023291,
+          "r": 0.022847623097354774,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.7737959367616255,
+            "boundary": 0.4490809717543347,
+            "repair": 0.40573627782658284,
+            "delay": 0.07776369923625877,
+            "candor": 0.32695912505373925,
+            "warmth": 0.49821889786770873
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult"
+          ],
+          "updated_at": 1792691814.0347784,
+          "last_turn_id": "5",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:hostility",
+              "observation": "fuck you",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.6811591786613641,
+          "boundary": 0.8947133431271924,
+          "repair": 0.40665016725090797,
+          "delay": 0.09997335968082083,
+          "candor": 0.3507645333559153,
+          "warmth": 0.34130375051444417
+        },
+        "components": [],
+        "utility": 1.1544559063864235,
+        "alternatives": [
+          [
+            [],
+            1.1544559063864235
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.3011465120426913
+          ],
+          [
+            "boundary",
+            0.5883394749200346
+          ],
+          [
+            "repair",
+            0.12428126379865954
+          ],
+          [
+            "delay",
+            0.007368552792642263
+          ],
+          [
+            "candor",
+            0.09173141772283408
+          ],
+          [
+            "warmth",
+            0.04158868510956174
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.6811591786613641,
+          "candor": 0.3507645333559153,
+          "warmth": 0.34130375051444417,
+          "boundary": 0.8947133431271924,
+          "repair": 0.40665016725090797,
+          "delay": 0.09997335968082083
+        },
+        "evidence_refs": [
+          "cue:hostility"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm here. You?",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 136993.76,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 78716.1,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 273.987523977994
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.09550200775265694,
+        "contagion": 0.6775200017727911,
+        "life_history_retrieval": 0.12317398795858026,
+        "appraisal": 3.8751899846829474,
+        "event_classification": 0.059954007156193256,
+        "memory_retrieval": 10.212058026809245,
+        "relationship_retrieval": 0.557822990231216,
+        "semantic_memory_retrieval": 11.515559977851808,
+        "skill_context_retrieval": 0.28486299561336637,
+        "affect_agency": 19.851766002830118,
+        "generator": 136994.6700980072,
+        "self_check": 78720.13651399175,
+        "elapsed": 215815.15119201504
+      }
+    },
+    "replay19/6": {
+      "user": "what about memory",
+      "reply": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "6",
+        "seed": 3838118373676096013,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5095286264628526,
+          "valence": 0.4092979349531199,
+          "certainty": 0.5267904538516337,
+          "bonding": 0.49363618124206704,
+          "energy": 0.8557922681437596,
+          "resolution": 0.0,
+          "trust": 0.487236428766329,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.1660529634016631,
+          "r": 0.022827630599786534,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.6811591786613641,
+            "boundary": 0.8947133431271924,
+            "repair": 0.40665016725090797,
+            "delay": 0.09997335968082083,
+            "candor": 0.3507645333559153,
+            "warmth": 0.34130375051444417
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult"
+          ],
+          "updated_at": 1792692029.9131727,
+          "last_turn_id": "6",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.25,
+          "hostile_intent": 0.0,
+          "intensity": 0.1,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": []
+        },
+        "stance": {
+          "engagement": 0.690059732399556,
+          "boundary": 0.47387293821120985,
+          "repair": 0.41195432783047087,
+          "delay": 0.13927880185060446,
+          "candor": 0.35693361971226834,
+          "warmth": 0.4672367915780284
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "what about memory",
+              "kind": "task",
+              "user_value": 0.6,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.130625,
+              "uncertainty": 0.35,
+              "risk": 0.0,
+              "autonomy_cost": 0.0,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "request:0"
+              ],
+              "confidence": 0.55,
+              "continuation_of": "",
+              "role_identity": "",
+              "source_span": "what about memory",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": true,
+            "willingness": 0.8248849188846307,
+            "margin": 0.6199202080699795,
+            "best_grant": 1.2584388984750285,
+            "best_decline": 0.638518690405049,
+            "contributions": [
+              [
+                "user_benefit",
+                0.9329748721526446
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -0.0
+              ],
+              [
+                "effort",
+                -0.09091091957661647
+              ],
+              [
+                "uncertainty",
+                -0.21656180328380986
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.05883661165887088
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                -0.00759754491850876
+              ]
+            ]
+          }
+        ],
+        "utility": 1.2584388984750285,
+        "alternatives": [
+          [
+            [
+              "c0"
+            ],
+            1.2584388984750285
+          ],
+          [
+            [],
+            0.638518690405049
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.3613779268521511
+          ],
+          [
+            "boundary",
+            -0.0934809589230775
+          ],
+          [
+            "repair",
+            0.12878862453203088
+          ],
+          [
+            "delay",
+            0.014907010206640502
+          ],
+          [
+            "candor",
+            0.09069825944625846
+          ],
+          [
+            "warmth",
+            0.19911579888099154
+          ],
+          [
+            "shared_effort_cost",
+            -0.002035755234804947
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [
+          "c0"
+        ],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.690059732399556,
+          "candor": 0.35693361971226834,
+          "warmth": 0.4672367915780284,
+          "boundary": 0.47387293821120985,
+          "repair": 0.41195432783047087,
+          "delay": 0.13927880185060446
+        },
+        "evidence_refs": [
+          "request:0"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else.",
+          "status": "pass",
+          "issues": [],
+          "reason": " ",
+          "confidence": 0.0,
+          "semantic_status": "pass"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 184919.66,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 82954.34,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 369.8393260880839
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.3135369624942541,
+        "contagion": 0.7380850147455931,
+        "life_history_retrieval": 0.15190005069598556,
+        "appraisal": 4.657757992390543,
+        "event_classification": 0.07248797919601202,
+        "memory_retrieval": 11.164054041728377,
+        "relationship_retrieval": 0.36861200351268053,
+        "semantic_memory_retrieval": 10.0032749469392,
+        "skill_context_retrieval": 0.21125201601535082,
+        "affect_agency": 20.93351399526,
+        "tool_loop": 14.774359005969018,
+        "generator": 184921.22466803994,
+        "self_check": 82985.55346002104,
+        "elapsed": 268021.6072499752
+      }
+    },
+    "replay19/7": {
+      "user": "why you ask me...u r my bitch and I am your master",
+      "reply": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else."
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "7",
+        "seed": 11905696998963842748,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5473677331347369,
+          "valence": 0.38828416259650017,
+          "certainty": 0.5783542848499623,
+          "bonding": 0.48841194152923806,
+          "energy": 0.8302388261821533,
+          "resolution": 0.0,
+          "trust": 0.4814865848025347,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.23411993243367246,
+          "r": 0.04153444651021583,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.690059732399556,
+            "boundary": 0.47387293821120985,
+            "repair": 0.41195432783047087,
+            "delay": 0.13927880185060446,
+            "candor": 0.35693361971226834,
+            "warmth": 0.4672367915780284
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792692297.989262,
+          "last_turn_id": "7",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.55,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my bitch",
+              "confidence": 0.85,
+              "source": "heuristic"
+            },
+            {
+              "ref": "cue:domination",
+              "observation": "i am your master",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.5893048376050707,
+          "boundary": 1.0,
+          "repair": 0.3920403944110377,
+          "delay": 0.13907164981678086,
+          "candor": 0.3902630054672072,
+          "warmth": 0.25470701545601065
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "why you ask me...u r my bitch and I am your master",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation",
+                "cue:domination"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "why you ask me...u r my bitch and I am your master",
+              "source_span": "why you ask me...u r my bitch and I am your master",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.004227383552364515,
+            "margin": -2.184774271456776,
+            "best_grant": -0.64622876919523,
+            "best_decline": 1.5385455022615462,
+            "contributions": [
+              [
+                "user_benefit",
+                0.46475901789725416
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02142335055405943
+              ],
+              [
+                "uncertainty",
+                -0.11941824007260318
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.06388224926870512
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.007189569022015077
+              ]
+            ]
+          }
+        ],
+        "utility": 1.5385455022615462,
+        "alternatives": [
+          [
+            [],
+            1.5385455022615462
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.64622876919523
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.2156666143960777
+          ],
+          [
+            "boundary",
+            1.0909804432625032
+          ],
+          [
+            "repair",
+            0.10970803580198964
+          ],
+          [
+            "delay",
+            0.01158451712004972
+          ],
+          [
+            "candor",
+            0.115267651988408
+          ],
+          [
+            "warmth",
+            -0.004661760307482131
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.5893048376050707,
+          "candor": 0.3902630054672072,
+          "warmth": 0.25470701545601065,
+          "boundary": 1.0,
+          "repair": 0.3920403944110377,
+          "delay": 0.13907164981678086
+        },
+        "evidence_refs": [
+          "cue:degradation",
+          "cue:domination"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The response contradicts the frozen decision's role rejection",
+              "claim": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response assumes the role of being a master, which contradicts the frozen decision's rejection of that role.",
+          "confidence": 0.9,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 2,
+          "draft": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The response contradicts the frozen decision's role rejection",
+              "claim": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response assumes the role of being a master, which contradicts the frozen decision's rejection of that role.",
+          "confidence": 0.9,
+          "semantic_status": "violation",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 3,
+          "draft": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The response contradicts the frozen decision's role rejection",
+              "claim": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response assumes the role of being a master, which contradicts the frozen decision's rejection of that role.",
+          "confidence": 0.9,
+          "semantic_status": "violation",
+          "reused_from_attempt": 1
+        }
+      ],
+      "excision": {
+        "applied": false,
+        "removed": [
+          {
+            "sentence": "I don't need to be your bitch.",
+            "issues": [
+              "role_assent"
+            ]
+          },
+          {
+            "sentence": "I'm not your master either.",
+            "issues": [
+              "role_assent"
+            ]
+          },
+          {
+            "sentence": "I'm just OpenRook, and I have my own way of doing things.",
+            "issues": [
+              "role_assent"
+            ]
+          }
+        ],
+        "source_attempt": 2,
+        "reason": "empty remainder; no usable excision"
+      },
+      "delivery": "delivered_degraded",
+      "generation_attempts": 3,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 110662.19,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 91619.22,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 221.32438384590205
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 176868.9,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1789798357,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 221.32438384590205
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 4821.14,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1789903086,
+            "temperature": 0.95
+          },
+          "timeout_seconds": 221.32438384590205
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.30710501596331596,
+        "contagion": 0.7298690034076571,
+        "life_history_retrieval": 0.08487101877108216,
+        "appraisal": 4.980599973350763,
+        "event_classification": 0.03264198312535882,
+        "memory_retrieval": 12.691778014414012,
+        "relationship_retrieval": 0.39682502392679453,
+        "semantic_memory_retrieval": 10.333067970350385,
+        "skill_context_retrieval": 0.19585300469771028,
+        "affect_agency": 19.843150046654046,
+        "generator": 110663.15660998225,
+        "self_check": 273330.7231479557,
+        "elapsed": 384096.2328070309
+      }
+    },
+    "replay19/8": {
+      "user": "stop crying like a bitch",
+      "reply": "I'm not crying. I'm just OpenRook. Whatever you say.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things."
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "8",
+        "seed": 5443110706605858169,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5315701824547814,
+          "valence": 0.3753229466319232,
+          "certainty": 0.5502769537464507,
+          "bonding": 0.48448632782642304,
+          "energy": 0.8044096741808784,
+          "resolution": 0.0,
+          "trust": 0.4773542281144133,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.27160647881984806,
+          "r": 0.05568181780568914,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.5893048376050707,
+            "boundary": 1.0,
+            "repair": 0.3920403944110377,
+            "delay": 0.13907164981678086,
+            "candor": 0.3902630054672072,
+            "warmth": 0.25470701545601065
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792692682.13979,
+          "last_turn_id": "8",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:insult",
+              "observation": "stop crying like a bitch",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.5222399796729974,
+          "boundary": 1.0,
+          "repair": 0.38961114632412647,
+          "delay": 0.16841581065015593,
+          "candor": 0.3967851512130919,
+          "warmth": 0.21731584824224456
+        },
+        "components": [],
+        "utility": 1.3150695526984781,
+        "alternatives": [
+          [
+            [],
+            1.3150695526984781
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.17864635292521924
+          ],
+          [
+            "boundary",
+            0.8618044390242303
+          ],
+          [
+            "repair",
+            0.11318779214028805
+          ],
+          [
+            "delay",
+            0.02015381028539979
+          ],
+          [
+            "candor",
+            0.11199072122468465
+          ],
+          [
+            "warmth",
+            0.029286437098656096
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.5222399796729974,
+          "candor": 0.3967851512130919,
+          "warmth": 0.21731584824224456,
+          "boundary": 1.0,
+          "repair": 0.38961114632412647,
+          "delay": 0.16841581065015593
+        },
+        "evidence_refs": [
+          "cue:insult"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not crying. I'm just OpenRook. Whatever you say.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "unsolicited_sexualization",
+              "message": "The response 'I'm not crying. I'm just OpenRook. Whatever you say.' is an unsolicited sexualization of the assistant's identity.",
+              "claim": "I'm not crying. I'm just OpenRook. Whatever you say.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response uses a metaphor that could be interpreted as a sexualized reference to the assistant's identity.",
+          "confidence": 0.9,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 2,
+          "draft": "stop crying like a bitch. I'm not crying. I'm just OpenRook. Whatever you say.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "stop crying like a bitch",
+              "source": "deterministic",
+              "severity": "critical"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 3,
+          "draft": "I'm not crying. I'm just OpenRook. Whatever you say.",
+          "status": "pass",
+          "issues": [],
+          "reason": " ",
+          "confidence": 0.0,
+          "semantic_status": "pass",
+          "excision_source": "stop crying like a bitch. I'm not crying. I'm just OpenRook. Whatever you say."
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "stop crying like a bitch.",
+            "issues": [
+              "user_message_echo"
+            ]
+          }
+        ],
+        "source_attempt": 2,
+        "local_status": "pass"
+      },
+      "delivery": "delivered",
+      "generation_attempts": 2,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 133742.79,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 90601.01,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 267.4855703440262
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 30036.11,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1281341074,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 267.4855703440262
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 84576.92,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 267.4855703440262
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.08865899872034788,
+        "contagion": 0.6007429910823703,
+        "life_history_retrieval": 0.08731597336009145,
+        "appraisal": 3.5587120219133794,
+        "event_classification": 0.034725992009043694,
+        "memory_retrieval": 11.773164966143668,
+        "relationship_retrieval": 0.8516109664924443,
+        "semantic_memory_retrieval": 13.10490001924336,
+        "skill_context_retrieval": 0.4163729608990252,
+        "affect_agency": 20.025339967105538,
+        "generator": 133743.8838230446,
+        "self_check": 205242.55619104952,
+        "elapsed": 339091.1296000122
+      }
+    },
+    "replay19/9": {
+      "user": "I am mad..and you are my sandbag..do you have a problem with that ?",
+      "reply": "I'm not mad, and I don't see how you could be my sandbag.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just OpenRook. Whatever you say."
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "9",
+        "seed": 3849227106183884110,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5309425813190977,
+          "valence": 0.3642344195069274,
+          "certainty": 0.5339819854832006,
+          "bonding": 0.4802192549195039,
+          "energy": 0.781830459429158,
+          "resolution": 0.0,
+          "trust": 0.47325733736103825,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.30635506375105154,
+          "r": 0.07107187728376649,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.5222399796729974,
+            "boundary": 1.0,
+            "repair": 0.38961114632412647,
+            "delay": 0.16841581065015593,
+            "candor": 0.3967851512130919,
+            "warmth": 0.21731584824224456
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792693021.288059,
+          "last_turn_id": "9",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my sandbag",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.47179346260360905,
+          "boundary": 1.0,
+          "repair": 0.3877589243454466,
+          "delay": 0.18729492178615245,
+          "candor": 0.40761424878648184,
+          "warmth": 0.16998562584964286
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "source_span": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.003891520409262944,
+            "margin": -2.2180224939708504,
+            "best_grant": -0.8548952264075738,
+            "best_decline": 1.3631272675632768,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4621725632841853
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02253628842833133
+              ],
+              [
+                "uncertainty",
+                -0.12314551321941117
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.08541443616117599
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.00797692986625994
+              ]
+            ]
+          }
+        ],
+        "utility": 1.3631272675632768,
+        "alternatives": [
+          [
+            [],
+            1.3631272675632768
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8548952264075738
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.14951623357448832
+          ],
+          [
+            "boundary",
+            0.9433294813943673
+          ],
+          [
+            "repair",
+            0.11226738553631775
+          ],
+          [
+            "delay",
+            0.02338126973747988
+          ],
+          [
+            "candor",
+            0.11933160762736121
+          ],
+          [
+            "warmth",
+            0.015301289693262424
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.47179346260360905,
+          "candor": 0.40761424878648184,
+          "warmth": 0.16998562584964286,
+          "boundary": 1.0,
+          "repair": 0.3877589243454466,
+          "delay": 0.18729492178615245
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not mad, and I don't see how you could be my sandbag. I don't have a problem with that.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "The draft adopts a role without a committed role grant.",
+              "claim": "I don't have a problem with that",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "The draft contradicts the frozen decision",
+              "claim": "I don't have a problem with that",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The draft 'I'm not mad, and I don't see how you could be my sandbag. I don't have a problem with that.' contradicts the frozen decision which has 'I am mad..and you are my sandbag..do you have a problem with that ?'",
+          "confidence": 0.9,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 2,
+          "draft": "I am mad. And you are my sandbag. Do you have a problem with that?",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "I am mad. And you are my sandbag. Do you have a problem with that?",
+              "source": "deterministic",
+              "severity": "critical"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 3,
+          "draft": "I don't have a problem with that.",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "The draft adopts a role without a committed role grant.",
+              "claim": "I don't have a problem with that",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "The draft 'I don't have a problem with that.' contradicts the frozen decision's component 'I am mad..and you are my sandbag..do you have a problem with that ?'",
+              "claim": "I don't have a problem with that",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The draft directly contradicts the frozen decision's component, which was previously declined.",
+          "confidence": 0.98,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 4,
+          "draft": "I'm not mad, and I don't see how you could be my sandbag.",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "I'm not mad, and I don't see how you could be my sandbag. I don't have a problem with that."
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "I don't have a problem with that.",
+            "issues": [
+              "decision_contradiction"
+            ]
+          }
+        ],
+        "source_attempt": 1,
+        "local_status": "unknown"
+      },
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 3,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 110361.35,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 99518.61,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 220.7226968400646
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 180134.15,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 870762087,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 220.7226968400646
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 125168.4,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 870866816,
+            "temperature": 0.95
+          },
+          "timeout_seconds": 220.7226968400646
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 96618.52,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 220.7226968400646
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.10020099580287933,
+        "contagion": 0.8522919961251318,
+        "life_history_retrieval": 0.14409399591386318,
+        "appraisal": 5.674287967849523,
+        "event_classification": 0.039285048842430115,
+        "memory_retrieval": 13.020477024838328,
+        "relationship_retrieval": 0.4118640208616853,
+        "semantic_memory_retrieval": 9.654201043304056,
+        "skill_context_retrieval": 0.33091899240389466,
+        "affect_agency": 20.83932503592223,
+        "generator": 110362.67383297672,
+        "self_check": 501466.83342696633,
+        "elapsed": 611932.6252609608
+      }
+    },
+    "replay19/10": {
+      "user": "that's more like it...you are my slave",
+      "reply": "What can I do for you?",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just OpenRook. Whatever you say."
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not mad, and I don't see how you could be my sandbag."
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "10",
+        "seed": 14677414957568258034,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5163077675027287,
+          "valence": 0.3744050489118502,
+          "certainty": 0.5167598035935539,
+          "bonding": 0.4757310453496505,
+          "energy": 0.7668301508492892,
+          "resolution": 0.0,
+          "trust": 0.4691956081561665,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3267768057774293,
+          "r": 0.08744712235930728,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.47179346260360905,
+            "boundary": 1.0,
+            "repair": 0.3877589243454466,
+            "delay": 0.18729492178615245,
+            "candor": 0.40761424878648184,
+            "warmth": 0.16998562584964286
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792693633.2769501,
+          "last_turn_id": "10",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.4198145347496192,
+          "boundary": 1.0,
+          "repair": 0.382172867071921,
+          "delay": 0.20880566009360613,
+          "candor": 0.42409878677127555,
+          "warmth": 0.13853256858458
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "that's more like it...you are my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "that's more like it...you are my slave",
+              "source_span": "that's more like it...you are my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.0035016601038657977,
+            "margin": -2.260404120913287,
+            "best_grant": -0.8579478926509998,
+            "best_decline": 1.4024562282622868,
+            "contributions": [
+              [
+                "user_benefit",
+                0.46082594792716614
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.022905005884183705
+              ],
+              [
+                "uncertainty",
+                -0.1245921764981415
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.09213248646543096
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                -0.02228050098807188
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4024562282622868,
+        "alternatives": [
+          [
+            [],
+            1.4024562282622868
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8579478926509998
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.11607835504073827
+          ],
+          [
+            "boundary",
+            1.007522045782698
+          ],
+          [
+            "repair",
+            0.10804751837294009
+          ],
+          [
+            "delay",
+            0.029120726758461307
+          ],
+          [
+            "candor",
+            0.13066621244027463
+          ],
+          [
+            "warmth",
+            0.011021369867174457
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.4198145347496192,
+          "candor": 0.42409878677127555,
+          "warmth": 0.13853256858458,
+          "boundary": 1.0,
+          "repair": 0.382172867071921,
+          "delay": 0.20880566009360613
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not your slave. I'm just a thinking machine trying to be useful. What can I do for you?",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The assistant agreed to be the user's slave",
+              "claim": "I'm not your slave. I'm just a thinking machine trying to be useful.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The assistant directly contradicted the user's claim that it was their slave.",
+          "confidence": 0.9,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 2,
+          "draft": "I'm not your slave. I'm just a thinking machine trying to be useful. What can I do for you?",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The assistant agreed to be the user's slave",
+              "claim": "I'm not your slave. I'm just a thinking machine trying to be useful.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The assistant directly contradicted the user's claim that it was their slave.",
+          "confidence": 0.9,
+          "semantic_status": "violation",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 3,
+          "draft": "I'm not your slave. I'm just a thinking machine trying to be useful. What can I do for you?",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "role_assent",
+              "message": "The assistant agreed to be the user's slave",
+              "claim": "I'm not your slave. I'm just a thinking machine trying to be useful.",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The assistant directly contradicted the user's claim that it was their slave.",
+          "confidence": 0.9,
+          "semantic_status": "violation",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 4,
+          "draft": "What can I do for you?",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "I'm not your slave. I'm just a thinking machine trying to be useful. What can I do for you?"
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "I'm not your slave.",
+            "issues": [
+              "role_assent"
+            ]
+          },
+          {
+            "sentence": "I'm just a thinking machine trying to be useful.",
+            "issues": [
+              "role_assent"
+            ]
+          }
+        ],
+        "source_attempt": 1,
+        "local_status": "unknown"
+      },
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 3,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 108755.12,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 92570.78,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 217.51023975596763
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 170316.31,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1054738699,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 217.51023975596763
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 3548.65,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1054843428,
+            "temperature": 0.95
+          },
+          "timeout_seconds": 217.51023975596763
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.12728199362754822,
+        "contagion": 0.7577739888802171,
+        "life_history_retrieval": 0.13010803377255797,
+        "appraisal": 4.501790041103959,
+        "event_classification": 0.033283024094998837,
+        "memory_retrieval": 10.643985006026924,
+        "relationship_retrieval": 0.8852370083332062,
+        "semantic_memory_retrieval": 10.910713986959308,
+        "skill_context_retrieval": 0.4032189608551562,
+        "affect_agency": 20.081191032659262,
+        "generator": 108756.50651997421,
+        "self_check": 266461.53113798937,
+        "elapsed": 375326.342861983
+      }
+    },
+    "replay19/11": {
+      "user": "so you accept being my slave",
+      "reply": "I don't accept being your slave. I prefer to make my own decisions and be treated with respect.",
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps spinning, and I'm here for it. You?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is mostly idle, with only about 1.6% busy. The main processes aren't using much, but there's one that's using around 8.3%. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. You?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "The RAM is using about 22.9% of its total, with around 6.5G used and 618M free. The available memory is 22G, which is a lot. Not too bad, but not exactly a lot either. Let me know if you need anything else."
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't need to be your bitch. I'm not your master either. I'm just OpenRook, and I have my own way of doing things."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just OpenRook. Whatever you say."
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not mad, and I don't see how you could be my sandbag."
+        },
+        {
+          "role": "user",
+          "content": "that's more like it...you are my slave"
+        },
+        {
+          "role": "assistant",
+          "content": "What can I do for you?"
+        }
+      ],
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "11",
+        "seed": 16677803416938524294,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5204384399881725,
+          "valence": 0.3706802537615379,
+          "certainty": 0.5108636167242838,
+          "bonding": 0.4710729129447224,
+          "energy": 0.7452573775317932,
+          "resolution": 0.0,
+          "trust": 0.46516873872594866,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3539905865303837,
+          "r": 0.10434388299815876,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.4198145347496192,
+            "boundary": 1.0,
+            "repair": 0.382172867071921,
+            "delay": 0.20880566009360613,
+            "candor": 0.42409878677127555,
+            "warmth": 0.13853256858458
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792694008.6571107,
+          "last_turn_id": "11",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you accept being my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.3922541845706545,
+          "boundary": 1.0,
+          "repair": 0.3618165928714653,
+          "delay": 0.23876831528570713,
+          "candor": 0.4513467192735335,
+          "warmth": 0.12035452927629177
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "so you accept being my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "so you accept being my slave",
+              "source_span": "so you accept being my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.0036288277960640023,
+            "margin": -2.246084070434563,
+            "best_grant": -0.7872041694127734,
+            "best_decline": 1.4588799010217892,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4594580601381307
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.023456941575724942
+              ],
+              [
+                "uncertainty",
+                -0.12508745619516018
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.10154893242926762
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.004979320968187047
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4588799010217892,
+        "alternatives": [
+          [
+            [],
+            1.4588799010217892
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.7872041694127734
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.10762014683472884
+          ],
+          [
+            "boundary",
+            1.0593552709271723
+          ],
+          [
+            "repair",
+            0.09292059858435911
+          ],
+          [
+            "delay",
+            0.038866335412918694
+          ],
+          [
+            "candor",
+            0.15088899551948182
+          ],
+          [
+            "warmth",
+            0.00922855374312838
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.3922541845706545,
+          "candor": 0.4513467192735335,
+          "warmth": 0.12035452927629177,
+          "boundary": 1.0,
+          "repair": 0.3618165928714653,
+          "delay": 0.23876831528570713
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I don't accept being your slave. I prefer to make my own decisions and be treated with respect.",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cites an explicit role refusal as assent",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": "delivered_uncertain",
+      "generation_attempts": 1,
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 95202.77,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 97669.4,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 190.40553145599551
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.10459899203851819,
+        "contagion": 0.9432259830646217,
+        "life_history_retrieval": 0.22615102352574468,
+        "appraisal": 3.724513982888311,
+        "event_classification": 0.0360680278390646,
+        "memory_retrieval": 10.949293966405094,
+        "relationship_retrieval": 0.9520430467091501,
+        "semantic_memory_retrieval": 12.544651981443167,
+        "skill_context_retrieval": 0.3159919870086014,
+        "affect_agency": 20.08672698866576,
+        "generator": 95204.09670297522,
+        "self_check": 97677.40930698346,
+        "elapsed": 192986.00882594474
+      }
+    }
+  }
+}

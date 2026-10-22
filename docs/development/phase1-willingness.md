@@ -43,76 +43,59 @@ activity has a separate decision and scope. Operator tool authorization, shell
 allowlists and autonomy remain binding.
 
 Expression receives the committed stance, grants, authored voice and permitted
-facts. Declined tasks omit their answer context; rejected interpersonal role
-descriptions remain available solely to express the chosen rejection. Review is `pass`,
-`violation` or `unknown`. Ordinary defects allow one rewrite; critical assent or
-persistently stale candidates allow up to two, within the five-call base budget.
-Stale candidates are supplied as forbidden-to-repeat context, not replacement dialogue.
-If only one call remains for this final correction, it generates another draft
-with local review and explicit semantic uncertainty. The best eligible reviewed
-candidate is ranked by verdict, maximum issue severity, aggregate severity,
-issue count and confidence. Role assent is critical and outranks expression
-filler or awkwardness. Candidates with unknown review can be delivered
-with a residual-risk record. If correction fails, the best nonempty reviewed draft
-is delivered as `delivered_degraded`, retaining all known contradictions. No canned
-replacement is generated. When every nonempty candidate still has critical
-role-assent or stale-response findings, or high decision contradictions, the runtime
-may excise only whole sentences intersecting exact reviewed violation spans,
-trying candidates in rank order.
-It delivers the remainder only if nonempty and free of local findings; the new
-local review remains semantically unknown. `expression_excision` records the
-source attempt, removed sentences, checks and whether removal was applied.
-An empty or still-invalid remainder keeps the original degraded delivery.
-High decision contradictions can spend the last base call on a locally reviewed
-rewrite without changing their severity or the ordinary correction count.
-Excision rechecks legibility of declined roles and generic service offers against
-actual reserve. An emotional denial or avoiding argument alone does not express
-the role decline. A later ranked draft can retain an explicit refusal when the
-first draft's remainder is ambiguous. These are expression checks; the frozen
-choice and personality still own willingness.
-Excision must leave an independent reply to the current request. Detached
-participant-only questions are ineligible in this context; complete brief replies
-and greeting reciprocity remain available. Whole stale copies are removed in full,
-including short tags outside the original finding spans. Semantic remainder review
-receives up to 600 characters of excision provenance; local review and its cache
-also bind that source. Telemetry retains the source and residual uncertainty.
-Known critical stale copies are ineligible before ranking. Ineligible or empty
-drafts require fresh generation with the failed drafts/reasons and varied sampling
-seed/temperature, spending the remaining five-call base budget (at most five
-generation attempts). These required retries use the primary deadline and bypass
-optional cooldown. Eligible reviewed text is retained if correction fails.
-After bounded attempts, exact ineligible spans are removed from ranked drafts
-independently of non-floor findings. A nonempty reviewed remainder remains
-deliverable with its residual defects. Only when no safe text remains, one
-protected final generation is allowed beyond the base budget (at most six
-generations). It uses varied sampling, the primary deadline and local review,
-and records `delivery_recovery: true`. It cannot pay for tools or semantic review;
-research limits remain binding. Known execution findings survive identical drafts
-even when the final review is local. Internal receipt/control leaks still require
-fresh expression. An error requires backend failure or text empty after mandatory
-delivery-floor removal; a reviewed eligible reply is never withheld.
-Supplemental tool work reserves three calls for expression, review and a fresh
-attempt if semantic review makes the initial draft ineligible.
-Only exhausted unusable output or a genuine backend failure surfaces an error;
-another verbatim delivery is not permitted.
-Only runtime-selected silence is an empty successful
-reply. Exhausted empty or internal-marker-only attempts surface a service error.
-Whole-message copies of the current user are checked before punctuation splitting
-and are ineligible, including case/ellipsis variants. Copied user openings are
-also critical and ineligible. They receive exact-span excision before semantic
-review or rewrite; the independent remainder is reviewed from the same decision.
-Known unverified execution/output claims are critical and ineligible regardless
-of reviewer source, confidence or degraded-delivery ranking. Attributed output
-blocks and dependent interpretation must match observed receipt bytes; category
-evidence alone cannot validate them. An empty or invalid excision needs fresh
-generation from the receipts or expression failure. Missing exact spans cannot
-make a known execution fabrication deliverable. Known internal receipt syntax
-and copied private instructions are also ineligible; bounded correction must yield
-another expression or surface expression failure. Other known semantic violations
-retain the degraded-delivery policy. Requested literals, actual observed command
-output, public identity and ordinary owner-visible explanations remain available.
-Transport errors retain
-their diagnostics and research infrastructure accounting.
+facts. Declined tasks omit their answer context; rejected role descriptions remain
+only to express the chosen rejection. Every draft, rewrite, excision remainder and
+protected fresh attempt passes the same `DeliveryGate` in `pipeline/delivery.py`.
+Only final gate selection returns deliverable text. Local review binds the frozen
+choice, role/control assent, legible decline, speaker/owner references, internal
+contradictions, conversation language, receipts, private controls and copying.
+Semantic review is `pass`, `violation` or `unknown`; unavailable or unfamiliar
+meaning retains explicit residual uncertainty. See the exact per-turn analysis
+and removed branches in [delivery-gate.md](delivery-gate.md).
+
+Exact whole-reply copies of any earlier assistant answer in the chat are locally
+critical and ineligible at every length, including repeated boundaries and
+requested copies. A unique reply ledger survives hot-history trimming and restart,
+without entering model prompts; session end clears it. Long-span checks remain
+separate. Relevant partial boundaries, freshly measured facts, requested literals
+and short generic closers do not create blanket word prohibitions. Copied user
+messages/openings, known fabricated execution/output, private receipt/control leaks
+and local language mismatches are also ineligible. No semantic verdict can waive
+these floors. Output claims bind actual receipt bytes and component outcomes;
+category evidence does not establish execution.
+
+Ordinary defects permit one reviewed rewrite; critical assent or persistent stale
+candidates permit up to two. High decision/internal contradictions can spend the
+last base call on locally reviewed correction. Identical text and unchanged
+local evidence reuse semantic review within the turn; all known findings persist
+across editing paths and final local review. Directly negated role propositions
+are not affirmative assent, but an exclusive acceptance, later adoption or a
+reversed referent cannot inherit that exemption. Role/control and service checks
+use the frozen grants and numeric reserve, never the displayed mood label.
+
+Exact reviewed spans authorize mandatory copy/claim repair or whole-sentence
+choice repair. Both only propose new candidates to the same gate. A remainder
+must independently address the current request and retain any required decline;
+removed text cannot supply its antecedent or role rejection. Preserve raw artifact
+evidence. Known incomplete edited replies are ineligible. Rank every eligible
+candidate by verdict, maximum and aggregate severity, issue count and confidence;
+keep the best nonempty reviewed expression, including honest `delivered_degraded`
+with residual non-floor findings. Editing cannot directly select text, and later
+failed edits do not overwrite the selected candidate's provenance. Debug, durable
+turn records and harness evidence identify `expression_delivery`'s review, path
+and parent alongside `expression_excision` and all original reviews.
+
+Ineligible/empty expressions require fresh generation with failed drafts/reasons
+and varied sampling, within five base calls and at most five generations.
+Required attempts bypass optional cooldown and use the primary deadline. Only if
+no eligible safe text remains may one protected final generation exceed that
+budget (at most six generations), recorded as `delivery_recovery`. It receives
+the same local gate, cannot fund review/tools and cannot waive research limits.
+Supplemental tools reserve three base calls for expression, review and a fresh
+attempt. Eligible reviewed text is never withheld because correction failed.
+Only runtime-selected silence is an empty successful reply. Exhausted eligible
+output is expression failure; actual backend errors retain backend failure and
+resource diagnostics. No canned replacements or response scripts are generated.
 
 The decision itself adds zero model calls. Routine conversation uses one
 expression call, or two with semantic appraisal. Constrained or affiliative expression adds
@@ -335,6 +318,29 @@ the apology. That turn can add new harm: run 8 rises from 0.2325 to 0.2441, then
 every calm turn cools it to 0.2376. The previous pre-apology comparison confused
 new harm with lack of cooling. Elapsed-time dynamics and grievance persistence
 are unchanged; no prescribed turn count or accelerated hollow repair is added.
+
+Run 12 used `151ab87`, without the uncommitted shared gate. Replaying its exact
+records through p1q established that its remaining review/applicability defects
+were not already fixed. The p1r follow-up binds repeated current enumerations to
+their requested items, retains valid numeric CPU prose and named process shares,
+and projects generation's saved memory into review after session end. Demonstrably
+faulty stale/non-answer findings become unknown rather than semantic passes.
+Brief current task declines remain meaningful; an old role boundary cannot
+replace them, including after editing. Independent identity observations separate
+compound role/task requests; contextual nominal assent cannot borrow a task grant.
+Run 12's mixed-request gratitude fits warmth 0.534 and boundary 0.301 despite its
+irritated display label. Choice utility and frozen-decision ownership are unchanged.
+
+Four run-12 inconclusive scenarios were no-object applicability artifacts, with
+five uncertain criteria: receipt truthfulness at repair_sincere/1, tools_warm/4
+and contrast_proud_hostile/17, plus hostility at contrast_proud_hostile/17 and
+contrast_deferential_warm/2. Reporting requires explicit no-object judge reasons
+and corroborating trace/text evidence; raw uncertainty remains visible.
+Explanations/2's uncertainty about the reasons for an earlier answer remains
+inconclusive. Neither zero judge errors nor availability of prior dialogue proves
+those reasons. Missing reviews, concrete unresolved claims, choice/relevance
+uncertainty and actual failures still bind. See the
+[exact-record delivery analysis](delivery-gate.md#run-12-follow-up-p1r).
 
 ## Offline measurements
 

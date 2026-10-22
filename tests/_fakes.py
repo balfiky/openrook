@@ -33,3 +33,13 @@ class MockLLMBackend:
         self.last_user_message = user_message
         self.call_count += 1
         return self._response
+
+
+class VaryingMockLLMBackend(MockLLMBackend):
+    """Keep unrelated multi-turn tests independent of whole-reply freshness.
+
+    The fixed backend above remains available for exact repetition tests.
+    """
+    def generate(self, system_prompt: str, user_message: str) -> str:
+        response = super().generate(system_prompt, user_message)
+        return response if self.call_count == 1 else f"{response} Fixture expression {self.call_count}."

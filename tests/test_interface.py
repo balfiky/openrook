@@ -26,7 +26,7 @@ from interface.api import (
     update_config,
 )
 from pipeline import CognitivePipeline
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 

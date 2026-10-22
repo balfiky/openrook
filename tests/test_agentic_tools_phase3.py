@@ -31,7 +31,7 @@ from core.types import (
     ToolResult,
     UnresolvedItem,
 )
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 from core.tool_memory import (
     ToolMemoryEffects,
     compute_tool_trust_delta,
@@ -558,7 +558,7 @@ class TestPipelineToolMemoryIntegration:
         assert all(0 <= value <= 1 for value in resp.debug.modulator_snapshot.values())
         assert resp.debug.turn_decision.relationship.h > 0
         assert resp.debug.turn_decision.relationship.r > 0
-        assert resp.response == "I am exhausted and we are wasting time."
+        assert resp.response.startswith("I am exhausted and we are wasting time.")
         before = resp.debug.modulator_snapshot["energy"]
         task = pipe.process("find me top AI books released after March 2026", user_id="u1")
         granted = any(c.granted and c.component.kind == "task" for c in task.debug.turn_decision.components)

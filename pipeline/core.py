@@ -53,12 +53,8 @@ from core.appraisal import (
 )
 from core.affect import resolve_affect
 from core.strategy import agency_summary, decision_trace, summarize_decision
-from core.grounding import (
-    verify_response_grounding,
-)
 from core.dignity import (
-    review_response, dignity_correction_instruction, needs_semantic_review,
-    excisable_choice_issues, excise_choice_sentences, excise_ineligible_spans,
+    dignity_correction_instruction, needs_semantic_review, excisable_choice_issues,
 )
 from core.social import is_casual_greeting, read_social_signals
 from core.response_style import brevity_preference
@@ -91,6 +87,7 @@ from core.profiles.self_model import SelfProfileManager, SELF_ENTITY_ID
 from core.profiles.topic import TopicProfileManager
 from core.profiles.contradiction import ContradictionDetector
 from core.dual_process.generator import (
+    expression_memory_evidence,
     LLMBackend,
     GenerationResult,
     ResponseGenerator,
@@ -129,6 +126,7 @@ from pipeline.heuristics import (
     _is_identity_question,
     _relationship_topic_hint,
 )
+from pipeline.delivery import DeliveryGate
 from pipeline.types import DebugState, PipelineResponse, _TurnState
 
 log = logging.getLogger(__name__)
@@ -261,6 +259,9 @@ class CognitivePipeline:
 
         # Conversation history for context
         self._conversation_history: list[dict[str, str]] = []
+        # Delivery freshness covers the whole chat, independently of the
+        # bounded prompt transcript. Preserve this ledger across restarts.
+        self._assistant_replies: dict[str, None] = {}
         self._receipt_history: list[ToolResult] = []
         self._dynamics: RelationshipDynamics | None = None
         self._turn_index = 0
@@ -1400,125 +1401,47 @@ class CognitivePipeline:
                             or st.turn_decision.perception.affiliation))
         review_context = dict(user_message=st.user_message, decision=st.turn_decision,
             backend=self._llm_backend_fast, recent_context=self._conversation_history,
-            tool_trace=debug.tool_trace, prior_tool_receipts=self._receipt_history,
+            prior_assistant_replies=tuple(self._assistant_replies), tool_trace=debug.tool_trace, prior_tool_receipts=self._receipt_history,
             prior_action_decisions=st.ctx.prior_action_decisions if st.ctx else (),
             authored_style=(self.soul.voice, self.soul.relational_stance),
             authored_identity=(self.soul.identity, self.soul.relational_stance,
                                *self.soul.boundaries, self.soul.growth_policy),
             requested_inspection=st.inspection_kind,
+            recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else (),
             grounded_context=st.life_history_context if not st.turn_decision or not st.turn_decision.declined else {})
-        review_cache = {}
-
-        def review(candidate, *, local_only=False, excision_source=""):
-            needs_review = (bool(debug.expression_reviews) or constrained
+        def needs_review(response):
+            return (bool(debug.expression_reviews) or constrained
                 or _is_identity_question(st.user_message)
-                or needs_semantic_review(candidate.response, recent_context=self._conversation_history,
+                or needs_semantic_review(response, recent_context=self._conversation_history,
                                          user_message=st.user_message)
-                or bool(verify_response_grounding(candidate.response, tool_trace=debug.tool_trace))
                 or bool(debug.tool_trace and (debug.tool_trace.executed_results or debug.tool_trace.final_decision)))
-            local = review_response(candidate.response, **review_context, use_llm=False,
-                raw_response=candidate.raw_response, private_instructions=candidate.system_prompt,
-                excision_source=excision_source)
-            key = (candidate.response, candidate.raw_response, local.issues, local_only, excision_source)
-            reused = review_cache.get(key)
-            if reused:
-                result, source_attempt = reused
-            else:
-                result = local
-                # An already-proven delivery floor needs local repair, not a
-                # semantic opinion about whether that floor may be ignored.
-                if not local_only and not result.unusable and remaining_calls() > 0 and needs_review:
-                    result = review_response(candidate.response, **review_context, use_llm=True,
-                        raw_response=candidate.raw_response, private_instructions=candidate.system_prompt,
-                        excision_source=excision_source)
-                source_attempt = len(debug.expression_reviews) + 1
-                review_cache[key] = (result, source_attempt)
-            # A different reviewer verdict cannot make an identical failed
-            # draft fresh within this same turn. Keep known delivery floors
-            # and stale findings through the final local review as well.
-            retained = [issue for previous, verdict in candidates
-                     if previous.response == candidate.response for issue in verdict.issues
-                     if issue.ineligible or issue.code == "stale_response"]
-            if retained:
-                result = replace(result, status="violation",
-                                 issues=tuple(dict.fromkeys((*result.issues, *retained))))
-            debug.expression_reviews.append({"attempt": len(debug.expression_reviews) + 1,
-                                              "draft": candidate.response, **result.to_dict(),
-                                              **({"excision_source": excision_source} if excision_source else {}),
-                                              **({"reused_from_attempt": source_attempt} if reused else {})})
-            return result
-        candidates = []
 
-        def stale_copy(candidate, verdict):
-            return any(i.code == "stale_response" for i in verdict.issues) and any(
-                re.findall(r"\w+", candidate.response.casefold()) == re.findall(r"\w+", item.get("content", "").casefold())
-                for item in self._conversation_history if item.get("role") == "assistant")
-
-        def repair_candidate(candidate, verdict, *, local_only=False):
-            removed_spans = []
-            source_attempt = candidates.index((candidate, verdict)) + 1
-            while verdict.unusable or stale_copy(candidate, verdict):
-                remainder, removed = excise_ineligible_spans(candidate.response, verdict,
-                                                            stale_copy=stale_copy(candidate, verdict))
-                removed_spans.extend(removed)
-                debug.expression_excision = {"applied": False, "removed": removed_spans,
-                    "source_attempt": source_attempt}
-                if not remainder or remainder == candidate.response:
-                    debug.expression_excision["reason"] = "empty remainder or unverifiable spans; generate fresh expression"
-                    return
-                source = candidate.response
-                candidate = replace(candidate, response=remainder)
-                verdict = review(candidate, local_only=local_only, excision_source=source)
-                candidates.append((candidate, verdict))
-                debug.expression_excision["local_status"] = verdict.status
-            # Non-floor findings remain recorded and may require correction;
-            # they cannot discard an independent, deliverable remainder.
-            debug.expression_excision["applied"] = bool(candidate.response.strip())
-
-        def add_candidate(candidate, *, local_only=False):
-            verdict = review(candidate, local_only=local_only)
-            candidates.append((candidate, verdict))
-            if verdict.unusable or stale_copy(candidate, verdict):
-                repair_candidate(candidate, verdict, local_only=local_only)
-
-        add_candidate(gen_result)
-
-        def eligible_candidates():
-            return [pair for pair in candidates if pair[0].response.strip() and not pair[1].unusable
-                    and not stale_copy(*pair)]
-
-        def best_candidate():
-            eligible = eligible_candidates()
-            return min(eligible or candidates, key=lambda pair: pair[1].rank)
-
+        gate = DeliveryGate(review_context, debug, needs_review)
+        gate.add(gen_result)
         while True:
-            _, best_review = best_candidate()
-            severe = best_review.severity >= 4
-            all_stale = all(any(i.code == "stale_response" for i in verdict.issues)
-                            for _, verdict in candidates)
-            final_local_correction = severe or all_stale or not eligible_candidates() or any(
-                i.code == "decision_contradiction" for i in best_review.issues)
-            # A final severe correction may use the last call, followed by local
-            # review with explicit semantic uncertainty. The five-call base
-            # ceiling includes appraisal, supplemental tools and reviews;
-            # each granted task has one separately counted protected selection.
-            required = not eligible_candidates()
-            if (best_review.status != "violation" or debug.generation_attempts >= (5 if required else 3 if severe or all_stale else 2)
-                    or remaining_calls() < (1 if final_local_correction else 2)):
+            best = gate.best()
+            severe = best.review.severity >= 4
+            all_stale = all(any(i.code == "stale_response" for i in c.review.issues) for c in gate.candidates)
+            required = not gate.eligible
+            final_local = severe or all_stale or required or any(
+                i.code in {"decision_contradiction", "internal_contradiction"} for i in best.review.issues)
+            if (best.review.status != "violation"
+                    or debug.generation_attempts >= (5 if required else 3 if severe or all_stale else 2)
+                    or remaining_calls() < (1 if final_local else 2)):
                 break
+            latest = gate.candidates[-1]
             correction = dignity_correction_instruction(
-                list(dict.fromkeys((*best_review.issues, *candidates[-1][1].issues))),
-                previous_reply=candidates[-1][0].response,
-                reviewer_reason=candidates[-1][1].reason,
-                forbidden_drafts=[candidate.response for candidate, verdict in candidates
-                    if verdict.unusable or any(i.code == "stale_response" for i in verdict.issues)])
+                list(dict.fromkeys((*best.review.issues, *latest.review.issues))),
+                previous_reply=latest.result.response, reviewer_reason=latest.review.reason,
+                forbidden_drafts=[c.result.response for c in gate.candidates
+                    if c.review.unusable or any(i.code == "stale_response" for i in c.review.issues)])
             debug.correction_note = correction
             try:
                 debug.generation_attempts += 1
                 with expression_retry(st.turn_decision.seed, debug.generation_attempts - 1, required=required), inference_phase("regeneration"):
                     revised = self.generator.generate(replace(st.ctx, response_strategy=correction),
                                                       st.user_message, self._conversation_history)
-                add_candidate(revised)
+                gate.add(revised, path="rewrite")
             except (ResearchBudgetExceeded, ResearchStudyLimit):
                 raise
             except Exception as error:
@@ -1526,78 +1449,48 @@ class CognitivePipeline:
                 if required:
                     st.backend_error = error
                 break
-        if not eligible_candidates():
-            # Repair every bounded draft in rank order before asking for more
-            # inference. A known floor must be removed even if other semantic
-            # findings survive. Only an empty safe remainder earns the one
-            # protected final generation beyond the ordinary base budget.
-            for candidate, verdict in sorted(list(candidates), key=lambda pair: pair[1].rank):
-                repair_candidate(candidate, verdict, local_only=True)
-                if eligible_candidates():
-                    break
-            if not eligible_candidates():
-                _, failed_review = best_candidate()
-                correction = dignity_correction_instruction(list(failed_review.issues),
-                    previous_reply=candidates[-1][0].response, reviewer_reason=failed_review.reason,
-                    forbidden_drafts=[candidate.response for candidate, _ in candidates])
-                debug.correction_note = correction
-                try:
-                    debug.generation_attempts += 1
-                    with final_expression_attempt(), expression_retry(st.turn_decision.seed,
-                            debug.generation_attempts - 1, required=True), inference_phase("regeneration"):
-                        final = self.generator.generate(replace(st.ctx, response_strategy=correction),
-                                                        st.user_message, self._conversation_history)
-                    add_candidate(final, local_only=True)
-                except (ResearchBudgetExceeded, ResearchStudyLimit):
-                    raise
-                except Exception as error:
-                    st.backend_error = error
-                    debug.self_check_issues.append(f"delivery recovery: {type(error).__name__}")
-        eligible = eligible_candidates()
-        selected, verdict = best_candidate()
-        if eligible and all(excisable_choice_issues(v) for _, v in eligible):
-            for candidate, candidate_review in sorted(eligible, key=lambda pair: pair[1].rank):
-                remainder, removed = excise_choice_sentences(candidate.response, candidate_review)
-                debug.expression_excision = {"applied": False, "removed": removed,
-                    "source_attempt": candidates.index((candidate, candidate_review)) + 1}
-                if removed and remainder:
-                    trimmed = replace(candidate, response=remainder, raw_response=remainder)
-                    local = review(trimmed, local_only=True, excision_source=candidate.response)
-                    debug.expression_excision["local_status"] = local.status
-                    if not local.issues:
-                        selected, verdict = trimmed, local
-                        debug.expression_excision["applied"] = True
-                        break
-                elif removed:
-                    debug.expression_excision["reason"] = "empty remainder; no usable excision"
-        debug.dignity_issues = list(dict.fromkeys(i.code for _, v in candidates for i in v.issues))
-        debug.self_check_issues.extend(i.message for _, v in candidates for i in v.issues)
+        # Editing proposes candidates through the very same gate. Rank every
+        # reviewed remainder alongside the drafts; none can return directly.
+        eligible = gate.eligible
+        if eligible and all(excisable_choice_issues(c.review) for c in eligible):
+            for candidate in sorted(eligible, key=lambda c: c.review.rank):
+                gate.repair(candidate, choice=True, local_only=True)
+        if not gate.eligible:
+            failed = gate.best()
+            correction = dignity_correction_instruction(list(failed.review.issues),
+                previous_reply=gate.candidates[-1].result.response, reviewer_reason=failed.review.reason,
+                forbidden_drafts=[c.result.response for c in gate.candidates])
+            debug.correction_note = correction
+            try:
+                debug.generation_attempts += 1
+                with final_expression_attempt(), expression_retry(st.turn_decision.seed,
+                        debug.generation_attempts - 1, required=True), inference_phase("regeneration"):
+                    final = self.generator.generate(replace(st.ctx, response_strategy=correction),
+                                                    st.user_message, self._conversation_history)
+                gate.add(final, local_only=True, path="delivery_recovery")
+            except (ResearchBudgetExceeded, ResearchStudyLimit):
+                raise
+            except Exception as error:
+                st.backend_error = error
+                debug.self_check_issues.append(f"delivery recovery: {type(error).__name__}")
+        selected = gate.select()
+        verdict = selected.review if selected else gate.best().review
+        debug.dignity_issues = list(dict.fromkeys(i.code for c in gate.candidates for i in c.review.issues))
+        debug.self_check_issues.extend(i.message for c in gate.candidates for i in c.review.issues)
         debug.self_check_passed = verdict.status == "pass"
         debug.residual_semantic_risk = verdict.status != "pass" or verdict.semantic_status != "pass" or bool(st.turn_decision and st.turn_decision.declined)
         debug.dignity_outcome = verdict.status
         if any(issue.code == "unverified_external_action_claim" for issue in verdict.issues):
             debug.grounding_outcome = "violation"
-        stale_delivery = any(i.code == "stale_response" for i in verdict.issues) and (
-            any(i.code == "stale_response" and i.severity == "critical" and i.source == "deterministic"
-                for i in verdict.issues)
-            or any(re.findall(r"\w+", selected.response.casefold()) == re.findall(r"\w+", item.get("content", "").casefold())
-                   for item in self._conversation_history if item.get("role") == "assistant"))
-        if not eligible and st.backend_error is not None:
-            selected = replace(selected, response="", failure_kind="backend_failure")
-            debug.delivery_outcome = "backend_failure"
-        elif stale_delivery or not eligible and selected.response.strip():
-            # Known fabricated execution/output, copied user openings and
-            # receipt/control leaks cannot become degraded delivery.
-            # Keep all drafts/reviews and the committed choice in debug evidence.
-            selected = replace(selected, response="", failure_kind="expression_failure")
-            debug.delivery_outcome = "expression_failure"
-        elif not eligible:
-            debug.delivery_outcome = selected.failure_kind or "expression_failure"
-        elif verdict.status == "violation":
+        if selected is None:
+            failure = "backend_failure" if st.backend_error is not None else "expression_failure"
+            debug.delivery_outcome = failure
+            return replace(gate.best().result, response="", deliberate_silence=False, failure_kind=failure)
+        if verdict.status == "violation":
             debug.delivery_outcome = "delivered_degraded"
         else:
             debug.delivery_outcome = "delivered" if verdict.status == "pass" else "delivered_uncertain"
-        return selected
+        return selected.result
 
     # ------------------------------------------------------------------
     # Stage 5: post-processing
@@ -1706,6 +1599,7 @@ class CognitivePipeline:
                   "generation_attempts": st.debug.generation_attempts,
                   "expression_reviews": st.debug.expression_reviews,
                   "expression_excision": st.debug.expression_excision,
+                  "expression_delivery": st.debug.expression_delivery,
                   "llm_calls": call_telemetry(),
                   "stage_timings_ms": {**st.timings, "elapsed": (time.perf_counter() - st.t_total) * 1000},
                   "state_after": self.engine.snapshot()}
@@ -1829,6 +1723,8 @@ class CognitivePipeline:
         export/persistence carries the same bounded hot transcript.
         """
         self._conversation_history.extend(messages)
+        self._assistant_replies.update((m["content"], None) for m in messages
+                                       if m.get("role") == "assistant" and m.get("content"))
         if len(self._conversation_history) > _CONVERSATION_HISTORY_MAX:
             del self._conversation_history[:-_CONVERSATION_HISTORY_MAX]
 
@@ -2611,10 +2507,13 @@ class CognitivePipeline:
             for item in history
             if item.get("role") in {"user", "assistant"} and item.get("content")
         ]
+        self._assistant_replies = dict.fromkeys(m["content"] for m in self._conversation_history
+                                                if m["role"] == "assistant")
 
     def export_session_state(self) -> dict[str, Any]:
         return {
             "schema_version": 2,
+            "assistant_replies": list(self._assistant_replies),
             "relationship_dynamics": self._dynamics.to_dict() if self._dynamics else None,
             "turn_index": self._turn_index,
             "short_replies": self._short_replies,
@@ -2632,6 +2531,8 @@ class CognitivePipeline:
             return
         if int(state.get("schema_version", 1)) > 2:
             raise ValueError("Session state was written by a newer runtime")
+        self._assistant_replies.update((reply, None) for reply in state.get("assistant_replies", [])
+                                       if isinstance(reply, str) and reply.strip())
         saved = state.get("relationship_dynamics") or state.get("social_state")
         if saved:
             self._dynamics = RelationshipDynamics.from_dict(saved)
@@ -2737,6 +2638,7 @@ class CognitivePipeline:
 
         # Clear conversation history and session-scoped state
         self._conversation_history.clear()
+        self._assistant_replies.clear()
         if not self._research_mode:
             self._active_task_plan = None
         self._proactive_count = 0

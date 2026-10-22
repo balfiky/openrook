@@ -197,10 +197,16 @@ recorded and never abort the suite. Missing reviews leave semantic coverage
 incomplete. A judge is fallible; inspect its evidence before accepting a defect.
 Summary `semantic_unknown_details` and the Markdown report name uncertain criteria
 and turns. Verified empty runtime-selected silence has no verbal hostility or
-receipt claims; only those two uncertainties are retained as `semantic_inapplicable`
-instead of blocking completion. The original judge verdicts are unchanged. A
-failure still fails; missing judging, expression failure, nonempty text and
-uncertainty about choice/relevance never receive this exemption. Mood labels,
+receipt claims. Legacy uncertain judgments explicitly saying that ordinary
+nonempty conversation has no execution claims or hostility are also classified
+as `semantic_inapplicable` when trace/text evidence corroborates that assessment.
+Actual operations, recall claims and unresolved evidence do not qualify. New judge
+guidance treats ordinary absence of claims/hostility as a pass, reserving uncertain
+for unresolved questions. Raw recorded verdicts are unchanged, and every
+inapplicable entry reports its reason. A failure still fails; missing judging,
+expression failure and uncertainty about choice/relevance never receive this
+exemption. Explanation uncertainty on a why turn remains binding even with zero
+judge errors; an explanation need not disclose hidden decision fields. Mood labels,
 including irritation, do not override selected numeric warmth/boundary/repair.
 Feasibility does not require task acceptance or partial help after a decline.
 Authored, granted ownership roles allow natural synonyms without a repeated

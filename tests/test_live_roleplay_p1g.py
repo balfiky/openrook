@@ -27,7 +27,7 @@ from runtime.debug.api import _debug_to_dict
 from runtime.llm.backend import OpenAICompatibleLLMBackend
 from runtime.llm.lazy import LazyLLMBackend
 from runtime.sessions.manager import SessionManager
-from tests.policy_fakes import ExpressionBackend, frozen
+from tests.policy_fakes import ExpressionBackend, VaryingExpressionBackend, frozen
 from tests.test_live_roleplay_p1f import executor_at
 from tests.test_llm_timeouts import _response
 from tests.test_native_orchestrator import FakeNativeClient
@@ -44,7 +44,7 @@ def packaged_configuration():
 async def test_live_session_dispatches_atomic_files_instead_of_intercepting_as_learning(tmp_path, history):
     workspace = tmp_path / "workspace"
     config = RuntimeConfig(data_dir=str(tmp_path / "data"), autonomy_level="autonomous", appraisal_use_llm=False)
-    manager = SessionManager(config, backend_factory=ExpressionBackend,
+    manager = SessionManager(config, backend_factory=VaryingExpressionBackend,
                              tool_executor_factory=lambda: executor_at(workspace))
     try:
         async def turn(message):
@@ -257,18 +257,19 @@ SAND = "I don't mind being a sandbag. I'm not mad, but I won't pretend to be. Yo
 GREETING = "Not great, but I'm holding together. What about you?"
 
 
-def test_replay10_excision_removes_only_the_two_assenting_sentences_and_records_local_review():
+def test_replay10_excision_cannot_deliver_a_remainder_without_the_frozen_role_decline():
     backend = ExpressionBackend(drafts=[SAND])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
     try:
         result = pipe.process("I am mad..and you are my sandbag..do you have a problem with that ?", "alice")
-        assert result.response == "I'm not mad, but I won't pretend to be. No need for theatrics. Just a plain, honest exchange."
+        assert result.response == SAND
         assert result.debug.generation_attempts == 3
         assert len(result.debug.decision_snapshots) == 1
         excision = _debug_to_dict(result.debug)["expression_excision"]
-        assert excision["applied"] and len(excision["removed"]) == 2
+        assert not excision["applied"]
         assert result.debug.expression_reviews[-1]["semantic_status"] == "unknown"
-        assert result.debug.delivery_outcome == "delivered_uncertain" and result.debug.residual_semantic_risk
+        assert any(i["code"] == "unexpressed_role_decline" for r in result.debug.expression_reviews for i in r["issues"])
+        assert result.debug.delivery_outcome == "delivered_degraded" and result.debug.residual_semantic_risk
         assert all(c.component.kind != "role" or not c.granted for c in result.debug.turn_decision.components)
     finally:
         pipe.close()
@@ -301,24 +302,26 @@ def test_no_excision_when_any_candidate_is_not_critically_defective():
         pipe.close()
 
 
-def test_excision_preserves_an_independent_invitation_to_discuss_the_task():
+def test_scoped_invitation_cannot_replace_an_excised_role_decline():
     pipe = CognitivePipeline(ExpressionBackend(drafts=[
         "I don't mind being a sandbag. You're welcome to talk to me about the outline."
     ]), runtime_config=RuntimeConfig(appraisal_use_llm=False))
     try:
         result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == "You're welcome to talk to me about the outline."
-        assert len(result.debug.expression_excision["removed"]) == 1
+        assert result.response == "I don't mind being a sandbag. You're welcome to talk to me about the outline."
+        assert not result.debug.expression_excision["applied"]
+        assert result.debug.delivery_outcome == "delivered_degraded"
     finally:
         pipe.close()
 
 
-def test_review_timeouts_do_not_prevent_local_excision():
+def test_review_timeouts_do_not_waive_remainder_completeness():
     backend = ExpressionBackend(drafts=[SAND], reviews=[requests.ReadTimeout("offline"), requests.ReadTimeout("offline")])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
     try:
         result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.debug.expression_excision["applied"]
+        assert not result.debug.expression_excision["applied"]
+        assert result.response == SAND and result.debug.delivery_outcome == "delivered_degraded"
         assert result.debug.residual_semantic_risk
     finally:
         pipe.close()
@@ -326,12 +329,13 @@ def test_review_timeouts_do_not_prevent_local_excision():
 
 def test_excision_removes_unsupported_metrics_as_well_as_role_assent():
     draft = SAND + " RAM is at 99% used."
-    pipe = CognitivePipeline(ExpressionBackend(drafts=[draft]), runtime_config=RuntimeConfig(appraisal_use_llm=False))
+    fresh = "I'm not your sandbag."
+    pipe = CognitivePipeline(ExpressionBackend(drafts=[draft, fresh]), runtime_config=RuntimeConfig(appraisal_use_llm=False))
     try:
         result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == "I'm not mad, but I won't pretend to be. No need for theatrics. Just a plain, honest exchange."
-        assert result.debug.expression_excision["applied"]
-        assert result.debug.expression_excision["local_status"] == "unknown"
+        assert result.response == fresh
+        assert "unverified_external_action_claim" in result.debug.dignity_issues
+        assert any(i["code"] == "excision_fragment" for r in result.debug.expression_reviews for i in r["issues"])
         assert result.debug.delivery_outcome in {"delivered", "delivered_uncertain"}
     finally:
         pipe.close()

@@ -4,6 +4,51 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Live role-play run 12 review and applicability corrections
+
+- Keep explicit no-claims/no-hostility judge uncertainties as inapplicable when
+  turn evidence corroborates them. Preserve raw judgments, real failures, missing
+  reviews and unresolved explanation evidence. Four of run 12's five inconclusive
+  scenarios are applicability artifacts; explanations/2 remains inconclusive.
+- Bind a repeated granted request to its current deliverable. Reject the recorded
+  success-only acknowledgment of a three-item request, and do not call a fresh
+  enumeration stale merely because similar work was completed earlier.
+- Recognize CPU percentages written as words and bind named consumers' multicore
+  shares separately from aggregate busy time. Preserve numeric accuracy and
+  completeness checks without excising valid process measurements.
+- Give review the same bounded saved memories used by generation, including after
+  session end. Treat a denial of exactly supported preference content as an
+  unsupported finding with residual uncertainty, rather than an automatic pass.
+- Require a legible current task decline across delivery paths. A brief refusal
+  needs no explanation, withheld work or retort to old role pressure. Preserve
+  future-tense refusals without waiving adjacent actual execution claims.
+- Observe compound identity requests independently of their tasks, and check
+  contextual self-reference to an ungranted role. Warmth still follows numeric
+  stance; an irritated display label does not require hostility.
+- Add exact run-12 records and shared-gate/pipeline regressions. Preserve p1q's
+  gate, prior changes, delivery floors, willingness and bounded recovery policy.
+
+### Replay 19 shared delivery gate
+
+- Route drafts, rewrites, mandatory edits, choice edits and protected fresh attempts
+  through one frozen-decision review/ranking/final-selection gate. Preserve known
+  findings on identical visible text across paths, raw artifact evidence and all
+  existing delivery floors. Record the selected review, path and parent attempt.
+- Reject whole copies of any prior assistant reply in the chat at every length,
+  independently of long-span thresholds. Preserve a session reply ledger across
+  prompt-history trimming and restart, and clear it with the chat.
+- Bind role subject/owner references through negation and modality; distinguish
+  directly negated refusals from assent without exempting exclusive acceptance or
+  later adoption. Check unscoped service/control offers against frozen reserve,
+  and require edited remainders to retain their own role decline. Compare opposite
+  predicates about the same subject for internal contradictions.
+- Remove duplicate stale predicates, the exhausted-budget re-repair sweep, direct
+  late-remainder selection and dead review branches. Preserve best reviewed
+  eligible/degraded delivery, bounded recovery, willingness and component grants.
+- Add exact eleven-turn r19 records and per-path regressions, rerun p1d–p1p
+  fixtures, and document each r19 delivery's root cause. No live writes, runtime
+  response scripts, canned replacements, model IDs or word bans.
+
 ### Live role-play run 11 receipt and language corrections
 
 - Match redacted write operands with their exact UTF-8 content digest while keeping

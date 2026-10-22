@@ -101,6 +101,7 @@ class DebugState:
     turn_decision: TurnDecision | None = None
     expression_reviews: list[dict[str, Any]] = field(default_factory=list)
     expression_excision: dict[str, Any] = field(default_factory=dict)
+    expression_delivery: dict[str, Any] = field(default_factory=dict)
     delivery_outcome: str = "pending"
     residual_semantic_risk: bool = False
 

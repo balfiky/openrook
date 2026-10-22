@@ -18,7 +18,7 @@ import asyncio
 import sqlite3
 import tempfile
 
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 
@@ -65,10 +65,12 @@ class TestConcurrentChannels:
         class OrderedBackend:
             def __init__(self, turn_num: int):
                 self._turn = turn_num
+                self._calls = 0
 
             def generate(self, system_prompt: str, user_message: str) -> str:
                 turn_order.append(self._turn)
-                return f"response {self._turn}"
+                self._calls += 1
+                return f"response {self._turn} expression {self._calls}"
 
         backend_iter = iter([OrderedBackend(1), OrderedBackend(2)])
 

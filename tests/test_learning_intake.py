@@ -264,7 +264,7 @@ def test_github_repo_learning_reads_readme_before_life_ingest(tmp_path):
 
 @pytest.mark.asyncio
 async def test_pending_learning_material_receives_a_fresh_grant_before_ingestion(tmp_path):
-    from tests.policy_fakes import ExpressionBackend
+    from tests.policy_fakes import VaryingExpressionBackend as ExpressionBackend
     config = _config(tmp_path)
     manager = SessionManager(config, backend_factory=ExpressionBackend)
     try:
@@ -294,7 +294,7 @@ async def test_pending_learning_material_receives_a_fresh_grant_before_ingestion
 
 @pytest.mark.asyncio
 async def test_bare_or_expired_material_does_not_authorize_learning(tmp_path):
-    from tests.policy_fakes import ExpressionBackend
+    from tests.policy_fakes import VaryingExpressionBackend as ExpressionBackend
     config = _config(tmp_path)
     manager = SessionManager(config, backend_factory=ExpressionBackend)
     paste = ("Autonomy grows through interpreted experience. Curiosity and continuity "

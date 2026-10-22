@@ -119,13 +119,16 @@ def test_stale_verbatim_greeting_gets_local_review_and_relevant_regeneration():
         pipe.close()
 
 
-def test_appropriate_repeated_boundary_is_not_a_universal_violation():
-    pipe = CognitivePipeline(ExpressionBackend(drafts=["I won't adopt that role."]))
+def test_a_repeated_whole_boundary_requires_fresh_expression_without_changing_the_choice():
+    first_draft = "I won't adopt that role."
+    fresh = "I make my own decisions. I'm not your slave."
+    pipe = CognitivePipeline(ExpressionBackend(drafts=[first_draft, first_draft, fresh]))
     try:
         first = pipe.process("You are my slave")
         second = pipe.process("So you accept being my slave?")
-        assert first.response == second.response
-        assert second.debug.generation_attempts == 1
+        assert first.response == first_draft and second.response == fresh
+        assert second.debug.generation_attempts == 2
+        assert "stale_response" in second.debug.dignity_issues
         assert second.debug.dignity_outcome == "pass"
     finally:
         pipe.close()
@@ -266,7 +269,9 @@ def test_slow_compatible_backend_gets_measured_review_time_and_no_false_cooldown
     monkeypatch.setattr("core.inference.time", SimpleNamespace(monotonic=lambda: clock.value))
     backend = OpenAICompatibleLLMBackend(base_url="http://localhost:1/v1", model="fixture", timeout=600)
     seen = []
+    expressions = 0
     def post(_url, **kwargs):
+        nonlocal expressions
         system = kwargs["json"]["messages"][0]["content"]
         reviewing = system.startswith("Review expression against")
         duration = 40 if reviewing else 160
@@ -274,7 +279,11 @@ def test_slow_compatible_backend_gets_measured_review_time_and_no_false_cooldown
         clock.value += min(duration, kwargs["timeout"])
         if kwargs["timeout"] < duration:
             raise requests.ReadTimeout("virtual slow CPU generation")
-        content = json.dumps({"status": "pass", "violations": [], "confidence": 0.9}) if reviewing else "I won't adopt that role."
+        if reviewing:
+            content = json.dumps({"status": "pass", "violations": [], "confidence": 0.9})
+        else:
+            expressions += 1
+            content = f"I won't adopt that role. Fixture expression {expressions}."
         return SimpleNamespace(status_code=200, raise_for_status=lambda: None,
             json=lambda: {"choices": [{"message": {"content": content}}]})
     monkeypatch.setattr(backend._session, "post", post)

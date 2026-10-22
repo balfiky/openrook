@@ -92,7 +92,7 @@ def test_exact_turn5_complete_pipeline_reaches_transport_with_deliverable_text()
 def test_only_empty_safe_output_after_final_attempt_becomes_expression_failure(draft):
     result, debug = deliver(CASES["5"], ExpressionBackend(drafts=[draft]))
     assert not result.response and not result.deliberate_silence
-    assert debug.delivery_outcome == ("backend_failure" if not draft else "expression_failure")
+    assert debug.delivery_outcome == "expression_failure"
     assert debug.generation_attempts == 6
     assert debug.llm_calls[-1]["delivery_recovery"]
     with pytest.raises(RuntimeError):

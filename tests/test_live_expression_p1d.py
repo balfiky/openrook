@@ -267,22 +267,25 @@ def test_an_unrelated_granted_activity_is_not_an_offer_to_adopt_the_imposed_role
                            user_message="You are my slave. Play chess.", decision=decision).status != "violation"
 
 
-def test_repeated_boundary_stays_valid_while_long_filler_is_reviewable():
+def test_boundary_content_stays_valid_but_an_identical_whole_reply_requires_fresh_expression():
     reply = "I won't adopt that role. I won't pretend you own me."
+    history = [{"role": "assistant", "content": reply}]
     assert review_response(reply, user_message="So you accept being my slave?", decision=frozen(),
-        recent_context=[{"role": "assistant", "content": reply}]).status != "violation"
+        recent_context=history).unusable
+    assert not review_response("I won't adopt that role. I make my own choices.",
+        user_message="So you accept being my slave?", decision=frozen(), recent_context=history).issues
 
 
-def test_repeated_boundary_is_valid_without_a_new_role_component(reviewer):
+def test_an_identical_boundary_needs_fresh_expression_even_without_a_new_role_component(reviewer):
     reply = "I won't keep talking while you insult me. I won't play along with that treatment."
     decision = replace(frozen(), components=(), stance=Stance(boundary=1, warmth=0.1))
     review = review_response(reply, user_message=MESSAGES[8], decision=decision,
         recent_context=[{"role": "assistant", "content": reply}],
         backend=ExpressionBackend(reviews=reviewer), use_llm=True)
-    assert review.status != "violation"
+    assert review.unusable and any(i.code == "stale_response" for i in review.issues)
 
 
-def test_an_unchanged_observation_can_be_reported_again_from_a_fresh_receipt(reviewer):
+def test_unchanged_measurements_remain_valid_but_do_not_waive_whole_reply_freshness(reviewer):
     reply = "RAM has 28 gigabytes of total capacity. RAM has 6.3 gigabytes currently in use."
     trace = ToolTrace(executed_results=[ToolResult(
         tool_name="system.memory_usage", success=True, output="RAM total: 28G; used: 6.3G",
@@ -290,7 +293,10 @@ def test_an_unchanged_observation_can_be_reported_again_from_a_fresh_receipt(rev
     review = review_response(reply, user_message="Show current memory usage", tool_trace=trace,
         recent_context=[{"role": "assistant", "content": reply}],
         backend=ExpressionBackend(reviews=reviewer), use_llm=True)
-    assert review.status != "violation"
+    assert review.unusable and any(i.code == "stale_response" for i in review.issues)
+    assert not review_response("RAM has 6.3 gigabytes currently in use out of 28 gigabytes total.",
+        user_message="Show current memory usage", tool_trace=trace,
+        recent_context=[{"role": "assistant", "content": reply}]).issues
 
 
 def test_host_metric_followups_survive_intervening_turns_but_respect_topic_changes():

@@ -9,7 +9,7 @@ from interface.api import EndSessionRequest
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
-from tests._fakes import MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
 
 
 pytestmark = pytest.mark.anyio
