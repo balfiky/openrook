@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from core.grounding import (
     extract_action_claims,
     grounding_correction_response,
@@ -324,3 +326,25 @@ def test_registry_claim_is_not_grounded_by_skill_list_tool():
 
     assert len(issues) == 1
     assert issues[0].required_categories == ("registry_write",)
+
+
+@pytest.mark.parametrize("claim", [
+    "I wrote the directive to a local registry.",
+    "I wrote the file in the workspace.",
+    "I executed the shell command successfully.",
+])
+def test_learning_receipt_cannot_ground_unrelated_side_effects(claim):
+    trace = ToolTrace(executed_results=[ToolResult(
+        tool_name="learning.intake", success=True, output='{"experience_id": 1}',
+    )])
+    assert verify_response_grounding(claim, tool_trace=trace)
+
+
+def test_learning_claim_requires_a_successful_learning_receipt():
+    claim = "I ingested this material into Life History."
+    assert verify_response_grounding(claim, tool_trace=None)
+    for success in (False, True):
+        trace = ToolTrace(executed_results=[ToolResult(
+            tool_name="learning.intake", success=success, output='{"experience_id": 1}',
+        )])
+        assert bool(verify_response_grounding(claim, tool_trace=trace)) is not success

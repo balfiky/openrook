@@ -179,6 +179,8 @@ def _infer_emotion_label(s: dict[str, float]) -> str:
         return "anxious" if s["arousal"] > 0.6 else "uncertain"
     if s["valence"] < 0.3 and s["bonding"] < 0.3:
         return "detached"
+    if s["valence"] < 0.45 and s["arousal"] >= 0.5:
+        return "irritated" if s["certainty"] >= 0.45 else "uneasy"
     return "neutral"
 
 

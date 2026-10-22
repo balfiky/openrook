@@ -109,6 +109,29 @@ class TestHealthAndReady:
         data = resp.json()
         assert data["has_llm_key"] is True
 
+    def test_ready_rejects_a_draining_manager_then_recovers(self, client):
+        manager = interface_api.get_session_manager()
+        manager._accepting = False
+        try:
+            response = client.get("/v1/ready")
+            assert response.status_code == 503
+            assert response.json()["status"] == "reloading"
+        finally:
+            manager._accepting = True
+        assert client.get("/v1/ready").json()["status"] == "ready"
+
+    def test_ready_waits_for_detached_identity_manager_shutdown(self, client, monkeypatch):
+        from types import SimpleNamespace
+
+        task = SimpleNamespace(done=lambda: False)
+        with monkeypatch.context() as patch:
+            patch.setattr(interface_api, "_background_shutdown_tasks", [task])
+            response = client.get("/v1/ready")
+            assert response.status_code == 503
+            assert response.json()["status"] == "reloading"
+            task.done = lambda: True
+            assert client.get("/v1/ready").json()["status"] == "ready"
+
 
 class TestChatEndpoint:
     @pytest.mark.parametrize("path", ["/chat", "/v1/chat"])

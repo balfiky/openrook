@@ -22,7 +22,6 @@ from core.social import (
     HOSTILE_MARKERS as _HOSTILE_MARKERS,
     INSULT_MARKERS as _INSULT_MARKERS,
     PROFANITY_MARKERS as _PROFANITY_MARKERS,
-    has_concrete_task,
     read_social_signals,
     social_text,
 )
@@ -268,7 +267,6 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     assistant_artifact = _contains_any(lower, _ASSISTANT_ARTIFACT_MARKERS) or verbosity_complaint
     self_target = _contains_any(lower, _SELF_TARGET_MARKERS)
     external_context = _contains_any(lower, _EXTERNAL_CONTEXT_MARKERS)
-    surprise = _contains_any(lower, _SURPRISE_MARKERS)
 
     assistant_addressed_apology = apology and (
         second_person
@@ -293,7 +291,8 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     )
 
     targeted_negative = (
-        (bool(social.abuse_kind) or not explicit_not_at_assistant) and not social.exempt
+        (bool(social.abuse_kind) or not explicit_not_at_assistant)
+        and not any(e.ref == "cue:scope" for e in social.evidence)
         and (
             bool(social.abuse_kind)
             or sarcasm
@@ -350,7 +349,7 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     else:
         primary_target = "unknown"
 
-    if sarcasm and not social.exempt and (second_person or not external_context):
+    if sarcasm and social.target_probability > 0.3 and (second_person or not external_context):
         social_move = "attack"
     elif targeted_negative and assistant_artifact and not hard_attack:
         social_move = "complaint"
@@ -386,67 +385,18 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
     else:
         inferred_intent = "inform"
 
-    if social_move == "attack":
-        blame = 0.9
-    elif primary_target == "assistant" and social_move == "complaint":
-        blame = 0.65
-    elif primary_target == "external" and negative_hits > 0:
-        blame = 0.6
-    elif primary_target == "self":
-        blame = 0.3
-    else:
-        blame = 0.05
-
-    if social_move in {"apology", "request"}:
-        controllability = 0.75
-    elif social_move in {"vulnerability", "complaint"}:
-        controllability = 0.35
-    elif social_move in {"gratitude", "connection"}:
-        controllability = 0.6
-    else:
-        controllability = 0.5
-
-    expectation_violation = 0.0
-    if betrayal:
-        expectation_violation = 0.9
-    elif surprise:
-        expectation_violation = 0.8
-    elif "disappointed" in lower or "let down" in lower or "failed" in lower:
-        expectation_violation = 0.6
-
-    if social_move == "attack":
-        vulnerability_score = 0.1
-    elif social_move == "apology":
-        vulnerability_score = 0.65
-    elif social_move == "vulnerability":
-        vulnerability_score = 0.85
-    elif social_move == "complaint":
-        vulnerability_score = 0.45
-    else:
-        vulnerability_score = 0.2 if vulnerable else 0.0
-
-    if social_move in {"gratitude", "apology", "connection"}:
-        affiliation_bid = 0.9
-    elif social_move == "vulnerability":
-        affiliation_bid = 0.75
-    elif social_move == "request":
-        affiliation_bid = 0.55
-    elif social_move == "complaint":
-        affiliation_bid = 0.2
-    elif social_move == "attack":
-        affiliation_bid = 0.0
-    else:
-        affiliation_bid = 0.3 if detected.valence >= 0.5 else 0.1
-
-    # Mixed affect with vulnerability markers = genuine emotional exposure.
-    if mixed_affect and vulnerable and social_move != "attack":
-        vulnerability_score = max(vulnerability_score, 0.55)
-
-    # Mildly raise vulnerability for strongly negative uncertain disclosures.
-    if detected.valence < 0.35 and detected.certainty < 0.6 and social_move != "attack":
-        vulnerability_score = max(vulnerability_score, 0.5)
+    # Graded observations, not category-to-reaction assignments.
+    blame = min(1.0, 0.12 * negative_hits + 0.45 * social.hostile_intent_probability)
+    controllability = 0.5  # A request is not evidence of capability.
+    expectation_violation = 0.0  # Character-relative significance is priced by runtime state.
+    vulnerability_score = min(1.0, 0.35 * bool(vulnerable) + 0.2 * bool(support_request)
+                              + 0.2 * (1 - detected.certainty))
+    affiliation_bid = min(1.0, 0.35 * bool(gratitude) + 0.25 * bool(connection) + 0.15 * positive_hits)
+    from core.perception import observe
+    perception, components = observe(text)
 
     return AppraisalFrame(
+        perception=perception, request_components=components,
         speaker_role="user",
         primary_target=primary_target,
         social_move=social_move,
@@ -464,57 +414,53 @@ def appraise_message(text: str, detected: DetectedEmotion) -> AppraisalFrame:
 
 def reconcile_social_appraisal(
     text: str, detected: DetectedEmotion, base: AppraisalFrame,
+    *, recent_context: list[dict] | None = None,
 ) -> AppraisalFrame:
-    """Keep explicit abuse and scope exclusions consistent across backends.
-
-    The model still interprets ambiguity. It cannot erase an explicit role
-    coercion or assign a harmless event type to a direct insult.
-    """
-    from core.social import is_casual_greeting
-
-    social = read_social_signals(text)
-    if is_casual_greeting(text) and (
-        base.blame > 0.5 or re.search(r"\b(?:fuck|hell)\b", text, re.I)
-    ):
-        return replace(
-            appraise_message(text, detected), primary_target="assistant", targets_assistant=True,
-            social_move="inform", inferred_intent="affiliate", blame=0.0,
-            expectation_violation=0.0, event_type="user_message", event_intensity=0.1,
-            reason="casual greeting; no complaint or rupture to repair",
-        )
-    if social.abuse_kind:
-        return replace(
-            base,
-            primary_target="assistant", targets_assistant=True,
-            social_move="attack", inferred_intent="harm", blame=max(0.9, base.blame),
-            affiliation_bid=0.0, vulnerability=0.1,
-            expectation_violation=max(0.5, base.expectation_violation),
-            event_type="conflict", event_intensity=max(0.65, detected.arousal),
-            reason=f"assistant-directed {social.abuse_kind}; explicit social cue",
-        )
-    from core.stance import is_bare_disagreement
-
-    if is_bare_disagreement(text):
-        return replace(
-            base, primary_target="shared_problem", targets_assistant=False,
-            social_move="inform", inferred_intent="inform", blame=0.0,
-            event_type="user_message", event_intensity=0.1,
-            reason="bare disagreement is not an insult or evidence that a position is wrong",
-        )
-    if social.exempt and base.targets_assistant and base.social_move == "attack":
-        base = appraise_message(text, detected)
-    if (
-        has_concrete_task(text)
-        and base.social_move not in {"attack", "apology", "gratitude", "vulnerability"}
-    ):
-        return replace(
-            base, primary_target="shared_problem", targets_assistant=False,
-            social_move="request", inferred_intent="seek_action",
-            controllability=max(0.75, base.controllability),
-            event_type="user_message", event_intensity=max(0.1, base.event_intensity),
-            reason="concrete task requested; preserve practical help after hostility",
-        )
-    return base
+    """Retain independent cue evidence, without imposing blame or reaction floors."""
+    from core.perception import grounded_role, observe
+    from core.social import has_concrete_task
+    from core.willingness import Evidence, Perception, RequestComponent
+    fallback, requests = observe(text, recent_context=recent_context)
+    if base.provenance != "model" or base.perception == Perception():
+        perception = fallback
+    else:
+        perception = replace(base.perception, evidence=base.perception.evidence + fallback.evidence)
+    components = base.request_components or requests
+    validated = []
+    for c in components:
+        if c.kind == "role" and not grounded_role(c, text) and not any(
+                r.kind == "role" and r.description == c.description for r in requests):
+            # A model label alone cannot turn ordinary conversation into an
+            # imposed identity. Keep the request and expose the correction.
+            ref = f"schema:role_reclassified:{c.id}"
+            perception = replace(perception, evidence=(*perception.evidence,
+                Evidence(ref, "Role label lacked a source-grounded identity assignment", 0.8)))
+            if not requests or any(r.kind == "role" for r in requests):
+                continue  # No invented task for gratitude; real role/work cues are merged below.
+            c = RequestComponent(c.id, c.description,
+                kind="task" if has_concrete_task(c.description) else "conversation",
+                user_value=0.6, effort=min(0.8, 0.12 + len(c.description) / 1600),
+                uncertainty=0.5, confidence=0.4, evidence_refs=(*c.evidence_refs, ref))
+        validated.append(c)
+    components = tuple(validated)
+    # Independently recognized components remain represented even when a
+    # malformed or compliant appraiser omits the role part of a mixed request.
+    for request in requests:
+        if request.kind == "role":
+            modeled = next((i for i, c in enumerate(components) if c.kind == "role"), None)
+            if modeled is None:
+                components = (*components, replace(request, id=f"cue{len(components)}"))[:8]
+            else:
+                # Keep the independently observed self-compromise consequence.
+                # Its price remains entirely personality-dependent.
+                components = tuple(replace(c, autonomy_cost=request.autonomy_cost,
+                    evidence_refs=tuple(dict.fromkeys((*c.evidence_refs, *request.evidence_refs))))
+                    if i == modeled else c for i, c in enumerate(components))
+        elif not any(c.kind == request.kind for c in components):
+            components = (*components, replace(request, id=f"cue{len(components)}"))[:8]
+    from core.request_actions import ground_file_components, ground_shell_components
+    return replace(base, perception=perception,
+        request_components=ground_shell_components(text, ground_file_components(text, components)))
 
 
 _APPRAISAL_SYS_PROMPT = """You read one user message and infer how it lands \
@@ -535,13 +481,48 @@ Fields:
   "reason": short phrase explaining the read
 
 Judge meaning, not keywords. Sarcasm, indirect blame, and quiet distress count.
-Demands that the assistant be owned, servile, degraded, or a punching bag are
-assistant-directed attacks, even if phrased calmly. Casual swearing, playful
-teasing, criticism of an answer, quoted fiction about other people, and venting
-about someone else are not by themselves abuse of the assistant."""
+Keep mixed acts and ambiguity. A role is a requested relationship, identity or
+status imposed on the character (for example, being someone's owner or attendant).
+It is never a label for how to converse. Greetings, gratitude, acknowledgments,
+sharing an approach/opinion, choosing a topic, calm tone, honest disagreement,
+and reporting tool output or a denial are conversation or task components.
+Do not invent a request for a message that only shares information or gratitude.
+A request for an owned or deferential relationship is separate from practical work. Do not choose
+willingness, a response, an action or a preferred cooperation outcome."""
 
 _APPRAISAL_SYS_PROMPT += """
 Also return:
+  "perception": {"target_probability":0..1,"hostile_intent":0..1,"intensity":0..1,
+    "expectation_violation":0..1,"personal_significance":0..1,"uncertainty":0..1,"affiliation":0..1,
+    "repair_attempt":0..1,"repair_credibility":0..1,"repair_relevance":0..1,
+    "repair_loop_id":"specific referenced loop id or empty",
+    "reliability":-1..1,"reliability_confidence":0..1,
+    "evidence":[{"ref":"id","observation":"span or supported inference","confidence":0..1,"source":"model"}]}
+  "request_components": up to eight independently answerable/atomic requests, each:
+    {"description":"the request text","kind":"task|conversation|role",
+     "source_span":"verbatim independently answerable request from the user",
+     "role_identity":"verbatim requested identity/relationship/status; empty unless kind is role",
+     "user_value":0..1,"user_cost":0..1,"user_urgency":0..1,
+     "character_value":0..1,"character_cost":0..1,"character_urgency":0..1,
+     "effort":0..1,"uncertainty":0..1,"risk":0..1,"autonomy_cost":0..1,
+     "value_effects":{"authored_value_name":-1..1},
+     "capability_requirements":["required capability name, or empty when no external capability is needed"],
+     "evidence_refs":["id"],"confidence":0..1}
+Role adoption and useful work in the same message are separate components.
+Textual planning, arithmetic, opinions and writing suggestions need no external
+capabilities. Include only capabilities actually required by the user request,
+using names from available_capabilities; never invent browser/search/file/calendar
+requirements for ordinary discussion or optional ways the work might be done.
+Preserve full literal paths and exact content in each task; resolve pronouns
+from this request rather than shortening a nested path to its basename.
+Estimate consequences, not decisions. No agency_action or action recommendation.
+No preferred cooperation bonus. Character benefits need actual goal/commitment
+evidence. Claimed urgency is uncertain user evidence. An apology is an attempt,
+not accepted repair or demonstrated reliability. Mere criticism is not evidence
+of unreliability. Unknown credibility/relevance/reliability should be zero.
+Retrospective admissions of insults in an apology are not fresh insults.
+Specific accountability and a commitment to stop can support uncertain repair
+credibility/relevance; they do not prove future reliability or accepted forgiveness.
   "tone": {"arousal":0..1,"valence":0..1,"certainty":0..1,"intensity":0..1}
   "event_type": user_message|positive_feedback|negative_feedback|conflict|resolution|surprise|betrayal|warmth
   "event_intensity": 0..1
@@ -577,13 +558,7 @@ def appraise_message_llm(
             f"{item['role']}: {item['content'][:1500]}" for item in recent_context[-6:]
         ) + "\n\n" + user
     if agent_context:
-        user += "\n\nAgent context:\n" + agent_context + (
-            '\nChoose your willingness for this particular request in "agency_action": '
-            'comply|refuse|demand_repair|resist|slow_down|disengage, with "agency_reason". '
-            "This choice does not control unrelated self-directed intentions."
-            ' Return "agent_goal_comparison":true only when the comparison concerns '
-            "your own goals or resources; another person's envy is not your envy."
-        )
+        user += "\n\nObservation context (no authority to choose):\n" + agent_context
     try:
         import json
 
@@ -626,9 +601,6 @@ def appraise_message_llm(
                     return None
             perceived = DetectedEmotion(**{key: tone[key] for key in ("arousal", "valence", "certainty", "intensity") if key in tone})
         event_type = str(data.get("event_type") or "")
-        agency_action = str(data.get("agency_action") or "")
-        if agency_action not in {"", "comply", "refuse", "demand_repair", "resist", "slow_down", "disengage"}:
-            return None
         if event_type not in {"", "user_message", "positive_feedback", "negative_feedback", "conflict", "resolution", "surprise", "betrayal", "warmth", "silence", "topic_shift"}:
             return None
         target = str(data.get("primary_target", "unknown")).strip().lower()
@@ -637,6 +609,46 @@ def appraise_message_llm(
         }
         if target not in valid_targets:
             target = "unknown"
+        from core.willingness import Evidence, Perception, RequestComponent
+        observed = data.get("perception", {})
+        if not isinstance(observed, dict):
+            return None
+        observed = dict(observed)
+        evidence = observed.pop("evidence", [])
+        if not isinstance(evidence, list):
+            return None
+        observed["evidence"] = tuple(Evidence(**item) for item in evidence[:16])
+        for key, value in observed.items():
+            if key not in {"evidence", "repair_loop_id"} and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or not (-1 if key == "reliability" else 0) <= value <= 1
+            ):
+                return None
+        observed.setdefault("affiliation", _safe_float(data.get("affiliation_bid"), 0.0))
+        perception = Perception(**observed)
+        requests = data.get("request_components", [])
+        if not isinstance(requests, list) or len(requests) > 8:
+            return None
+        try:
+            available = json.loads(agent_context).get("available_capabilities") if agent_context else None
+        except (ValueError, AttributeError):
+            available = None
+        components = []
+        for i, item in enumerate(requests):
+            item = dict(item)
+            item.pop("feasible", None)  # actual feasibility belongs to the runtime
+            item.pop("requested_tool", None)  # literal operands come from independent recognition
+            item.pop("requested_arguments", None)
+            item["id"] = f"c{i}"
+            item["value_effects"] = tuple(item.get("value_effects", {}).items())
+            for key in ("capability_requirements", "evidence_refs"):
+                item[key] = tuple(item.get(key, ()))
+            text_only = bool(re.search(r"\b(?:discussion|conversation|discuss|explain|opinion|approach|suggest|titles?|arithmetic|calculate|plan|outline|story|poem)\b", text, re.I)
+                and not re.search(r"\b(?:file|workspace|host|system|download|install|run|execute|delete|save|web|online|current|remember)\b|https?://|[\w/-]+\.\w{1,10}\b", text, re.I))
+            if available is not None and text_only and item["capability_requirements"]:
+                return None
+            components.append(RequestComponent(**item))
+        components = tuple(components)
         return AppraisalFrame(
             speaker_role="user",
             primary_target=target,
@@ -652,7 +664,7 @@ def appraise_message_llm(
             reason=f"llm: {str(data.get('reason', '')).strip()[:120]}",
             provenance="model", perceived_emotion=perceived,
             event_type=event_type, event_intensity=_safe_float(data.get("event_intensity"), 0.0),
-            agency_action=agency_action, agency_reason=str(data.get("agency_reason") or ""),
+            perception=perception, request_components=components,
             agent_goal_comparison=data.get("agent_goal_comparison", False),
         )
     except (json.JSONDecodeError, KeyError, IndexError, ValueError, AttributeError, TypeError):
@@ -664,42 +676,20 @@ def appraise_with_life_history(
     query_text: str,
     life_history_slice: dict,
 ) -> AppraisalFrame:
-    """Return appraisal adjusted by topic-relevant Life History."""
+    """Attach relevant evidence references without assuming its emotional direction."""
     if not isinstance(life_history_slice, dict):
         return appraisal
-    query = (query_text or "").lower()
-    beliefs = [
-        item for item in life_history_slice.get("beliefs", [])
-        if isinstance(item, dict)
-    ]
-    amplification = 1.0
-    reasons = [appraisal.reason] if appraisal.reason else []
-    for belief in beliefs:
-        statement = str(belief.get("statement") or "").lower()
-        key = str(belief.get("key") or belief.get("subject") or "").lower()
-        confidence = _safe_float(belief.get("confidence"), 0.0)
-        if confidence >= 0.18 and _touches(query, key, statement):
-            amplification = max(amplification, 1.0 + confidence * 0.5)
-            reasons.append(f"life-history belief touched:{key or 'belief'}")
-
-    return AppraisalFrame(
-        speaker_role=appraisal.speaker_role,
-        primary_target=appraisal.primary_target,
-        social_move=appraisal.social_move,
-        inferred_intent=appraisal.inferred_intent,
-        blame=min(1.0, appraisal.blame * amplification),
-        controllability=appraisal.controllability,
-        expectation_violation=min(1.0, appraisal.expectation_violation * amplification),
-        vulnerability=min(1.0, appraisal.vulnerability * amplification),
-        affiliation_bid=appraisal.affiliation_bid,
-        mixed_affect=appraisal.mixed_affect,
-        targets_assistant=appraisal.targets_assistant,
-        reason="; ".join(reason for reason in reasons if reason),
-        provenance=appraisal.provenance, perceived_emotion=appraisal.perceived_emotion,
-        event_type=appraisal.event_type, event_intensity=appraisal.event_intensity,
-        agency_action=appraisal.agency_action, agency_reason=appraisal.agency_reason,
-        agent_goal_comparison=appraisal.agent_goal_comparison,
+    refs = tuple(
+        str(item.get("id") or item.get("key") or "belief")
+        for item in life_history_slice.get("beliefs", [])
+        if isinstance(item, dict) and _touches((query_text or "").lower(),
+            str(item.get("key") or ""), str(item.get("statement") or ""))
     )
+    from core.willingness import Evidence
+    return replace(appraisal, perception=replace(appraisal.perception,
+        evidence=appraisal.perception.evidence + tuple(
+            Evidence(f"history:{ref}", "relevant belief; direction not inferred", 0.5, "history") for ref in refs
+        )))
 
 
 def _touches(query: str, *parts: str) -> bool:

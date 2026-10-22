@@ -10,7 +10,7 @@ key is renamed, this test will catch the regression before a release.
 
 from __future__ import annotations
 
-from tests._fakes import MockLLMBackend
+from tests.policy_fakes import ExpressionBackend
 from pipeline import CognitivePipeline
 
 
@@ -35,8 +35,8 @@ def _provider_empty() -> dict:
     }
 
 
-def _make_pipeline(provider) -> tuple[CognitivePipeline, MockLLMBackend]:
-    backend = MockLLMBackend(response="Acknowledged.")
+def _make_pipeline(provider) -> tuple[CognitivePipeline, ExpressionBackend]:
+    backend = ExpressionBackend(drafts=("Acknowledged.",))
     pipe = CognitivePipeline(
         llm_backend=backend,
         db_path=":memory:",
@@ -45,14 +45,18 @@ def _make_pipeline(provider) -> tuple[CognitivePipeline, MockLLMBackend]:
     return pipe, backend
 
 
+def _generation_prompt(backend):
+    return next(s for s, _ in reversed(backend.calls) if s.startswith("Express the committed"))
+
+
 class TestConstitutionInjection:
     def test_constitution_appears_in_system_prompt(self):
         """Constitution text must reach the LLM's system_prompt every turn."""
         pipe, backend = _make_pipeline(_provider_with_constitution)
         pipe.process("Hello", user_id="test")
-        assert SENTINEL in backend.last_system_prompt, (
+        assert SENTINEL in _generation_prompt(backend), (
             f"Constitution sentinel not found in system prompt. "
-            f"First 400 chars of prompt: {backend.last_system_prompt[:400]!r}"
+            f"First 400 chars of prompt: {_generation_prompt(backend)[:400]!r}"
         )
 
     def test_empty_constitution_does_not_inject_section(self):
@@ -60,14 +64,14 @@ class TestConstitutionInjection:
         pipe, backend = _make_pipeline(_provider_empty)
         pipe.process("Hello", user_id="test")
         # Section only renders when there is actual content
-        assert SENTINEL not in backend.last_system_prompt
+        assert SENTINEL not in _generation_prompt(backend)
 
     def test_constitution_present_on_second_turn(self):
         """Constitution must still be injected on subsequent turns, not just the first."""
         pipe, backend = _make_pipeline(_provider_with_constitution)
         pipe.process("First message", user_id="test")
         pipe.process("Second message", user_id="test")
-        assert SENTINEL in backend.last_system_prompt
+        assert SENTINEL in _generation_prompt(backend)
 
     def test_constitution_survives_query_text_variant(self):
         """Provider called with a query_text arg must still inject the constitution."""
@@ -79,5 +83,5 @@ class TestConstitutionInjection:
 
         pipe, backend = _make_pipeline(provider_that_records)
         pipe.process("Tell me about yourself", user_id="test")
-        assert SENTINEL in backend.last_system_prompt
+        assert SENTINEL in _generation_prompt(backend)
         assert len(call_args) >= 1

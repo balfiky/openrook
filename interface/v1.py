@@ -120,6 +120,7 @@ def build_v1_router(
     session_manager_getter,
     config_getter,
     serve_started_at: float,
+    reload_pending_getter=lambda: False,
 ) -> APIRouter:
     """Create the ``/v1`` router.
 
@@ -158,9 +159,13 @@ def build_v1_router(
         }
 
     @router.get("/ready", summary="Readiness probe")
-    async def ready() -> dict[str, Any]:
+    async def ready():
+        if reload_pending_getter():
+            return JSONResponse(status_code=503, content={"status": "reloading"})
         cfg = config_getter()
         mgr = get_manager()
+        if not mgr.accepting_messages:
+            return JSONResponse(status_code=503, content={"status": "reloading"})
         env_has_key = bool(os.environ.get("LLM_API_KEY"))
         return {
             "status": "ready",

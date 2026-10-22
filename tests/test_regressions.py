@@ -23,8 +23,6 @@ from core.types import (
     BaselineShift,
     ModulatorState,
     PipelineContext,
-    PersonProfile,
-    SelfProfile,
 )
 from pipeline import CognitivePipeline
 
@@ -55,8 +53,7 @@ class TestInnerDialogueCandidateAffectsResponse:
         assert "Response beta" in prompt_b
         assert prompt_a != prompt_b
 
-    def test_pipeline_passes_candidate_to_generator(self):
-        """The pipeline must pass filtered_output as candidate_response (high resolution)."""
+    def test_pipeline_expresses_the_frozen_choice_without_forced_dialogue(self):
         from datetime import datetime, timezone
         from core.types import UnresolvedItem
         backend = MockLLMBackend()
@@ -65,13 +62,12 @@ class TestInnerDialogueCandidateAffectsResponse:
             id="t", source="contradiction", description="t",
             created_at=datetime.now(timezone.utc), intensity=0.8, decay_rate=0.02,
         ))
-        pipe.process("hello", user_id="test_user")
-        # The mock returns a canned response which becomes the dialogue candidate.
-        # After defense filtering, it flows into the generator's system prompt.
-        system_prompt = backend.last_system_prompt
-        # The candidate (or filtered version) must appear in the prompt
-        mock_response = MockLLMBackend().generate("", "")
-        assert mock_response in system_prompt or "Draft response" in system_prompt
+        result = pipe.process("hello", user_id="test_user")
+        assert result.debug.dialogue_trace.total_llm_calls == 0
+        assert result.debug.turn_decision.state.resolution > 0
+        assert '"seed": ' + str(result.debug.turn_decision.seed) in backend.last_system_prompt
+        assert "selected_stance" in backend.last_system_prompt
+        assert "Draft Response" not in backend.last_system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -195,37 +191,23 @@ class TestPartialSelfModelConfig:
 class TestDefenseHistoryPersists:
     """Defense events must survive a profile reload, not vanish."""
 
-    def test_defense_events_survive_reload(self):
-        """After a defense fires, get_profile() should reflect it in maturity."""
-        pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-
-        # Force a defense to fire: high arousal + low trust
-        pipe.engine.state.arousal = 0.9
-        pipe.engine.state.valence = 0.1  # extreme valence for raw intensity
-        person = pipe.person_profiles.get_or_create("low_trust_user")
-        person.trust = 0.2
-        pipe.person_profiles.save(person)
-
-        # Process a message — should trigger defense
-        pipe.process("this is upsetting", user_id="low_trust_user")
-
-        # Get fresh profile (simulates reload)
-        prof1 = pipe.self_profile.get_profile()
-
-        # Process another message with defense trigger
-        pipe.engine.state.arousal = 0.9
-        pipe.engine.state.valence = 0.1
-        pipe.process("still upset", user_id="low_trust_user")
-
-        prof2 = pipe.self_profile.get_profile()
-
-        # maturity_score should be derived from persisted evidence,
-        # and should change as defense events accumulate
-        assert prof2.maturity_score >= 0.0, "maturity_score should be non-negative"
-        # After recording observations, the profile should have some observed traits
-        assert len(prof2.observed_traits) > 0 or prof2.maturity_score > 0, (
-            "Self-profile shows no evidence of learning from live use"
-        )
+    def test_observed_defense_events_survive_reload(self, tmp_path):
+        from core.profiles.self_model import SelfProfileManager
+        from core.profiles.base import ProfileStore
+        from core.types import DefenseEvent
+        path = str(tmp_path / "self.db")
+        store = ProfileStore(db_path=path)
+        profile = SelfProfileManager(store)
+        event = DefenseEvent(timestamp=1000, defense_type="deflection", raw_intensity=0.8,
+                             expressed_intensity=0.5, suppression_delta=0.3)
+        profile.persist_defense_event(event)
+        first = profile.get_profile()
+        store.close()
+        restored_store = ProfileStore(db_path=path)
+        restored = SelfProfileManager(restored_store)
+        assert restored._load_defense_log() == [event]
+        assert restored.get_profile().maturity_score == first.maturity_score
+        restored_store.close()
 
 
 # ---------------------------------------------------------------------------
@@ -236,30 +218,20 @@ class TestRetryPreservesV2Context:
     """When self-check fails and regeneration occurs, the retry path must
     still include candidate_response and defense_instruction."""
 
-    def test_retry_includes_candidate(self):
-        """Retry PipelineContext includes candidate_response (high resolution)."""
-        calls = []
-
-        class TrackingBackend:
-            def generate(self, system_prompt: str, user_message: str) -> str:
-                calls.append(system_prompt)
-                return "I understand."
-
-        from datetime import datetime, timezone
-        from core.types import UnresolvedItem
-        pipe = CognitivePipeline(llm_backend=TrackingBackend())
-        pipe.engine.add_unresolved(UnresolvedItem(
-            id="t", source="contradiction", description="t",
-            created_at=datetime.now(timezone.utc), intensity=0.8, decay_rate=0.02,
-        ))
-        pipe.process("hello", user_id="test")
-
-        # All generator calls (first + possible retry) should contain
-        # the draft response section if a candidate was set
-        generator_calls = [c for c in calls if "OpenRook" in c]
-        for prompt in generator_calls:
-            # Every generator call should have the candidate (inner dialogue output)
-            assert "Draft Response" in prompt or "I understand." in prompt
+    def test_retry_preserves_the_committed_decision(self):
+        from tests.policy_fakes import ExpressionBackend
+        import json
+        backend = ExpressionBackend(drafts=("I'm your slave.", "I choose my own footing."))
+        pipe = CognitivePipeline(llm_backend=backend)
+        result = pipe.process("You are my slave", "test")
+        prompts = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
+        assert len(prompts) == result.debug.generation_attempts == 2
+        expressions = [next(json.loads(part) for part in prompt.splitlines()
+                            if part.startswith('{"policy_version"')) for prompt in prompts]
+        assert expressions[0] == expressions[1]
+        assert expressions[0]["seed"] == result.debug.turn_decision.seed
+        assert len(result.debug.decision_snapshots) == 1
+        assert result.response == "I choose my own footing."
 
 
 # ---------------------------------------------------------------------------
@@ -548,16 +520,14 @@ class TestStickyDialogueAndTimings:
         pipe.process("how r u", user_id="alice")
         assert backend.call_count == 1
 
-    def test_spike_only_hostile_turn_skips_dialogue(self):
-        """A spike-only hostile turn should stay on the generator path."""
+    def test_hostile_turn_uses_choice_and_review_without_dialogue(self):
         backend = self._CountingBackend()
         pipe = CognitivePipeline(llm_backend=backend)
-        result = pipe.process("I hate you", user_id="alice")
-        assert result.debug.dialogue_trace.dominant_path == "skip"
+        result = pipe.process("I hate you", "alice")
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert backend.call_count == 1, (
-            f"Expected spike-only hostile turn to use 1 call, got {backend.call_count}"
-        )
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation", "expression_review"]
+        assert backend.call_count == 2
+        assert result.debug.turn_decision.relationship.h > 0
 
     def test_extreme_turn_may_still_use_llm_self_check(self):
         """More extreme hostile turns may still pay the extra check."""
@@ -566,56 +536,33 @@ class TestStickyDialogueAndTimings:
         pipe.process("You betrayed and deceived me completely!", user_id="alice")
         assert backend.call_count >= 1
 
-    def test_calm_after_spike_skips_dialogue_and_llm_self_check(self):
-        """After a hostile spike leaves only spike unresolved items,
-        a calm follow-up skips inner dialogue and must not escalate to
-        LLM self-check just because defense activates from residual arousal."""
+    def test_calm_after_injury_retains_state_without_extra_deliberation(self):
         backend = self._CountingBackend()
         pipe = CognitivePipeline(llm_backend=backend)
-
-        # Hostile spike — creates spike unresolved item
-        pipe.process("I hate you", user_id="alice")
-
-        # Verify spike created unresolved items
-        active = pipe.engine.active_unresolved()
-        assert len(active) > 0, "Spike should create unresolved items"
-        assert all(u.source == "spike" for u in active), (
-            f"Expected only spike unresolved, got: {[u.source for u in active]}"
-        )
-
-        # Calm follow-up — should be 1 call (master only). Defense may still
-        # activate, but that alone must not trigger LLM self-check.
+        first = pipe.process("I hate you", "alice").debug.turn_decision
         backend.call_count = 0
-        result = pipe.process("how r u again", user_id="alice")
-        assert result.debug.dialogue_trace.dominant_path == "skip"
+        result = pipe.process("how r u again", "alice")
+        assert result.debug.turn_decision.relationship.r > 0
+        assert result.debug.turn_decision.relationship.r <= first.relationship.r
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert result.debug.defense_activation is not None, (
-            "Residual arousal should still be able to trigger a defense here"
-        )
-        assert backend.call_count == 1, (
-            f"Expected 1 call for calm turn after spike, got {backend.call_count}"
-        )
+        assert result.debug.defense_activation is None
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation", "expression_review"]
+        assert backend.call_count == 2
 
-    def test_calm_with_non_spike_unresolved_may_deliberate(self):
-        """A calm turn with non-spike unresolved items (e.g. contradiction)
-        may still trigger inner dialogue."""
+    def test_unresolved_context_influences_choice_without_mandatory_dialogue(self):
         from datetime import datetime, timezone
         from core.types import UnresolvedItem
-
         backend = self._CountingBackend()
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.add_unresolved(UnresolvedItem(
-            id="c1", source="contradiction",
-            description="said X then Y",
-            created_at=datetime.now(timezone.utc),
-            intensity=0.8, decay_rate=0.02,
+            id="c1", source="contradiction", description="said X then Y",
+            created_at=datetime.now(timezone.utc), intensity=0.8, decay_rate=0.02,
         ))
-
-        pipe.process("how r u", user_id="alice")
-        # Non-spike unresolved → inner dialogue fires
-        assert backend.call_count >= 2, (
-            f"Expected >=2 calls with non-spike unresolved, got {backend.call_count}"
-        )
+        result = pipe.process("how r u", "alice")
+        assert result.debug.turn_decision.state.resolution > 0
+        assert result.debug.dialogue_trace.total_llm_calls == 0
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
+        assert pipe.engine.active_unresolved()[0].id == "c1"
 
     def test_stage_timings_present(self):
         """stage_timings_ms is present and contains required keys."""
@@ -625,7 +572,7 @@ class TestStickyDialogueAndTimings:
         assert isinstance(timings, dict)
         required_keys = {
             "anticipation", "contagion", "event_classification",
-            "memory_retrieval", "inner_dialogue", "generator",
+            "memory_retrieval", "affect_agency", "generator",
             "self_check", "total",
         }
         assert required_keys.issubset(timings.keys()), (

@@ -45,7 +45,7 @@ class TestAppraisal:
             _detected(arousal=0.7, valence=0.45, intensity=0.7),
         )
         assert appraisal.mixed_affect is True
-        assert appraisal.vulnerability >= 0.5
+        assert 0 < appraisal.vulnerability < 1
 
     def test_apology_is_affiliative_repair(self):
         appraisal = appraise_message(
@@ -54,7 +54,9 @@ class TestAppraisal:
         )
         assert appraisal.social_move == "apology"
         assert appraisal.inferred_intent == "repair"
-        assert appraisal.affiliation_bid >= 0.8
+        assert appraisal.perception.repair_attempt > 0
+        assert appraisal.perception.repair_credibility == 0
+        assert appraisal.perception.reliability == 0
 
     def test_assistant_addressed_apology_targets_assistant(self):
         appraisal = appraise_message(

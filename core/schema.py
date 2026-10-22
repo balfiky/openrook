@@ -11,7 +11,7 @@ import sqlite3
 
 # Current schema version for all OpenRook databases.
 # Bump this when tables are added/altered and add a migration path.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SchemaVersionError(RuntimeError):
@@ -68,6 +68,13 @@ def _run_migrations(conn: sqlite3.Connection, stored: int, target: int) -> None:
         if current == 1:
             _migrate_1_to_2(conn)
             current = 2
+            continue
+        if current == 2:
+            conn.execute("""CREATE TABLE IF NOT EXISTS relationship_dynamics (
+                source_person TEXT PRIMARY KEY, payload TEXT NOT NULL,
+                turn_index INTEGER NOT NULL DEFAULT 0
+            )""")
+            current = 3
             continue
         raise SchemaVersionError(
             f"No migration path available from schema version {current} to {target}."

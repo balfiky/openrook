@@ -19,7 +19,10 @@ class TestPhase11Report:
         trace = collect_phase11_trace(scenario)
         assert trace["scenario_id"] == "p11_external_distress_validate"
         assert len(trace["turns"]) == 1
-        assert trace["turns"][0]["response_strategy"] == "validate"
+        decision = trace["turns"][0]["turn_decision"]
+        assert decision["policy_version"] == "willingness-1.2"
+        assert decision["relationship"]["h"] == 0
+        assert decision["utility"] == max(a[1] for a in decision["alternatives"])
 
     def test_rendered_trace_mentions_strategy(self):
         scenario = load_phase11_scenarios("p11_action_request_practical")[0]

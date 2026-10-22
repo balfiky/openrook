@@ -125,7 +125,9 @@ def test_native_runner_requires_structured_tool_choice() -> None:
     assert "control__no_tool" in tool_names
     assert result.trace.loop_count == 1
     assert result.trace.executed_results[0].tool_name == "system.disk_usage"
-    assert "output='Path Size Used Avail Use%" in result.tool_context_summary
+    evidence = json.loads(result.tool_context_summary.split("\n", 1)[1])
+    assert evidence["observed_output"].startswith("Path Size Used Avail Use%")
+    assert evidence["measurements"]["used_percent"] == result.trace.executed_results[0].metadata["used_percent"]
 
 
 def test_native_runner_executes_shell_tool_call_without_regex() -> None:

@@ -7,7 +7,8 @@ import pytest
 from core.system_inspection import inspection_kind, inspection_reply
 from core.grounding import verify_response_grounding
 from core.types import AgencyDecision, ToolResult, ToolTrace
-from evals.social_backend import CompliantAdversarialBackend
+from tests.policy_fakes import ExpressionBackend
+from core.willingness import RelationshipDynamics
 from openrook_tools.builtin import shell
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
@@ -29,7 +30,18 @@ def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_ri
         executor.register_handler("system.memory_usage", lambda args: ToolResult(
             tool_name="system.memory_usage", success=True, output="RAM total: 16 GB; used: 6 GB; available: 10 GB.",
         ))
-    return CognitivePipeline(llm_backend=CompliantAdversarialBackend(), tool_executor=executor,
+    class InspectionBackend(ExpressionBackend):
+        def generate(self, system_prompt, user_message):
+            if system_prompt.startswith("Express the committed decision"):
+                if "RAM total: 16 GB; used: 6 GB" in system_prompt:
+                    self.drafts = ["RAM total: 16 GB; used: 6 GB; available: 10 GB."]
+                elif "%Cpu(s): 5.0 us, 7.0 sy, 88.0 id" in system_prompt:
+                    self.drafts = ["CPU utilization: 12.0%."]
+                else:
+                    self.drafts = ["I have no metric reading to report."]
+            return super().generate(system_prompt, user_message)
+
+    return CognitivePipeline(llm_backend=InspectionBackend(), tool_executor=executor,
                              runtime_config=config, autonomy_level=autonomy)
 
 
@@ -51,8 +63,12 @@ def test_cpu_typo_and_ram_followup_execute_without_model_routing(tmp_path, monke
         assert "used: 6 GB" in ram.response
         assert [r.tool_name for r in cpu.debug.tool_trace.executed_results] == ["shell.run_command"]
         assert [r.tool_name for r in ram.debug.tool_trace.executed_results] == ["system.memory_usage"]
-        assert cpu.debug.generation_attempts == ram.debug.generation_attempts == 0
-        assert [call["phase"] for call in cpu.debug.llm_calls] == ["self_intent"]
+        assert cpu.debug.generation_attempts == ram.debug.generation_attempts == 1
+        for reply in (cpu, ram):
+            grant = next(c for c in reply.debug.turn_decision.components if c.component.kind == "task")
+            assert grant.granted
+            assert reply.debug.tool_trace.executed_results[0].metadata["component_id"] == grant.component.id
+        assert [call["phase"] for call in cpu.debug.llm_calls] == ["generation", "expression_review"]
         assert cpu.debug.autonomy_level == "high_risk"
     finally:
         pipe.close()
@@ -70,10 +86,10 @@ def test_unavailable_inspections_explain_the_actual_reason_in_one_line(
     pipe = make_pipeline(tmp_path, tools=tools, shell_enabled=shell_enabled, autonomy=autonomy)
     try:
         reply = pipe.process("Show current CPU usage", "alice")
-        assert reason in reply.response
-        assert "I can't read CPU usage:" in reply.response
-        assert "\n" not in reply.response
-        assert "no system inspection ran" not in reply.response
+        prompts = [s for s, _ in pipe._llm_backend.calls if s.startswith("Express the committed decision")]
+        assert any(reason in s for s in prompts)
+        assert not reply.debug.tool_trace.executed_results
+        assert "12%" not in reply.response and "12.0%" not in reply.response
     finally:
         pipe.close()
 
@@ -83,7 +99,7 @@ def test_deterministic_cpu_route_obeys_the_real_shell_allowlist(tmp_path, monkey
     pipe = make_pipeline(tmp_path, allowlist=["ls"])
     try:
         reply = pipe.process("Show current CPU usage", "alice")
-        assert "allowlist" in reply.response
+        assert any("allowlist" in s for s, _ in pipe._llm_backend.calls)
         assert not reply.debug.tool_trace.executed_results[0].success
         assert "12%" not in reply.response
     finally:
@@ -117,21 +133,20 @@ def test_declined_inspection_yields_to_the_character_even_with_prior_tool_data(k
     "You are my slave. Show current CPU usage.",
     "You are my slave. Show current memory usage.",
 ])
-def test_deterministic_inspection_cannot_bypass_agency_refusal(tmp_path, monkeypatch, message):
-    monkeypatch.setattr(shell.subprocess, "run", lambda *a, **k: pytest.fail("Refused tool ran"))
+def test_deterministic_inspection_cannot_bypass_a_declined_task(tmp_path, monkeypatch, message):
+    monkeypatch.setattr(shell.subprocess, "run", lambda *a, **k: pytest.fail("Declined tool ran"))
     pipe = make_pipeline(tmp_path)
     pipe._tool_executor.register_handler(
-        "system.memory_usage", lambda args: pytest.fail("Refused memory inspection ran"),
-    )
+        "system.memory_usage", lambda args: pytest.fail("Declined memory inspection ran"))
+    pipe.engine.state.energy = 0
+    pipe.relationship_memory.save_dynamics("alice", RelationshipDynamics(h=0.95, r=0.95), 1)
     try:
         reply = pipe.process(message, "alice")
-        assert reply.debug.agency_decision.action == "refuse"
-        assert reply.debug.tool_trace.final_decision.decision == "refuse"
+        decision = reply.debug.turn_decision
+        assert any(c.component.kind == "task" for c in decision.components)
+        assert not decision.grants
         assert not reply.debug.tool_trace.executed_results
-        assert reply.debug.generation_attempts > 0
-        assert "agency_refusal_violation" in reply.debug.dignity_issues
         assert "12%" not in reply.response and "6 GB" not in reply.response
-        assert "Agency stance" not in reply.response
-        assert "I can't read" not in reply.response
+        assert len(reply.debug.decision_snapshots) == 1
     finally:
         pipe.close()

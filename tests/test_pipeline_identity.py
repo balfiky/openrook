@@ -2,7 +2,8 @@
 
 import pytest
 
-from core.types import LongTermEntry, SemanticMemoryEntry
+from core.types import LongTermEntry, SemanticMemoryEntry, OpenLoop
+from tests.policy_fakes import ExpressionBackend
 from pipeline import CognitivePipeline
 from pipeline.heuristics import _is_identity_question
 from runtime.debug.explain import explain_turn
@@ -26,6 +27,8 @@ def test_user_memory_question_generates_with_saved_context_after_restart(tmp_pat
     pipe = CognitivePipeline(llm_backend=MockLLMBackend(response="I understand."), db_path=db_path)
     try:
         pipe.process("I prefer short answers.", user_id="alice")
+        pipe.relationship_memory.upsert_open_loop(OpenLoop(source_person="alice", loop_kind="commitment",
+            topic="deadline", description="Agreed deadline", related_key="deadline:1"))
         pipe.process("I'm angry with you about the deadline.", user_id="alice")
         pipe.end_session(user_id="alice")
     finally:
@@ -51,7 +54,7 @@ def test_user_memory_question_generates_with_saved_context_after_restart(tmp_pat
         assert result.debug.relationship_context is not None
         assert result.debug.relationship_context.open_loop_count >= 1
         assert any(
-            event.event_kind == "rupture"
+            event.event_kind == "turn_decision"
             for event in result.debug.relationship_context.recent_events
         )
     finally:
@@ -59,33 +62,29 @@ def test_user_memory_question_generates_with_saved_context_after_restart(tmp_pat
 
 
 @pytest.mark.parametrize("question", [
-    "What did you learn?",
-    "What do you learn about yourself?",
-    "What changed?",
-    "What did you change about yourself?",
-    "Did you evolve?",
-    "How have you changed?",
-    "evolve",
-    "What do you remember about yourself?",
-    "What do you believe?",
-    "What are your priorities?",
+    "What did you learn?", "What do you learn about yourself?", "What changed?",
+    "What did you change about yourself?", "Did you evolve?", "How have you changed?", "evolve",
+    "What do you remember about yourself?", "What do you believe?", "What are your priorities?",
 ])
-def test_self_identity_question_uses_plain_grounded_reply(question):
-    backend = MockLLMBackend(response="Invented transformation.")
+def test_self_identity_questions_use_frozen_choice_and_grounded_generation(question):
+    backend = ExpressionBackend(drafts=("I have no saved changes to describe.",))
     pipe = CognitivePipeline(llm_backend=backend)
     try:
-        result = pipe.process(question, user_id="alice")
-
+        result = pipe.process(question, "alice")
         assert _is_identity_question(question)
-        assert result.response == "I don't have any recorded changes to my beliefs or priorities yet."
-        assert backend.call_count == 0
+        assert result.response == "I have no saved changes to describe."
+        prompts = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
+        assert len(prompts) == 1 and "Grounded identity records: {}" in prompts[0]
+        assert result.debug.generation_attempts == 1
+        assert len(result.debug.decision_snapshots) == 1
+        assert result.debug.expression_reviews[0]["status"] == "pass"
     finally:
         pipe.close()
 
 
 def test_identity_reply_reports_saved_beliefs_and_priority_changes_plainly():
     pipe = CognitivePipeline(
-        llm_backend=MockLLMBackend(),
+        llm_backend=ExpressionBackend(drafts=("Repair takes patience. Independence matters more after learning.",)),
         life_history_snapshot_provider=lambda: {
             "beliefs": [{"key": "repair", "statement": "Repair takes patience.", "confidence": 0.8}],
             "drives": [{"name": "self_direction", "value": 0.7, "baseline": 0.5}],
@@ -101,8 +100,11 @@ def test_identity_reply_reports_saved_beliefs_and_priority_changes_plainly():
         result = pipe.process("What do you believe?", user_id="alice")
 
         assert "Repair takes patience." in result.response
-        assert "self direction: higher priority than its starting setting." in result.response
-        assert "Learning made independence more relevant." in result.response
+        generation = next(s for s, _ in pipe._llm_backend.calls if s.startswith("Express the committed decision"))
+        assert "Learning made independence more relevant." in generation
+        assert "self_direction" in generation
+        assert '"value": 0.7' in generation
+        assert result.debug.generation_attempts == 1
         assert "Life History" not in result.response
         assert "drive" not in result.response.lower()
         assert "0.80" not in result.response
@@ -149,39 +151,30 @@ def test_semantic_only_recall_explanation_matches_context_sent_to_generator(tmp_
         pipe.close()
 
 
-def test_identity_shortcut_does_not_claim_prefetched_memories_were_used(tmp_path):
-    backend = MockLLMBackend()
-    pipe = CognitivePipeline(
-        llm_backend=backend,
-        db_path=str(tmp_path / "identity.db"),
-        life_history_provider=lambda: {"beliefs": [{"statement": "Unused prompt belief."}]},
-        life_history_snapshot_provider=lambda: {
-            "beliefs": [{"statement": "Actual saved belief."}],
-        },
-    )
+def test_identity_generation_reports_only_the_context_actually_supplied(tmp_path):
+    backend = ExpressionBackend(drafts=("Actual saved belief.",))
+    pipe = CognitivePipeline(llm_backend=backend, db_path=str(tmp_path / "identity.db"),
+        life_history_provider=lambda: {"beliefs": [{"statement": "Superseded retrieved belief."}]},
+        life_history_snapshot_provider=lambda: {"beliefs": [{"statement": "Actual saved belief."}]})
     try:
-        pipe.semantic_memory.store(SemanticMemoryEntry(
-            summary="You prefer bullet points.", source_person="alice", salience=1.0,
-        ))
-        pipe.long_term.store(LongTermEntry(
-            summary="An earlier discussion.", source_person="alice", confidence=1.0,
-        ))
-        result = pipe.process("What do you believe?", user_id="alice")
+        pipe.semantic_memory.store(SemanticMemoryEntry(summary="You prefer bullet points.", source_person="alice", salience=1.0))
+        pipe.long_term.store(LongTermEntry(summary="An earlier discussion.", source_person="alice", confidence=1.0))
+        result = pipe.process("What do you believe?", "alice")
+        prompt = next(s for s, _ in backend.calls if s.startswith("Express the committed decision"))
         explanation = explain_turn(result.debug)
-
-        assert backend.call_count == 0
-        assert result.debug.semantic_memories == []
-        assert result.debug.retrieved_memories == []
-        assert "Recalled" not in explanation["memory"]
+        assert result.debug.generation_attempts == 1
+        for memory in result.debug.semantic_memories + result.debug.retrieved_memories:
+            assert memory.summary in prompt
+            assert memory.summary.rstrip(".") in explanation["memory"]
         assert "Actual saved belief" in explanation["life_history"]
-        assert "Unused prompt belief" not in explanation["life_history"]
+        assert "Superseded retrieved belief" not in explanation["life_history"]
     finally:
         pipe.close()
 
 
 def test_identity_reply_reports_drive_only_change_when_user_asks_for_drives():
     pipe = CognitivePipeline(
-        llm_backend=MockLLMBackend(),
+        llm_backend=ExpressionBackend(drafts=("Curiosity is now a higher priority.",)),
         life_history_snapshot_provider=lambda: {
             "drives": [{"name": "curiosity", "value": 0.7, "baseline": 0.5}],
         },
@@ -189,24 +182,28 @@ def test_identity_reply_reports_drive_only_change_when_user_asks_for_drives():
     try:
         result = pipe.process("What are your drives?", user_id="alice")
 
-        assert "Drive shifts:" in result.response
-        assert "curiosity: 0.70 (+0.20)" in result.response
+        assert result.response == "Curiosity is now a higher priority."
+        prompt = next(s for s, _ in pipe._llm_backend.calls if s.startswith("Express the committed decision"))
+        assert '"name": "curiosity"' in prompt and '"value": 0.7' in prompt
+        assert result.debug.turn_decision.grants
         assert "don't have any recorded changes" not in result.response
     finally:
         pipe.close()
 
 
-def test_identity_reply_does_not_claim_no_changes_when_saved_record_is_unavailable():
+def test_identity_generation_distinguishes_unavailable_records_from_empty_records():
     def unavailable():
         raise OSError("unavailable")
-
-    pipe = CognitivePipeline(
-        llm_backend=MockLLMBackend(),
-        life_history_snapshot_provider=unavailable,
-    )
+    backend = ExpressionBackend(drafts=("I could not read the saved record.",))
+    pipe = CognitivePipeline(llm_backend=backend, life_history_snapshot_provider=unavailable)
     try:
-        result = pipe.process("What changed?", user_id="alice")
-
-        assert result.response == "I couldn't read my saved record of changes right now. Please try again."
+        result = pipe.process("What changed?", "alice")
+        assert result.response == "I could not read the saved record."
+        records = result.debug.life_history_context["identity_records"]
+        assert records.get("error")
+        prompt = next(s for s, _ in backend.calls if s.startswith("Express the committed decision"))
+        assert "Grounded identity records" in prompt and '"error"' in prompt
+        review = next(u for s, u in backend.calls if s.startswith("Review expression against"))
+        assert '"grounded_context"' in review and '"error"' in review
     finally:
         pipe.close()

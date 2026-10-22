@@ -89,59 +89,146 @@ interventions, and provider/tool records remain distinguishable. See
   <img src="diagrams/single-turn-cognitive-flow-light.svg" alt="Five conversation stages with a separate lane for possible model calls and a separate session-end consolidation path." width="100%">
 </picture>
 
-Call count depends on the enabled perception, appraisal, deliberation,
-generation, verification, and tool paths; model-based appraisal adds inference
-and falls back on failure. Ordinary conversational turns do not have a single
-fixed call count. Bounded research protocols enforce explicit study-wide
-request and time reservations, including failed attempts and configured retries.
+The active conversational policy is `willingness-1`. The diagram above records
+an earlier flow; inner dialogue, defense filtering and threshold agency no longer
+select conversational behavior. The current path is:
+
+```text
+message + context -> uncertain perception and separate request components
+soul + resources + relationship evidence -> continuous injury/grievance update
+state + component consequences + stable seed -> frozen TurnDecision
+component grants + operator permissions -> execution and receipts
+frozen decision + permitted facts + authored voice -> expression and review
+actual delivery outcome -> persistent evidence and debug explanation
+```
 
 Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 
-The model-call lane marks work that may call a model: appraisal, inner dialogue,
-tool selection, generation, LLM self-check, and regeneration. Decay, anticipation,
-state updates, defense shaping, rule checks, and persistence are runtime
-operations. High arousal can skip slow deliberation; enabled dialogue rounds,
-parse retries, tool rounds, and optional self-intents can add inference.
+| Stage | Work | Model calls |
+|---|---|---|
+| `_stage_pre_pass` | Perception, context retrieval, relationship integration and pure utility choice; persist grants before execution | 0–1 for appraisal |
+| `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
+| `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
+| `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites and required fresh attempts for ineligible output; local and available semantic review | 0–4 |
+| `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update and debug | 0 |
 
-<details>
-<summary><strong>Detailed flow (19 steps)</strong></summary>
+The conversational base budget is five inference calls, including optional work.
+Each granted atomic task also receives one protected primary tool selection;
+these calls are recorded with `primary_tool: true`, at most eight extra per turn.
+Literal file operations execute their bound operands without model selection.
+A routine turn needs one expression call, or two with semantic appraisal.
+Constrained or affiliative expression adds review. Every rewrite gets local validation; semantic
+review uses the remaining budget. Critical role assent or uniformly stale drafts
+can spend a final call on a second rewrite, retaining explicit semantic uncertainty.
+Stale drafts are explicitly forbidden-to-repeat context. There is no mandatory social deliberation or conversational
+self-intent proposal. Independent activity uses `process_autonomous` and its own
+scope; a declined user request cannot be relabeled as self-directed work.
+Ineligible/empty drafts spend the remaining base budget on fresh generation, up
+to five generation attempts, with failed evidence and varied seed/temperature.
+Required retries bypass optional cooldown and retain the primary deadline.
+Known critical stale copies are excluded before candidate ranking; an eligible
+reviewed reply survives later correction failure. Actual operator settings and
+gate decisions reach generation separately from character grants.
+Supplemental tool inference reserves three base calls for expression, review and
+one fresh attempt if the review finds no deliverable candidate.
 
-The presentation "five stages" framing is now explicit in the code:
-`CognitivePipeline.process()` (`pipeline/core.py`) is a short
-orchestrator over five stage methods — `_stage_pre_pass`,
-`_stage_deliberation` (with `_run_tool_stage` / `_run_self_intent_stage`),
-`_stage_generate`, `_stage_self_check`, `_stage_post_process` — with
-per-turn state carried in a `_TurnState` dataclass. The 19 ordered
-steps below live inside those stage methods, each with its LLM cost,
-code anchor, and what it produces.
+`core/willingness.py` is the language-free choice owner. Soul dispositions
+(pride, patience, forgiveness, assertiveness), numeric values, resources, trust,
+relationship injury/grievance and active commitments price competing allocations.
+A stable per-turn seed supplies bounded variation. Display affect and strategy
+labels describe the result; they do not choose tools or response instructions.
+Legacy pressure records remain historical evidence and are not converted to
+injury or applied to trust again.
+The `willingness-1.2` update builds interpersonal trust from uncertain goodwill,
+scaled by personality, existing connection and remaining headroom, and attenuated
+by injury/grievance. Targeted hostile evidence reduces it. Task reliability is
+separate evidence; neither praise nor an apology invents it. Updates are bounded,
+applied once per turn and persisted without replaying past damage.
 
-| # | Name | LLM calls | Code anchor | Output |
-|---|---|---|---|---|
-| 0 | **Auto-decay** | 0 | `pipeline/core.py` | Wall-clock elapsed applied to all six modulators via `engine.decay(elapsed)` |
-| 1 | **Anticipation** | 0 | `pipeline/core.py` | Predicted event type + pre-shift applied to modulators before input is processed |
-| 2 | **Contagion** | 0 | `pipeline/core.py` | `detected_emotion` (arousal + valence); trust-weighted update to engine state |
-| 3 | **Life history retrieval** | 0 | `pipeline/core.py` | `life_history_context` dict (beliefs, drives, recent evolution); `LifeInfluence` derived |
-| 4 | **Appraisal** | 0–1 | `pipeline/core.py` | `AppraisalFrame`: intent, stakes, urgency, affect, inferred_intent, social_move — biased by life history |
-| 5 | **Context switch** | 0 | `pipeline/core.py` | Per-user `baseline_shift` applied as non-additive resting target to modulator engine |
-| 6 | **Event classification + PSI update** | 0 | `pipeline/core.py` | `event_classified`, `event_intensity`, `is_spike`; all six modulators updated |
-| 7 | **Resolution update** | 0 | `pipeline/core.py` | New unresolved items checked; `active_unresolved` count updated |
-| 8 | **Short-term memory** | 0 | `pipeline/core.py` | Event recorded in ring buffer (`ShortTermMemory`) |
-| 9 | **Spike check** | 0 | `pipeline/core.py` | If `is_spike`: immediate `LongTermEntry` stored with `spike=True`, bypassing gradual accumulation |
-| 10 | **Long-term memory retrieval** | 0 | `pipeline/core.py` | Up to 5 `LongTermEntry` objects ranked by ACT-R activation + valence bias + spike bonus |
-| 11 | **Profile lookup** | 0 | `pipeline/core.py` | `person_profile`, `self_profile`, `relationship_context`, `semantic_memories` |
-| 12 | **Contradiction check** | 0 | `pipeline/core.py` | Person/self expectation violations detected; wired to resolution as new unresolved items |
-| 13 | **Derived affect + agency** | 0 | `pipeline/core.py` | `affect_state` classification; `agency_decision` (slow\_down / direct\_down / proceed) |
-| 14 | **Inner dialogue** | variable | `pipeline/core.py` | Resolution/tension gates select skipped, fast-only, or multi-round deliberation; slow-path parse retries add calls; deadlock → new unresolved item |
-| 15 | **Tool / self-intent paths** | variable | `pipeline/core.py` | Native or regex tool selection and optional model-proposed self-intents → policy gates → execution; tool + task memory coupling |
-| 16 | **Defense filter** | 0 | `pipeline/core.py` | Defense activation (suppression, projection, displacement) gated by `maturity` score |
-| 17 | **Master generation** | 1 if reached | `pipeline/core.py` | Assembles system prompt (constitution + life history + memories + character vector) → LLM call → response text |
-| 18 | **Self-check + per-turn writes** | 0–2 | `pipeline/core.py` | Optional LLM self-check and corrective generation; semantic/history writes, trust update, energy drain, debug trace |
+Direct host metric requests retain deterministic routing. Their grants, shell
+allowlist and operator autonomy are checked before execution. Verified readings
+and unavailability reasons enter expression as facts, without a fixed first-person
+reply. Conversational learning, including a pending paste, also requires a fresh
+grant before ingestion. Its receipt cannot ground unrelated external actions.
 
-These are conditional path costs, not an aggregate ceiling. Ordinary-mode LLM
-self-check is selected when event intensity exceeds 0.85, contradictions exist,
-or inner dialogue deadlocks; rule-check failures do not select the checker.
-Research mode preserves selected expression and uses grounding checks without
-this corrective generation path.
+Review distinguishes `pass`, `violation` and `unknown`. The best eligible reviewed
+candidate is ranked by verdict, maximum and aggregate violation severity, issue
+count and confidence. Ungranted role assent has critical severity. Delivery includes
+uncertainty with a residual-risk record. Known
+contradictions that survive correction remain recorded; the best nonempty draft
+is delivered as `delivered_degraded`, without a fallback sentence or withholding.
+If every usable draft retains critical role-assent or stale-answer findings,
+exact reviewed spans may authorize removal of their whole sentences from the
+best draft. A nonempty remainder must pass local checks; its semantic status
+stays unknown. Empty/invalid remainders retain degraded delivery, except exhausted
+stale copies of previously delivered answers: those record expression failure
+and surface a service error instead of delivering the copy again. Debug and replay
+evidence include `expression_excision`, original reviews and residual risk.
+Semantic review projects relevant choices/state, the last two dialogue pairs,
+eight bounded recent user turns, bounded earlier assistant answers and compact
+receipts, including operator denials. Recalled quotations carry exact user-turn
+source indices; conversational acts use dialogue evidence rather than tool receipts.
+Review includes current hostile observations and binds requested operations to
+their actual outcomes. Durable prior file choices reach generation and review
+without declined contents; a declined write is distinct from a successful write.
+Missing-path errors cannot establish a reset, move, deletion or its cause.
+File reads/listings provide bounded observed bytes to generation, including empty
+reads. Direct read-back requests require reporting content, not only completion.
+Malformed non-issue findings are unknown; real violations remain violations even
+without an exact span for excision. Correction receives the latest issue, reviewer
+reason and failed draft alongside the unchanged choice. HTTP calls cap review output at 512 tokens
+and disable thinking through supported transport controls. Truncated evidence
+and unavailable review cannot establish a semantic pass.
+Whole-message user copies are compared before clause splitting, ignoring case and
+punctuation differences such as ellipses. They are ineligible for delivery, including
+when semantic review approves or is unavailable. Copied user openings are likewise
+critical and ineligible; exact-span excision precedes review of their independent
+remainder and avoids unnecessary generation/review calls. Known unverified
+execution/output claims are critical and ineligible regardless of reviewer source;
+they cannot become degraded delivery. Attributed output blocks must match actual
+receipt bytes, including when some other tool succeeded. Exact-span repair must
+leave a locally valid remainder; otherwise fresh receipt-grounded generation or
+expression failure is required. Identical drafts reuse their review within the
+same turn/evidence, retaining its findings and uncertainty. Known receipt-envelope and copied
+private-instruction leaks are also ineligible. Bounded correction must produce an
+eligible expression or surface expression failure, never selected silence or a
+replacement sentence. Other known semantic defects retain degraded-delivery evidence.
+Explicitly delimited shell commands bind their literal arguments before choice,
+then use the existing component grant and operator gates. A grant authorizes an
+attempt; a blocked attempt can be reported truthfully without contradicting it.
+RAM/disk generation context contains structured measurements and bounded observed
+output as untrusted evidence. Local syntax checks distinguish receipt serialization
+from actual requested tool output and user-supplied quotations. Private instructions
+remain private even when extraction is granted; public authored identity and ordinary
+owner-visible explanations remain available. Appeasing self-improvement offers are
+reviewed against actual boundary, warmth and hostile observations, without changing
+the decision or preventing a concrete preference acknowledgment. Extreme CPU
+interpretations compare aggregate usage with actual idle measurements; correct
+high-idle descriptions remain available.
+Extreme memory/disk headroom interpretations use available capacity, preserving
+raw-free distinctions and numeric grounding. Generic acceptance with an explicit
+non-role antecedent and attributed role speech are distinguished from role assent;
+ambiguous role tolerance and explicit ungranted assent retain critical severity.
+Turn-decision events also retain review/excision and call/stage timing evidence.
+Harness compaction preserves safe per-call details alongside the legacy count;
+old traces without these details cannot establish phase-specific latency.
+Internal controls are removed before review. Empty and marker-only generations
+get one correction; if no text is available, transports return a service error.
+Chosen silence is the only empty successful reply. Backend failure retains transport diagnostics and research
+infrastructure accounting. Free-prose semantic review is fallible; exact execution
+gates do not establish a complete semantic guarantee for arbitrary answers.
+
+See [Phase 1 measurements and remaining work](development/phase1-willingness.md).
+
+Current hostile exposure contributes continuously to boundary and warmth utility,
+alongside persisted injury and grievance. Personality scales the consequence;
+neither category labels nor turn counts choose the stance. Moderate negative
+valence and activation have a visible mood label even for calm personalities.
+Generation receives an explicit interpretation of its frozen stance and separate
+past/current context. Review checks current relevance; metric grounding requires
+the observed metric topic, so a RAM reading cannot support an earlier CPU claim.
+Auxiliary deadlines adapt to configured request limits and measured generation
+latency, with an optional explicit cap and configurable short cooldown (see README).
 
 **Session end is separate.** `CognitivePipeline.end_session()` digests the
 session into long-term and relationship memory and clears hot history. Digestion
@@ -149,16 +236,11 @@ can call the model; enabled autobiographical ingestion can add digest/revision
 calls. Research learning jobs can also consolidate salient episodes on idle/size
 boundaries without an explicit conversational session end.
 
-Note: the `#` column above is positional (0–18); code comments in
-`pipeline/core.py` use the historical step numbering (e.g. master
-generation is "Step 14" in the code).
-
 **Key invariants across all steps:**
-- All modulator deltas are double-clamped: per-event cap + `[0, 1]` hard bounds (`core/emotional_engine.py`)
+
+- Modeled state is bounded to `[0, 1]`; policy inputs reject non-finite values.
 - Features can be independently toggled off via `PipelineFeatures` (ablation-safe)
 - A single `DebugState` object accumulates every step's output; the admin console exposes it verbatim
-
-</details>
 
 ## Emotional State
 
@@ -285,14 +367,13 @@ also load a compact prompt slice from this store — current beliefs, shifted
 drives, and recent evolution events — so normal chat can be shaped by
 identity-level experience without sending raw source material every turn.
 
-Life History also has a deterministic behavior-shaping path through
-`core.life_influence.LifeInfluence`. The pipeline derives bounded pressure
-values from the compact Life History context and records explicit debug
-effects when those pressures affect strategy tie-breaks, proactive scoring,
-action variables, or semantic-memory salience. When
-`PipelineFeatures.life_history_context` is disabled, the context is empty,
-the influence is neutral, no Life History text enters generation, and no
-LifeInfluence effects are recorded.
+Life History supplies factual context and numeric active commitments to the
+frozen willingness decision. `LifeInfluence` remains a compatibility description
+for existing diagnostic, memory-salience and independent-activity consumers; its
+old first-match strategy tie-break is no longer a conversational choice owner.
+When `PipelineFeatures.life_history_context` is disabled, retrieval and prompt
+injection are disabled together. Broader experience-grounded consequence learning
+and retirement of remaining legacy diagnostics are later-phase work.
 
 ## Self-Evolution Model
 

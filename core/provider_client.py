@@ -6,7 +6,7 @@ be chosen explicitly by the caller.
 
 from __future__ import annotations
 
-from core.inference import request_timeout
+from core.inference import output_token_limit, request_timeout, reviewing_expression, sampling_parameters
 from core.llm_content import reply_text
 
 import os
@@ -58,11 +58,14 @@ class ChatCompletionsClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
+            **sampling_parameters(),
         }
 
         # Disable thinking mode when not needed (faster responses)
-        if not self._thinking:
+        if not self._thinking or reviewing_expression():
             payload["thinking"] = {"type": "disabled"}
+        if reviewing_expression():
+            payload["max_tokens"] = output_token_limit(512)
 
         # Retry once on connection error (server closes idle keep-alive connections)
         try:

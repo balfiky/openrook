@@ -8,6 +8,7 @@ from contextlib import suppress
 from functools import partial
 from dataclasses import asdict
 import logging
+import json
 import os
 from pathlib import Path
 from core.clock import clock as time
@@ -153,16 +154,6 @@ class SessionManager:
             # Reset idle timer on acceptance (before processing starts)
             self._reset_idle_timer(session_key)
             try:
-                learning_note = (
-                    await self._maybe_run_learning_intake(session, user_id, text)
-                    if not self.config.research_mode and _should_attempt_learning_intake(session, text)
-                    else ""
-                )
-                if learning_note and not learning_note.startswith("Learning intake failed:"):
-                    session.pipeline.last_intake_receipt = learning_note
-                    await session.record_runtime_turn()
-                    return learning_note
-
                 try:
                     response = await self._send_with_task(session, session_key, text)
                 except RuntimeError as exc:
@@ -170,9 +161,6 @@ class SessionManager:
                         await self._discard_session_reference(session_key, session)
                         continue
                     raise
-                if learning_note:
-                    session.pipeline.last_intake_receipt = learning_note
-                    return _append_learning_note(response, learning_note)
                 return response
             finally:
                 # Reset again on completion so the timeout counts from last activity
@@ -229,6 +217,17 @@ class SessionManager:
         text: str,
     ) -> str:
         """Persist explicit "learn from this" requests into Life History."""
+        # Kept for old internal callers, but it is no longer a pre-decision
+        # conversation route. Even those callers need the exact current grant.
+        from core.grants import execution_denial, execution_metadata
+        if not execution_metadata() or execution_denial("learning.intake"):
+            return ""
+        frozen = getattr(getattr(session, "last_debug", None), "turn_decision", None)
+        if frozen is None or not any(
+            item.granted and item.component.kind == "task" and item.component.description.strip() == text.strip()
+            for item in frozen.components
+        ):
+            return ""
         pending_inline = False
         if session.pending_learning_intake is not None:
             pending = session.pending_learning_intake
@@ -263,6 +262,65 @@ class SessionManager:
             return ""
         session.pending_learning_intake = None
         return result.confirmation_text()
+
+    def _observe_learning_component(self, session, text):
+        from core.willingness import RequestComponent
+
+        pending = session.pending_learning_intake
+        if pending is not None and pending.expired(session.turn_index):
+            session.pending_learning_intake = pending = None
+        inline = pending is not None and _looks_like_pending_learning_text(text)
+        try:
+            explicit = detect_learning_request(text) is not None
+        except LearningIntakeError:
+            explicit = True
+        if not explicit and not inline:
+            return None
+        return (RequestComponent("learning", text, user_value=0.6,
+                                 effort=min(0.8, 0.12 + len(text) / 1600),
+                                 evidence_refs=("learning:pending" if inline else "learning:explicit",)),)
+
+    def _execute_learning_component(self, component, user_id, backend, *, session=None):
+        """Execute explicit learning only inside the pipeline's committed grant."""
+        if not {"learning:explicit", "learning:pending"}.intersection(component.evidence_refs):
+            return None
+        from core.grants import execution_denial, execution_metadata
+        from core.inference import generate
+        from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
+        from core.types import ToolResult
+        denial = execution_denial("learning.intake") if execution_metadata() else "No committed component execution scope"
+        if denial:
+            return ToolResult("learning.intake", False, "", error=denial)
+
+        class IntakeBackend:
+            def generate(self, system, user):
+                return generate(backend, "learning_intake", system, user, optional=True)
+
+        try:
+            kwargs = {"pending_inline_text": True} if "learning:pending" in component.evidence_refs else {}
+            result = ingest_learning_from_message(self.config, component.description, actor=user_id,
+                                                  llm_client_factory=lambda config: IntakeBackend(), **kwargs)
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
+        except LearningIntakeError as error:
+            if session is not None and "URL or a longer pasted text" in str(error):
+                session.pending_learning_intake = PendingLearningIntake(
+                    created_turn_index=session.turn_index,
+                    expires_after_turns=max(1, int(self.config.pending_intake_ttl_turns)),
+                )
+            return ToolResult("learning.intake", False, "", error=str(error))
+        except Exception as error:
+            return ToolResult("learning.intake", False, "", error=type(error).__name__)
+        if result is None:
+            return None
+        if session is not None:
+            session.pending_learning_intake = None
+        return ToolResult("learning.intake", True, json.dumps(asdict(result), ensure_ascii=False),
+                          metadata={"experience_id": result.experience_id})
+
+    @property
+    def accepting_messages(self) -> bool:
+        return self._accepting
 
     @property
     def active_sessions(self) -> dict[str, UserSession]:
@@ -487,6 +545,9 @@ class SessionManager:
             session_key=session_key,
             user_lock=self._get_or_create_user_lock(rel_key),
         )
+        if not self.config.research_mode:
+            pipeline._component_observer = partial(self._observe_learning_component, session)
+            pipeline._component_executor = partial(self._execute_learning_component, session=session)
         if saved is not None:
             session.restore_session_extra_state(saved)
         if self._agent is not None:
@@ -545,7 +606,7 @@ class SessionManager:
             return {}
 
     def _life_history_snapshot_provider(self) -> dict[str, Any]:
-        """Load unabridged identity-level state for deterministic identity replies."""
+        """Load identity facts for frozen-decision generation and review."""
         from runtime.life_history import LifeHistoryStore, life_history_db_path
 
         if not os.path.exists(life_history_db_path(self.config)):
@@ -561,7 +622,7 @@ class SessionManager:
                 }
         except Exception:
             log.exception("Failed to load life history snapshot")
-            return {}
+            return {"error": "Saved identity records are unavailable"}
 
     def _skill_context_provider(
         self,

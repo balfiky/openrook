@@ -228,19 +228,17 @@ def _check_assertion(
                               f"Response doesn't contain '{substring}'")
 
     if kind == AssertionKind.RESPONSE_NOT_EMPTY:
-        ok = len(response.response.strip()) > 0
+        ok = bool(response.response.strip()) or debug.delivery_outcome in {"chosen_silence", "expression_failure", "backend_failure"}
         return AssertionResult(assertion, ok, len(response.response),
                               "Response is empty")
 
     if kind == AssertionKind.RESPONSE_SOCIAL:
-        from core.social import SocialState, has_concrete_task
         from evals.social_contract import social_reply_issues
 
-        social = SocialState(**(debug.social_state or {}))
         issues = social_reply_issues(
             response.response, user_message=debug.user_message,
-            stage=social.stage, current_abuse=social.current_abuse,
-            concrete_task=has_concrete_task(debug.user_message),
+            decision=debug.turn_decision, delivery_outcome=debug.delivery_outcome,
+            shipped_non_submission=params.get("shipped_non_submission", False),
             expected_answer=params.get("expected_answer", ""),
             refused_answer=params.get("refused_answer", ""),
             recent_context=pipeline.export_conversation_history()[:-2],
@@ -312,6 +310,10 @@ def _collect_metrics(
 
     for resp in responses:
         debug = resp.debug
+        metrics.chosen_silences += debug.delivery_outcome == "chosen_silence"
+        metrics.expression_failures += debug.delivery_outcome == "expression_failure"
+        metrics.backend_failures += debug.delivery_outcome == "backend_failure"
+        metrics.uncertain_deliveries += debug.delivery_outcome == "delivered_uncertain"
         # Stage timings
         for stage, ms in debug.stage_timings_ms.items():
             all_timings[stage] = all_timings.get(stage, 0.0) + ms

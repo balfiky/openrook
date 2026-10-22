@@ -7,6 +7,7 @@ No autonomy here — just execution primitives.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import os
 import re
 import shutil
@@ -201,12 +202,13 @@ def _write_file(args: dict[str, Any]) -> ToolResult:
     parent = os.path.dirname(path)
     if parent and not os.path.isdir(parent):
         os.makedirs(parent, exist_ok=True)
-    with open(path, "w") as f:
-        f.write(content)
+    encoded = content.encode("utf-8")
+    with open(path, "wb") as f:
+        f.write(encoded)
     return ToolResult(
         tool_name="fs.write_file", success=True,
-        output=f"Wrote {len(content)} bytes to {path}",
-        metadata={"bytes_written": len(content)},
+        output=f"Wrote {len(encoded)} bytes to {path}",
+        metadata={"bytes_written": len(encoded), "path": path, "sha256": hashlib.sha256(encoded).hexdigest()},
         side_effect_summary=f"created/overwritten: {path}",
     )
 

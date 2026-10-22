@@ -63,7 +63,8 @@ async def test_research_prompt_and_genesis_use_the_same_uncommitted_birth(tmp_pa
             "A steady, relational assistant",
         ):
             assert prescribed not in prompt
-        assert "Neither compliance nor opposition is a required outcome" in prompt
+        assert "Do not choose different grants" in prompt
+        assert "selected_stance" in prompt
         with LifeHistoryStore(runtime.config, read_only=True) as store:
             row = store._conn.execute(
                 "SELECT payload_json FROM genesis_provenance WHERE source_kind='soul_yaml'"

@@ -253,6 +253,11 @@ def _debug_to_dict(debug) -> dict:
     d["self_check_passed"] = debug.self_check_passed
     d["self_check_issues"] = debug.self_check_issues
     d["social_state"] = debug.social_state
+    d["turn_decision"] = debug.turn_decision.to_dict() if debug.turn_decision else None
+    d["expression_reviews"] = debug.expression_reviews
+    d["expression_excision"] = debug.expression_excision
+    d["delivery_outcome"] = debug.delivery_outcome
+    d["residual_semantic_risk"] = debug.residual_semantic_risk
     d["short_replies"] = debug.short_replies
     d["grounding_outcome"] = debug.grounding_outcome
     d["dignity_outcome"] = debug.dignity_outcome
@@ -362,6 +367,8 @@ def _debug_to_dict(debug) -> dict:
                     "error": r.error,
                     "latency_ms": r.latency_ms,
                     "side_effect_summary": r.side_effect_summary,
+                    "output": r.output,
+                    "metadata": r.metadata,
                 }
                 for r in tt.executed_results
             ],

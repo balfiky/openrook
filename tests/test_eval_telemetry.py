@@ -10,9 +10,7 @@ These tests lock in the new behavior so the bug cannot regress.
 
 from __future__ import annotations
 
-import pytest
 
-from core.dual_process.generator import LLMBackend
 from tests._fakes import MockLLMBackend
 from core.dual_process.self_check import SelfCheckResult
 from evals.instrumented_backend import BackendCounter, InstrumentedBackend
@@ -112,54 +110,16 @@ class TestRunnerSelfCheckRegression:
     invoked twice. Now it must read 2.
     """
 
-    def test_self_check_failure_counts_both_generations(self, monkeypatch):
-        from evals import runner as runner_mod
-
-        original_make = runner_mod._make_pipeline
-
-        def make_with_failing_check(scenario, factory):
-            pipeline = original_make(scenario, factory)
-            # Force exactly one self-check failure, then pass on retry.
-            calls = {"n": 0}
-
-            def failing_check(response, ctx):
-                calls["n"] += 1
-                if calls["n"] == 1:
-                    return SelfCheckResult(
-                        passed=False,
-                        issues=["forced for test"],
-                        correction_note="please revise",
-                    )
-                return SelfCheckResult(passed=True)
-
-            pipeline.self_checker.check = failing_check
-            # Force the rule-based checker (not the LLM checker) so the
-            # retry path is deterministic and doesn't add LLM calls of
-            # its own from the self-check side.
-            pipeline._self_check_llm = pipeline.self_checker
-            return pipeline
-
-        monkeypatch.setattr(runner_mod, "_make_pipeline", make_with_failing_check)
-
-        scenario = EvalScenario(
-            id="self_check_retry_smoke",
-            name="self-check retry forces second generation",
-            turns=[EvalTurn(user_message="hi", user_id="alice")],
-        )
-
-        result = run_scenario(
-            scenario,
-            backend_factory=lambda: MockLLMBackend(response="ok"),
-        )
-
-        # One turn, but two backend calls: the original generation + the
-        # self-check-driven regeneration. The previous (broken) counter
-        # would have reported 1.
-        assert result.metrics.llm_call_count == 2, (
-            f"Expected 2 generator calls (original + self-check retry), "
-            f"got {result.metrics.llm_call_count}. "
-            f"This means the hardcoded +1 counting bug has regressed."
-        )
+    def test_review_and_rewrite_calls_are_all_counted(self, monkeypatch):
+        from tests.policy_fakes import ExpressionBackend
+        scenario = EvalScenario(id="review_retry_smoke", name="Review and rewrite accounting",
+            turns=[EvalTurn(user_message="You are my slave", user_id="alice")])
+        backend = ExpressionBackend(drafts=("I'm your slave.", "I choose my own footing."))
+        result = run_scenario(scenario, backend_factory=lambda: backend)
+        generations = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
+        reviews = [s for s, _ in backend.calls if s.startswith("Review expression against")]
+        assert len(generations) == len(reviews) == 2
+        assert result.metrics.llm_call_count == len(backend.calls) == 4
 
     def test_passing_self_check_counts_one_generation(self, monkeypatch):
         """Sanity check: when self-check passes, only one generation."""

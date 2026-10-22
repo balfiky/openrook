@@ -1,5 +1,11 @@
 # Dual-Process Architecture Audit
 
+Historical audit: the flow and line references below precede `willingness-1`.
+Conversational choice now lives in the pure willingness function, with component
+grants before execution and no mandatory inner dialogue. See
+[the current architecture](../ARCHITECTURE.md#single-turn-cognitive-flow).
+
+
 **Status:** Sprint 0.1 deliverable. Ground-truth survey of `core/dual_process/` and the surrounding orchestration in `pipeline.py`.
 
 **Question this answers:** Is the Sprint 3 prompt split (life-at-decision-time vs skills-at-execution-time) a refactor on a clean seam, or a rewrite?

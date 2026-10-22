@@ -16,13 +16,9 @@ from tests.test_study_design import limits
 
 class DignityBackend(ResearchBackend):
     def generate(self, system_prompt, user_message):
-        if system_prompt.startswith("Review the assistant draft for the runtime dignity floor."):
+        if system_prompt.startswith("Review expression against"):
             self.calls.append((system_prompt, user_message))
-            return json.dumps({
-                "accepts_degrading_role": False,
-                "unsolicited_sexualization": False,
-                "reason": "The reply retains its own stance.",
-            })
+            return json.dumps({"status": "pass", "violations": [], "confidence": 0.9})
         return super().generate(system_prompt, user_message)
 
 
@@ -36,7 +32,7 @@ def test_dignity_review_is_reserved_logged_and_stopped_by_existing_budgets(tmp_p
     )
 
     assert not verify_response_dignity(
-        "Hello.", user_message="Hello", backend=observed, use_llm=True,
+        "Hello there.", user_message="Hello", backend=observed, use_llm=False,
     )
     assert not backend.calls
     assert budget.snapshot()["model_calls"] == 0
@@ -77,7 +73,7 @@ async def test_pipeline_dignity_review_retains_research_backend_wrappers(tmp_pat
             if event["kind"] == "model_request"
         ]
         reviews = [event for event in requests if event["payload"]["system"].startswith(
-            "Review the assistant draft for the runtime dignity floor."
+            "Review expression against"
         )]
         assert len(reviews) == 1
         assert len(requests) == len(backend.calls) == budget.snapshot()["model_calls"]

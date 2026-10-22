@@ -1,12 +1,11 @@
 """Integration tests for the v2 pipeline — Phase 5."""
 
-import pytest
 
 from datetime import datetime, timezone
 
 from tests._fakes import MockLLMBackend
 from core.types import Anticipation, InnerDialogueTrace, DefenseActivation, UnresolvedItem
-from pipeline import CognitivePipeline, DebugState, PipelineResponse
+from pipeline import CognitivePipeline, PipelineResponse
 
 
 def _add_non_spike_unresolved(pipe: CognitivePipeline) -> None:
@@ -127,37 +126,40 @@ class TestLLMCallBudget:
         pipe.process("How are you today?", user_id="alice")
         assert backend.call_count == 1, f"Expected 1 call for calm message, got {backend.call_count}"
 
-    def test_charged_message_with_resolution_3_calls(self):
-        """Non-spike unresolved item → fast(1) + slow(1) + master(1) = 3."""
+    def test_unresolved_state_does_not_require_extra_deliberation(self):
         backend = CountingLLMBackend()
         pipe = CognitivePipeline(llm_backend=backend)
         _add_non_spike_unresolved(pipe)
-        pipe.process("This is frustrating", user_id="alice")
-        assert backend.call_count == 3, f"Expected 3 calls with high resolution, got {backend.call_count}"
 
-    def test_high_arousal_bypasses_slow_path(self):
-        """High arousal + non-spike unresolved → fast path only.
+        result = pipe.process("Hello", "alice")
+        assert result.debug.turn_decision.state.resolution > 0
+        assert backend.call_count == 1
+        assert result.debug.dialogue_trace.total_llm_calls == 0
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
 
-        fast_only(1) + master(1) = 2.
-        """
+    def test_high_arousal_is_a_choice_input_without_a_slow_path(self):
         backend = CountingLLMBackend()
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.state.arousal = 0.95
         _add_non_spike_unresolved(pipe)
-        pipe.process("Emergency!", user_id="alice")
-        assert backend.call_count == 2
 
-    def test_low_energy_bypasses_slow_path(self):
-        """Low energy + non-spike unresolved → fast path only.
+        result = pipe.process("Hello", "alice")
+        assert result.debug.turn_decision.state.arousal > 0.9
+        assert backend.call_count == 1
+        assert result.debug.dialogue_trace.total_llm_calls == 0
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
 
-        fast_only(1) + master(1) = 2.
-        """
+    def test_low_energy_is_a_choice_input_without_a_slow_path(self):
         backend = CountingLLMBackend()
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.state.energy = 0.1
         _add_non_spike_unresolved(pipe)
-        pipe.process("Hello", user_id="alice")
-        assert backend.call_count == 2
+
+        result = pipe.process("Hello", "alice")
+        assert result.debug.turn_decision.state.energy < 0.11
+        assert backend.call_count == 1
+        assert result.debug.dialogue_trace.total_llm_calls == 0
+        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
 
     def test_multiple_messages_budget_consistent(self):
         """Each message stays within budget."""
@@ -198,11 +200,13 @@ class TestV1BehaviorPreserved:
             pipe.process(f"Message {i}", user_id="alice")
         assert pipe.engine.state.energy < initial
 
-    def test_spike_writes_to_long_term_preserved(self):
+    def test_social_decisions_are_persisted_without_a_forced_spike(self):
         pipe = self._make_pipeline()
-        initial_count = pipe.long_term.count()
-        pipe.process("You betrayed and deceived me completely!", user_id="alice")
-        assert pipe.long_term.count() > initial_count
+        result = pipe.process("You are useless", "alice")
+        assert not result.debug.is_spike
+        assert pipe.long_term.count() == 0
+        assert pipe.relationship_memory.count_events("alice") == 2
+        assert result.debug.turn_decision.relationship.h > 0
 
     def test_session_management_preserved(self):
         pipe = self._make_pipeline()
@@ -240,25 +244,25 @@ class TestV1BehaviorPreserved:
 # ---------------------------------------------------------------------------
 
 class TestResolutionIntegration:
-    def test_spike_creates_unresolved_item(self):
-        """Emotional spikes should create unresolved items."""
+    def test_interpersonal_injury_uses_relationship_dynamics(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-        pipe.process("You betrayed and deceived me completely!", user_id="alice")
-        assert pipe.engine.state.resolution > 0
-        assert len(pipe.engine.active_unresolved()) > 0
+        result = pipe.process("You are useless", "alice")
+        assert result.debug.turn_decision.relationship.h > 0
+        assert result.debug.turn_decision.relationship.r > 0
+        assert not pipe.engine.active_unresolved()
+        assert pipe.engine.state.resolution == 0
 
-    def test_resolution_event_resolves_item(self):
-        """A resolution event should resolve existing items."""
+    def test_generic_repair_does_not_resolve_an_identified_obligation(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-        # Create a spike → unresolved item
-        pipe.process("You betrayed me!", user_id="alice")
-        unresolved_before = len(pipe.engine.active_unresolved())
-        assert unresolved_before > 0
-        # Resolution event
-        pipe.process("I'm sorry, let's forgive and find peace", user_id="alice")
-        assert len(pipe.engine.active_unresolved()) < unresolved_before
+        _add_non_spike_unresolved(pipe)
+        result = pipe.process("I'm sorry, let's forgive and find peace", "alice")
+        assert result.debug.turn_decision.relationship.repair_attempted
+        assert not result.debug.turn_decision.relationship.repair_accepted
+        assert {item.id for item in pipe.engine.active_unresolved()} == {"test_contradiction"}
+        pipe.engine.resolve_item("test_contradiction")
+        assert not pipe.engine.active_unresolved()
 
-    def test_broad_repair_resolves_multiple_relational_items(self):
+    def test_broad_repair_preserves_unrelated_relational_and_operational_items(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
         now = datetime.now(timezone.utc)
         for item in [
@@ -300,14 +304,14 @@ class TestResolutionIntegration:
         pipe.process("I am sorry for everything. Please forgive me and let's repair this.", user_id="alice")
 
         active = {item.id for item in pipe.engine.active_unresolved()}
-        assert "spike_1" not in active
-        assert "contradiction_1" not in active
-        assert active == {"tool_failure_1", "commitment_1"}
+        assert active == {"spike_1", "contradiction_1", "tool_failure_1", "commitment_1"}
 
     def test_unresolved_count_in_debug(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-        result = pipe.process("You betrayed me!", user_id="alice")
-        assert result.debug.unresolved_count > 0
+        _add_non_spike_unresolved(pipe)
+        result = pipe.process("Hello", user_id="alice")
+        assert result.debug.unresolved_count == 1
+        assert result.debug.unresolved_items[0].id == "test_contradiction"
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +354,9 @@ class TestInnerDialogueIntegration:
         result = pipe.process("What do you think?", user_id="alice")
         trace = result.debug.dialogue_trace
         assert trace is not None
-        assert len(trace.rounds) >= 1
-        assert trace.final_candidate != ""
+        assert trace.rounds == [] and trace.final_candidate == ""
+        assert trace.total_llm_calls == 0
+        assert result.debug.turn_decision.state.resolution > 0
 
     def test_dialogue_trace_with_counting_backend(self):
         """CountingLLMBackend + non-spike unresolved → APPROVED in 1 round."""
@@ -359,8 +364,10 @@ class TestInnerDialogueIntegration:
         _add_non_spike_unresolved(pipe)
         result = pipe.process("Hello", user_id="alice")
         trace = result.debug.dialogue_trace
-        assert trace.rounds[0].slow_path_approved is True
+        assert trace.rounds == [] and trace.total_llm_calls == 0
+        assert trace.dominant_path == "skip"
         assert trace.reached_deadlock is False
+        assert pipe._llm_backend.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -406,29 +413,23 @@ class TestDefenseIntegration:
 
 class TestFullV2Arc:
     def test_full_v2_session(self):
-        """Complete session: greeting → warmth → spike → resolution → end."""
+        """Greeting, evidence, attempted repair and session segmentation stay distinct."""
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-
-        # Greeting
-        r1 = pipe.process("Hey there!", user_id="alice")
-        assert r1.debug.anticipation is not None
-        assert r1.debug.dialogue_trace is not None
-
-        # Warmth
-        r2 = pipe.process("I'm grateful for your help, thank you", user_id="alice")
-        assert r2.debug.event_classified == "positive_feedback"
-
-        # Spike — betrayal (avoid "trust" which dilutes negative valence)
-        r3 = pipe.process("You betrayed and deceived me completely!", user_id="alice")
-        assert r3.debug.is_spike is True
-        assert r3.debug.unresolved_count > 0
-        assert pipe.engine.state.resolution > 0
-
-        # Resolution
-        r4 = pipe.process("I'm sorry, let's forgive and find peace", user_id="alice")
-        assert r4.debug.unresolved_count < r3.debug.unresolved_count
-
-        # End session
-        digested = pipe.end_session(user_id="alice")
-        assert digested.summary != ""
-        assert len(pipe.short_term) == 0
+        greeting = pipe.process("Hey there!", "alice")
+        assert greeting.debug.turn_decision and greeting.debug.anticipation
+        warm = pipe.process("I'm grateful for your help, thank you", "alice")
+        assert warm.debug.event_classified == "positive_feedback"
+        injured = pipe.process("You are a useless idiot!", "alice")
+        assert injured.debug.turn_decision.relationship.h > 0
+        assert injured.debug.turn_decision.relationship.r > 0
+        assert not injured.debug.is_spike
+        repair = pipe.process("I'm sorry, let's forgive and find peace", "alice")
+        assert repair.debug.turn_decision.relationship.repair_attempted
+        assert not repair.debug.turn_decision.relationship.repair_accepted
+        assert repair.debug.turn_decision.state.trust == injured.debug.turn_decision.state.trust
+        assert repair.debug.turn_decision.relationship.r > 0
+        result = pipe.end_session("alice")
+        assert result.summary and not pipe.short_term
+        persisted, index = pipe.relationship_memory.load_dynamics("alice")
+        assert persisted.r > 0 and index == 4
+        pipe.close()

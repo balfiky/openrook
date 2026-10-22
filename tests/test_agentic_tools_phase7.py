@@ -1,12 +1,11 @@
 """Tests for Agentic Tools Phase 7: Multi-step task planning and task memory."""
 
 from __future__ import annotations
+from core.strategy import agency_summary
+from tests.policy_fakes import frozen
 
-import os
-import tempfile
-import time
 
-import pytest
+
 
 from core.types import (
     ActionVariables,
@@ -16,16 +15,11 @@ from core.types import (
     TaskStatus,
     TaskStep,
     TaskTrace,
-    ToolCapability,
     ToolCategory,
-    ToolDecision,
-    ToolIntent,
     ToolObservation,
-    ToolResult,
     ToolTrace as ToolTraceType,
 )
 from core.task_planning import (
-    DEFAULT_MAX_STEPS_PER_TURN,
     MAX_PLAN_STEPS,
     detect_multi_step_intent,
     execute_plan,
@@ -34,12 +28,11 @@ from core.task_planning import (
     summarize_plan_status,
 )
 from core.tool_memory import (
-    ToolMemoryEffects,
     create_task_long_term_entry,
     create_task_unresolved_item,
     derive_task_self_observations,
 )
-from core.dual_process.tool_loop import run_tool_loop, ToolLoopResult
+from core.dual_process.tool_loop import run_tool_loop
 from openrook_tools.registry import ToolRegistry
 from openrook_tools.executor import ToolExecutor
 from openrook_tools import register_builtins
@@ -633,6 +626,7 @@ class TestToolLoopMultiStep:
             defense_active=True,
             executor=exe,
             engine=engine,
+            agency_decision=agency_summary(frozen()),
         )
 
         # Should be refused or clarify (destructive + low trust)

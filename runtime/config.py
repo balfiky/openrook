@@ -80,6 +80,10 @@ class RuntimeConfig:
     llm_model: str = ""            # model name for OpenAI-compatible backends
     llm_api_key: str = ""          # generic API key (optional for local endpoints)
     llm_request_timeout_seconds: float = 600.0  # allow slow local CPU generation
+    # None adapts to the primary deadline and successful generation latency.
+    # An explicit auxiliary deadline is still capped by the primary deadline.
+    llm_auxiliary_timeout_seconds: float | None = None
+    llm_auxiliary_cooldown_seconds: float = 30.0
 
     # Debug API
     debug_host: str = "127.0.0.1"
@@ -189,6 +193,12 @@ class RuntimeConfig:
             or self.llm_request_timeout_seconds < 1
         ):
             raise ValueError("llm_request_timeout_seconds must be a finite number of at least 1 second")
+        for name, minimum in (("llm_auxiliary_timeout_seconds", 1), ("llm_auxiliary_cooldown_seconds", 0)):
+            value = getattr(self, name)
+            if value is None and name == "llm_auxiliary_timeout_seconds":
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < minimum:
+                raise ValueError(f"{name} must be a finite number of at least {minimum} seconds")
         if not isinstance(self.research_json_schema, bool):
             raise ValueError("Research JSON schema mode must be boolean")
         if type(self.research_inference_retries) is not int or not 0 <= self.research_inference_retries <= 2:

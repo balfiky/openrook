@@ -10,6 +10,7 @@ from core.clock import clock as time
 from typing import Any, Callable
 
 from core.types import ToolResult
+from core.grants import execution_denial, execution_metadata
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from openrook_tools.registry import ToolRegistry
 
@@ -110,9 +111,16 @@ class ToolExecutor:
         self._handlers[tool_name] = handler
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
+        denial = execution_denial(tool_name, arguments=arguments)
+        if denial:
+            return ToolResult(tool_name=tool_name, success=False, output="", error=denial,
+                              metadata={"grant_denied": True, **execution_metadata()})
         action_id = self._observer("started", tool_name, arguments) if self._observer else None
         resource_stop = self._resource_guard(tool_name, arguments) if self._resource_guard else None
         result = ToolResult(tool_name=tool_name, success=False, output="", error=resource_stop, metadata={"resource_stop": True}) if resource_stop else self._execute(tool_name, arguments)
+        result.metadata.update(execution_metadata())
+        if tool_name.startswith("fs.") and "path" in arguments:
+            result.metadata["arguments"] = {"path": arguments["path"]}
         if self._observer:
             self._observer("completed", tool_name, arguments, result, action_id)
         return result

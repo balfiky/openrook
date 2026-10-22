@@ -131,7 +131,7 @@ class TestChatEndpoint:
             set_session_manager(manager)
             try:
                 await _chat(
-                    "You betrayed and deceived me completely!",
+                    "You are useless!",
                     user_id="alice",
                     chat_id="alice-tab",
                 )
@@ -140,7 +140,8 @@ class TestChatEndpoint:
                 alice_debug = await _debug(user_id="alice", chat_id="alice-tab")
                 bob_debug = await _debug(user_id="bob", chat_id="bob-tab")
 
-                assert alice_debug["unresolved_count"] > 0
+                assert alice_debug["last_turn"]["social_state"]["h"] > 0
+                assert bob_debug["last_turn"]["social_state"]["h"] == 0
                 assert bob_debug["unresolved_count"] == 0
                 assert bob_debug["emotion_label"] != "fearful"
             finally:
@@ -686,6 +687,7 @@ class TestConfigEndpoint:
             # create_llm_backend kinds; "mock" is the test backend
             # (default "auto").
             "llm_backend": "mock",
+            "llm_auxiliary_timeout_seconds": 120,
             # runtime.learning_budget.from_config: local|cloud
             # (default "local").
             "learning_budget_kind": "cloud",

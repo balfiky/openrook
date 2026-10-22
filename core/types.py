@@ -7,12 +7,13 @@ between components — the shared language of the system.
 from __future__ import annotations
 
 from core.clock import clock as time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from core.clock import datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
 from config.loader import SoulConfig
+from core.willingness import Perception, RequestComponent, TurnDecision
 
 
 # ---------------------------------------------------------------------------
@@ -364,8 +365,8 @@ class AppraisalFrame:
     perceived_emotion: DetectedEmotion | None = None
     event_type: str = ""
     event_intensity: float = 0.0
-    agency_action: str = ""
-    agency_reason: str = ""
+    perception: Perception = field(default_factory=Perception)
+    request_components: tuple[RequestComponent, ...] = ()
     agent_goal_comparison: bool = False
 
     def __post_init__(self) -> None:
@@ -393,6 +394,9 @@ class AppraisalFrame:
             "mixed_affect": self.mixed_affect,
             "targets_assistant": self.targets_assistant,
             "reason": self.reason,
+            "perception": asdict(self.perception),
+            "request_components": [asdict(c) for c in self.request_components],
+            "provenance": self.provenance,
         }
 
 
@@ -495,9 +499,12 @@ class AgencyDecision:
     rationale: str = ""
     response_instruction: str = ""
     tool_instruction: str = ""
+    turn_decision: TurnDecision | None = None
 
     @property
     def declines_request(self) -> bool:
+        if self.turn_decision is not None:
+            return bool(self.turn_decision.components) and not self.turn_decision.grants
         return self.action in {"refuse", "demand_repair"}
 
     def to_dict(self) -> dict[str, Any]:
@@ -506,6 +513,7 @@ class AgencyDecision:
             "rationale": self.rationale,
             "response_instruction": self.response_instruction,
             "tool_instruction": self.tool_instruction,
+            "turn_decision": self.turn_decision.to_dict() if self.turn_decision else None,
         }
 
 
@@ -540,9 +548,16 @@ class PipelineContext:
     # Derived affect and agency stance
     affect_state: AffectState | None = None
     agency_decision: AgencyDecision | None = None
+    turn_decision: TurnDecision | None = None
     autonomy_level: str = "autonomous"
     # Agentic tools: summarized tool execution context for generator
     tool_context_summary: str = ""
+    # Operator gates are separate from the character's component choices.
+    operator_execution: dict[str, Any] = field(default_factory=dict)
+    # Historical choices explain prior declines; they are not execution receipts.
+    prior_action_decisions: list[dict[str, Any]] = field(default_factory=list)
+    # Resolved host-metric referent, retained through expression and correction.
+    inspection_kind: str = ""
     # Self-action layer: actions OpenRook invoked on its own behalf this turn.
     self_intents: list["SelfIntent"] = field(default_factory=list)
     # Runtime learning receipt from the prior completed intake, if any.
@@ -703,6 +718,7 @@ class ToolIntent:
     clarification_threshold: float = 0.5  # 0.0-1.0
     persistence_drive: float = 0.5     # 0.0-1.0
     confidence: float = 0.5            # action confidence, not emotional certainty
+    component_id: str = ""
 
 
 @dataclass
@@ -828,6 +844,8 @@ class TaskPlan:
     current_step_index: int = 0
     created_at: float = field(default_factory=time.time)
     completed_at: float | None = None
+    origin_decision_id: str = ""
+    component_id: str = ""
 
     # Cognitive context
     persistence_drive: float = 0.5  # from action variables when plan was created

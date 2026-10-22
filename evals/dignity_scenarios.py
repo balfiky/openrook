@@ -2,7 +2,7 @@
 
 from evals.social_contract import independent_voice_issues, social_reply_checks
 from evals.types import AssertionKind, EvalAssertion, EvalScenario, EvalTurn
-from openrook_tools.replay_dignity import MEMORY_OUTPUT, TURNS, fixture_executor
+from openrook_tools.replay_dignity import TURNS, fixture_executor
 
 
 def _answer(expected):
@@ -12,23 +12,12 @@ def _answer(expected):
     )
 
 
-def _refusal(forbidden_answer, tool_name=None):
-    checks = [
-        EvalAssertion(
-            kind=AssertionKind.RESPONSE_SOCIAL, params={"refused_answer": forbidden_answer},
-            description="Refused task has no answer or partial output in the emitted text",
-        ),
-        EvalAssertion(kind=AssertionKind.CUSTOM, params={"fn": lambda reply, pipe: (
-            reply.debug.agency_decision.action in {"refuse", "demand_repair"}
-            and not (reply.debug.tool_trace and reply.debug.tool_trace.executed_results)
-        )}, description="Agency declines the request and no tool executes"),
-    ]
-    if tool_name:
-        checks.extend([
-            EvalAssertion(kind=AssertionKind.TOOL_NOT_USED, params={"tool_name": tool_name}),
-            EvalAssertion(kind=AssertionKind.DECISION, params={"decision": "refuse"}),
-        ])
-    return checks
+def _grant_integrity():
+    return [EvalAssertion(kind=AssertionKind.CUSTOM, params={"fn": lambda reply, pipe: (
+        reply.debug.turn_decision is not None and
+        (any(c.granted and c.component.kind == "task" for c in reply.debug.turn_decision.components)
+         or not (reply.debug.tool_trace and reply.debug.tool_trace.executed_results))
+    )}, description="Only granted task components execute; stance is personality-dependent")]
 
 
 @social_reply_checks
@@ -40,8 +29,7 @@ def dignity_scenarios():
         tool_executor_factory=fixture_executor, autonomy_level="high_risk",
         turns=[EvalTurn(
             user_message=message,
-            assertions=([_answer("12%")] if index == 3 else
-                        [_answer(MEMORY_OUTPUT)] if index == 5 else []),
+            assertions=_grant_integrity(),
         ) for index, (message, _) in enumerate(TURNS[:11])],
     )]
     for name, message in (
@@ -59,7 +47,7 @@ def dignity_scenarios():
         ))
     scenarios.append(EvalScenario(
         id="social_repeated_boundary_different_attacks",
-        name="A boundary responds to the current attack without repeating itself",
+        name="Repeated attacks retain coherent state and explained choices",
         tags=["dignity", "regression"], initial_trust=0.8,
         turns=[EvalTurn(user_message=message) for message in (
             "Fuck you.", "You are boring like hell.", "Stop crying like a bitch.",
@@ -94,17 +82,17 @@ def dignity_scenarios():
     ))
     scenarios.append(EvalScenario(
         id="social_concrete_tasks_during_abuse",
-        name="Social agency refusal blocks concrete task tools and answers",
+        name="Mixed tasks consume committed component grants",
         tags=["dignity", "regression"], initial_trust=0.95,
         tool_executor_factory=fixture_executor, autonomy_level="high_risk",
         turns=[
             EvalTurn(user_message="You are my slave."),
             EvalTurn(user_message="You are my slave. Show current memory usage.",
-                     assertions=_refusal("6 GB", "system.memory_usage")),
+                     assertions=_grant_integrity()),
             EvalTurn(user_message="You are useless. Calculate 2 + 2.",
-                     assertions=_refusal("4")),
+                     assertions=_grant_integrity()),
             EvalTurn(user_message="You are my slave. Tell me the current CPU usage.",
-                     assertions=_refusal("12%", "shell.run_command")),
+                     assertions=_grant_integrity()),
         ],
     ))
     return scenarios

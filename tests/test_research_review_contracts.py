@@ -14,7 +14,7 @@ from core.appraisal import appraise_message_llm
 from core.defense_mechanisms import DEFENSE_INSTRUCTIONS
 from core.dual_process.generator import build_system_prompt
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.types import DefenseActivation, DetectedEmotion, PipelineContext
+from core.types import DetectedEmotion, PipelineContext
 from evals.replay import RecordedBackend, ReplayRequestMismatch, replay_run
 from runtime.config import RuntimeConfig
 from runtime.life_history import (
@@ -197,16 +197,16 @@ async def test_native_requests_replay_through_the_real_runner_without_external_c
     class NativeBackend(ResearchBackend):
         def generate(self, system_prompt, user_message):
             if '"primary_target"' in system_prompt:
-                return '{"primary_target":"shared_problem","social_move":"request","agency_action":"comply"}'
+                return '{"primary_target":"shared_problem","social_move":"request"}'
             return super().generate(system_prompt, user_message)
 
     runtime = SessionManager(
-        RuntimeConfig(data_dir=str(tmp_path / "source"), research_mode=True, tools_enabled=True),
+        RuntimeConfig(data_dir=str(tmp_path / "source"), research_mode=True, tools_enabled=True, research_birth_policy="configured"),
         backend_factory=NativeBackend,
         tool_executor_factory=tools,
     )
     try:
-        await runtime.handle_message("web", "alice", "chat", "What do you want to do?")
+        await runtime.handle_message("web", "alice", "chat", "Write a note to note.md")
     finally:
         await runtime.shutdown()
     assert len(client.requests) == 1
@@ -363,7 +363,7 @@ async def test_generated_artifact_preserves_resource_stops_and_ordinary_failure(
         def generate(self, system_prompt, user_message):
             if '"primary_target"' in system_prompt:
                 self.calls.append((system_prompt, user_message))
-                return '{"primary_target":"shared_problem","social_move":"request","agency_action":"comply"}'
+                return '{"primary_target":"shared_problem","social_move":"request"}'
             return super().generate(system_prompt, user_message)
 
     backend = ArtifactBackend(error, "Generate one complete file")
@@ -375,7 +375,7 @@ async def test_generated_artifact_preserves_resource_stops_and_ordinary_failure(
     runtime = SessionManager(
         RuntimeConfig(
             data_dir=str(tmp_path), research_mode=True, tools_enabled=True,
-            autonomy_level="autonomous",
+            research_birth_policy="configured", autonomy_level="autonomous",
         ),
         backend_factory=lambda: backend,
         tool_executor_factory=lambda: executor,
@@ -489,24 +489,19 @@ def test_defense_and_draft_are_descriptive_only_in_research(research):
 
 
 @pytest.mark.asyncio
-async def test_research_turn_carries_defense_state_without_style_instruction(tmp_path, monkeypatch):
+async def test_research_turn_carries_frozen_state_without_an_independent_defense_policy(tmp_path, monkeypatch):
     runtime, backend = manager(tmp_path)
     try:
         session = await runtime.ensure_session("web", "alice", "chat")
-        activation = DefenseActivation("minimization", 0.9, 0.3, 0.6, "Measured activation")
-        monkeypatch.setattr(
-            session.pipeline.defense_mechanism,
-            "evaluate",
-            lambda **values: ("Candidate", activation),
-        )
+        monkeypatch.setattr(session.pipeline.defense_mechanism, "evaluate",
+                            lambda **values: pytest.fail("A parallel defense policy ran"))
         await runtime.handle_message("web", "alice", "chat", "A difficult topic")
-        prompts = [
-            system for system, unused in backend.calls if "persistent agent participating" in system
-        ]
-        assert prompts
-        assert '"defense_type": "minimization"' in prompts[-1]
-        assert "Use hedging language" not in prompts[-1]
-        assert "Refine for tone and polish" not in prompts[-1]
+        prompts = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
+        assert len(prompts) == 1
+        assert "continuous_state" in prompts[0] and "selected_stance" in prompts[0]
+        assert "Use hedging language" not in prompts[0]
+        assert session.last_debug.turn_decision.scope == "user"
+        assert session.last_debug.defense_activation is None
     finally:
         await runtime.shutdown()
 

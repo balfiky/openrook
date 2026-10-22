@@ -10,6 +10,7 @@ from core.character_vector import CharacterVector
 from core.dual_process.self_check import CoherenceVerdict
 from core.life_influence import LifeInfluence
 from core.tool_memory import ToolMemoryEffects
+from core.willingness import RelationshipDynamics, TurnDecision
 from core.types import (
     ActionVariables,
     AffectState,
@@ -97,6 +98,11 @@ class DebugState:
     dignity_outcome: str = "clear"
     dignity_issues: list[str] = field(default_factory=list)
     decision_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    turn_decision: TurnDecision | None = None
+    expression_reviews: list[dict[str, Any]] = field(default_factory=list)
+    expression_excision: dict[str, Any] = field(default_factory=dict)
+    delivery_outcome: str = "pending"
+    residual_semantic_risk: bool = False
 
     # Step 14: Energy
     energy_after: float = 0.0
@@ -151,6 +157,14 @@ class PipelineResponse:
     """What the pipeline returns to the caller."""
     response: str
     debug: DebugState
+    backend_error: Exception | None = field(default=None, repr=False, compare=False)
+
+    def raise_for_backend_failure(self) -> None:
+        """Transports report service failure after retaining the turn's debug."""
+        if self.debug.delivery_outcome == "backend_failure":
+            raise self.backend_error or RuntimeError("Backend returned no expression.")
+        if not self.response.strip() and not self.debug.deliberate_silence:
+            raise RuntimeError("Expression generation returned no deliverable text.")
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +178,11 @@ class _TurnState:
     user_id: str
     debug: DebugState
     social_state: Any = None
+    dynamics: RelationshipDynamics = field(default_factory=RelationshipDynamics)
+    turn_decision: TurnDecision | None = None
+    turn_id: str = ""
+    elapsed: float = 0.0
+    trust_delta: float = 0.0
     short_replies: bool = False
     inspection_kind: str = ""
     timings: dict[str, float] = field(default_factory=dict)
@@ -193,5 +212,6 @@ class _TurnState:
     strategy: ResponseStrategy | None = None
     ctx: PipelineContext | None = None
     gen_result: Any = None
+    backend_error: Exception | None = None
     self_directed: bool = False
     action_context: dict[str, Any] | None = None

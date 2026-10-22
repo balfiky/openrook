@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.social import has_concrete_task
+from dataclasses import asdict
 from runtime.debug.labels import social_move_phrase, strategy_label, strategy_reason_label
 from runtime.life_history import DEFAULT_DRIVES
 
@@ -19,11 +19,13 @@ def explain_turn(debug: Any) -> dict[str, str]:
     life_effects = getattr(debug, "life_influence_effects", {}) or {}
     defense = getattr(debug, "defense_activation", None)
     self_check_issues = getattr(debug, "self_check_issues", []) or []
+    decision = getattr(debug, "turn_decision", None)
 
     return {
         "interpretation": _interpretation(appraisal),
         "strategy": _strategy(debug, appraisal),
-        "state": _state(getattr(debug, "baseline_shift_applied", {}) or {}, getattr(debug, "modulator_snapshot", {}) or {}),
+        "state": _state({}, asdict(decision.state)) if decision else _state(getattr(debug, "baseline_shift_applied", {}) or {}, getattr(debug, "modulator_snapshot", {}) or {}),
+        "delivery": getattr(debug, "delivery_outcome", "unrecorded"),
         "memory": _memory(
             relationship,
             getattr(debug, "retrieved_memories", []) or [],
@@ -52,18 +54,18 @@ def _interpretation(appraisal: Any) -> str:
 
 
 def _strategy(debug: Any, appraisal: Any) -> str:
-    social = getattr(debug, "social_state", {}) or {}
-    if social.get("current_abuse"):
-        if has_concrete_task(getattr(debug, "user_message", "")):
-            agency = getattr(debug, "agency_decision", None)
-            if agency and agency.declines_request:
-                return "I declined the concrete task while holding the social boundary."
-            return "I kept the firmer social stance while answering the concrete task."
-        if social.get("pressure", 0) > 1:
-            return "You insulted me several times; I set a boundary and kept the reply short."
-        return "I read this as a direct insult or role coercion; I named a boundary."
-    if social.get("pressure", 0):
-        return "Earlier insults still affect the modeled relationship; I kept this reply brief while trust recovers."
+    decision = getattr(debug, "turn_decision", None)
+    if decision is not None:
+        parts = [f"{decision.policy_version}, turn {decision.turn_id}, seed {decision.seed}; utility {decision.utility:.4f}."]
+        for c in decision.components:
+            if c.best_grant is None:
+                parts.append(f"{c.component.id}: declined because the component is infeasible; willingness 0.")
+                continue
+            causes = sorted(c.contributions, key=lambda pair: abs(pair[1]), reverse=True)[:3]
+            parts.append(f"{c.component.id}: {'granted' if c.granted else 'declined'}, willingness {c.willingness:.3f}, margin {c.margin:.4f}; "
+                         + ", ".join(f"{name} {value:+.3f}" for name, value in causes) + ".")
+        parts.append(f"Decision-time injury {decision.relationship.h:.3f}, grievance {decision.relationship.r:.3f}, energy {decision.state.energy:.3f}, trust {decision.state.trust:.3f}.")
+        return " ".join(parts)
     strategy = getattr(debug, "response_strategy", "") or ""
     if not strategy:
         return "No explicit response strategy was selected."

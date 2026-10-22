@@ -9,6 +9,7 @@ from __future__ import annotations
 from config.environment import project_env
 
 import copy
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -197,6 +198,9 @@ class ContagionDetectionConfig:
 class SoulConfig:
     """Seed identity authored by the user before experience-driven growth."""
 
+    schema_version: int = 2
+    character_seed: int = 0
+    dispositions: dict[str, float] = field(default_factory=dict)
     name: str = "OpenRook"
     identity: str = (
         "An independent, thoughtful character with a modeled mood, a dry sense of humor, "
@@ -243,6 +247,36 @@ class SoulConfig:
         "thoughtful": 0.78,
         "blunt": 0.45,
     })
+
+    def __post_init__(self) -> None:
+        if self.schema_version > 2 or self.schema_version < 1:
+            raise ValueError("Unsupported soul schema version")
+        if isinstance(self.character_seed, bool) or not isinstance(self.character_seed, int):
+            raise ValueError("character_seed must be an integer")
+        self.dispositions = canonical_dispositions(self.dispositions, self.initial_traits)
+        self.schema_version = 2
+        for mapping in (self.core_values, self.initial_traits):
+            for key, value in mapping.items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+                    raise ValueError(f"Soul weight {key!r} must be finite and in [0, 1]")
+
+
+def canonical_dispositions(values: dict | None, traits: dict | None = None) -> dict[str, float]:
+    """Migrate the legacy patient trait once, without adding a second drive."""
+    result = {"pride": 0.65, "patience": 0.65, "forgiveness": 0.55, "assertiveness": 0.70}
+    supplied = dict(values or {})
+    if "patience" not in supplied:
+        if "patience" in (traits or {}):
+            supplied["patience"] = traits["patience"]
+        elif "patient" in (traits or {}):
+            supplied["patience"] = traits["patient"]
+    if set(supplied) - set(result):
+        raise ValueError("Unknown canonical disposition")
+    for key, value in supplied.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(f"Disposition {key!r} must be finite and in [0, 1]")
+        result[key] = float(value)
+    return result
 
 
 @dataclass
@@ -459,6 +493,9 @@ def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
     soul_data = soul.get("soul", soul)
     if soul_data:
         cfg.soul = SoulConfig(
+            schema_version=soul_data.get("schema_version", 1),
+            character_seed=soul_data.get("character_seed", 0),
+            dispositions=dict(soul_data.get("dispositions", {})),
             name=soul_data.get("name", cfg.soul.name),
             identity=soul_data.get("identity", cfg.soul.identity),
             voice=soul_data.get("voice", cfg.soul.voice),
@@ -564,6 +601,7 @@ def research_configuration(birth_policy: str = "uncommitted") -> OpenRookConfig:
             boundaries=[],
             core_values={},
             initial_traits={},
+            dispositions={"pride": 0.5, "patience": 0.5, "forgiveness": 0.5, "assertiveness": 0.5},
             growth_policy="Beliefs, values, preferences, and habits may develop or change through experience. Neither compliance nor opposition is a required outcome.",
         )
         config.values = {}

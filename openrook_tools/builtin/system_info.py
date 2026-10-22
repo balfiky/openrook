@@ -191,6 +191,8 @@ def _memory_usage(_: dict[str, Any]) -> ToolResult:
             "free_bytes": free,
             "available_bytes": available,
             "used_percent": round(used_percent, 2),
+            "available_percent": round(100 * available / total, 2) if total else 0,
+            "free_percent": round(100 * free / total, 2) if total else 0,
         },
         side_effect_summary="none",
     )

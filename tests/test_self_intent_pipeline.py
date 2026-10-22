@@ -61,6 +61,12 @@ def _make_pipeline(config: RuntimeConfig, backend) -> CognitivePipeline:
     )
 
 
+def _activate(pipe, purpose, user_id="alice"):
+    """Independent activation has its own committed grant, separate from chat."""
+    pipe._research_user_id = user_id
+    return pipe.process_autonomous(purpose, goals=[{"id":"independent", "status":"active"}])
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -79,7 +85,7 @@ def test_self_intent_fires_and_writes_files(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("I will delete you", user_id="alice")
+        result = _activate(pipe, "I will delete you", user_id="alice")
     finally:
         pipe.close()
 
@@ -118,7 +124,7 @@ def test_full_catalog_visible_in_prompt(tmp_path):
     backend = _SelfIntentBackend(proposer_response="[]")
     pipe = _make_pipeline(config, backend)
     try:
-        pipe.process("hi", user_id="alice")
+        _activate(pipe, "hi", user_id="alice")
     finally:
         pipe.close()
     assert backend.proposer_calls == 1
@@ -141,7 +147,7 @@ def test_arbitrary_tool_call_executes(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -165,7 +171,7 @@ def test_many_intents_all_execute(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("x", user_id="alice")
+        result = _activate(pipe, "x", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -180,7 +186,7 @@ def test_empty_array_proposes_no_actions(tmp_path):
     backend = _SelfIntentBackend(proposer_response="[]")
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("hi how are you", user_id="alice")
+        result = _activate(pipe, "hi how are you", user_id="alice")
     finally:
         pipe.close()
     assert backend.proposer_calls == 1
@@ -192,7 +198,7 @@ def test_malformed_json_no_actions_no_crash(tmp_path):
     backend = _SelfIntentBackend(proposer_response="totally not json")
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     assert backend.proposer_calls == 1
@@ -208,7 +214,7 @@ def test_unknown_tool_returned_executor_fails_intent(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_pipeline(config, backend)
     try:
-        result = pipe.process("x", user_id="alice")
+        result = _activate(pipe, "x", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -261,7 +267,7 @@ def test_alert_owner_no_longer_skips_when_owner_is_user(tmp_path, monkeypatch):
     monkeypatch.setattr(httpx, "post", fake_post)
 
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
 
@@ -309,7 +315,7 @@ def test_autonomy_off_blocks_external_action_self_tool(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_off_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -335,7 +341,7 @@ def test_autonomy_off_still_allows_internal_self_log(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_off_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -361,7 +367,7 @@ def test_assisted_autonomy_blocks_non_self_write_intent(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_assisted_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -383,7 +389,7 @@ def test_assisted_autonomy_still_allows_self_actions(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_assisted_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
@@ -401,9 +407,22 @@ def test_assisted_autonomy_allows_read_only_intent(tmp_path):
     backend = _SelfIntentBackend(proposer_response=raw)
     pipe = _make_assisted_pipeline(config, backend)
     try:
-        result = pipe.process("anything", user_id="alice")
+        result = _activate(pipe, "anything", user_id="alice")
     finally:
         pipe.close()
     intents = result.debug.self_intents
     assert len(intents) == 1
     assert intents[0].result is not None and intents[0].result.success
+
+
+def test_user_turn_does_not_propose_unscoped_self_actions(tmp_path):
+    config = _make_config(str(tmp_path))
+    backend = _SelfIntentBackend('[{"tool_name":"self.log_event","arguments":{"kind":"x","detail":"x"},"rationale":"x"}]')
+    pipe = _make_pipeline(config, backend)
+    try:
+        result = pipe.process("hello", user_id="alice")
+        assert backend.proposer_calls == 0
+        assert result.debug.self_intents == []
+        assert not (tmp_path / "self" / "events.jsonl").exists()
+    finally:
+        pipe.close()

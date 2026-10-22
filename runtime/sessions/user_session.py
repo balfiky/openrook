@@ -417,6 +417,7 @@ class UserSession:
                 await self._run_blocking(self._save_hot_state)
                 self.last_debug = result.debug
                 self.last_activity = time.time()
+                result.raise_for_backend_failure()
                 return result.response
             finally:
                 self._active_message_count = max(0, self._active_message_count - 1)

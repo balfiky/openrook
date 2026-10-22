@@ -11,22 +11,33 @@
 
 An open-source runtime for LLM agents with persistent memory, relationship history, modeled mood, and evolving identity. OpenRook carries that state across conversations into prompts for supported LLM backends.
 
-The character also has a runtime dignity floor. Direct insults and demands for
-ownership or degrading roles trigger a notice, a firm boundary, then cooler,
-shorter replies and possible disengagement from hostile conversation. Concrete
-tasks can still be answered under the existing agency and tool rules. Apologies
-and several calm turns ease the boundary gradually; trust, relationship history,
-and the preference for shorter answers can carry across sessions. This is
-**modeled mood and behavior**, not evidence of subjective feelings.
+Character choice now belongs to the runtime's versioned willingness policy.
+Perception estimates meaning and request consequences; a pure utility calculation
+uses authored dispositions, values, resources, trust and relationship history to
+commit a continuous stance and separate grants for each request component.
+Pride, patience, forgiveness and assertiveness are editable in Settings and
+`soul.yaml`. The shipped seed declines degrading-role requests in the offline
+32-seed transcript probe; owners can author deferential characters. Courtesy,
+bluntness and swearing are personality choices.
 
-Soul boundaries remain editable in Settings, but cannot disable the dignity
-floor. Output checks catch degrading role acceptance, unsolicited sexualization,
-and drafts that contradict the runtime stance through appeasement or service
-boilerplate. They allow one corrective generation, then use a short character
-reply if correction fails or inference is slow. Ordinary swearing,
-friendly teasing, venting about others, and requested fiction about third parties
-are allowed. See the [offline regression replay](docs/development/dignity-replay/README.md)
-for the tested behavior and its limits.
+Tools, generated artifacts, inspections, continuations and conversational learning
+consume committed grants before execution. Operator permissions still apply.
+Expression receives the frozen decision and grounded receipts. Review reports
+`pass`, `violation` or `unknown`, with one rewrite for ordinary defects and up to
+two for critical role assent or persistently stale candidates within the five-call
+base budget. Stale drafts are supplied as forbidden-to-repeat context. Candidates are ranked
+by verdict and violation severity before issue count. Unknown expression is
+delivered with its review record. If correction fails, the best
+nonempty reviewed expression is delivered as `delivered_degraded`, with its
+violations retained. There are no canned social fallback replies. Only
+runtime-selected silence is an empty successful reply; exhausted empty or
+marker-only generations surface a service error.
+
+The offline factorial sweep measures variation in the preference model, not
+human feelings or live language behavior. See [Phase 1 implementation and
+measurements](docs/development/phase1-willingness.md) for results, validation limits
+and remaining work. Earlier [dignity replay reports](docs/development/dignity-replay/README.md)
+measure the previous policy and are historical.
 
 ```bash
 python3 -m pip install "git+https://github.com/balfiky/openrook.git"
@@ -46,11 +57,23 @@ Slow local CPU generation can use a longer **Request timeout (seconds)** in
 Settings > LLM (the LLM Backend section), or `llm_request_timeout_seconds` in
 your runtime YAML. The default is **600 seconds**, with a minimum of one second.
 Save Settings to reload the runtime; restart after editing YAML directly.
-HTTP timeouts apply to connection/read waits per request attempt, rather than
-the whole turn. Auxiliary appraisal, dialogue, self-check, dignity, regeneration,
-tool-selection and self-intent calls use at most eight seconds and retain
-deterministic fallbacks. Main-generation timeouts keep the friendly error and
-point to this setting. Declared research inference limits take precedence.
+HTTP timeouts apply per request attempt. Optional inference automatically uses
+the larger of eight seconds, one quarter of the configured request deadline,
+and twice the latest successful generation latency, capped by the request
+deadline. Set `llm_auxiliary_timeout_seconds` to a finite deadline of at least
+one second to override adaptation (`null` restores automatic timing). Two
+consecutive timeouts pause that phase for `llm_auxiliary_cooldown_seconds`
+(default 30; zero disables the pause). Primary generation and research limits
+remain independent. Ordinary conversation uses one expression call,
+or two calls with semantic appraisal. Constrained expression adds a review;
+ordinary correction adds generation and review. Critical assent or uniformly stale drafts can use the last
+call for a second rewrite with local review and explicit semantic uncertainty.
+Conversational turns have a five-call base budget, including supplemental tool
+inference, with calls reserved for expression. Each granted atomic task also has
+one protected primary tool selection (at most eight per turn), recorded separately.
+Explicit literal file operations need no model selection. Backend
+failures are recorded separately from character-selected silence. Declared
+research resource limits still apply.
 
 Compatible backends request `reasoning_effort: "none"` and
 `chat_template_kwargs: {enable_thinking: false}` without selecting by model name.
@@ -474,20 +497,24 @@ ledger. Identity includes constitution, beliefs, drives, and self-traits;
 evolution includes metabolism, open questions, and skill-to-Life-History migration.
 These mechanisms model state and behavior, not experienced emotion.
 
-A conversation turn runs five stages internally: pre-pass (including optional
-model-backed appraisal) → gated deliberation (inner dialogue, tool loop, defense
-shaping) → master LLM generation → conditional self-check → post-processing
-(per-turn memory writes, energy drain, debug trace). Session-end digestion and
-optional autobiographical ingestion are separate and can call the model.
-Call costs depend on the enabled paths. With `tools_enabled: false`, external
-tools are disabled but internal skill-registry tools remain available.
-Turn details expose `llm_calls` with phase, duration, and outcome. Clear greetings,
-direct insults, and host metric requests use deterministic appraisal. CPU/RAM/disk
-inspections use the existing executor and tool policy before model routing and
-return observed data directly. Optional calls have an eight-second transport
-limit; after a measured slow call, redundant review and correction calls are
-skipped. Self-directed action proposals retain the full configured catalog.
-Research inference keeps its declared limits and request logging.
+A conversation turn observes meaning and request components, updates continuous
+relationship state, commits one willingness decision, executes granted work,
+then generates and reviews expression. Inner dialogue and defense filters do
+not make a second conversational choice. CPU/RAM/disk requests have deterministic
+tool routing; their grants, shell allowlist and operator autonomy still apply,
+and verified results reach the character's expression through receipts.
+
+Ordinary conversation uses one expression call, or two with semantic appraisal.
+Constrained expression adds review; correction uses the remaining budget, with
+up to two rewrites for critical role assent or persistently stale candidates and
+local review of every candidate. The base budget is five calls, including
+supplemental tool-selection and learning inference; each granted task also has
+one protected primary selection. Turn details expose each call's phase, duration,
+outcome and primary-selection accounting.
+Session-end digestion and independent activities have separate inference costs.
+With `tools_enabled: false`, external tools are disabled while internal skill
+registry tools remain subject to their own permissions and the turn's grants.
+Research inference retains its declared resource limits and request logging.
 
 For the full code-level component map (LLM backends, persistence files, tool executor wiring) and the per-turn cognitive flow diagram, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

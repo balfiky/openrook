@@ -10,6 +10,7 @@ Strict output rules:
 - `likes`, `dislikes`, and `boundaries` must each have between 3 and 8 concrete items. Items are short phrases, not full paragraphs.
 - `core_values` should have 3-6 entries; keys are short lowercase value names (e.g. "loyalty", "honesty", "curiosity").
 - `initial_traits` should have 3-6 entries; keys are short lowercase trait names (e.g. "calm", "curious", "direct").
+- `dispositions` must contain pride, patience, forgiveness and assertiveness, each finite in [0,1]. Infer these decision-bearing preferences from the description. They may differ freely across characters. Pride prices self-compromise; patience prices friction; forgiveness controls grievance recovery; assertiveness prices expressing preferences. Reflect described values in `core_values` as well as prose; prose alone does not supply numeric preferences.
 - Free-text fields (`identity`, `voice`, `relational_stance`, `growth_policy`) must each be one to three sentences. No headers, no lists inside them.
 - `name` is a short display name — one or two words, not a full sentence. If the description names the agent, use that; otherwise choose a name that fits the described character.
 
@@ -17,10 +18,13 @@ Schema:
 
 ```json
 {
+  "schema_version": 2,
+  "character_seed": 0,
+  "dispositions": {"pride": 0.65, "patience": 0.65, "forgiveness": 0.55, "assertiveness": 0.7},
   "name": "<short name>",
   "identity": "<1-3 sentences: who the agent is and what it is for>",
   "voice": "<1-3 sentences: tone, register, what it avoids saying>",
-  "relational_stance": "<1-3 sentences: how it treats the user, trust posture, repair over escalation>",
+  "relational_stance": "<1-3 sentences: how it relates to the user, trust and conflict preferences>",
   "growth_policy": "<1-2 sentences: what can drift, what stays stable>",
   "likes": ["<short phrase>", "<short phrase>", "..."],
   "dislikes": ["<short phrase>", "<short phrase>", "..."],

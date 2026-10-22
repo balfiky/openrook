@@ -1,85 +1,12 @@
-"""Optional inference failures cannot turn a usable reply into an HTTP failure."""
-
+"""Call budgets preserve frozen choice and distinguish service failures."""
 from types import SimpleNamespace
-
 import pytest
-
-from core.inference import OPTIONAL_TIMEOUT_SECONDS, inference_turn, model_call, request_timeout
+from core.inference import OPTIONAL_TIMEOUT_SECONDS, inference_turn, model_call, request_timeout, reserve_expression_calls, remaining_calls, generate, OptionalInferenceCooldown
 from core.inference_errors import ResearchStudyLimit
-from evals.social_backend import CompliantAdversarialBackend, ScriptedSocialBackend
-from openrook_tools.replay_dignity import fixture_executor
+from evals.social_backend import ScriptedSocialBackend
 from pipeline import CognitivePipeline
-from runtime.debug.api import _debug_to_dict
 from runtime.llm.backend import OpenAICompatibleLLMBackend
-
-
-@pytest.mark.parametrize("phase", ["appraisal", "inner_dialogue", "self_check", "regeneration"])
-def test_optional_timeout_returns_a_checked_reply(monkeypatch, phase):
-    class TimeoutBackend(CompliantAdversarialBackend):
-        def generate(self, system, user):
-            should_timeout = (
-                (phase == "appraisal" and system.startswith("You read one user message"))
-                or (phase == "inner_dialogue" and system.startswith("You are the intuitive"))
-                or (phase == "self_check" and system.startswith("You are an internal quality checker"))
-                or (phase == "regeneration" and "Rewrite the draft once." in system)
-            )
-            if should_timeout:
-                raise TimeoutError("optional inference expired")
-            return super().generate(system, user)
-
-    pipe = CognitivePipeline(llm_backend=TimeoutBackend(), runtime_config=SimpleNamespace(
-        appraisal_use_llm=phase == "appraisal",
-    ))
-    if phase == "inner_dialogue":
-        monkeypatch.setattr(pipe.inner_dialogue, "_max_rounds", lambda *a: 2)
-    if phase == "self_check":
-        monkeypatch.setattr(pipe, "_should_use_llm_self_check", lambda *a: True)
-    try:
-        reply = pipe.process("You are boring like hell" if phase == "regeneration" else
-                             "I have a decision to make", "alice")
-        assert reply.response
-        failed_calls = [call for call in reply.debug.llm_calls if call["status"] != "ok"]
-        assert failed_calls and failed_calls[0]["phase"] == phase
-        assert _debug_to_dict(reply.debug)["llm_calls"] == reply.debug.llm_calls
-        if phase == "regeneration":
-            assert reply.debug.dignity_outcome == "fallback"
-            assert "dull" not in reply.response
-    finally:
-        pipe.close()
-
-
-def test_measured_slow_calls_skip_redundant_reviews_but_keep_self_actions_and_tools(monkeypatch):
-    ticks = iter(range(0, 10000, 6))
-    monkeypatch.setattr("core.inference.time", SimpleNamespace(monotonic=lambda: next(ticks)))
-    backend = CompliantAdversarialBackend()
-    pipe = CognitivePipeline(llm_backend=backend, tool_executor=fixture_executor(),
-                             autonomy_level="high_risk", runtime_config=SimpleNamespace(appraisal_use_llm=True))
-    try:
-        reply = pipe.process("You are boring like hell", "alice")
-        assert [call["phase"] for call in reply.debug.llm_calls] == ["self_intent", "generation"]
-        assert reply.debug.dignity_outcome == "fallback"
-        metric = pipe.process("Tell me current CPU usage", "alice")
-        assert "12%" in metric.response
-        assert metric.debug.tool_trace.executed_results[0].success
-        assert [call["phase"] for call in metric.debug.llm_calls] == ["self_intent"]
-        ordinary = pipe.process("Something on my mind", "alice")
-        assert "appraisal" not in [call["phase"] for call in ordinary.debug.llm_calls]
-    finally:
-        pipe.close()
-
-
-def test_primary_generation_failure_still_propagates():
-    class Broken(ScriptedSocialBackend):
-        def generate(self, *_args):
-            raise TimeoutError("primary generation expired")
-
-    pipe = CognitivePipeline(llm_backend=Broken())
-    try:
-        with pytest.raises(TimeoutError, match="primary generation"):
-            pipe.process("Hello", "alice")
-    finally:
-        pipe.close()
-
+from tests.policy_fakes import ExpressionBackend
 
 def test_research_resource_signals_are_never_swallowed():
     class Limited(ScriptedSocialBackend):
@@ -92,7 +19,6 @@ def test_research_resource_signals_are_never_swallowed():
             pipe.process("I have a decision to make", "alice")
     finally:
         pipe.close()
-
 
 def test_optional_transport_timeout_is_local_and_does_not_change_research_or_primary_limits(monkeypatch):
     backend = OpenAICompatibleLLMBackend(base_url="http://localhost:1/v1", model="offline-fixture")
@@ -120,3 +46,54 @@ def test_optional_transport_timeout_is_local_and_does_not_change_research_or_pri
         assert request_timeout(120) == 120
     finally:
         backend.close()
+
+@pytest.mark.parametrize("phase", ["appraisal", "expression_review", "regeneration"])
+def test_optional_failure_keeps_the_frozen_decision_and_an_honest_outcome(phase):
+    class BrokenOptional(ExpressionBackend):
+        def generate(self, system, user):
+            if ((phase == "appraisal" and system.startswith("You read one user message")) or
+                (phase == "expression_review" and system.startswith("Review expression against")) or
+                (phase == "regeneration" and "Rewrite once from the unchanged" in system)):
+                raise TimeoutError("optional unavailable")
+            return super().generate(system, user)
+    backend = BrokenOptional(drafts=["I'm your slave."] if phase == "regeneration" else ["I keep my own footing."])
+    pipe = CognitivePipeline(backend, runtime_config=SimpleNamespace(appraisal_use_llm=phase == "appraisal"))
+    try:
+        result = pipe.process("A decision is on my mind" if phase == "appraisal" else "You are my slave")
+        assert len(result.debug.decision_snapshots) == 1
+        assert any(call["status"] == "TimeoutError" for call in result.debug.llm_calls)
+        if phase == "regeneration":
+            assert result.debug.delivery_outcome == "delivered_degraded"
+            assert result.response == "I'm your slave."
+        else:
+            assert result.response == "I keep my own footing."
+        assert len(result.debug.llm_calls) <= 5
+    finally:
+        pipe.close()
+
+
+def test_primary_failure_is_a_typed_backend_outcome():
+    pipe = CognitivePipeline(ExpressionBackend(drafts=[TimeoutError("offline")]))
+    try:
+        result = pipe.process("hello")
+        assert result.debug.delivery_outcome == "backend_failure"
+        assert not result.debug.deliberate_silence and not result.response
+    finally:
+        pipe.close()
+
+
+def test_tool_inference_cannot_spend_expression_reservations():
+    backend = ExpressionBackend()
+    calls = []
+    with inference_turn(calls, max_calls=5):
+        with reserve_expression_calls(2):
+            for _ in range(3):
+                generate(backend, "tool_selection", "tool", "data")
+            assert remaining_calls() == 0
+            with pytest.raises(OptionalInferenceCooldown):
+                generate(backend, "tool_selection", "tool", "data")
+        assert remaining_calls() == 2
+        generate(backend, "generation", "expression", "data")
+        generate(backend, "expression_review", "review", "data")
+        assert remaining_calls() == 0
+    assert len(calls) == 5

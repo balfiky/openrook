@@ -10,7 +10,6 @@ import pytest
 import requests
 
 from core.inference import inference_turn, model_call
-from evals.social_backend import ScriptedSocialBackend
 from openrook_tools.native_orchestrator import NativeToolCallRunner
 from openrook_tools.replay_dignity import fixture_executor
 from pipeline import CognitivePipeline
@@ -216,19 +215,20 @@ async def test_main_generation_timeout_keeps_friendly_503_and_setting_hint(monke
         pipe.close()
 
 
-@pytest.mark.parametrize("phase", ["dignity", "self_intent", "tool_selection"])
-def test_remaining_auxiliary_timeouts_complete_the_turn(monkeypatch, phase):
+@pytest.mark.parametrize("phase", ["expression_review", "self_intent", "tool_selection"])
+def test_timeout_is_recorded_in_its_actual_execution_scope(monkeypatch, phase):
     from openai import APITimeoutError
     import httpx
-    class SlowAuxiliary(ScriptedSocialBackend):
+    from tests.policy_fakes import ExpressionBackend
+
+    class SlowAuxiliary(ExpressionBackend):
         def generate(self, system, user):
-            if phase == "dignity" and system.startswith("Review the assistant draft"):
-                raise requests.ReadTimeout("dignity expired")
+            if phase == "expression_review" and system.startswith("Review expression against"):
+                raise requests.ReadTimeout("review expired")
             if phase == "self_intent" and system.startswith("You are deciding what"):
                 raise requests.ReadTimeout("self intent expired")
-            if phase == "dignity":
-                return "A master craftsman would know."
             return super().generate(system, user)
+
     executor = fixture_executor()
     native_timeouts = []
     def choose(**kwargs):
@@ -237,17 +237,30 @@ def test_remaining_auxiliary_timeouts_complete_the_turn(monkeypatch, phase):
     if phase == "tool_selection":
         client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=choose)))
         executor.set_tool_runner(NativeToolCallRunner(executor=executor, base_url="http://localhost:1/v1",
-                                                     model="offline-fixture", timeout=900, client=client))
-    pipe = CognitivePipeline(llm_backend=SlowAuxiliary(), tool_executor=executor if phase != "dignity" else None,
-                             autonomy_level="high_risk", runtime_config=SimpleNamespace(appraisal_use_llm=phase == "dignity"))
+            model="offline-fixture", timeout=900, client=client))
+    pipe = CognitivePipeline(llm_backend=SlowAuxiliary(drafts=("A master craftsman would know.",)),
+        tool_executor=executor if phase != "expression_review" else None, autonomy_level="high_risk")
     try:
-        result = pipe.process("Tell me a story" if phase == "tool_selection" else "Hello", "alice")
-        assert result.response
-        failed = [item for item in result.debug.llm_calls if item["status"] != "ok"]
-        assert [item["phase"] for item in failed] == [phase]
-        assert any(item["phase"] == "generation" for item in result.debug.llm_calls)
+        if phase == "self_intent":
+            calls = []
+            with inference_turn(calls):
+                result = pipe.process_autonomous("Inspect my workspace", [{"id": "chosen"}])
+            assert result.debug.turn_decision.scope == "self"
+            assert result.debug.turn_decision.grants
+            assert not result.debug.tool_trace or not result.debug.tool_trace.executed_results
+        else:
+            result = pipe.process("Run printf diagnostic_probe" if phase == "tool_selection" else "Hello", "alice")
+            calls = result.debug.llm_calls
+            assert result.response
+            assert any(item["phase"] == "generation" for item in calls)
+        assert [c["phase"] for c in calls if c["status"] != "ok"] == [phase]
+        if phase == "expression_review":
+            assert result.debug.dignity_outcome == "unknown"
+            assert result.debug.residual_semantic_risk
         if phase == "tool_selection":
-            assert native_timeouts == [8]
+            assert native_timeouts == [900]  # Requested work uses its primary deadline.
+            selection = next(c for c in calls if c["phase"] == "tool_selection")
+            assert selection["primary_tool"] and not selection["optional"]
     finally:
         pipe.close()
 
@@ -257,3 +270,26 @@ def test_timeout_change_resets_stale_connection_health(tmp_path):
     record_llm_health(config, diagnose_llm_error(requests.ReadTimeout("expired"), config))
     config.llm_request_timeout_seconds = 900
     assert llm_health(config)["status"] == "untested"
+
+
+@pytest.mark.asyncio
+async def test_auxiliary_settings_survive_partial_save_and_can_restore_automatic_timing(tmp_path, monkeypatch):
+    from interface import api
+    from interface.routes_admin_config import _admin_field_metadata
+    path = tmp_path / "runtime.yaml"
+    RuntimeConfig(data_dir=str(tmp_path / "storage")).write_yaml(str(path))
+    monkeypatch.setattr(api, "RUNTIME_CONFIG_PATH", str(path))
+    reload_runtime = AsyncMock(return_value={"reloaded_web_manager": True})
+    monkeypatch.setattr(api, "_reload_runtime_from_config", reload_runtime)
+    await api.update_config(api.ConfigUpdateRequest(
+        llm_auxiliary_timeout_seconds=180, llm_auxiliary_cooldown_seconds=12))
+    await api.update_config(api.ConfigUpdateRequest(console_enabled=False))
+    saved = RuntimeConfig.from_yaml(str(path))
+    assert saved.llm_auxiliary_timeout_seconds == 180
+    assert saved.llm_auxiliary_cooldown_seconds == 12
+    assert reload_runtime.await_args.args[0].llm_auxiliary_timeout_seconds == 180
+    metadata = {item["name"]: item for item in _admin_field_metadata(saved)}
+    assert metadata["llm_auxiliary_timeout_seconds"]["session_manager_reload"]
+    assert metadata["llm_auxiliary_cooldown_seconds"]["section"] == "model"
+    await api.update_config(api.ConfigUpdateRequest(llm_auxiliary_timeout_seconds=None))
+    assert RuntimeConfig.from_yaml(str(path)).llm_auxiliary_timeout_seconds is None

@@ -29,9 +29,11 @@ llm_base_url: 'http://localhost:11434/v1'
 llm_model: ''
 llm_api_key: ''
 # Per-request timeout for generation, including slow local CPU inference.
-# Settings > LLM also edits this value. Auxiliary calls use at most 8 seconds;
-# declared research inference limits take precedence in bounded studies.
+# Settings > LLM also edits this value. Research limits take precedence in studies.
 llm_request_timeout_seconds: 600.0
+# null adapts auxiliary review/rewrites to the request limit and generation latency.
+llm_auxiliary_timeout_seconds: null
+llm_auxiliary_cooldown_seconds: 30.0
 
 debug_host: 127.0.0.1
 debug_port: 8077

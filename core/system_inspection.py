@@ -26,11 +26,39 @@ def inspection_kind(message: str, history: list[dict[str, str]] | None = None) -
         r"show|check|tell|report|how much)\b", text,
     ))
     followup = bool(re.fullmatch(r"(?:and |what about )?(?:cpu|ram|memory|disk|storage)[?.! ]*", text.strip()))
-    prior_inspection = any(
-        inspection_kind(turn.get("content", ""))
-        for turn in (history or [])[-6:] if turn.get("role") == "user"
-    ) if followup and not explicit else False
+    prior_inspection = False
+    if followup and not explicit:
+        # Count user turns, not alternating messages. Short intervening social
+        # turns need not erase the host-metric referent, but an explicit switch
+        # to recollection or conceptual discussion does.
+        recent_users = [turn.get("content", "") for turn in (history or []) if turn.get("role") == "user"][-5:]
+        for prior in reversed(recent_users):
+            if inspection_kind(prior):
+                prior_inspection = True
+                break
+            if re.search(r"\b(?:remember|recollection|memory (?:of|about)|"
+                         r"(?:explain|define|what is) (?:cpu|ram|memory))\b", prior, re.I):
+                break
     return kind if explicit or (followup and (prior_inspection or text.strip() in {"cpu", "ram"})) else ""
+
+
+def addresses_inspection(response: str, kind: str) -> bool:
+    """Recognize an observation's topic, including prose without numeric digits.
+
+    This only checks relevance. Receipt integrity and factual accuracy remain
+    separate checks; the existence of any numbers is not sufficient grounding.
+    """
+    topics = {
+        "cpu": r"\b(?:cpu|processor|utili[sz]ation)\b",
+        "memory": r"\b(?:ram|memory|mem|memtotal|memavailable)\b",
+        "disk": r"\b(?:disk|storage|filesystem|drive)\b",
+    }
+    observation = re.search(r"\d|%|\b(?:usage|utili[sz]ation|used|free|available|total|idle|busy|in use|consum\w*)\b", response, re.I)
+    # A capacity reading can answer the resolved disk request without repeating
+    # its name. Require labeled storage quantities, not arbitrary numbers.
+    capacity = kind == "disk" and re.search(
+        r"\b\d+(?:\.\d+)?\s*[kmgtpe]i?b?\s+(?:free|used|available)\b", response, re.I)
+    return bool((re.search(topics.get(kind, r"(?!)"), response, re.I) or capacity) and observation)
 
 
 def inspection_intent(kind: str, available: set[str]) -> ToolIntent | None:

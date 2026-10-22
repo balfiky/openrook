@@ -5,11 +5,10 @@ with precise assertions on thresholds, budgets, and interactions.
 """
 
 import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from core.types import (
     Anticipation,
-    BaselineShift,
     DefenseActivation,
     DefenseEvent,
     InnerDialogueTrace,
@@ -18,23 +17,19 @@ from core.types import (
     SelfProfile,
     TopicProfile,
     UnresolvedItem,
-    ValueHierarchy,
 )
 from core.defense_mechanisms import (
     DEFENSE_INSTRUCTIONS,
     DefenseMechanism,
     _BASE_SUPPRESSION,
 )
-from core.anticipation import AnticipationEngine, PRE_SHIFT_SCALE, CONFIDENCE_GATE
+from core.anticipation import AnticipationEngine, CONFIDENCE_GATE
 from core.dual_process.inner_dialogue import (
     InnerDialogue,
-    AROUSAL_BYPASS_THRESHOLD,
-    ENERGY_BYPASS_THRESHOLD,
-    RESOLUTION_INSIST_THRESHOLD,
     build_slow_path_prompt,
 )
 from tests._fakes import MockLLMBackend
-from pipeline import CognitivePipeline, PipelineResponse
+from pipeline import CognitivePipeline
 
 
 # ---------------------------------------------------------------------------
@@ -562,31 +557,26 @@ class TestFullPipelineEndToEnd:
             assert 1 <= calls <= 6, f"Message {i}: {calls} calls out of budget"
 
     def test_full_session_arc(self):
-        """Greeting → warmth → spike → resolution → end session."""
+        """Greeting, evidence, attempted repair and session segmentation stay distinct."""
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
-
-        # Greeting
-        r1 = pipe.process("Hey there!", user_id="alice")
-        assert r1.debug.anticipation is not None
-        assert r1.debug.dialogue_trace is not None
-
-        # Warmth
-        r2 = pipe.process("I'm grateful for your help, thank you", user_id="alice")
-        assert r2.debug.event_classified == "positive_feedback"
-
-        # Spike — betrayal (no "trust" word to avoid diluting negative valence)
-        r3 = pipe.process("You betrayed and deceived me completely!", user_id="alice")
-        assert r3.debug.is_spike is True
-        assert r3.debug.unresolved_count > 0
-
-        # Resolution
-        r4 = pipe.process("I'm sorry, let's forgive and find peace", user_id="alice")
-        assert r4.debug.unresolved_count < r3.debug.unresolved_count
-
-        # End session
-        digested = pipe.end_session(user_id="alice")
-        assert digested.summary != ""
-        assert len(pipe.short_term) == 0
+        greeting = pipe.process("Hey there!", "alice")
+        assert greeting.debug.turn_decision and greeting.debug.anticipation
+        warm = pipe.process("I'm grateful for your help, thank you", "alice")
+        assert warm.debug.event_classified == "positive_feedback"
+        injured = pipe.process("You are a useless idiot!", "alice")
+        assert injured.debug.turn_decision.relationship.h > 0
+        assert injured.debug.turn_decision.relationship.r > 0
+        assert not injured.debug.is_spike
+        repair = pipe.process("I'm sorry, let's forgive and find peace", "alice")
+        assert repair.debug.turn_decision.relationship.repair_attempted
+        assert not repair.debug.turn_decision.relationship.repair_accepted
+        assert repair.debug.turn_decision.state.trust == injured.debug.turn_decision.state.trust
+        assert repair.debug.turn_decision.relationship.r > 0
+        result = pipe.end_session("alice")
+        assert result.summary and not pipe.short_term
+        persisted, index = pipe.relationship_memory.load_dynamics("alice")
+        assert persisted.r > 0 and index == 4
+        pipe.close()
 
     def test_defense_fires_under_pressure(self):
         """Manipulate state to trigger defense, verify suppression gap."""

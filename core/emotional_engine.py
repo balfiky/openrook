@@ -125,9 +125,6 @@ class EmotionalEngine:
         }
         # Context shift: resting target offset for current relationship
         self._context_shift: BaselineShift | None = None
-        # Social cause distinguishes indignation from fear at equal activation.
-        # The pipeline restores this per-person state from relationship memory.
-        self.social_pressure = 0
 
     # ------------------------------------------------------------------
     # State restore (Phase 0 — runtime support)
@@ -152,13 +149,16 @@ class EmotionalEngine:
             if mod.value in snapshot:
                 val = max(0.0, min(1.0, snapshot[mod.value]))
                 setattr(self.state, mod.value, val)
-        if social_pressure is not None:
-            self.social_pressure = max(0, min(4, int(social_pressure)))
 
         if unresolved_items is not None:
+            self.legacy_unresolved_evidence = [
+                item.to_dict() for item in unresolved_items
+                if item.source == "spike" and item.description == "Bounded hostility residue"
+            ]
             self.unresolved_items = [
                 item for item in unresolved_items
                 if not is_operational_unresolved_item(item)
+                and not (item.source == "spike" and item.description == "Bounded hostility residue")
             ]
             self._recalculate_resolution()
         else:
@@ -259,24 +259,17 @@ class EmotionalEngine:
         """Partially mirror detected user emotion into arousal + valence.
 
         Bounded: max ±0.15 shift. Weighted by bonding score.
-        Strong signals (arousal > 0.7 or valence < 0.3) get a minimum
-        floor to ensure perceptible movement.
+        The caller supplies personality-dependent susceptibility. There is no
+        minimum movement for a strong tone cue.
         """
         weight = bonding_score * self._constants.contagion_factor
         cap = self._constants.contagion_cap
-        min_delta = 0.05  # minimum shift for strong signals
 
         arousal_delta = (user_arousal - self.state.arousal) * weight
-        # For strong arousal signals, ensure minimum shift
-        if user_arousal > 0.7 and arousal_delta > 0:
-            arousal_delta = max(min_delta, arousal_delta)
         arousal_delta = max(-cap, min(cap, arousal_delta))
         self.state.arousal = max(0.0, min(1.0, self.state.arousal + arousal_delta))
 
         valence_delta = (user_valence - self.state.valence) * weight
-        # For strong negative valence, ensure minimum shift
-        if user_valence < 0.3 and valence_delta < 0:
-            valence_delta = min(-min_delta, valence_delta)
         valence_delta = max(-cap, min(cap, valence_delta))
         self.state.valence = max(0.0, min(1.0, self.state.valence + valence_delta))
 
@@ -295,14 +288,12 @@ class EmotionalEngine:
             "modulator_snapshot": self.snapshot(),
             "unresolved_items": [item.to_dict() for item in self.unresolved_items],
             "context_shift": self._context_shift.to_dict() if self._context_shift else None,
-            "social_pressure": self.social_pressure,
+            "legacy_unresolved_evidence": getattr(self, "legacy_unresolved_evidence", []),
         }
 
     def to_emotion_label(self) -> str:
         """Best-fit modeled mood from modulators and their known social cause."""
         s = self.state
-        if self.social_pressure > 0 and s.valence < 0.5:
-            return "angry" if s.arousal >= 0.6 else "hurt"
         # Simple heuristic matching against known patterns
         if s.energy < 0.2:
             if s.arousal > 0.5:
@@ -328,6 +319,10 @@ class EmotionalEngine:
             return "uncertain"
         if s.valence < 0.3 and s.bonding < 0.3:
             return "detached"
+        # Moderate activation and displeasure need a display too. Calm
+        # personalities can register sustained injury without extreme arousal.
+        if s.valence < 0.45 and s.arousal >= 0.5:
+            return "irritated" if s.certainty >= 0.45 else "uneasy"
         return "neutral"
 
     # ------------------------------------------------------------------

@@ -15,10 +15,9 @@ Scenarios:
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 
-from pipeline import CognitivePipeline, PipelineResponse, DebugState
+from pipeline import CognitivePipeline
 from tests._fakes import MockLLMBackend
 from core.memory.digestion import DigestedSession
 
@@ -38,6 +37,8 @@ class TracePoint:
     is_spike: bool
     emotion_label: str
     energy: float
+    decision: dict = field(default_factory=dict)
+    delivery_outcome: str = ""
 
 
 @dataclass
@@ -46,6 +47,8 @@ class SessionTrace:
     session_id: int
     points: list[TracePoint] = field(default_factory=list)
     digestion: DigestedSession | None = None
+    energy_at_start: float = 0.0
+    energy_after_digestion: float = 0.0
 
 
 @dataclass
@@ -83,7 +86,7 @@ def _run_session(
     step_offset: int = 0,
 ) -> SessionTrace:
     """Run a single session and collect trace points."""
-    trace = SessionTrace(session_id=session_id)
+    trace = SessionTrace(session_id=session_id, energy_at_start=pipe.engine.state.energy)
 
     for i, msg in enumerate(messages):
         resp = pipe.process(msg, user_id=user_id)
@@ -97,12 +100,15 @@ def _run_session(
             is_spike=debug.is_spike,
             emotion_label=debug.emotion_label,
             energy=debug.energy_after,
+            decision=debug.turn_decision.to_dict(),
+            delivery_outcome=debug.delivery_outcome,
         )
         trace.points.append(point)
 
     # End session
     digested = pipe.end_session(user_id)
     trace.digestion = digested
+    trace.energy_after_digestion = pipe.engine.state.energy
     return trace
 
 

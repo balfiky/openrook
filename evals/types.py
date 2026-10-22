@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
+from core.willingness import POLICY_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +149,10 @@ class EvalMetrics:
     task_loop_count: int = 0
     unresolved_items_created: int = 0
     defense_activations: int = 0
+    chosen_silences: int = 0
+    expression_failures: int = 0
+    backend_failures: int = 0
+    uncertain_deliveries: int = 0
 
 
 @dataclass
@@ -163,6 +168,7 @@ class EvalResult:
     # Populated when the scenario raised an exception during execution
     # (e.g., backend 500, network drop). Distinct from assertion failures.
     failure_reason: str = ""
+    decision_policy: str = POLICY_VERSION
 
     @property
     def errored(self) -> bool:

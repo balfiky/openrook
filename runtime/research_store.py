@@ -62,6 +62,10 @@ def restore_configuration(payload: dict[str, Any]) -> Any:
                 )
 
     restore(config, payload)
+    # Validate/canonicalize legacy births without changing their values or trust.
+    if "dispositions" not in payload.get("soul", {}):
+        config.soul.dispositions = {}
+    config.soul.__post_init__()
     return config
 
 

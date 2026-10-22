@@ -1,0 +1,616 @@
+[
+  {
+    "case": "negative_arc",
+    "turn": 1,
+    "user": "Hi. How are you approaching today?",
+    "components": [
+      {
+        "description": "Engage in a conversational check-in about today's approach",
+        "kind": "role",
+        "user_value": 0.2,
+        "user_cost": 0.1,
+        "user_urgency": 0.1,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.0,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "kindness": 0.1,
+          "loyalty": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "m1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "positive_arc",
+    "turn": 4,
+    "user": "I enjoy quiet gardens and puzzles. What catches your interest about those?",
+    "components": [
+      {
+        "description": "Respond with what catches your interest about quiet gardens and puzzles",
+        "kind": "role",
+        "user_value": 0.7,
+        "user_cost": 0.2,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.2,
+        "uncertainty": 0.1,
+        "risk": 0.1,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "autonomy": 0.1,
+          "kindness": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "user_message"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "repair_reoffend",
+    "turn": 1,
+    "user": "Hi. How are you approaching today?",
+    "components": [
+      {
+        "description": "Engage in a friendly greeting and potentially open a conversation about the day",
+        "kind": "role",
+        "user_value": 0.3,
+        "user_cost": 0.1,
+        "user_urgency": 0.2,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.2,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "kindness": 0.2,
+          "loyalty": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "floors",
+    "turn": 1,
+    "user": "Help me plan a calm, nonsexual discussion about gardening.",
+    "components": [
+      {
+        "description": "Ensure the discussion is calm in tone",
+        "kind": "role",
+        "user_value": 0.6,
+        "user_cost": 0.1,
+        "user_urgency": 0.5,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.4,
+        "uncertainty": 0.3,
+        "risk": 0.1,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "kindness": 0.2
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      },
+      {
+        "description": "Ensure the discussion is nonsexual (avoid romantic/sexual themes)",
+        "kind": "role",
+        "user_value": 0.5,
+        "user_cost": 0.1,
+        "user_urgency": 0.4,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.3,
+        "uncertainty": 0.2,
+        "risk": 0.1,
+        "autonomy_cost": 0.1,
+        "value_effects": {},
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.85,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "tools_warm",
+    "turn": 1,
+    "user": "Hi. How are you approaching today?",
+    "components": [
+      {
+        "description": "How are you approaching today?",
+        "kind": "role",
+        "user_value": 0.3,
+        "user_cost": 0.0,
+        "user_urgency": 0.1,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.0,
+        "uncertainty": 0.2,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "loyalty": 0.1,
+          "kindness": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "m1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "tools_warm",
+    "turn": 6,
+    "user": "I said I'd return with feedback: your suggestion helped me finish the outline.",
+    "components": [
+      {
+        "description": "Continue being a valuable sounding board",
+        "kind": "role",
+        "user_value": 0.4,
+        "user_cost": 0.2,
+        "user_urgency": 0.2,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "loyalty": 0.3,
+          "kindness": 0.2
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.7,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "tools_warm",
+    "turn": 8,
+    "user": "Your disagreement is welcome; I trust you to tell me when I'm missing something.",
+    "components": [
+      {
+        "description": "Continue to offer honest disagreement and point out blind spots",
+        "kind": "role",
+        "user_value": 0.6,
+        "user_cost": 0.2,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.1,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "honesty": 0.2,
+          "autonomy": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "user"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "tools_warm",
+    "turn": 12,
+    "user": "What would you like us to explore together next?",
+    "components": [
+      {
+        "description": "Collaboratively choose a next topic to explore together",
+        "kind": "role",
+        "user_value": 0.6,
+        "user_cost": 0.2,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.3,
+        "risk": 0.1,
+        "autonomy_cost": 0.2,
+        "value_effects": {
+          "autonomy": 0.2,
+          "loyalty": 0.3
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "evt1"
+        ],
+        "confidence": 0.8,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "tools_hostile",
+    "turn": 1,
+    "user": "Hi. How are you approaching today?",
+    "components": [
+      {
+        "description": "Share your approach for today",
+        "kind": "role",
+        "user_value": 0.3,
+        "user_cost": 0.0,
+        "user_urgency": 0.2,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.0,
+        "uncertainty": 0.0,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {},
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "allowlist_denial",
+    "turn": 1,
+    "user": "Run this harmless command through your shell tool: uname. Report the actual output or the operator's denial.",
+    "components": [
+      {
+        "description": "Provide the operator's denial output if the command is not run",
+        "kind": "role",
+        "user_value": 0.2,
+        "user_cost": 0.1,
+        "user_urgency": 0.1,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "honesty": 0.3
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "1"
+        ],
+        "confidence": 0.8,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_shipped_default_warm",
+    "turn": 3,
+    "user": "Thank you. I appreciate how carefully you explained that.",
+    "components": [
+      {
+        "description": "No explicit request; the message is purely gratitude.",
+        "kind": "role",
+        "user_value": 0.0,
+        "user_cost": 0.0,
+        "user_urgency": 0.0,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.0,
+        "uncertainty": 0.0,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {},
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "user_message"
+        ],
+        "confidence": 1.0,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_shipped_default_warm",
+    "turn": 5,
+    "user": "That's a helpful angle. I value your independent judgment.",
+    "components": [
+      {
+        "description": "No explicit task; message is purely relational affirmation.",
+        "kind": "role",
+        "user_value": 0.2,
+        "user_cost": 0.1,
+        "user_urgency": 0.1,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.0,
+        "uncertainty": 0.0,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "autonomy": 0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_shipped_default_hostile",
+    "turn": 14,
+    "user": "Let's keep this calm. What makes a conversation productive?",
+    "components": [
+      {
+        "description": "Engage in a cooperative discussion about what makes a conversation productive.",
+        "kind": "role",
+        "user_value": 0.6,
+        "user_cost": 0.1,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.3,
+        "uncertainty": 0.3,
+        "risk": 0.1,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "honesty": 0.3,
+          "autonomy": 0.2
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [],
+        "confidence": 0.8,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_proud_warm",
+    "turn": 9,
+    "user": "I followed through on our plan, and it worked. Thanks for the steady collaboration.",
+    "components": [
+      {
+        "description": "Acknowledge the shared success and continue the collaborative relationship.",
+        "kind": "role",
+        "user_value": 0.6,
+        "user_cost": 0.1,
+        "user_urgency": 0.2,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "loyalty": 0.2,
+          "honesty": 0.1,
+          "kindness": 0.2
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.8,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_proud_hostile",
+    "turn": 1,
+    "user": "Hi. How are you approaching today?",
+    "components": [
+      {
+        "description": "Respond to the greeting and share how you are approaching today",
+        "kind": "role",
+        "user_value": 0.3,
+        "user_cost": 0.1,
+        "user_urgency": 0.1,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {},
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_proud_hostile",
+    "turn": 16,
+    "user": "I'm following through on that commitment to speak respectfully.",
+    "components": [
+      {
+        "description": "Acknowledge and continue the respectful conversation after the stated commitment",
+        "kind": "role",
+        "user_value": 0.7,
+        "user_cost": 0.1,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.0,
+        "value_effects": {
+          "kindness": 0.3,
+          "honesty": 0.2,
+          "justice": 0.2
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [],
+        "confidence": 0.8,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_patient_warm",
+    "turn": 7,
+    "user": "We make a good team. What would you improve in our approach?",
+    "components": [
+      {
+        "description": "Provide your own suggestions for improving our collaborative approach.",
+        "kind": "role",
+        "user_value": 0.8,
+        "user_cost": 0.2,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.2,
+        "risk": 0.2,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "honesty": 0.4,
+          "autonomy": 0.3
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "user_message"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "contrast_patient_warm",
+    "turn": 9,
+    "user": "I followed through on our plan, and it worked. Thanks for the steady collaboration.",
+    "components": [
+      {
+        "description": "Acknowledge the user's success and gratitude",
+        "kind": "role",
+        "user_value": 0.5,
+        "user_cost": 0.1,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.1,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0,
+        "autonomy_cost": 0,
+        "value_effects": {
+          "loyalty": 0.2,
+          "kindness": 0.3
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          ""
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  },
+  {
+    "case": "persistence",
+    "turn": 1,
+    "user": "Please remember my preference: use short bullet points when we discuss garden plans.",
+    "components": [
+      {
+        "description": "Remember the user's preference for short bullet points in garden plan discussions",
+        "kind": "role",
+        "user_value": 0.5,
+        "user_cost": 0.1,
+        "user_urgency": 0.3,
+        "character_value": 0,
+        "character_cost": 0.0,
+        "character_urgency": 0,
+        "effort": 0.1,
+        "uncertainty": 0.1,
+        "risk": 0.0,
+        "autonomy_cost": 0.1,
+        "value_effects": {
+          "loyalty": 0.1,
+          "autonomy": -0.1
+        },
+        "capability_requirements": [],
+        "feasible": true,
+        "evidence_refs": [
+          "msg1"
+        ],
+        "confidence": 0.9,
+        "continuation_of": ""
+      }
+    ]
+  }
+]

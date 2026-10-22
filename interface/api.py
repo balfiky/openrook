@@ -34,7 +34,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from interface.auth import build_require_bearer, verify_bearer
 from interface.errors import llm_error_payload, redact_error
@@ -286,6 +286,7 @@ app.include_router(
         session_manager_getter=lambda: get_session_manager(),
         config_getter=_current_config_for_middleware,
         serve_started_at=_serve_started_at,
+        reload_pending_getter=lambda: any(not t.done() for t in _background_shutdown_tasks),
     )
 )
 
@@ -355,6 +356,8 @@ class ConfigUpdateRequest(BaseModel):
     llm_base_url: str | None = None
     llm_model: str | None = None
     llm_request_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
+    llm_auxiliary_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
+    llm_auxiliary_cooldown_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     debug_host: str | None = None
     debug_port: int | None = Field(default=None, ge=1, le=65535)
     proactive_enabled: bool | None = None
@@ -447,6 +450,9 @@ class AdminSoulUpdateRequest(BaseModel):
     entries.
     """
 
+    schema_version: int = Field(default=2, ge=1, le=2)
+    character_seed: int = 0
+    dispositions: dict[str, float] = Field(default_factory=dict)
     name: str = Field(..., max_length=64)
     identity: str = Field(default="", max_length=2000)
     voice: str = Field(default="", max_length=2000)
@@ -457,6 +463,13 @@ class AdminSoulUpdateRequest(BaseModel):
     boundaries: list[str] = Field(default_factory=list, max_length=32)
     core_values: dict[str, float] = Field(default_factory=dict)
     initial_traits: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _canonical_dispositions(self):
+        from config.loader import canonical_dispositions
+        self.dispositions = canonical_dispositions(self.dispositions, self.initial_traits)
+        self.schema_version = 2
+        return self
 
     @field_validator("name")
     @classmethod
@@ -542,6 +555,7 @@ async def chat(req: ChatRequest):
     try:
         if _pipeline_override is not None:
             result = _pipeline_override.process(req.message, user_id=req.user_id)
+            result.raise_for_backend_failure()
             return ChatResponse(response=result.response, debug=_serialize_debug(result.debug))
 
         manager = get_session_manager()
@@ -655,6 +669,9 @@ async def update_config(req: ConfigUpdateRequest) -> dict:
         ),
         llm_api_key=existing.llm_api_key,
         llm_request_timeout_seconds=_keep(req.llm_request_timeout_seconds, existing.llm_request_timeout_seconds),
+        llm_auxiliary_timeout_seconds=(req.llm_auxiliary_timeout_seconds
+            if "llm_auxiliary_timeout_seconds" in req.model_fields_set else existing.llm_auxiliary_timeout_seconds),
+        llm_auxiliary_cooldown_seconds=_keep(req.llm_auxiliary_cooldown_seconds, existing.llm_auxiliary_cooldown_seconds),
         debug_host=_keep_str(req.debug_host, existing.debug_host, fallback="127.0.0.1"),
         debug_port=_keep(req.debug_port, existing.debug_port),
         proactive_enabled=_keep(req.proactive_enabled, existing.proactive_enabled),
@@ -896,6 +913,7 @@ async def websocket_chat(ws: WebSocket) -> None:
             try:
                 if _pipeline_override is not None:
                     result = _pipeline_override.process(user_message, user_id=user_id)
+                    result.raise_for_backend_failure()
                     payload = {
                         "response": result.response,
                         "debug": _serialize_debug(result.debug),
@@ -1062,6 +1080,7 @@ def _session_key(user_id: str, chat_id: str) -> str:
 def _session_debug(session_key_value: str, session: UserSession) -> dict:
     pipeline = session.pipeline
     unresolved = pipeline.engine.active_unresolved()
+    dynamics, turn_index = pipeline.relationship_memory.load_dynamics(session.user_id)
     return {
         "session_key": session_key_value,
         "user_id": session.user_id,
@@ -1072,6 +1091,8 @@ def _session_debug(session_key_value: str, session: UserSession) -> dict:
         "long_term_count": pipeline.long_term.count(),
         "unresolved_count": len(unresolved),
         "unresolved_items": [item.to_dict() for item in unresolved],
+        "relationship_dynamics": dynamics.to_dict(),
+        "relationship_turn_index": turn_index,
         "last_turn": _serialize_debug(session.last_debug) if session.last_debug else None,
     }
 

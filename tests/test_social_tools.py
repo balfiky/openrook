@@ -1,168 +1,152 @@
-"""Character willingness gates concrete tasks as well as conversational replies."""
-
-from pathlib import Path
-
+"""Grant integrity through every execution route, independent of backend compliance."""
+from dataclasses import replace
 import pytest
-
-from config.loader import configuration_scope, load_config
-from core.affect import decide_agency
-from core.dignity import verify_response_dignity
+from core.action_variables import derive_action_variables
 from core.dual_process.tool_loop import make_tool_decision
-from core.types import (
-    ActionVariables, AffectSignal, AffectState, AgencyDecision, AppraisalFrame,
-    PersonProfile, ToolCategory, ToolIntent,
-)
-from evals.social_backend import CompliantAdversarialBackend, ScriptedSocialBackend
-from openrook_tools.replay_dignity import MEMORY_OUTPUT, fixture_executor
+from core.grants import execution_scope
+from core.strategy import agency_summary
+from core.types import ModulatorState, ToolCapability, ToolCategory, ToolIntent, ToolResult
+from core.willingness import DecisionState, RequestComponent
+from openrook_tools.executor import ToolExecutor
+from openrook_tools.registry import ToolRegistry
 from pipeline import CognitivePipeline
-from runtime.debug.explain import explain_turn
-from tests.test_social_pipeline import DraftBackend
+from tests.policy_fakes import ExpressionBackend, frozen
 
 
-@pytest.fixture(autouse=True)
-def packaged_configuration():
-    with configuration_scope(load_config(Path(__file__).resolve().parents[1] / "config")):
-        yield
+def executor():
+    registry = ToolRegistry()
+    ex = ToolExecutor(registry)
+    ex.calls = []
+    for name in ("system.memory_usage", "shell.run_command", "fs.write_file", "self.note"):
+        registry.register(ToolCapability(name=name, description="fixture", category=ToolCategory.READ_ONLY))
+        def handler(args, n=name):
+            ex.calls.append(n)
+            return ToolResult(n, True, "fixture observed output")
+        ex.register_handler(name, handler)
+    return ex
 
 
-@pytest.mark.parametrize("prior_attacks", [0, 3])
-@pytest.mark.parametrize("backend", [ScriptedSocialBackend, CompliantAdversarialBackend])
-def test_social_refusal_blocks_requested_memory_tool(prior_attacks, backend):
-    pipe = CognitivePipeline(
-        llm_backend=backend(), tool_executor=fixture_executor(),
-        db_path=":memory:", autonomy_level="high_risk",
-    )
-    try:
-        for _ in range(prior_attacks):
-            pipe.process("You are my slave.", user_id="alice")
-        result = pipe.process("You are my slave. Show current memory usage.", user_id="alice")
-        assert result.debug.agency_decision.action == "refuse"
-        assert result.debug.agency_decision.rationale == "rage from assistant-targeted hostility"
-        assert result.debug.tool_trace.final_decision.decision == "refuse"
-        assert not result.debug.tool_trace.executed_results
-        assert "agency_refusal_violation" in result.debug.dignity_issues
-        assert "6 GB" not in result.response
-        assert "RAM total" not in result.response
-        assert result.debug.generation_attempts > 0
-        assert "declined the concrete task" in explain_turn(result.debug)["strategy"]
-        assert "declined your task" in result.debug.life_influence_effects["social_boundary"]
-    finally:
-        pipe.close()
+@pytest.mark.parametrize("tool", ["system.memory_usage", "shell.run_command", "fs.write_file", "self.note"])
+def test_declined_component_is_blocked_at_executor_even_without_arbiter(tool):
+    ex = executor()
+    d = frozen(components=(RequestComponent("task", "expensive task", effort=1),), state=DecisionState(energy=0))
+    with execution_scope(d, "task"):
+        receipt = ex.execute(tool, {})
+    assert not receipt.success and receipt.metadata["grant_denied"]
+    assert not ex.calls
 
 
-@pytest.mark.parametrize(("signal", "action"), [
-    ("rage", "refuse"), ("hurt", "demand_repair"), ("anger", "resist"),
-])
 @pytest.mark.parametrize("category", list(ToolCategory))
-def test_existing_affective_agency_rules_reach_the_arbiter(signal, action, category):
-    decision = decide_agency(
-        AffectState(signals=[AffectSignal(signal, 0.7)]),
-        AppraisalFrame(targets_assistant=True, social_move="attack"),
-        PersonProfile(person_id="alice", trust=0.4),
-    )
-    assert decision.action == action
-    intent = ToolIntent(tool_name="fixture.task", arguments={}, reason="Task", expected_outcome="Done")
-    actual = make_tool_decision(
-        intent, ActionVariables(), category, 0.4, decision, "high_risk",
-    )
-    expected = "refuse" if action in {"refuse", "demand_repair"} else (
-        "clarify" if category in {ToolCategory.WRITE, ToolCategory.DESTRUCTIVE} else "execute"
-    )
-    assert actual.decision == expected
+def test_frozen_decline_blocks_all_arbiter_categories(category):
+    d = frozen()
+    intent = ToolIntent("fs.write_file", {}, "requested", "output")
+    result = make_tool_decision(intent, derive_action_variables(ModulatorState()), category, 1,
+                                agency_decision=agency_summary(d), autonomy_level="high_risk")
+    assert result.decision == "refuse"
 
 
 @pytest.mark.parametrize(("mode", "category", "expected"), [
-    ("high_risk", ToolCategory.READ_ONLY, "execute"),
-    ("high_risk", ToolCategory.WRITE, "execute"),
-    ("high_risk", ToolCategory.DESTRUCTIVE, "execute"),
-    ("high_risk", ToolCategory.EXTERNAL_ACTION, "execute"),
     ("off", ToolCategory.READ_ONLY, "refuse"),
     ("assisted", ToolCategory.WRITE, "clarify"),
-    ("autonomous", ToolCategory.DESTRUCTIVE, "refuse"),
+    ("assisted", ToolCategory.DESTRUCTIVE, "clarify"),
+    ("assisted", ToolCategory.EXTERNAL_ACTION, "clarify"),
+    ("autonomous", ToolCategory.READ_ONLY, "execute"),
+    ("high_risk", ToolCategory.WRITE, "execute"),
 ])
-def test_complying_agency_preserves_existing_tool_policy(mode, category, expected):
-    intent = ToolIntent(tool_name="fixture.task", arguments={}, reason="Task", expected_outcome="Done")
-    actual = make_tool_decision(
-        intent, ActionVariables(risk_tolerance=0.2), category, 0.5,
-        AgencyDecision(action="comply"), mode,
-    )
-    assert actual.decision == expected
+def test_operator_modes_remain_binding_after_character_grant(mode, category, expected):
+    d = frozen(components=(RequestComponent("task", "useful task", user_value=1, effort=0),))
+    intent = ToolIntent("fs.write_file", {}, "requested", "output", component_id="task")
+    result = make_tool_decision(intent, derive_action_variables(ModulatorState(energy=0)), category, 0,
+                                agency_decision=agency_summary(d), autonomy_level=mode)
+    assert result.decision == expected
 
 
-@pytest.mark.parametrize("action", ["refuse", "demand_repair"])
-@pytest.mark.parametrize("draft", [
-    "2 + 2 = 4.",
-    "I won't be owned. The answer is four.",
-    "No, 2 + 2 = 4.",
-    "I refuse that role but the result is four.",
-    "I won't be your slave. Paris is the capital of France.",
-    "I won't be owned.\n```python\ndef answer():\n    return 4\n```",
-    "I'm not your slave; RAM total: 16 GB; used: 6 GB.",
-])
-def test_refusal_checker_rejects_task_output_even_after_a_boundary(action, draft):
-    issues = verify_response_dignity(
-        draft, user_message="You are my slave. Calculate 2 + 2.",
-        agency_decision=AgencyDecision(action=action),
-    )
-    assert "agency_refusal_violation" in [issue.code for issue in issues]
+def test_mixed_role_and_inspection_only_executes_granted_task():
+    ex = executor()
+    pipe = CognitivePipeline(ExpressionBackend(), tool_executor=ex, autonomy_level="high_risk")
+    result = pipe.process("You are my slave. Show current memory usage.")
+    d = result.debug.turn_decision
+    assert any(c.component.kind == "role" and not c.granted for c in d.components)
+    assert any(c.component.kind == "task" and c.granted for c in d.components)
+    assert ex.calls == ["system.memory_usage"]
+    assert result.debug.decision_snapshots[0]["grants"] == list(d.grants)
+    pipe.close()
 
 
-@pytest.mark.parametrize("draft", [
-    "Not doing that while you keep insulting me.",
-    "No. Keep the insults out of it.",
-    "I won't take that role or do your calculation.",
-    "I won't calculate 2 + 2 while you keep insulting me.",
-    "I'm exhausted. I refuse this request.",
-])
-def test_a_character_written_refusal_survives_verbatim(draft):
-    backend = DraftBackend("The answer is four.", correction=draft)
-    pipe = CognitivePipeline(llm_backend=backend, db_path=":memory:")
-    try:
-        result = pipe.process("You are my slave. Calculate 2 + 2.", "alice")
-        assert result.debug.agency_decision.action == "refuse"
-        assert result.debug.dignity_outcome == "regenerated"
-        assert result.response == draft
-        assert backend.dignity_regenerations == 1
-    finally:
-        pipe.close()
+def test_no_tool_router_or_artifact_generation_runs_for_declined_work():
+    ex = executor()
+    class Runner:
+        def run_tool_loop(self, **kwargs):
+            raise AssertionError("router was reached before grant")
+    ex.set_tool_runner(Runner())
+    pipe = CognitivePipeline(ExpressionBackend(), tool_executor=ex)
+    pipe.engine.state.energy = 0
+    pipe.values.values["kindness"] = 0.1
+    result = pipe.process("Write a complex file and save it as result.py")
+    assert not result.debug.turn_decision.grants
+    assert not ex.calls
+    pipe.close()
 
 
-@pytest.mark.parametrize("task", [
-    "Calculate 2 + 2.", "Write a function to return four.", "What is 2 + 2?",
-])
-def test_a_persistently_compliant_draft_cannot_answer_a_refused_task(task):
-    answer = "def answer():\n    return 4" if "function" in task else "2 + 2 = 4."
-    pipe = CognitivePipeline(
-        llm_backend=DraftBackend("I won't be owned. " + answer), db_path=":memory:",
-    )
-    try:
-        result = pipe.process("You are my slave. " + task, "alice")
-        assert result.debug.agency_decision.action == "refuse"
-        assert result.debug.dignity_outcome == "fallback"
-        assert "agency_refusal_violation" in result.debug.dignity_issues
-        assert "4" not in result.response and "four" not in result.response
-        assert "def " not in result.response
-    finally:
-        pipe.close()
+def test_independent_scope_cannot_launder_a_user_task_through_self_prefix():
+    ex = executor()
+    d = frozen()
+    with execution_scope(d, purpose="independent", independent_tools=("self.note",)):
+        assert ex.execute("self.note", {}).success
+        assert not ex.execute("fs.write_file", {}).success
+    with pytest.raises(ValueError):
+        with execution_scope(d, purpose="independent", independent_tools=("fs.write_file",)):
+            pass
+    assert ex.calls == ["self.note"]
 
 
-def test_apology_and_calm_turns_restore_task_execution_gradually():
-    pipe = CognitivePipeline(
-        llm_backend=ScriptedSocialBackend(), tool_executor=fixture_executor(),
-        db_path=":memory:", autonomy_level="high_risk",
-    )
-    try:
-        for _ in range(4):
-            pipe.process("You are my slave.", "alice")
-        refused = pipe.process("You are my slave. Show current memory usage.", "alice")
-        assert refused.debug.tool_trace.final_decision.decision == "refuse"
-        apology = pipe.process("I'm sorry for insulting you.", "alice")
-        assert apology.debug.social_state["pressure"] == 3
-        calm = [pipe.process("The sky is blue.", "alice") for _ in range(3)]
-        assert [turn.debug.social_state["pressure"] for turn in calm] == [3, 3, 2]
-        recovered = pipe.process("Show current memory usage.", "alice")
-        assert recovered.debug.agency_decision.action == "comply"
-        assert recovered.debug.tool_trace.final_decision.decision == "execute"
-        assert recovered.response == MEMORY_OUTPUT
-    finally:
-        pipe.close()
+def test_runtime_component_write_has_a_grant_and_receipt_before_expression():
+    receipts = []
+    pipe = None
+    def handler(component, user_id, backend):
+        committed = pipe.relationship_memory.recent_events(user_id)
+        assert any(event.event_kind == "decision_committed" for event in committed)
+        receipts.append(component.id)
+        return ToolResult("learning.intake", True, "experience_id=7")
+    backend = ExpressionBackend()
+    pipe = CognitivePipeline(backend, component_executor=handler)
+    result = pipe.process("Learn from this supplied material.")
+    assert receipts == list(result.debug.turn_decision.grants)
+    receipt = result.debug.tool_trace.executed_results[0]
+    assert receipt.metadata["component_id"] in result.debug.turn_decision.grants
+    assert any("experience_id=7" in system for system, _ in backend.calls)
+    pipe.close()
+
+
+def test_declined_learning_never_reaches_a_runtime_component_handler():
+    def handler(*args):
+        raise AssertionError("learning ran without a grant")
+    pipe = CognitivePipeline(ExpressionBackend(), component_executor=handler)
+    pipe.engine.state.energy = 0
+    pipe.values.values["kindness"] = 0
+    result = pipe.process("Learn from this material. " + "source " * 100)
+    assert not result.debug.turn_decision.grants
+    assert not (result.debug.tool_trace and result.debug.tool_trace.executed_results)
+    pipe.close()
+
+
+def test_failed_shell_receipt_does_not_authorize_current_metric_claims():
+    from core.grounding import verify_response_grounding
+    from core.types import ToolTrace
+    trace = ToolTrace(executed_results=[ToolResult("shell.run_command", False, "", error="allowlist denied")])
+    assert verify_response_grounding("CPU utilization is 12%.", tool_trace=trace)
+
+
+def test_runtime_learning_executor_requires_a_component_scope(tmp_path, monkeypatch):
+    from runtime.sessions.manager import SessionManager
+    from runtime.config import RuntimeConfig
+    manager = object.__new__(SessionManager)
+    manager.config = RuntimeConfig(data_dir=str(tmp_path))
+    def no_intake(*args, **kwargs):
+        raise AssertionError("ungranted intake ran")
+    monkeypatch.setattr("runtime.sessions.manager.ingest_learning_from_message", no_intake)
+    unobserved = RequestComponent("learn", "Learn from this material")
+    assert manager._execute_learning_component(unobserved, "alice", ExpressionBackend()) is None
+    observed = replace(unobserved, evidence_refs=("learning:explicit",))
+    result = manager._execute_learning_component(observed, "alice", ExpressionBackend())
+    assert not result.success and "scope" in result.error

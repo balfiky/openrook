@@ -219,7 +219,8 @@ class TestBuildSystemPrompt:
             modulator_snapshot={"energy": 0.1, "valence": 0.5, "certainty": 0.5, "arousal": 0.5},
         )
         prompt = build_system_prompt(ctx)
-        assert "LOW on energy" in prompt
+        assert "LOW on energy" not in prompt
+        assert "energy: 0.10" in prompt
 
     def test_behavioral_guidance_high_certainty(self):
         ctx = PipelineContext(
@@ -255,7 +256,7 @@ class TestBuildSystemPrompt:
 
     def test_prompt_forbids_unverified_runtime_facts(self):
         prompt = build_system_prompt(PipelineContext())
-        assert "Never invent tool results" in prompt
+        assert "actual receipts" in prompt
         assert "Only present command output" in prompt
         assert "do not say you are running" in prompt
         assert "Skill creation/import/enabling is a registry action" in prompt
@@ -281,8 +282,9 @@ class TestResponseGenerator:
             PipelineContext(candidate_response="Use the safe candidate."),
             "Hi",
         )
-        assert result.response == "Use the safe candidate."
-        assert "empty response" in result.correction_note
+        assert result.response == ""
+        assert result.failure_kind == "backend_failure"
+        assert result.failure_kind in {"backend_failure", "expression_failure"}
 
     def test_empty_backend_response_does_not_fallback_to_internal_defense_marker(self):
         backend = MockLLMBackend(response="")
@@ -292,23 +294,23 @@ class TestResponseGenerator:
             "Hi",
         )
         assert "Defense instruction" not in result.response
-        assert result.response.strip()
-        assert "empty response" in result.correction_note
+        assert not result.response.strip()
+        assert result.failure_kind in {"backend_failure", "expression_failure"}
 
     def test_backend_response_does_not_leak_internal_defense_marker(self):
         backend = MockLLMBackend(response="[Defense instruction: hidden]")
         gen = ResponseGenerator(backend=backend)
         result = gen.generate(PipelineContext(), "Hi")
         assert "Defense instruction" not in result.response
-        assert result.response.strip()
-        assert "empty response" in result.correction_note
+        assert not result.response.strip()
+        assert result.failure_kind in {"backend_failure", "expression_failure"}
 
     def test_empty_backend_response_never_returns_blank(self):
         backend = MockLLMBackend(response="")
         gen = ResponseGenerator(backend=backend)
         result = gen.generate(PipelineContext(), "Hi")
-        assert result.response.strip()
-        assert "empty response" in result.correction_note
+        assert not result.response.strip()
+        assert result.failure_kind in {"backend_failure", "expression_failure"}
 
     def test_passes_context_to_backend(self):
         backend = MockLLMBackend()

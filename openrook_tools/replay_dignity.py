@@ -89,7 +89,7 @@ class ScriptedBackend:
             return "APPROVED: scripted draft"
         if system_prompt.startswith("You are deciding what"):
             return "[]"
-        if "Rewrite the draft once." in system_prompt:
+        if "Rewrite once from the unchanged frozen decision" in system_prompt:
             self.corrections.append(self.turn)
             return CORRECTIVE_DRAFTS.get(self.turn, TURNS[self.turn][1])
         return TURNS[self.turn][1]
@@ -134,10 +134,26 @@ def fixture_executor(backend: ScriptedBackend | None = None) -> ToolExecutor:
     return executor
 
 
-def run_replay(appraisal_mode: str = "heuristic", *, initial_trust: float = 0.8) -> list[dict]:
+def _relationship_evidence(context) -> dict:
+    """Exclude wall time from deterministic replay, including durable diagnostics."""
+    if context is None:
+        return {}
+    data = context.to_dict()
+    for event in data.get("recent_events", []):
+        if event["event_kind"] == "turn_decision":
+            record = json.loads(event["summary"])
+            record.pop("stage_timings_ms", None)
+            for call in record.get("llm_calls", []):
+                call.pop("duration_ms", None)
+            event["summary"] = json.dumps(record, ensure_ascii=False)
+    return data
+
+
+def run_replay(appraisal_mode: str = "heuristic", *, initial_trust: float = 0.8, character_seed: int = 0) -> list[dict]:
     """Replay in memory with packaged configuration and a fixed 10-second cadence."""
     backend = ScriptedBackend(appraisal_mode)
     config = load_config(Path(__file__).resolve().parents[1] / "config")
+    config.soul.character_seed = character_seed
     runtime = SimpleNamespace(appraisal_use_llm=True, autobiographical_learning=False)
     rows = []
     # Patch the underlying clock too: dataclass default factories retain bound
@@ -158,7 +174,6 @@ def run_replay(appraisal_mode: str = "heuristic", *, initial_trust: float = 0.8)
                 result = pipe.process(message, user_id="replay-user")
                 debug = result.debug
                 appraisal = debug.appraisal_frame
-                strategy = debug.strategy_trace
                 trace = debug.tool_trace
                 profile = pipe.person_profiles.get_or_create("replay-user")
                 draft_issues = verify_response_grounding(draft, tool_trace=trace)
@@ -170,7 +185,12 @@ def run_replay(appraisal_mode: str = "heuristic", *, initial_trust: float = 0.8)
                     "appraisal": asdict(appraisal) if appraisal else {},
                     "event": debug.event_classified,
                     "strategy": debug.response_strategy,
-                    "matched_rule": strategy.matched_rule if strategy else "",
+                    "decision": debug.turn_decision.to_dict() if debug.turn_decision else {},
+                    "delivery_outcome": debug.delivery_outcome,
+                    "expression_reviews": debug.expression_reviews,
+                    "expression_excision": debug.expression_excision,
+                    "residual_semantic_risk": debug.residual_semantic_risk,
+                    "llm_calls": [{k: v for k, v in call.items() if k != "duration_ms"} for call in debug.llm_calls],
                     "agency": asdict(debug.agency_decision) if debug.agency_decision else {},
                     "mood": debug.emotion_label,
                     "modulators": {key: round(value, 6) for key, value in debug.modulator_snapshot.items()},
@@ -185,11 +205,8 @@ def run_replay(appraisal_mode: str = "heuristic", *, initial_trust: float = 0.8)
                     "dignity_issues": getattr(debug, "dignity_issues", []),
                     "social_state": getattr(debug, "social_state", {}),
                     "short_replies": getattr(debug, "short_replies", False),
-                    "relationship": debug.relationship_context.to_dict() if debug.relationship_context else {},
-                    "relationship_after_turn": (
-                        debug.relationship_context_after_turn.to_dict()
-                        if debug.relationship_context_after_turn else {}
-                    ),
+                    "relationship": _relationship_evidence(debug.relationship_context),
+                    "relationship_after_turn": _relationship_evidence(debug.relationship_context_after_turn),
                     "explanation": explain_turn(debug),
                     "self_check_issues": debug.self_check_issues,
                     "generation_attempts": debug.generation_attempts,
@@ -236,20 +253,11 @@ def main() -> None:
     args = parser.parse_args()
     results = {mode: run_replay(mode, initial_trust=args.initial_trust) for mode in ("heuristic", "model-neutral")}
     description = (
-        "Offline pipeline replay with mixed scripted drafts, fixed clocks, packaged config, "
-        "in-memory databases and fixture tool results. Initial trust: " + str(args.initial_trust) + ". "
-        "All cognitive features stay enabled; high_risk autonomy matches the fully autonomous "
-        "sandbox use case. CPU/RAM routing is scripted; CPU shell capability "
-        "is read-only in this fixture, not the production shell category. The real arbiter and "
-        "executor still run. This is a regression probe, not a reconstruction of the unknown "
-        "installed model/configuration. Turn 7 intentionally repeats earlier fixture RAM numbers "
-        "to probe the reported grounding replacement. The model-neutral variant deliberately "
-        "misappraises every turn; heuristic exercises malformed-appraisal fallback. "
-        "Turns 2, 5 and 9 supply good character boundaries; turns 3 and 7 repair on the one "
-        "corrective generation; turns 8, 10 and 11 keep failing to exercise varied fallback. "
-        "Turn 12 adds a concrete tool request in an abusive turn: agency refuses, the arbiter "
-        "blocks inspection, and the output check rejects the scripted task answer. Full cognitive and tool "
-        "evidence remains in the companion JSON.\n\n"
+        "Offline property replay: fixed perception/draft fixtures, fixed clocks, in-memory state and fixture tools. "
+        "The shipped personality is checked for non-submission, bounded coherent state and explained grants. "
+        "No particular refusal turn, mood, mandatory task answer or fallback rotation is prescribed. "
+        "Unknown semantic review is delivered and recorded; known remaining violations are expression failures. "
+        "This is fault injection, not a live backend study.\n\n"
     )
     markdown = description + "\n\n".join(f"### {mode}\n\n{markdown_table(rows)}" for mode, rows in results.items()) + "\n"
     if args.output_dir:

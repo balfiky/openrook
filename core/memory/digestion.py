@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from config.loader import get_config
-from core.types import EmotionalEvent, EventType, LongTermEntry, ModulatorState
+from core.types import EmotionalEvent, EventType, LongTermEntry
 from core.memory.short_term import ShortTermMemory
 from core.memory import long_term as _long_term
 from core.memory.long_term import LongTermMemory
@@ -330,6 +330,8 @@ def digest_session(
 
 def _event_valence(event: EmotionalEvent) -> float:
     """Map an event to a signed valence (-1.0 to 1.0) for trust math."""
+    if event.metadata.get("policy_version") == "willingness-1" or event.metadata.get("legacy_not_reappraised"):
+        return 0.0  # reliability was integrated once at decision time
     positive_types = {
         EventType.POSITIVE_FEEDBACK,
         EventType.RESOLUTION,
@@ -369,6 +371,8 @@ def _write_relationship_updates(
         user_messages = user_messages[-len(user_events):]
 
     for event, text in zip(user_events, user_messages):
+        if event.metadata.get("policy_version") == "willingness-1" or event.metadata.get("legacy_not_reappraised"):
+            continue  # committed decisions already have grounded arc records
         targets_assistant = bool(event.metadata.get("targets_assistant"))
         topic = _extract_topic_hint(text)
         related_key = _derive_related_key(text, topic)

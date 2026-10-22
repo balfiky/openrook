@@ -65,7 +65,8 @@ def test_first_turn_explanation_does_not_claim_saved_memory_or_learned_history(t
         payload = _debug_to_dict(result.debug)
 
         assert result.debug.life_history_context == life
-        assert ("Drive[curiosity]" in backend.last_system_prompt) == seeded
+        assert "Drive[curiosity]" not in backend.last_system_prompt
+        assert result.debug.turn_decision.personality.curiosity >= 0
         for explanation in (payload["explanation"], payload["persona_view"]["explanation"]):
             assert explanation["memory"] == "No saved details about you were used."
             assert explanation["life_history"] == "Only the starting character settings applied."

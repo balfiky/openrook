@@ -658,6 +658,7 @@ class TestCommands:
                     session = manager.active_sessions["telegram:100:100"]
                     assert session.last_debug is not None
                     session.last_debug.relationship_context = _relationship_context()
+                    session.last_debug.relationship_context_after_turn = _relationship_context()
 
                     await channel.handle_update(_make_update(update_id=2, text="/memory"))
                     memory_msg = client.sent_messages[-1]["text"].lower()
@@ -688,7 +689,8 @@ class TestCommands:
                     await channel.handle_update(_make_update(update_id=1, text="hello"))
                     session = manager.active_sessions["telegram:100:100"]
                     session.pipeline.process = _raise_if_processed  # type: ignore[method-assign]
-                    session.last_debug.relationship_context = _relationship_context()  # type: ignore[union-attr]
+                    session.last_debug.relationship_context = _relationship_context()
+                    session.last_debug.relationship_context_after_turn = _relationship_context()  # type: ignore[union-attr]
 
                     for update_id, command in enumerate(
                         ["/state", "/why", "/memory", "/loops", "/repair", "/persona", "/persona all"],

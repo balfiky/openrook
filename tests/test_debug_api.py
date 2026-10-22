@@ -197,11 +197,8 @@ class TestPerUserDebug:
                     signal["name"] == "anger"
                     for signal in last_turn["affect_state"]["signals"]
                 )
-                assert last_turn["agency_decision"]["action"] in {
-                    "resist",
-                    "refuse",
-                    "demand_repair",
-                }
+                assert last_turn["turn_decision"]["policy_version"] == "willingness-1.2"
+                assert "grants" in last_turn["turn_decision"]
                 assert last_turn["autonomy_level"] == "assisted"
             finally:
                 await manager.shutdown()

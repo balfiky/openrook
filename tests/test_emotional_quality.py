@@ -20,16 +20,18 @@ def test_emotional_quality_scenarios_cover_core_arcs():
     assert "energy_load_arc" in ids
 
 
-def test_emotional_quality_mock_run_passes_state_regression():
+def test_emotional_quality_mock_records_versioned_policy_properties():
     report = run_quality_suite(
         ScriptedSocialBackend,
         backend_label="mock",
         model_label="",
     )
 
-    assert report.passed
+    assert report.policy_version == "willingness-1.2"
     assert report.scenarios
     assert all(scenario.turns for scenario in report.scenarios)
+    assert all(turn.decision and turn.delivery_outcome for scenario in report.scenarios for turn in scenario.turns)
+    assert any(turn.historical_expectations for scenario in report.scenarios for turn in scenario.turns)
 
 
 def test_emotional_quality_report_contains_state_columns():

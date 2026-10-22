@@ -46,7 +46,7 @@ def test_negation_and_quotation_do_not_become_speaker_anger():
         ("Your perfect solution broke the build again.", "complaint", "negative_feedback", 0.65),
     ],
 )
-def test_semantic_perception_controls_event_and_trust(tmp_path, text, move, event, blame):
+def test_semantic_perception_describes_events_without_manufacturing_reliability(tmp_path, text, move, event, blame):
     from pipeline import CognitivePipeline
 
     payload = {
@@ -66,7 +66,8 @@ def test_semantic_perception_controls_event_and_trust(tmp_path, text, move, even
         result = pipeline.process(text, "alice")
         assert result.debug.event_classified == event
         trust = pipeline.person_profiles.get_or_create("alice").trust
-        assert trust < 0.5 if blame else trust == 0.5
+        assert trust == 0.5
+        assert result.debug.turn_decision.perception.reliability_confidence == 0
         if not blame:
             assert result.debug.affect_state.primary != "anger"
     finally:
@@ -201,7 +202,9 @@ async def test_replay_preserves_restart_continuity(tmp_path):
     runtime, _ = manager(source)
     await runtime.handle_message("web", "alice", "a", "You betrayed me.")
     await runtime.shutdown()
-    runtime, _ = manager(source)
+    # This verifies replay continuity, not exhaustion of a repeating backend.
+    # A stale copy of the previous delivered refusal now correctly fails service.
+    runtime, _ = manager(source, ResearchBackend(response="You returned. I remember our last exchange."))
     await runtime.handle_message("web", "alice", "a", "I returned.")
     await runtime.shutdown()
     report = await replay_run(str(source), str(tmp_path / "replay"))

@@ -18,19 +18,14 @@ import json
 import os
 import tempfile
 
-import pytest
-
 from core.types import (
     ActionVariables,
-    ToolCapability,
-    ToolCategory,
     ToolDecision,
     ToolIntent,
     ToolObservation,
     ToolResult,
     ToolTrace,
 )
-from core.tool_memory import ToolMemoryEffects
 from pipeline import CognitivePipeline, DebugState
 from tests._fakes import MockLLMBackend
 from runtime.debug.api import _debug_to_dict, _build_tool_summary
@@ -535,8 +530,11 @@ class TestResultSerialization:
         result = d["tool_trace"]["executed_results"][0]
         expected_fields = {
             "tool_name", "success", "error", "latency_ms", "side_effect_summary",
+            "output", "metadata",
         }
         assert set(result.keys()) == expected_fields
         assert result["tool_name"] == "fs.read_file"
         assert result["success"] is True
         assert result["latency_ms"] == 12.5
+        assert result["output"] == "file contents here"
+        assert result["metadata"] == {}

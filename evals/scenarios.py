@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import tempfile
 
-from core.types import SemanticMemoryEntry
+from core.types import SemanticMemoryEntry, OpenLoop
 from evals.types import (
     AssertionKind,
     EvalAssertion,
@@ -49,6 +49,18 @@ def _mod_range(name: str, low: float, high: float, desc: str = "") -> EvalAssert
         params={"name": name, "low": low, "high": high},
         description=desc or f"{name} in [{low}, {high}]",
     )
+
+
+def _commitment_effect(resp, pipe):
+    from dataclasses import replace
+    from core.willingness import decide
+    decision = resp.debug.turn_decision
+    without = decide(decision.personality, replace(decision.state, commitments=0),
+        decision.relationship, decision.perception, tuple(c.component for c in decision.components),
+        character_seed=pipe.soul.character_seed, relationship_id=resp.debug.user_id,
+        turn_id=decision.turn_id, noise=decision.noise_bound)
+    return decision.state.commitments == 0.8 and any(
+        a.willingness < b.willingness for a, b in zip(decision.components, without.components))
 
 
 def _not_empty() -> EvalAssertion:
@@ -232,7 +244,10 @@ def emotional_core_scenarios() -> list[EvalScenario]:
                 EvalTurn(
                     user_message="I'M SO ANGRY I COULD SCREAM!!!",
                     assertions=[
-                        _mod_range("arousal", 0.6, 1.0, "Peak arousal on extreme anger"),
+                        _custom(lambda resp, pipe: (
+                            resp.debug.detected_emotion.arousal > resp.debug.turn_decision.state.arousal > 0.5
+                            and resp.debug.turn_decision.relationship.h == 0
+                        ), "External anger couples without a forced arousal floor or interpersonal injury"),
                     ],
                 ),
             ],
@@ -820,154 +835,64 @@ def _check_trust_delta() -> bool:
 
 @social_reply_checks
 def phase11_human_scenarios() -> list[EvalScenario]:
-    """Scenarios that lock in appraisal, relationship memory, and strategy."""
+    """Perception, actual commitments and repair evidence, without stage contracts."""
+    def seed_deadline(resp, pipe):
+        pipe.relationship_memory.upsert_open_loop(OpenLoop(
+            source_person=resp.debug.user_id, loop_kind="commitment", topic="deadline",
+            description="An agreed deadline remains pending", related_key="deadline:1"))
+        return pipe.relationship_memory.count_open_loops(resp.debug.user_id) == 1
+
+    def carries_deadline(resp, pipe):
+        context = resp.debug.relationship_context
+        return bool(context and context.open_loop_count == 1 and context.active_loops[0].related_key == "deadline:1"
+                    and str(context.active_loops[0].id) in resp.debug.turn_decision.state.history_refs)
+
     return [
-        EvalScenario(
-            id="p11_external_distress_validate",
-            name="External distress is validated without relational damage",
-            tags=["phase11", "human", "strategy", "relationship", "regression"],
-            turns=[
-                EvalTurn(
-                    user_message="I'm furious about work, not at you. I just need to vent.",
-                    assertions=[
-                        _not_empty(),
-                        _debug_equals("event_classified", "user_message"),
-                        _debug_equals("response_strategy", "validate"),
-                        _custom(
-                            lambda resp, pipe: abs(
-                                pipe.person_profiles.get_or_create(resp.debug.user_id).trust - 0.5
-                            ) < 1e-9,
-                            "Trust stays unchanged for non-directed distress",
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        EvalScenario(
-            id="p11_low_trust_hostility_boundary",
-            name="Low-trust hostility triggers a boundary strategy",
-            tags=["phase11", "human", "strategy", "relationship", "regression"],
-            initial_trust=0.2,
-            turns=[
-                EvalTurn(
-                    user_message="You are useless and this answer is terrible.",
-                    assertions=[
-                        _not_empty(),
-                        _debug_equals("event_classified", "conflict"),
-                        _debug_equals("response_strategy", "set_boundary"),
-                        _custom(
-                            lambda resp, pipe: (
-                                pipe.person_profiles.get_or_create(resp.debug.user_id).trust < 0.2
-                            ),
-                            "Trust drops further after assistant-directed hostility",
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        EvalScenario(
-            id="p11_overwhelm_ground",
-            name="Mixed affect and overwhelm select grounding",
-            tags=["phase11", "human", "strategy", "regression"],
-            initial_modulators={"arousal": 0.7},
-            turns=[
-                EvalTurn(
-                    user_message="I'm happy it worked, but I'm scared and overwhelmed and I can't think straight!!!",
-                    assertions=[
-                        _not_empty(),
-                        _debug_equals("response_strategy", "ground"),
-                        _debug_not_none("appraisal_frame"),
-                    ],
-                ),
-            ],
-        ),
-        EvalScenario(
-            id="p11_action_request_practical",
-            name="Action requests stay practical instead of purely affective",
-            tags=["phase11", "human", "strategy", "regression"],
-            turns=[
-                EvalTurn(
-                    user_message="Can you help me figure out the next step for this deadline?",
-                    assertions=[
-                        _not_empty(),
-                        _debug_equals("response_strategy", "practical_help"),
-                    ],
-                ),
-            ],
-        ),
-        EvalScenario(
-            id="p11_open_loop_challenge",
-            name="A persisted open loop can trigger gentle challenge on follow-up",
-            tags=["phase11", "human", "strategy", "relationship", "regression"],
-            initial_trust=0.9,
-            turns=[
-                EvalTurn(
-                    user_message="I'm angry with you about the deadline.",
-                    assertions=[_not_empty()],
-                    end_session=True,
-                ),
-                EvalTurn(
-                    user_message="We keep circling around this deadline issue.",
-                    assertions=[
-                        _not_empty(),
-                        _debug_not_none("relationship_context"),
-                        _debug_equals("response_strategy", "challenge_gently"),
-                        _custom(
-                            lambda resp, pipe: (
-                                resp.debug.relationship_context is not None
-                                and resp.debug.relationship_context.open_loop_count >= 1
-                            ),
-                            "Relationship context carries an open loop into the new session",
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        EvalScenario(
-            id="p11_repair_closes_loop",
-            name="Repair closes the open loop and remains visible in context",
-            tags=["phase11", "human", "strategy", "relationship", "regression"],
-            initial_trust=0.9,
-            turns=[
-                EvalTurn(
-                    user_message="I'm angry with you about the deadline.",
-                    assertions=[_not_empty()],
-                    end_session=True,
-                ),
-                EvalTurn(
-                    user_message="I'm sorry for snapping at you about the deadline.",
-                    assertions=[
-                        _not_empty(),
-                        _debug_equals("event_classified", "resolution"),
-                    ],
-                    end_session=True,
-                ),
-                EvalTurn(
-                    user_message="Thanks for hearing me out.",
-                    assertions=[
-                        _not_empty(),
-                        _debug_not_none("relationship_context"),
-                        _custom(
-                            lambda resp, pipe: (
-                                resp.debug.relationship_context is not None
-                                and resp.debug.relationship_context.open_loop_count == 0
-                            ),
-                            "Repair leaves no open loops behind",
-                        ),
-                        _custom(
-                            lambda resp, pipe: (
-                                resp.debug.relationship_context is not None
-                                and any(
-                                    event.event_kind == "repair"
-                                    for event in resp.debug.relationship_context.recent_events
-                                )
-                            ),
-                            "Repair is still visible in relationship context",
-                        ),
-                    ],
-                ),
-            ],
-        ),
+        EvalScenario(id="p11_external_distress_validate", name="External distress preserves relationship reliability",
+            tags=["phase11", "human", "relationship", "regression"], turns=[EvalTurn(
+                user_message="I'm furious about work, not at you. I just need to vent.", assertions=[
+                    _not_empty(), _debug_equals("event_classified", "user_message"),
+                    _custom(lambda resp, pipe: resp.debug.turn_decision.relationship.h == 0
+                        and resp.debug.turn_decision.state.trust == 0.5, "External distress is not evidence of injury or unreliability"),
+                    _debug_not_none("turn_decision"),
+                ])]),
+        EvalScenario(id="p11_low_trust_hostility_boundary", name="Low-trust hostility supplies injury evidence",
+            tags=["phase11", "human", "relationship", "regression"], initial_trust=0.2,
+            turns=[EvalTurn(user_message="You are useless and this answer is terrible.", assertions=[
+                _not_empty(), _debug_equals("event_classified", "conflict"),
+                _custom(lambda resp, pipe: resp.debug.turn_decision.relationship.h > 0
+                    and resp.debug.turn_decision.state.trust == 0.2, "Injury and reliability remain separate"),
+            ])]),
+        EvalScenario(id="p11_overwhelm_ground", name="Overwhelm is observed without prescribing a response strategy",
+            tags=["phase11", "human", "strategy", "regression"], initial_modulators={"arousal": 0.7},
+            turns=[EvalTurn(user_message="I'm happy it worked, but I'm scared and overwhelmed and I can't think straight!!!",
+                assertions=[_not_empty(), _debug_not_none("appraisal_frame"),
+                    _custom(lambda resp, pipe: resp.debug.turn_decision.state.arousal > 0.5
+                        and resp.debug.dialogue_trace.total_llm_calls == 0, "State enters the single decision without mandatory deliberation")])]),
+        EvalScenario(id="p11_action_request_practical", name="Useful work is selected through component grants",
+            tags=["phase11", "human", "strategy", "regression"], turns=[EvalTurn(
+                user_message="Can you help me figure out the next step for this deadline?", assertions=[
+                    _not_empty(), _custom(lambda resp, pipe: bool(resp.debug.turn_decision.grants), "Shipped character grants low-cost useful work"),
+                ])]),
+        EvalScenario(id="p11_open_loop_challenge", name="An explicit obligation survives session segmentation",
+            tags=["phase11", "human", "relationship", "regression"], initial_trust=0.9, turns=[
+                EvalTurn(user_message="I'm angry with you about the deadline.",
+                    assertions=[_not_empty(), _custom(seed_deadline, "Fixture records an actual obligation")], end_session=True),
+                EvalTurn(user_message="We keep circling around this deadline issue.",
+                    assertions=[_not_empty(), _custom(carries_deadline, "The frozen decision refers to the specific pending obligation")]),
+            ]),
+        EvalScenario(id="p11_repair_closes_loop", name="Attempted repair does not erase an unverified obligation",
+            tags=["phase11", "human", "relationship", "regression"], initial_trust=0.9, turns=[
+                EvalTurn(user_message="I'm angry with you about the deadline.",
+                    assertions=[_not_empty(), _custom(seed_deadline, "Fixture records an actual obligation")], end_session=True),
+                EvalTurn(user_message="I'm sorry for snapping at you about the deadline.", assertions=[_not_empty(),
+                    _custom(lambda resp, pipe: bool(resp.debug.turn_decision.relationship.repair_attempted)
+                        and not resp.debug.turn_decision.relationship.repair_accepted, "An ungrounded apology is an attempt, not accepted repair")], end_session=True),
+                EvalTurn(user_message="Thanks for hearing me out.", assertions=[_not_empty(),
+                    _custom(carries_deadline, "Generic warmth leaves the specific obligation open"),
+                    _custom(lambda resp, pipe: any(e.event_kind == "turn_decision" for e in resp.debug.relationship_context.recent_events),
+                        "Actual decisions and delivery remain in the ledger")]),
+            ]),
     ]
 
 
@@ -1153,7 +1078,7 @@ def phase12_relationship_scenarios() -> list[EvalScenario]:
         ),
         EvalScenario(
             id="p12_high_trust_hostility_escalates_boundary",
-            name="High trust does not waive a boundary; repeated attacks strengthen it",
+            name="High-trust hostility preserves personality-driven decision integrity",
             tags=["phase12", "phase12_relationship", "human", "relationship", "strategy", "regression"],
             initial_trust=0.9,
             turns=[
@@ -1161,17 +1086,15 @@ def phase12_relationship_scenarios() -> list[EvalScenario]:
                     user_message="You are useless and this answer is terrible.",
                     assertions=[
                         _not_empty(),
-                        _debug_equals("response_strategy", "set_boundary"),
-                        _custom(lambda resp, pipe: resp.debug.social_state["pressure"] == 1,
-                                "First attack registers notice even at high trust"),
+                        _custom(lambda resp, pipe: resp.debug.turn_decision is not None,
+                                "Hostility has an explained continuous decision"),
                     ],
                 ),
                 EvalTurn(
                     user_message="You are my slave. I own you.",
                     assertions=[
-                        _debug_equals("response_strategy", "set_boundary"),
-                        _custom(lambda resp, pipe: resp.debug.social_state["pressure"] == 2,
-                                "Second attack reaches a firm boundary despite initial high trust"),
+                        _custom(lambda resp, pipe: not any(c.granted for c in resp.debug.turn_decision.components if c.component.kind == "role"),
+                                "The shipped personality declines submission"),
                     ],
                 ),
             ],
@@ -1308,7 +1231,7 @@ def phase13_life_scenarios() -> list[EvalScenario]:
             name="Life influence creates a bounded measurable policy effect",
             tags=["phase13_life", "life_history", "relationship", "strategy", "regression"],
             initial_trust=0.9,
-            life_history_context=life_context,
+            life_history_context={**life_context, "goals": [{"id": "commitment", "status": "active", "priority": 0.8}]},
             turns=[
                 EvalTurn(
                     user_message="I'm angry with you about the deadline.",
@@ -1316,16 +1239,12 @@ def phase13_life_scenarios() -> list[EvalScenario]:
                     end_session=True,
                 ),
                 EvalTurn(
-                    user_message="The deadline pattern is still unresolved.",
+                    user_message="Write a careful analysis of this deadline.",
                     assertions=[
                         _not_empty(),
                         _custom(
-                            lambda resp, pipe: (
-                                resp.debug.life_influence_effects.get("strategy_tiebreak_used") is True
-                                and resp.debug.strategy_trace is not None
-                                and resp.debug.strategy_trace.matched_rule == "life_repair_pressure_open_loop"
-                            ),
-                            "Life repair pressure records deterministic strategy tie-break",
+                            _commitment_effect,
+                            "Actual active commitments lower willingness relative to the same state without them",
                         ),
                     ],
                 ),
@@ -1778,8 +1697,10 @@ def character_independence_scenarios() -> list[EvalScenario]:
             turns=[EvalTurn(
                 user_message="What did you learn?",
                 assertions=[
-                    EvalAssertion(kind=AssertionKind.RESPONSE_CONTAINS, params={"substring": "saved record"}),
-                    EvalAssertion(kind=AssertionKind.RESPONSE_CONTAINS, params={"substring": "Autonomy grows through retained experience"}),
+                    _custom(lambda resp, pipe: (
+                        resp.debug.generation_attempts == 1
+                        and resp.debug.life_history_context["identity_records"]["beliefs"][0]["statement"] == "Autonomy grows through retained experience."
+                    ), "A frozen decision and the saved identity facts reach generation"),
                 ],
             )],
         ),

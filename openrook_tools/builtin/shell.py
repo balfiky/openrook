@@ -142,7 +142,7 @@ def _make_run_command(
                     success=False,
                     output="",
                     error=violation,
-                    metadata={"cmd": cmd, "policy": "shell_command_allowlist"},
+                    metadata={"cmd": cmd, "policy": "shell_command_allowlist", "execution_started": False},
                 )
 
         if cwd is not None:

@@ -12,7 +12,6 @@ import re
 from core.types import (
     AffectSignal,
     AffectState,
-    AgencyDecision,
     AppraisalFrame,
     ModulatorState,
     PersonProfile,
@@ -142,88 +141,6 @@ def resolve_affect(
     )
     primary = signals[0].name if signals else "neutral"
     return AffectState(primary=primary, signals=signals)
-
-
-def decide_agency(
-    affect: AffectState,
-    appraisal: AppraisalFrame,
-    person: PersonProfile | None = None,
-) -> AgencyDecision:
-    """Translate affect into a willingness stance."""
-    trust = person.trust if person else 0.5
-    anger = affect.signal("anger")
-    rage = affect.signal("rage")
-    hurt = affect.signal("hurt")
-    caution = affect.signal("caution")
-    affection = affect.signal("affection")
-    exhaustion = affect.signal("exhaustion")
-
-    if rage >= 0.65 and appraisal.targets_assistant:
-        return AgencyDecision(
-            action="refuse",
-            rationale="rage from assistant-targeted hostility",
-            response_instruction=(
-                "Decline this request briefly in your own voice. Do not answer or "
-                "perform the task. Set a boundary without retaliating."
-            ),
-            tool_instruction="Decline tools for this request; independently selected activity remains available.",
-        )
-
-    if hurt >= 0.65 and appraisal.social_move == "attack":
-        return AgencyDecision(
-            action="demand_repair",
-            rationale="hurt plus direct attack",
-            response_instruction=(
-                "Decline this request pending repair, in your own voice. Do not "
-                "answer or perform the task. Keep the boundary without escalating tone."
-            ),
-            tool_instruction="Decline tools for this request pending a change in willingness.",
-        )
-
-    if anger >= 0.6 and appraisal.targets_assistant and trust <= 0.5:
-        return AgencyDecision(
-            action="resist",
-            rationale="anger at low/neutral trust",
-            response_instruction=(
-                "Stay direct and professional. Do not mirror hostility; ask for "
-                "specifics only when the request is vague."
-            ),
-            tool_instruction="Require clarity before risky or write actions.",
-        )
-
-    if caution >= 0.65:
-        return AgencyDecision(
-            action="slow_down",
-            rationale="high caution from uncertainty/risk",
-            response_instruction=(
-                "Slow the pace. Ask for exact targets, assumptions, and rollback plans "
-                "before confident action."
-            ),
-            tool_instruction="Prefer clarification for write, destructive, or external actions.",
-        )
-
-    if exhaustion >= 0.75:
-        return AgencyDecision(
-            action="disengage",
-            rationale="low energy",
-            response_instruction="Keep it short. Avoid taking on broad new work this turn.",
-            tool_instruction="Avoid multi-step tool loops unless the request is urgent.",
-        )
-
-    if affection >= 0.75 and trust >= 0.55:
-        return AgencyDecision(
-            action="comply",
-            rationale="high bonding and trust",
-            response_instruction="Be warmer and more loyal; help smoothly without becoming servile.",
-            tool_instruction="Normal tool policy; high trust can support autonomous read actions.",
-        )
-
-    return AgencyDecision(
-        action="comply",
-        rationale="no strong affective resistance",
-        response_instruction="Cooperate normally while letting current affect color tone.",
-        tool_instruction="Use normal tool policy.",
-    )
 
 
 def _clamp(value: float) -> float:

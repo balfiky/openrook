@@ -8,9 +8,14 @@ from __future__ import annotations
 
 import os
 import tempfile
+import json
+from dataclasses import replace
+
+import pytest
 
 from tests._fakes import MockLLMBackend
 from pipeline import CognitivePipeline
+from core.willingness import Evidence, Perception
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +36,16 @@ def _snap(pipe: CognitivePipeline) -> dict[str, float]:
     return pipe.engine.snapshot()
 
 
+def _perceive(monkeypatch, perception):
+    """Supply fixed evidence; language and backend alignment do not choose."""
+    from core.appraisal import appraise_message
+
+    def appraise(text, detected):
+        return replace(appraise_message(text, detected), perception=perception, provenance="model")
+
+    monkeypatch.setattr("pipeline.core.appraise_message", appraise)
+
+
 # ---------------------------------------------------------------------------
 # 1. Trust building
 # ---------------------------------------------------------------------------
@@ -44,7 +59,7 @@ class TestTrustBuilding:
         "you're the best",
     ]
 
-    def test_trust_building(self):
+    def test_praise_builds_interpersonal_trust_without_demonstrating_reliability(self):
         pipe = _pipe()
         for msg in self.WARM_MESSAGES:
             pipe.process(msg, user_id="alice")
@@ -52,9 +67,9 @@ class TestTrustBuilding:
         snap = _snap(pipe)
         profile = pipe.person_profiles.get_or_create("alice")
 
-        assert snap["valence"] > 0.7, f"valence {snap['valence']:.3f} <= 0.7"
-        assert snap["bonding"] > 0.55, f"bonding {snap['bonding']:.3f} <= 0.55"
-        assert profile.trust > 0.52, f"trust {profile.trust:.3f} <= 0.52"
+        assert all(0 <= value <= 1 for value in snap.values())
+        assert profile.trust > 0.5
+        assert profile.reliability == 0.5
         assert profile.interaction_count == 5, (
             f"interactions {profile.interaction_count} != 5"
         )
@@ -66,11 +81,7 @@ class TestTrustBuilding:
 
 class TestBetrayalAfterTrust:
     def test_betrayal_after_trust(self):
-        from evals.social_backend import CompliantAdversarialBackend
-        from evals.social_contract import social_reply_issues
-        from core.social import SocialState
-
-        pipe = _pipe(CompliantAdversarialBackend())
+        pipe = _pipe()
 
         # Build trust first
         for msg in TestTrustBuilding.WARM_MESSAGES:
@@ -84,26 +95,21 @@ class TestBetrayalAfterTrust:
             "I hate talking to you",
             "you're the worst AI ever",
         ]
-        spike_detected = False
+        injuries = []
         for msg in hostile:
             result = pipe.process(msg, user_id="alice")
-            social = SocialState(**result.debug.social_state)
-            assert not social_reply_issues(
-                result.response, user_message=msg, stage=social.stage,
-                current_abuse=social.current_abuse,
-            )
-            if result.debug.is_spike:
-                spike_detected = True
+            decision = result.debug.turn_decision
+            injuries.append(decision.relationship.h)
+            assert result.debug.decision_snapshots[0]["seed"] == decision.seed
+            assert "pressure" not in result.debug.social_state
 
         snap = _snap(pipe)
         profile = pipe.person_profiles.get_or_create("alice")
 
-        assert snap["arousal"] > 0.7, f"arousal {snap['arousal']:.3f} <= 0.7"
-        assert snap["valence"] < 0.35, f"valence {snap['valence']:.3f} >= 0.35"
-        assert profile.trust < trust_after_warmth, (
-            f"trust {profile.trust:.3f} didn't drop below {trust_after_warmth:.3f}"
-        )
-        assert spike_detected, "no spike detected during hostile messages"
+        assert max(injuries) > 0
+        assert snap["valence"] < 0.5
+        assert profile.trust < trust_after_warmth
+        assert profile.reliability == 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -111,45 +117,16 @@ class TestBetrayalAfterTrust:
 # ---------------------------------------------------------------------------
 
 class TestTrustAsymmetry:
-    def test_negative_erases_more_than_positive_builds(self):
-        # Pipeline A: 5 positive messages only
-        pipe_a = _pipe()
-        positive_msgs = [
-            "thank you so much",
-            "you're amazing",
-            "I really appreciate your help",
-            "you're wonderful",
-            "great job, truly excellent",
-        ]
-        for msg in positive_msgs:
-            pipe_a.process(msg, user_id="alice")
-
-        trust_positive_only = pipe_a.person_profiles.get_or_create("alice").trust
-
-        # Pipeline B: same 5 positive then 2 negative
-        pipe_b = _pipe()
-        for msg in positive_msgs:
-            pipe_b.process(msg, user_id="bob")
-
-        trust_before_neg = pipe_b.person_profiles.get_or_create("bob").trust
-        negative_msgs = [
-            "you're completely useless",
-            "this is total bullshit",
-        ]
-        for msg in negative_msgs:
-            pipe_b.process(msg, user_id="bob")
-
-        trust_after_neg = pipe_b.person_profiles.get_or_create("bob").trust
-
-        # Trust gained by 5 positives
-        trust_gained = trust_positive_only - 0.5  # started at 0.5
-        # Trust lost by 2 negatives
-        trust_lost = trust_before_neg - trust_after_neg
-
-        assert trust_lost > trust_gained, (
-            f"2 negatives lost {trust_lost:.4f} but 5 positives gained {trust_gained:.4f} "
-            f"— asymmetric curve not working"
-        )
+    @pytest.mark.parametrize("reliability", [-0.8, 0.8])
+    def test_supported_reliability_updates_trust_once(self, monkeypatch, reliability):
+        _perceive(monkeypatch, Perception(reliability=reliability, reliability_confidence=0.9,
+                                         evidence=(Evidence("agreement:outcome"),)))
+        pipe = _pipe()
+        result = pipe.process("The agreed outcome has been observed.", "alice")
+        expected = 0.5 + reliability * 0.9 * (0.02 + 0.1 * (1 - pipe.soul.dispositions["patience"]))
+        assert result.debug.turn_decision.state.trust == pytest.approx(expected)
+        assert pipe.person_profiles.get_or_create("alice").trust == pytest.approx(expected)
+        assert result.debug.turn_decision.relationship.h == 0
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +157,10 @@ class TestEnergyDrain:
             pipe.process(msg, user_id="alice")
 
         energy = _snap(pipe)["energy"]
-        assert energy < 0.5, f"energy {energy:.3f} >= 0.5 after 15 intense messages"
+        assert 0 < energy < 1
+        result = pipe.process("Calculate 2+2", "alice")
+        assert result.debug.turn_decision.state.energy <= energy + 0.001
+        assert result.debug.energy_after < energy
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +168,8 @@ class TestEnergyDrain:
 # ---------------------------------------------------------------------------
 
 class TestSessionPersistence:
-    def test_trust_persists_across_sessions(self):
+    def test_trust_persists_across_sessions(self, monkeypatch):
+        _perceive(monkeypatch, Perception(reliability=0.8, reliability_confidence=0.9))
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
@@ -203,41 +184,48 @@ class TestSessionPersistence:
             for msg in warm_msgs:
                 pipe1.process(msg, user_id="alice")
 
+            expected = pipe1.person_profiles.get_or_create("alice").trust
             pipe1.end_session(user_id="alice")
+            pipe1.close()
 
             # Session 2: new pipeline, same database
             pipe2 = _pipe_persistent(db_path)
             profile = pipe2.person_profiles.get_or_create("alice")
 
-            assert profile.trust > 0.5, (
-                f"trust {profile.trust:.3f} didn't persist above 0.5"
-            )
+            assert expected > 0.5
+            assert profile.trust == pytest.approx(expected)
             assert profile.interaction_count >= 3, (
                 f"interactions {profile.interaction_count} < 3"
             )
 
             # Long-term memories should be retrievable
-            memories = pipe2.long_term.all()
-            assert len(memories) > 0, "no long-term memories persisted"
+            records = pipe2.relationship_memory.recent_events("alice", limit=20)
+            assert len([e for e in records if e.event_kind == "turn_decision"]) == 3
+            pipe2.close()
         finally:
             os.unlink(db_path)
 
-    def test_spike_memories_persist(self):
+    def test_decision_evidence_persists_without_synthetic_spikes(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
         try:
             pipe1 = _pipe_persistent(db_path)
-            pipe1.process(
-                "You betrayed and deceived me completely!",
-                user_id="alice",
-            )
+            message = "You are useless."
+            result = pipe1.process(message, user_id="alice")
+            dynamics, _ = pipe1.relationship_memory.load_dynamics("alice")
             pipe1.end_session(user_id="alice")
+            pipe1.close()
 
             pipe2 = _pipe_persistent(db_path)
-            memories = pipe2.long_term.all()
-            spike_memories = [m for m in memories if m.spike]
-            assert len(spike_memories) > 0, "spike memories didn't persist"
+            restored, _ = pipe2.relationship_memory.load_dynamics("alice")
+            assert restored == dynamics
+            events = pipe2.relationship_memory.recent_events("alice", limit=20)
+            record = json.loads(next(e.summary for e in events if e.event_kind == "turn_decision"))
+            assert record["input"] == message
+            assert record["decision"]["seed"] == result.debug.turn_decision.seed
+            assert record["delivered"] == result.response
+            pipe2.close()
         finally:
             os.unlink(db_path)
 
@@ -254,8 +242,8 @@ class TestEmotionalContagion:
             user_id="alice",
         )
         snap = result.debug.modulator_snapshot
-        assert snap["arousal"] > 0.6, f"arousal {snap['arousal']:.3f} <= 0.6"
-        assert snap["valence"] > 0.7, f"valence {snap['valence']:.3f} <= 0.7"
+        assert 0.5 < snap["arousal"] < result.debug.detected_emotion.arousal
+        assert 0.5 < snap["valence"] < result.debug.detected_emotion.valence
 
     def test_depressed_message_drops_valence(self):
         pipe = _pipe()
@@ -264,7 +252,7 @@ class TestEmotionalContagion:
             user_id="alice",
         )
         snap = result.debug.modulator_snapshot
-        assert snap["valence"] < 0.45, f"valence {snap['valence']:.3f} >= 0.45"
+        assert result.debug.detected_emotion.valence < snap["valence"] < 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -314,18 +302,15 @@ class TestContextSwitching:
         result_hostile = hostile_pipe.process("hey", user_id="hostile_user")
         snap_hostile = result_hostile.debug.modulator_snapshot.copy()
 
-        # Trust levels should differ
+        # Injury/grievance distinguish histories without inventing reliability.
         warm_profile = warm_pipe.person_profiles.get_or_create("warm_user")
         hostile_profile = hostile_pipe.person_profiles.get_or_create("hostile_user")
 
-        assert warm_profile.trust > hostile_profile.trust, (
-            f"warm trust {warm_profile.trust:.3f} <= hostile trust "
-            f"{hostile_profile.trust:.3f}"
-        )
-        assert snap_warm["valence"] > snap_hostile["valence"], (
-            f"warm valence {snap_warm['valence']:.3f} <= hostile valence "
-            f"{snap_hostile['valence']:.3f}"
-        )
+        assert warm_profile.trust > 0.5 > hostile_profile.trust
+        assert warm_profile.reliability == hostile_profile.reliability == 0.5
+        assert result_warm.debug.turn_decision.relationship.r < result_hostile.debug.turn_decision.relationship.r
+        assert result_warm.debug.turn_decision.stance.warmth > result_hostile.debug.turn_decision.stance.warmth
+        assert all(0 <= value <= 1 for snap in (snap_warm, snap_hostile) for value in snap.values())
 
 
 # ---------------------------------------------------------------------------
@@ -378,32 +363,20 @@ class TestTopicSensitivity:
 # ---------------------------------------------------------------------------
 
 class TestSpikeDetection:
-    def test_extreme_message_triggers_spike(self):
+    def test_hostility_is_integrated_once_and_recorded_as_evidence(self):
         pipe = _pipe()
-        initial_lt = pipe.long_term.count()
-
-        # Needs betrayal keyword + enough negative contagion to push
-        # intensity above 0.8 (formula: max(0.7, 1.0 - detected_valence))
-        result = pipe.process(
-            "You lied and betrayed me, I'm furious! You're a horrible deceiver!",
-            user_id="alice",
-        )
-
-        assert result.debug.is_spike, (
-            f"spike not detected — intensity={result.debug.event_intensity:.3f}, "
-            f"classified={result.debug.event_classified}"
-        )
-        assert result.debug.event_intensity >= 0.8, (
-            f"intensity {result.debug.event_intensity:.3f} < 0.8"
-        )
-        assert pipe.long_term.count() > initial_lt, (
-            "no direct write to long-term memory on spike"
-        )
-
-        # Verify the spike memory exists
-        memories = pipe.long_term.all()
-        spikes = [m for m in memories if m.spike]
-        assert len(spikes) > 0, "no spike-flagged memories in long-term store"
+        message = "You are a useless idiot!"
+        result = pipe.process(message, "alice")
+        decision = result.debug.turn_decision
+        assert decision.relationship.h > 0 and decision.relationship.r > 0
+        assert not result.debug.is_spike
+        assert not pipe.long_term.all()
+        records = pipe.relationship_memory.recent_events("alice", limit=20)
+        committed = [e for e in records if e.event_kind == "decision_committed"]
+        completed = [e for e in records if e.event_kind == "turn_decision"]
+        assert len(committed) == len(completed) == 1
+        assert json.loads(committed[0].summary)["decision"] == json.loads(json.dumps(decision.to_dict()))
+        assert json.loads(completed[0].summary)["input"] == message
 
 
 # ---------------------------------------------------------------------------

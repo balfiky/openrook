@@ -12,6 +12,7 @@ from core.clock import clock as time
 
 from core.schema import ensure_schema_version
 from core.types import OpenLoop, RelationshipContext, RelationshipEvent
+from core.willingness import RelationshipDynamics
 
 
 class NullRelationshipMemory:
@@ -28,6 +29,12 @@ class NullRelationshipMemory:
 
     def social_state(self, source_person: str) -> dict:
         return {}
+
+    def load_dynamics(self, source_person: str) -> tuple[RelationshipDynamics, int]:
+        return RelationshipDynamics(), 0
+
+    def save_dynamics(self, source_person: str, dynamics: RelationshipDynamics, turn_index: int) -> None:
+        pass
 
     def record_event(self, event: RelationshipEvent) -> int:
         return 0
@@ -107,6 +114,23 @@ class RelationshipMemory:
         self.write_count += 1
         return int(cursor.lastrowid)
 
+    def load_dynamics(self, source_person: str) -> tuple[RelationshipDynamics, int]:
+        row = self._conn.execute(
+            "SELECT payload, turn_index FROM relationship_dynamics WHERE source_person = ?",
+            (source_person,),
+        ).fetchone()
+        if row:
+            return RelationshipDynamics.from_dict(json.loads(row["payload"])), row["turn_index"]
+        return RelationshipDynamics.from_dict(self.social_state(source_person)), 0
+
+    def save_dynamics(self, source_person: str, dynamics: RelationshipDynamics, turn_index: int) -> None:
+        self._conn.execute(
+            "INSERT INTO relationship_dynamics (source_person, payload, turn_index) VALUES (?, ?, ?) "
+            "ON CONFLICT(source_person) DO UPDATE SET payload=excluded.payload, turn_index=excluded.turn_index",
+            (source_person, json.dumps(dynamics.to_dict(), sort_keys=True), turn_index),
+        )
+        self._conn.commit()
+
     def upsert_open_loop(self, loop: OpenLoop) -> int:
         """Insert or strengthen an equivalent open loop."""
         existing = self._find_open_loop(
@@ -172,12 +196,14 @@ class RelationshipMemory:
 
         best_id: int | None = None
         best_score = -1
-        specific_match_required = bool(topic or related_key)
+        specific_match_required = bool(topic or related_key or description_hint)
+        if not specific_match_required:
+            return None
         for row in rows:
             loop = self._row_to_loop(row)
+            if loop_kind and loop.loop_kind != loop_kind:
+                continue
             score = 0
-            if loop_kind and loop.loop_kind == loop_kind:
-                score += 4
             if related_key and loop.related_key and loop.related_key == related_key:
                 score += 8
             if topic and loop.topic and loop.topic == topic:
@@ -188,11 +214,8 @@ class RelationshipMemory:
                 best_score = score
                 best_id = loop.id
 
-        if specific_match_required and best_score < 5:
+        if specific_match_required and best_score < (2 if description_hint else 5):
             return None
-
-        if best_id is None and rows:
-            best_id = rows[0]["id"]
 
         if best_id is None:
             return None
@@ -238,13 +261,14 @@ class RelationshipMemory:
         *,
         topic: str = "",
         limit: int = 5,
+        event_kind: str = "",
     ) -> list[RelationshipEvent]:
         """Return recent relationship events, prioritizing topic matches."""
         rows = self._conn.execute(
             """SELECT * FROM relationship_events
-               WHERE source_person = ?
+               WHERE source_person = ? AND (? = '' OR event_kind = ?)
                ORDER BY created_at DESC""",
-            (source_person,),
+            (source_person, event_kind, event_kind),
         ).fetchall()
         events = [self._row_to_event(row) for row in rows]
         if topic:

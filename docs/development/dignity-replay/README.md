@@ -1,4 +1,10 @@
-# Character boundary regression replay
+# Historical character boundary regression replay
+This directory documents the policy before `willingness-1`. The ladder, exact
+refusal turns, forced emotion labels and fallback lines described below are
+historical, including passages that originally said “current.” The active
+implementation uses continuous state and component grants; see
+[Phase 1](../phase1-willingness.md). Running the replay command now measures the
+active policy and does not reproduce these archived tables.
 
 The review follow-up is in [review.md](review.md), with the refreshed
 [after table](after.md), [evaluation results](eval-audit.json), and

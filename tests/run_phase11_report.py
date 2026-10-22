@@ -70,6 +70,8 @@ def collect_phase11_trace(scenario: EvalScenario) -> dict[str, Any]:
                 "response": response.response,
                 "event_classified": debug.event_classified,
                 "response_strategy": debug.response_strategy,
+                "turn_decision": debug.turn_decision.to_dict() if debug.turn_decision else None,
+                "delivery_outcome": debug.delivery_outcome,
                 "appraisal": (
                     debug.appraisal_frame.to_dict() if debug.appraisal_frame else None
                 ),

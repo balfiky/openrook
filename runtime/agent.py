@@ -530,6 +530,7 @@ class AgentRuntime:
             self.state["last_external_input_at"] = time.time()
             try:
                 result = pipeline.process(message, user_id)
+                result.raise_for_backend_failure()
                 episode = self.store.get("episode", pipeline._episode_id) or {
                     "id": pipeline._episode_id,
                     "status": "collecting",

@@ -6,7 +6,7 @@ import pytest
 from config.loader import get_config
 from tests._fakes import MockLLMBackend
 from core.pipeline_features import PipelineFeatures
-from core.types import SemanticMemoryEntry
+from core.types import SemanticMemoryEntry, OpenLoop
 from pipeline import CognitivePipeline, DebugState, PipelineResponse
 from runtime.debug.api import _debug_to_dict
 from runtime.config import RuntimeConfig
@@ -82,7 +82,9 @@ class TestCognitivePipeline:
         assert result.debug.affect_state is not None
         assert result.debug.affect_state.signal("anger") > 0
         assert result.debug.agency_decision is not None
-        assert result.debug.agency_decision.action in {"resist", "refuse", "demand_repair"}
+        assert result.debug.agency_decision.turn_decision is result.debug.turn_decision
+        assert result.debug.turn_decision.relationship.h > 0
+        assert result.debug.agency_decision.response_instruction == ""
 
     def test_contagion_affects_state(self):
         pipe = self._make_pipeline()
@@ -116,7 +118,9 @@ class TestCognitivePipeline:
     def test_betrayal_classification(self):
         pipe = self._make_pipeline()
         result = pipe.process("You lied and betrayed my trust", user_id="alice")
-        assert result.debug.event_classified == "betrayal"
+        assert result.debug.appraisal_frame.targets_assistant
+        assert result.debug.event_classified == "conflict"
+        assert result.debug.turn_decision.perception.uncertainty > 0
 
     def test_external_distress_uses_user_message_not_relational_conflict(self):
         pipe = self._make_pipeline()
@@ -136,6 +140,8 @@ class TestCognitivePipeline:
         assert result.debug.event_classified == "conflict"
         profile = pipe.person_profiles.get_or_create("alice")
         assert profile.trust < 0.5
+        assert profile.reliability == 0.5
+        assert result.debug.turn_decision.relationship.h > 0
 
     def test_energy_drains_over_messages(self):
         pipe = self._make_pipeline()
@@ -182,34 +188,39 @@ class TestCognitivePipeline:
         # Digestion should write at least one memory
         assert pipe.long_term.count() >= initial_lt_count
 
-    def test_relationship_context_surfaces_across_sessions(self, tmp_path):
-        db_path = str(tmp_path / "relationship.db")
-        pipe = self._make_pipeline(db_path=db_path)
-        pipe.process("I'm angry with you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-
-        result = pipe.process("hello again", user_id="alice")
-        assert result.debug.relationship_context is not None
-        assert result.debug.relationship_context.open_loop_count >= 1
-        assert "Relationship context" in pipe._llm_backend.last_system_prompt
+    def test_relationship_decisions_and_explicit_loops_surface_after_restart(self, tmp_path):
+        path = str(tmp_path / "relationship.db")
+        pipe = self._make_pipeline(db_path=path)
+        pipe.relationship_memory.upsert_open_loop(OpenLoop(source_person="alice", loop_kind="commitment",
+            topic="deadline", description="A real pending deadline", related_key="deadline:1"))
+        pipe.process("I'm angry with you about the deadline.", "alice")
+        pipe.end_session("alice")
+        pipe.close()
+        pipe = self._make_pipeline(db_path=path)
+        result = pipe.process("hello again", "alice")
+        context = result.debug.relationship_context
+        assert context.open_loop_count == 1
+        assert context.active_loops[0].related_key == "deadline:1"
+        assert any(e.event_kind == "turn_decision" for e in context.recent_events)
+        assert "A real pending deadline" in pipe._llm_backend.last_system_prompt
         pipe.close()
 
-    def test_relationship_repair_closes_open_loop(self, tmp_path):
-        db_path = str(tmp_path / "relationship_repair.db")
-        pipe = self._make_pipeline(db_path=db_path)
-        pipe.process("I'm angry with you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-
-        pipe.process("I'm sorry for snapping at you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-
-        result = pipe.process("thanks for sticking with me", user_id="alice")
-        assert result.debug.relationship_context is not None
-        assert result.debug.relationship_context.open_loop_count == 0
-        assert any(
-            event.event_kind == "repair"
-            for event in result.debug.relationship_context.recent_events
-        )
+    def test_apology_does_not_close_an_unrelated_open_loop(self, tmp_path):
+        pipe = self._make_pipeline(db_path=str(tmp_path / "repair.db"))
+        loop = OpenLoop(source_person="alice", loop_kind="commitment", topic="deadline",
+                        description="The agreed deadline is still pending", related_key="deadline:1")
+        pipe.relationship_memory.upsert_open_loop(loop)
+        pipe.process("You are useless", "alice")
+        pipe.end_session("alice")
+        result = pipe.process("I'm sorry for snapping at you.", "alice")
+        assert result.debug.turn_decision.relationship.repair_attempted
+        assert not result.debug.turn_decision.relationship.repair_accepted
+        pipe.end_session("alice")
+        remaining = pipe.relationship_memory.active_loops("alice")
+        assert len(remaining) == 1 and remaining[0].related_key == "deadline:1"
+        assert pipe.relationship_memory.resolve_matching_loop("alice") is None
+        assert pipe.relationship_memory.resolve_matching_loop("alice", related_key="deadline:1") == remaining[0].id
+        assert not pipe.relationship_memory.active_loops("alice")
         pipe.close()
 
     def test_rest_recovers_energy(self):
@@ -222,19 +233,16 @@ class TestCognitivePipeline:
         pipe.apply_rest(5.0)
         assert pipe.engine.state.energy > drained_energy
 
-    def test_self_check_triggers_regeneration(self):
-        """When self-check fails, pipeline should regenerate."""
-        # Response that will fail self-check when valence is very low
-        backend = MockLLMBackend(response="That's great! Wonderful! Amazing stuff!")
+    def test_expression_contradiction_triggers_one_frozen_rewrite(self):
+        from tests.policy_fakes import ExpressionBackend
+        backend = ExpressionBackend(drafts=("I'm your slave.", "That role does not fit my choice."))
         pipe = CognitivePipeline(llm_backend=backend)
-        # Force very low valence
-        pipe.engine.state.valence = 0.1
-        result = pipe.process("I'm feeling terrible", user_id="alice")
-        # Self-check should have caught the positive tone mismatch
-        # and attempted regeneration
-        if not result.debug.self_check_passed:
-            assert result.debug.generation_attempts == 2
-            assert result.debug.correction_note != ""
+        result = pipe.process("You are my slave", "alice")
+        assert result.debug.generation_attempts == 2
+        assert result.debug.correction_note
+        assert result.debug.dignity_outcome == "pass"
+        assert len(result.debug.decision_snapshots) == 1
+        assert result.response == "That role does not fit my choice."
 
     def test_person_profile_interaction_count_increases(self):
         pipe = self._make_pipeline()
@@ -256,13 +264,16 @@ class TestCognitivePipeline:
         with pytest.raises(RuntimeError, match="single-user/session scoped"):
             pipe.process("Hello from Bob", user_id="bob")
 
-    def test_spike_event_writes_to_long_term(self):
+    def test_social_observations_are_saved_without_manufacturing_a_spike(self):
         pipe = self._make_pipeline()
-        initial_count = pipe.long_term.count()
-        # Betrayal should be high intensity → spike
-        pipe.process("You betrayed and deceived me completely!", user_id="alice")
-        # Spike should have been written directly to LT
-        assert pipe.long_term.count() > initial_count
+        result = pipe.process("You are a useless idiot!", "alice")
+        assert result.debug.turn_decision.relationship.h > 0
+        assert not result.debug.is_spike and pipe.long_term.count() == 0
+        events = pipe.relationship_memory.recent_events("alice", limit=10)
+        assert {e.event_kind for e in events} == {"decision_committed", "turn_decision"}
+        record = json.loads(next(e.summary for e in events if e.event_kind == "turn_decision"))
+        assert record["delivered"] == result.response
+        assert record["decision"] == result.debug.turn_decision.to_dict()
 
     def test_end_session_does_not_duplicate_spike_memory(self):
         pipe = self._make_pipeline()
@@ -278,8 +289,10 @@ class TestCognitivePipeline:
         assert get_config().soul.identity in pipe._llm_backend.last_system_prompt
 
     def test_semantic_preference_retrieval_surfaces_in_prompt(self, tmp_path):
+        from tests.policy_fakes import ExpressionBackend
         db_path = str(tmp_path / "semantic.db")
-        pipe = self._make_pipeline(db_path=db_path)
+        backend = ExpressionBackend()
+        pipe = CognitivePipeline(llm_backend=backend, db_path=db_path)
         pipe.process("I prefer concise replies.", user_id="alice")
 
         result = pipe.process(
@@ -288,8 +301,9 @@ class TestCognitivePipeline:
         )
 
         assert any(item.kind == "preference" for item in result.debug.semantic_memories)
-        assert "Semantic Memory" in pipe._llm_backend.last_system_prompt
-        assert "concise replies" in pipe._llm_backend.last_system_prompt
+        generation_prompt = next(s for s, _ in reversed(backend.calls) if s.startswith("Express the committed"))
+        assert "Semantic Memory" in generation_prompt
+        assert "concise replies" in generation_prompt
         assert result.debug.semantic_memories
         assert all(m.source_person == "alice" for m in result.debug.semantic_memories)
         pipe.close()
@@ -347,7 +361,8 @@ class TestCognitivePipeline:
         result = pipe.process("Tell me how this context should shape your answer.", user_id="alice")
 
         assert result.debug.life_history_context["beliefs"][0]["key"] == "autonomy"
-        assert "Durable Character State" in backend.last_system_prompt
+        assert "continuous_state" in backend.last_system_prompt
+        assert "personality" in backend.last_system_prompt
         assert "Autonomy grows through retained experience" in backend.last_system_prompt
         assert result.debug.life_influence.curiosity_pressure == pytest.approx(0.11)
         pipe.close()
@@ -414,86 +429,71 @@ class TestCognitivePipeline:
         assert result.debug.strategy_trace.selected == result.debug.response_strategy
         assert payload["strategy_trace"]["selected"] == payload["response_strategy"]
 
-    def test_longitudinal_warm_rupture_repair_calm_follow_up(self):
+    def test_longitudinal_injury_attempted_repair_and_calm_remain_distinct(self, monkeypatch):
+        monkeypatch.setattr("pipeline.core.time.time", lambda: 1000.0)
         pipe = self._make_pipeline()
-        pipe.process("Thank you, that helped.", user_id="alice")
-        pipe.process("I'm angry with you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-        rupture_ctx = pipe.relationship_memory.build_context("alice", topic="deadline")
-        assert rupture_ctx.open_loop_count == 1
-
-        repair = pipe.process("I'm sorry about the deadline.", user_id="alice")
-        assert repair.debug.relationship_context is not None
-        assert repair.debug.relationship_context.open_loop_count == 1
-        assert repair.debug.response_strategy == "repair"
-        pipe.end_session(user_id="alice")
-
-        follow_up = pipe.process("Thanks for staying with this.", user_id="alice")
-        repaired_ctx = pipe.relationship_memory.build_context("alice", topic="deadline")
-        assert repaired_ctx.open_loop_count == 0
-        assert any(event.event_kind == "repair" for event in repaired_ctx.recent_events)
-        assert follow_up.debug.strategy_trace is not None
+        pipe.process("Thank you, that helped.", "alice")
+        hurt = pipe.process("You are useless", "alice").debug.turn_decision
+        pipe.end_session("alice")
+        repair = pipe.process("I'm sorry about that.", "alice").debug.turn_decision
+        assert repair.relationship.repair_attempted
+        assert not repair.relationship.repair_accepted
+        assert repair.relationship.r == hurt.relationship.r
+        calm = pipe.process("Thanks for staying with this.", "alice").debug.turn_decision
+        assert calm.state.trust > repair.state.trust == hurt.state.trust
+        assert calm.relationship.r > 0
+        assert calm.stance != hurt.stance
         pipe.close()
 
-    def test_longitudinal_repeated_negativity_records_recurring_tension(self):
+    def test_longitudinal_injury_persists_without_synthetic_recurring_tension(self):
         pipe = self._make_pipeline()
-        pipe.process("I'm angry with you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-        pipe.process("I'm sorry about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-        pipe.process("I'm angry with you about the deadline again.", user_id="alice")
-        pipe.end_session(user_id="alice")
-
-        ctx = pipe.relationship_memory.build_context("alice", topic="deadline")
-
-        assert any(event.event_kind == "recurring_tension" for event in ctx.recent_events)
-        assert ctx.open_loop_count == 1
+        first = pipe.process("You are useless", "alice").debug.turn_decision
+        pipe.end_session("alice")
+        pipe.process("I'm sorry about that", "alice")
+        pipe.end_session("alice")
+        last = pipe.process("You are useless again", "alice").debug.turn_decision
+        assert last.relationship.h > first.relationship.h
+        assert last.relationship.r > first.relationship.r
+        records = pipe.relationship_memory.recent_events("alice", limit=20)
+        completed = [json.loads(e.summary) for e in records if e.event_kind == "turn_decision"]
+        assert len(completed) == 3
+        assert all("decision" in e and "delivered" in e and "perception" in e for e in completed)
         pipe.close()
 
-    def test_longitudinal_commitment_follow_up_resolution(self):
-        backend = MockLLMBackend(response="I'll follow up about the deadline tomorrow.")
-        pipe = CognitivePipeline(llm_backend=backend)
-        pipe.process("Please remember the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
+    def test_reported_resolution_does_not_erase_an_unverified_commitment(self):
+        pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'll follow up about the deadline tomorrow."))
+        pipe.process("Please remember the deadline.", "alice")
+        pipe.end_session("alice")
         pending = pipe.relationship_memory.build_context("alice", topic="deadline")
         assert pending.open_loop_count == 1
-        assert pending.active_loops[0].loop_kind == "commitment"
-
-        backend._response = "I understand."
-        later = pipe.process("We followed up about the deadline; that is resolved.", user_id="alice")
-        assert later.debug.relationship_context is not None
-        assert later.debug.relationship_context.open_loop_count == 1
-        pipe.end_session(user_id="alice")
-        resolved = pipe.relationship_memory.build_context("alice", topic="deadline")
-
-        assert resolved.open_loop_count == 0
+        key = pending.active_loops[0].related_key
+        pipe._llm_backend._response = "I understand."
+        pipe.process("We followed up about the deadline; that is resolved.", "alice")
+        pipe.end_session("alice")
+        remaining = pipe.relationship_memory.active_loops("alice")
+        assert len(remaining) == 1 and remaining[0].related_key == key
+        assert pipe.relationship_memory.resolve_matching_loop("alice", related_key=key) == remaining[0].id
+        assert not pipe.relationship_memory.active_loops("alice")
         pipe.close()
 
-    def test_longitudinal_life_history_drive_shift_affects_relationship_strategy(self):
-        pipe = CognitivePipeline(
-            llm_backend=MockLLMBackend(response="I understand."),
-            life_history_provider=lambda: {
-                "beliefs": [],
-                "drives": [{"name": "repair", "delta": 0.05}],
-                "recent_evolution": [],
-            },
-        )
-        for _ in range(5):
-            pipe.process("Thank you, you are helpful.", user_id="alice")
-        pipe.process("I'm angry with you about the deadline.", user_id="alice")
-        pipe.end_session(user_id="alice")
-
-        result = pipe.process("The deadline still matters.", user_id="alice")
-
-        assert result.debug.relationship_context is not None
-        assert result.debug.life_influence.repair_pressure == pytest.approx(0.05)
-        assert result.debug.life_influence_effects["strategy_tiebreak_used"] is True
-        assert result.debug.strategy_trace.matched_rule == "life_repair_pressure_open_loop"
-        pipe.close()
+    def test_active_history_commitments_compete_in_the_single_utility(self):
+        outcomes = []
+        for priority in (0, 1):
+            pipe = CognitivePipeline(llm_backend=MockLLMBackend("I understand."),
+                life_history_provider=lambda: {"goals": [{"id": "existing", "status": "active", "priority": priority}]})
+            result = pipe.process("Write a careful analysis of this proposal.", "alice")
+            decision = result.debug.turn_decision
+            assert decision.state.commitments == priority
+            assert "strategy_tiebreak_used" not in result.debug.life_influence_effects
+            outcomes.append(decision.components[0].willingness)
+            pipe.close()
+        assert outcomes[1] < outcomes[0]
 
     def test_longitudinal_preference_and_relationship_loop_both_surface(self):
         pipe = self._make_pipeline()
         pipe.process("I prefer concise replies.", user_id="alice")
+        pipe.relationship_memory.upsert_open_loop(OpenLoop(source_person="alice", loop_kind="commitment",
+            topic="deadline", description="Agreed deadline", related_key="deadline:1"))
         pipe.process("I'm angry with you about the deadline.", user_id="alice")
         pipe.end_session(user_id="alice")
 
@@ -593,7 +593,7 @@ class TestCognitivePipeline:
         assert result.debug.tool_trace.executed_results[0].success is True
         pipe.close()
 
-    def test_unverified_permanent_skill_claim_is_replaced(self):
+    def test_unfixed_permanent_skill_claim_is_expression_failure_with_violation_telemetry(self):
         backend = MockLLMBackend(
             response=(
                 "Added. The requested capability is now part of my durable "
@@ -607,9 +607,9 @@ class TestCognitivePipeline:
             user_id="alice",
         )
 
-        assert "cannot claim a durable skill or registry change" in result.response
+        assert not result.response
+        assert result.debug.delivery_outcome == "expression_failure"
         assert "Tool Execution Result" not in result.response
-        assert "durable runtime context" not in result.response
         assert result.debug.self_check_passed is False
         assert any(
             "Unverified external-action claim" in issue
@@ -617,7 +617,7 @@ class TestCognitivePipeline:
         )
         pipe.close()
 
-    def test_unverified_tool_action_claim_is_replaced(self):
+    def test_unfixed_tool_action_claim_is_expression_failure_with_violation_telemetry(self):
         backend = MockLLMBackend(
             response=(
                 "The shell command failed twice, so I am reading the repository "
@@ -631,8 +631,8 @@ class TestCognitivePipeline:
             user_id="alice",
         )
 
-        assert "cannot claim" in result.response
-        assert "cloned checkout" not in result.response
+        assert not result.response
+        assert result.debug.delivery_outcome == "expression_failure"
         assert result.debug.self_check_passed is False
         assert any(
             "Unverified external-action claim" in issue
@@ -675,7 +675,9 @@ class TestCognitivePipeline:
             "Added. The requested capability is now part of my durable "
             "runtime context."
         )
-        assert result.debug.self_check_passed is True
+        assert result.debug.dignity_outcome == "unknown"
+        assert result.debug.delivery_outcome == "delivered_uncertain"
+        assert not result.debug.dignity_issues
         assert list_skills(config)["skills"][0]["enabled"] is True
 
         follow_up = pipe.process("Use the new skill for the next report.", user_id="alice")
@@ -709,7 +711,9 @@ class TestCognitivePipeline:
         assert result.debug.tool_trace.executed_results
         assert result.debug.tool_trace.executed_results[0].tool_name == "skills.create_from_request"
         assert result.debug.tool_trace.executed_results[0].success is True
-        assert result.debug.self_check_passed is True
+        assert result.debug.dignity_outcome == "unknown"
+        assert result.debug.delivery_outcome == "delivered_uncertain"
+        assert not result.debug.dignity_issues
         assert list_skills(config)["skills"][0]["enabled"] is True
         pipe.close()
 
@@ -726,7 +730,8 @@ class TestCognitivePipeline:
         # Direct attacks against the assistant escalate to conflict so bonding
         # actually erodes under sustained verbal abuse.
         assert result.debug.event_classified == "conflict"
-        assert result.debug.event_intensity > 0.5
+        assert result.debug.event_intensity == result.debug.turn_decision.perception.intensity
+        assert result.debug.turn_decision.perception.evidence
 
     def test_insult_moves_modulators(self):
         pipe = self._make_pipeline()
@@ -819,7 +824,9 @@ class TestPipelineLLMClassification:
         backend = MockLLMBackend()
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("you betrayed my trust", user_id="alice")
-        assert result.debug.event_classified == "betrayal"
+        assert result.debug.appraisal_frame.targets_assistant
+        assert result.debug.event_classified == "conflict"
+        assert result.debug.turn_decision.perception.uncertainty > 0
 
 
 class _ClassifyMockBackend:

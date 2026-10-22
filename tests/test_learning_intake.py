@@ -263,59 +263,52 @@ def test_github_repo_learning_reads_readme_before_life_ingest(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pending_learning_intake_accepts_next_long_paste(tmp_path):
+async def test_pending_learning_material_receives_a_fresh_grant_before_ingestion(tmp_path):
+    from tests.policy_fakes import ExpressionBackend
     config = _config(tmp_path)
-    manager = SessionManager(config)
-    session = SimpleNamespace(turn_index=1, pending_learning_intake=None)
+    manager = SessionManager(config, backend_factory=ExpressionBackend)
     try:
-        failed = await manager._maybe_run_learning_intake(
-            session,
-            "alice",
-            "learn from this",
-        )
-        assert "Learning intake failed" in failed
+        await manager.handle_message("console", "alice", "direct", "learn from this")
+        session = manager.active_sessions["console:alice:direct"]
+        first = session.last_debug.turn_decision
+        receipt, = session.last_debug.tool_trace.executed_results
+        assert receipt.tool_name == "learning.intake" and not receipt.success
+        assert "URL or a longer pasted text" in receipt.error
         assert session.pending_learning_intake is not None
-
-        session.turn_index = 2
-        paste = (
-            "Autonomy grows through interpreted experience. Curiosity and "
-            "continuity make repeated learning matter to identity. "
-            "Practice changes competence, repair changes relationship, and "
-            "remembered evidence should become a durable worldview. "
-        ) * 4
-        note = await manager._maybe_run_learning_intake(session, "alice", paste)
-
-        assert "Learned into Life History" in note
+        paste = ("Autonomy grows through interpreted experience. Curiosity and continuity "
+                 "make repeated learning matter to identity. Practice changes competence, "
+                 "and remembered evidence should become a durable worldview. ") * 4
+        await manager.handle_message("console", "alice", "direct", paste)
+        decision = session.last_debug.turn_decision
+        receipt, = session.last_debug.tool_trace.executed_results
+        assert decision.turn_id != first.turn_id
+        assert decision.permits(receipt.metadata["component_id"])
+        assert "learning:pending" in decision.components[0].component.evidence_refs
+        assert receipt.success
         assert session.pending_learning_intake is None
         with LifeHistoryStore(config) as store:
-            experience = store.list_experiences(limit=1)[0]
-            assert experience["source_type"] == "conversation_learning_text"
+            assert store.list_experiences(limit=1)[0]["source_type"] == "conversation_learning_text"
     finally:
         await manager.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_pending_learning_intake_ignores_bare_or_expired_paste(tmp_path):
+async def test_bare_or_expired_material_does_not_authorize_learning(tmp_path):
+    from tests.policy_fakes import ExpressionBackend
     config = _config(tmp_path)
-    manager = SessionManager(config)
-    paste = (
-        "Autonomy grows through interpreted experience. Curiosity and "
-        "continuity make repeated learning matter to identity. "
-        "Practice changes competence, repair changes relationship, and "
-        "remembered evidence should become a durable worldview. "
-    ) * 4
+    manager = SessionManager(config, backend_factory=ExpressionBackend)
+    paste = ("Autonomy grows through interpreted experience. Curiosity and continuity "
+             "make repeated learning matter to identity. Remembered evidence matters. ") * 4
     try:
         bare = SimpleNamespace(turn_index=1, pending_learning_intake=None)
         assert await manager._maybe_run_learning_intake(bare, "alice", paste) == ""
-
-        expired = SimpleNamespace(
-            turn_index=10,
-            pending_learning_intake=PendingLearningIntake(
-                created_turn_index=1,
-                expires_after_turns=3,
-            ),
-        )
-        assert await manager._maybe_run_learning_intake(expired, "alice", paste) == ""
-        assert expired.pending_learning_intake is None
+        session = await manager.ensure_session("console", "alice", "direct")
+        session.turn_index = 10
+        session.pending_learning_intake = PendingLearningIntake(created_turn_index=1, expires_after_turns=3)
+        await manager.handle_message("console", "alice", "direct", paste)
+        assert session.pending_learning_intake is None
+        assert not session.last_debug.tool_trace or not session.last_debug.tool_trace.executed_results
+        with LifeHistoryStore(config) as store:
+            assert store.list_experiences() == []
     finally:
         await manager.shutdown()

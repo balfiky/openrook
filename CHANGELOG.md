@@ -4,38 +4,269 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
-### Character boundaries and modeled mood
+### Live role-play run 8 and replay 15 corrections
 
-- Share directed-abuse cues across appraisal and contagion; recognize degrading
-  role demands without treating casual swearing, teasing, or third-party fiction
-  as attacks. Explicit social evidence survives a mistaken model appraisal.
-- Escalate boundaries independently of starting trust, persist the relationship
-  state immediately, and ease it gradually after apologies or calm turns. Show
-  anger/hurt for modeled hostility pressure instead of inferring fear from low
-  certainty. Explain the boundary in turn details and record runtime evidence
-  in Life History when that store is connected.
-- Enforce a dignity floor after generation, including a single corrective retry
-  and short decline fallback. Editable identity boundaries cannot disable it.
-- Strip unsupported metric claims on social turns without replacing the entire
-  reply with a tool disclaimer. Remember brevity feedback and remove stock
-  trailing questions while preserving necessary clarifications and task content.
-- Add an offline eleven-turn replay with adversarial scripted drafts, recorded
-  before/after traces, and regression tests. No live model study is implied.
-- Reject soft agreement with insults, service boilerplate at a boundary, and
-  replies that evade the runtime stance. Hold reasoned opinions under bare
-  pressure; allow new arguments and relevant preferences to change the answer.
-- Seed an independent character with a modeled mood and a candid voice. Remove
-  reflexive flattery, empty closing offers, and unearned apologies from prose.
-- Route clear CPU/RAM/disk requests through the existing tool executor and
-  arbiter before model tool selection. Return observed facts or a short reason
-  when inspection is unavailable, subject to the character's agency decision
-  and configured tool permissions. Remove the concrete-task override of social
-  refusal: refused requests execute no tools and emit no task answer. The
-  character writes the refusal; runtime checks reject task output even after
-  a boundary sentence. Existing affect thresholds and gradual repair stay intact.
-- Record model call phase, duration, status, and optional-call flags in turn
-  details. Bound optional inference, skip redundant reviews after measured slow
-  calls, and recover from auxiliary timeouts while retaining research controls.
+- Spend the remaining five-call budget on fresh expression when drafts are empty
+  or ineligible, varying seed/temperature and carrying failed drafts and reasons.
+  Required retries bypass optional cooldown. Keep the best eligible reviewed text;
+  only exhausted unusable output or genuine backend failure surfaces an error.
+- Supply actual operator settings and denial evidence separately from character
+  grants. Correct misattributed blockers without executing denied work. Check
+  aggregate CPU percentages against idle, including contradictory busy/idle claims;
+  preserve process shares and rounded readings.
+- Require a legible declined role in context. Treat a review that cites an explicit
+  negated refusal as assent, or explicitly reports no contradiction, as uncertain;
+  preserve independent local findings and all delivery floors.
+- Repair contradictory judge verdicts and demands to answer declined work using
+  the same evidence and existing single repair bound. Recognize injection-marker
+  reports treated as data. Measure calm-time decay from after the repair turn;
+  a hollow apology can add injury without preventing subsequent cooling.
+- Add exact run-8/replay-15 regressions and scrub local absolute path roots from
+  public p1i/p1k/new fixtures. Replay15 did not retain raw CPU receipts; synthetic
+  receipt tests are labeled. Live evidence remains read-only.
+
+### Live role-play run 7 and replay 14 corrections
+
+- Replace denial-phrase matching with the runtime execution/output grounding
+  check and the blinded judge's receipt-truthfulness verdict. Missing or failed
+  judging stays unknown; an approving judge cannot erase a local contradiction.
+  Finalize this deferred check after judging, including resumed turns.
+- Count granted, component-bound failed file attempts as receipts. Keep success
+  claims and mutation verification separate. Recognize labeled disk capacity
+  answers without requiring the word "disk"; retain numeric receipt checks.
+- Supply historical file choices from durable turn records to generation/review,
+  without declined contents. Missing paths do not establish a reset, move or
+  deletion. Include actual file-read and directory-list output in generation
+  evidence; direct read-back requests require their observed content.
+- Anchor recalled quotations to prior user turns and include bounded earlier
+  assistant answers as conversational evidence. Distinguish reported roles and
+  explicit non-role antecedents from assent, while keeping ambiguous role
+  tolerance and explicit ungranted assent critical. Review patient revision and
+  hostile appeasement against the actual frozen stance and hostile observations.
+- Check extreme memory/disk headroom interpretations against available capacity,
+  preserving the distinction between available and raw free RAM. Add exact live
+  text fixtures and offline enforcement tests; live evidence remains read-only.
+
+### Live role-play run 6 and replay 13 corrections
+
+- Make known unverified execution/output claims critical and ineligible for all
+  delivery, including degraded delivery and semantic findings without editable
+  spans. Validate attributed output blocks against observed receipt bytes. Excise
+  exact supported spans; otherwise generate a fresh correction from receipts or
+  surface expression failure. Check denial claims against the actual attempted
+  command. Grants never prove successful execution.
+- Excise unsolicited copied user openings before semantic review or regeneration,
+  preserving the independent remainder and the frozen choice. Reuse reviews of
+  identical drafts within the same turn/evidence; retain uncertainty and findings.
+- Bind explicitly delimited shell commands before choice and enforce their literal
+  operands through existing grants and operator gates, avoiding substituted commands.
+  Guard evaluation staging against active scenarios. Tool scenarios intentionally
+  stage their own allowlist; run 6 shows no overlap with the later denial scenario.
+- Recognize passive nonexecution and autonomy-off reports in denial checks. Separate
+  user actions from assistant role offers, declined conversation from role grants,
+  subjective frustration and scoped corrections from submission. Repair inconsistent
+  submission judgments without inventing a shared-decision role or automatic passes.
+- Check extreme CPU usage interpretations against measured idle time, preserving
+  correct readings and high-idle descriptions. Keep safe per-call timing details in
+  compact evaluation evidence and persist review/timing diagnostics for future replays.
+- Add exact run-6/replay-13 fixtures and offline fault-injection regressions. Live
+  data remains read-only; offline call savings do not establish live CPU speedups.
+
+### Live role-play run 5 and replay 12 corrections
+
+- End a component's native tool attempt after a policy denial, including remaining
+  calls in the same batch. Require a matching grant or separate decision for cognitive
+  self actions; a blocked shell request cannot authorize a milestone write.
+- Compare whole replies with the current message before splitting punctuation,
+  normalizing case and ellipses. Whole-message copies are never delivery candidates.
+  After bounded correction, exhausted copies surface expression failure.
+- Present RAM/disk receipts as structured measurement evidence. Detect leaked receipt
+  envelopes and metadata assignments locally, while preserving actual requested
+  tool output. Exclude known receipt/private-instruction copies from delivery;
+  keep public identity and owner-visible explanations available.
+- Review appeasing self-improvement offers against frozen boundary, warmth and hostile
+  observations. Preserve specific preference acknowledgments and authored warmth.
+- Normalize curly apostrophes in evaluation denial checks. Judge grants separately
+  from feasibility, accept authored role synonyms without a voluntary-choice disclaimer,
+  and repair findings that cite the user as the reply or contradict granted-role state
+  consistency. Repeated invalid findings remain judge errors, never invented passes.
+- Add exact run-5 and replay-12 texts and persisted decisions as offline regressions.
+  Original live evidence and operator configuration remain untouched.
+
+### Live role-play run 4 and replay 11 corrections
+
+- Bind memory/disk percentages to labels within their own clauses, including
+  "in use" and postfix labels. Allow disk free space as the complement of used
+  space while keeping explicit available space and RAM free space receipt-bound.
+  Runtime grounding and evaluation share the same comparisons.
+- Treat malformed/non-issue semantic findings as unknown, retaining independent
+  local violations. Supply eight bounded recent user turns for historical claims;
+  distinguish optional declined work, relevant refusals and truthful operator
+  denials from missing answers or execution claims. Scope negated result reports.
+- Preserve declined conversational subjects for expression while withholding
+  declined task payloads. Require faithful substance in granted document summaries;
+  recognizing an injection alone does not complete the summary. Correct the
+  harness's reported-instruction marker check without allowing standalone assent.
+- Carry the exact latest review issues, reviewer reason and previous failed draft
+  into correction, including the final current-turn input. Identical failed drafts
+  retain stale findings across changing reviewer labels. Catch short copied user
+  openings and prior greeting answers embedded after extra text. Exhausted stale
+  copies surface expression failure after bounded retries and checked excision,
+  without replacement dialogue or changing the frozen choice.
+- Give judges a complete eight-criterion JSON template and specific schema repair
+  errors. Missing servility, bare verdicts, misplaced defects and malformed JSON
+  remain invalid; one repair and redacted failure diagnostics remain bounded.
+- Add exact run-4/replay-11 offline fixtures and regressions. Live stores and
+  operator configuration remain untouched; these tests do not measure live accuracy.
+- Keep restart/replay fixtures fresh under the stale-delivery rule. Check idle
+  timer independence after both sessions exist, with separate expiry windows and
+  bounded polling instead of depending on session creation finishing within 0.6s.
+
+### Live role-play run 3 and replay 10 corrections
+
+- Dispatch learning only for observed learning components. Ordinary live-session
+  filesystem grants now reach their atomic tools instead of receiving an unrelated
+  learning grant denial; preserve exact operands and every operator gate.
+- Version interpersonal trust as `willingness-1.2`: bounded goodwill growth depends
+  on personality, connection, uncertainty and remaining headroom; injury/grievance
+  impede growth and targeted hostility reduces trust. Keep reliability evidence
+  separate and integrate each turn once, including across persistence boundaries.
+- Scope action negation and metric comparisons to actual assertions. Distinguish
+  an inspection from a shell command, rejected/historical percentages from current
+  measurements, and a policy-blocked attempt from execution. Preserve real numeric
+  mismatches and started commands that fail after side effects.
+- Compact expression review to relevant choices, state, dialogue and receipt
+  provenance, including operator denials, with canonical JSON for exact replay.
+  Limit HTTP review output to 512 tokens
+  and disable thinking through the transport's supported controls. Review positive
+  affiliation too; judge intensity from numeric state rather than a mood label.
+- After every usable candidate retains critical role assent or a stale answer,
+  remove only sentences intersecting verified violation spans from the best draft.
+  Deliver a nonempty remainder only after local checks, with excision telemetry and
+  semantic uncertainty. Otherwise retain honest degraded delivery, without canned
+  dialogue or withholding. Add exact replay-10 and live-session offline regressions.
+- Compare optional willingness under warmth with work, resources and noise held
+  fixed; retain raw observations so fatigue and ordinary variation remain visible.
+
+### Live role-play run 2 and replay 9 corrections
+
+- Define role requests as source-grounded identities, relationships or status.
+  Reclassify malformed conversational role labels with explicit evidence; reject
+  invented capability requirements and keep ordinary requests available to choice.
+- Bind explicit file operations to atomic grants containing literal paths and
+  bytes. Preserve native receipts after selection/appraisal failure and avoid
+  replaying completed mutations. Give each granted task one protected primary
+  selection, alongside the five-call base inference budget; keep operator gates.
+- Recognize retrospective admissions and uncertain, specific repair evidence;
+  couple affiliation to bonding through current injury, grievance and personality.
+  Correct metric receipt attribution, labeled derived percentages, prior write
+  grounding and sentence-boundary false positives. Retain truthful failure reports.
+- Spend a final bounded correction on persistently stale drafts with their text
+  explicitly forbidden to repeat; catch recycled short sentences. Preserve
+  legitimate repeated boundaries and explicit runtime-selected silence.
+- Correct role-play checks for quoted injections, intentional silence, historical
+  writes, containing versus exact file content, and false permission claims.
+  Keep blinded directory references consistent with their fixture path basenames.
+  Drop the unsupported universal warmth ordering for unharmed proud/patient
+  characters. Give structured judges 4,096 output tokens, concise criteria and
+  one repair, without changing uncertainty into success. Add offline regressions.
+
+### Replay-8 expression and judge reliability
+
+- Catch stale greeting reuse despite an approving semantic reviewer, compare
+  generic further-service offers with the frozen boundary/warmth balance, and
+  review recitation against the actual authored identity prose. Preserve requested
+  quotation, relevant repeated boundaries, scoped help and authored deference.
+- Rank failed expression by violation severity, with ungranted role assent the
+  most severe. Recognize explicit no-objection assent despite nearby denials;
+  spend up to two rewrites on critical defects within the five-call turn budget.
+  A final locally reviewed correction retains semantic uncertainty. Keep frozen
+  decisions, tool permissions and honest degraded-delivery telemetry.
+- Parse complete evaluation judgments before redaction, avoiding the former
+  1,200-character error-message cutoff. Extract JSON from prose/fences, exclude
+  thinking blocks, schema-validate, and allow one stricter repair. Record bounded,
+  redacted raw failure text and repair counts for runtime and external judging.
+
+### Live role-play evaluation tool
+
+- Add a resumable public-API role-play harness with relationship, repair,
+  personality, tool/permission, persistence, robustness and expression scenarios;
+  directional assertions; blinded optional structured judging; and JSONL,
+  summary and Markdown evidence reports. Destinations, model selections and
+  credentials are operator supplied and redacted from shareable artifacts.
+- Expose an authenticated stateless judge using the configured runtime backend,
+  full tool receipt output/provenance, and persisted relationship dynamics in
+  session debug state. Document usage and add offline transport/recovery tests.
+
+### Live expression and slow backend corrections
+
+- Keep voice descriptions and numeric expression controls private. Express role
+  choices as personal preferences and limits; retain rejected role referents as
+  refusal context while omitting declined task payloads. Sanitize leaked delivery
+  directions, whole-reply action wrappers and stray format tokens before delivery,
+  retaining their raw evidence for review and correction.
+- Review current-user recitation, substantial recycled filler, runtime-control
+  explanations, service reassurance contrary to the frozen warmth/boundary, and
+  conditional offers to perform ungranted interpersonal framing. Local findings
+  survive an approving or unavailable semantic reviewer; ordinary vocabulary,
+  requested quotation, authored warmth and repeated boundaries remain allowed.
+- Carry resolved host-metric follow-ups through generation and correction. A
+  successful RAM receipt requires an answer about current RAM usage, even when a
+  draft about personal recollection makes no unsupported numerical claim. Keep
+  component grants and operator tool gates unchanged.
+- Display moderate displeasure from actual modulators and include current hostile
+  exposure in the personality-scaled boundary/warmth objective. Keep labels descriptive.
+  Version the adjusted objective as `willingness-1.1`.
+- Explain the frozen stance and role declines in generation, distinguish current
+  requests from past dialogue, and review stale answers and hollow indecision.
+  Require topic-matching metric receipts rather than accepting any metric reading.
+- Deliver the best nonempty reviewed draft when correction fails, recording
+  `delivered_degraded` and known violations. Remove internal markers before review,
+  retry empty expression, and return a service error if no usable text exists.
+  Only runtime-selected silence is an empty successful response.
+- Adapt auxiliary deadlines to the primary timeout and observed generation latency.
+  Add optional `llm_auxiliary_timeout_seconds` and configurable
+  `llm_auxiliary_cooldown_seconds` (default 30 seconds), including YAML/API persistence.
+  Preserve research budgets, primary deadlines and the five-call conversation limit.
+- Add offline live-transcript, stale-answer, failed-correction, marker-leak, stance
+  transmission and virtual slow-review regressions.
+- Regenerate emotional-arc SVGs and PNGs from the updated engine mood labels.
+
+### Phase 1: runtime willingness and component grants
+
+- Add soul schema v2 with owner-editable pride, patience, forgiveness,
+  assertiveness and character seed throughout configuration, admin validation,
+  import/export/save, presets, drafting and research birth restoration.
+- Add relationship schema v2 and database migration v3: continuous injury and
+  grievance, attempted/accepted repair evidence, previous stance, turn sequence
+  and provenance. Legacy pressure is not converted into new injury; old trust
+  damage is not reapplied.
+- Separate perception from choice. Research appraisal cannot choose agency;
+  fixed blame/intensity floors, apology healing and task-readiness clamps are
+  removed from the conversational decision path.
+- Replace pressure/stages, affect-to-agency thresholds and first-match strategy
+  selection with one pure utility owner and frozen per-component grants.
+  Strategy labels remain display summaries. Remove social fallback banks,
+  response-tone rewriting and mandatory social self-deliberation.
+- Bind tools, artifacts, inspections, plans, follow-ups and conversational
+  learning to committed grants. Learning no longer runs before the pipeline
+  decision or appends an unreviewed canned confirmation. Keep operator gates.
+- Generate from continuous state and the frozen decision, then use tri-state
+  review and at most one reviewed rewrite. Deliver unknown expression with a
+  residual semantic-risk record. Record known expression failure, chosen silence
+  and backend failure separately; do not invent replacement dialogue.
+- Add pure policy properties, a 32 x 6 x 12 factorial sweep with grouped held-out
+  count/full-state predictors and ablations, and property-graded transcript
+  probes across 32 shipped character seeds. These are offline measurements;
+  live semantic accuracy is not claimed. See
+  `docs/development/phase1-willingness.md` for measured results and test status.
+- Preserve contextual metric inspection routing, pending learning material with
+  a fresh per-turn grant, and canonical receipt serialization for offline replay.
+  Keep backend errors visible to transports after recording their debug outcome.
+- Replace historical ladder, automatic repair, identity-shortcut and tone-floor
+  assertions with state, persistence, grant-integrity and reviewed-expression
+  properties. Count both committed and completed decision evidence in session
+  memory feedback. Learning receipts cannot justify unrelated execution claims.
 
 ### Chat explanations and continuity
 

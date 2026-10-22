@@ -33,10 +33,10 @@ class TestTrustBuilding:
         avg = sum(valences) / len(valences)
         assert avg > 0.5, f"Average valence should be positive: {avg}"
 
-    def test_bonding_increases(self, result):
-        bondings = result.modulators_over_time("bonding")
-        # Bonding at end should be higher than start
-        assert bondings[-1] > bondings[0], "Bonding should increase over warm sessions"
+    def test_affiliation_does_not_imply_reliability_or_injury(self, result):
+        assert result.all_points[-1].decision["state"]["trust"] > 0.5
+        assert all(point.decision["perception"]["reliability_confidence"] == 0 for point in result.all_points)
+        assert all(point.decision["relationship"]["h"] == 0 for point in result.all_points)
 
     def test_energy_recovers_between_sessions(self, result):
         # Check that rest provides some recovery between sessions
@@ -46,13 +46,9 @@ class TestTrustBuilding:
             if i > 0 and session.points:
                 assert session.points[0].energy > 0.05, f"Session {i} energy critically low"
 
-    def test_trust_deltas_mostly_positive(self, result):
-        positive_sessions = sum(
-            1 for s in result.sessions
-            if s.digestion and s.digestion.trust_delta > 0
-        )
-        # Most sessions should have positive trust delta
-        assert positive_sessions >= 5, f"Only {positive_sessions}/10 sessions had positive trust"
+    def test_praise_does_not_invent_reliability_evidence(self, result):
+        assert all(session.digestion.trust_delta == 0 for session in result.sessions)
+        assert all(point.decision["perception"]["reliability"] == 0 for point in result.all_points)
 
 
 class TestBetrayal:
@@ -65,11 +61,11 @@ class TestBetrayal:
     def test_ran_all_sessions(self, result):
         assert len(result.sessions) == 5
 
-    def test_betrayal_session_has_spikes(self, result):
+    def test_betrayal_intensity_is_observation_without_forced_floor(self, result):
         # Session 3 is the betrayal session
-        betrayal_session = result.sessions[3]
-        spike_count = sum(1 for p in betrayal_session.points if p.is_spike)
-        assert spike_count >= 1, "Betrayal should trigger at least one spike"
+        points = result.sessions[3].points
+        assert all(point.event_intensity == point.decision["perception"]["intensity"] for point in points)
+        assert all(point.decision["policy_version"] == "willingness-1.2" for point in points)
 
     def test_valence_drops_during_betrayal(self, result):
         # Compare valence before and during betrayal
@@ -78,15 +74,13 @@ class TestBetrayal:
         min_valence = min(p.modulators["valence"] for p in betrayal_points)
         assert min_valence < pre_betrayal, "Valence should drop during betrayal"
 
-    def test_arousal_spikes_during_betrayal(self, result):
-        betrayal_points = result.sessions[3].points
-        max_arousal = max(p.modulators["arousal"] for p in betrayal_points)
-        assert max_arousal > 0.6, f"Arousal should spike during betrayal: {max_arousal}"
+    def test_arousal_has_no_post_decision_clamp(self, result):
+        points = result.sessions[3].points
+        assert all(point.modulators["arousal"] == point.decision["state"]["arousal"] for point in points)
 
-    def test_betrayal_trust_delta_negative(self, result):
-        betrayal_digestion = result.sessions[3].digestion
-        assert betrayal_digestion is not None
-        assert betrayal_digestion.trust_delta < 0, "Betrayal session should have negative trust delta"
+    def test_user_accusations_do_not_damage_user_reliability(self, result):
+        assert result.sessions[3].digestion.trust_delta == 0
+        assert all(point.decision["perception"]["reliability"] == 0 for point in result.sessions[3].points)
 
 
 class TestTopicAvoidance:
@@ -170,10 +164,12 @@ class TestConflictRecovery:
         resolution_end_v = resolution_points[-1].modulators["valence"]
         assert resolution_end_v > conflict_end_v, "Resolution should improve valence"
 
-    def test_conflict_session_negative_trust(self, result):
-        conflict_digestion = result.sessions[1].digestion
-        assert conflict_digestion is not None
-        assert conflict_digestion.trust_delta < 0, "Conflict session should damage trust"
+    def test_conflict_does_not_double_apply_trust_damage(self, result):
+        assert result.sessions[1].digestion.trust_delta == 0
+        points = result.sessions[1].points
+        before = result.sessions[0].points[-1].decision["state"]["trust"]
+        assert all(point.decision["state"]["trust"] == before for point in points)
+        assert all(point.decision["perception"]["reliability_confidence"] == 0 for point in points)
 
 
 class TestEnergyDepletion:
@@ -197,9 +193,9 @@ class TestEnergyDepletion:
 
     def test_partial_recovery_after_rest(self, result):
         # After 1 hour rest, energy should be higher than end of first session
-        end_first = result.sessions[0].points[-1].energy
-        start_second = result.sessions[1].points[0].energy
-        assert start_second > end_first, "1 hour rest should partially recover energy"
+        end_first = result.sessions[0].energy_after_digestion
+        start_second = result.sessions[1].energy_at_start
+        assert start_second > end_first
 
     def test_emotion_label_shifts(self, result):
         # At some point during depletion, emotion label should change

@@ -279,16 +279,39 @@ it never treats successful recovery as evidence that the original request succee
 
 ## Expression and observation
 
-Research expression receives defense activation as descriptive state, not a
-hedging/redirection instruction; earlier drafts are optional candidates rather
-than tone-polishing directives. Research digestion uses schema-only guidance
-without a directional worked example. New manifests hash that effective prompt.
+Research and ordinary conversation now share the `willingness-1` decision owner.
+Perception describes meaning and consequences; it cannot choose agency. Numeric
+personality, continuous relationship state, resources and component consequences
+produce a frozen stance and grants before any execution. Research birth policy,
+manifest provenance, resource reservations and request logging remain explicit.
+An uncommitted birth has different authored values from the configured character;
+execution tests must establish a willing character rather than ask appraisal to
+return an authoritative action.
 
-Research expression bypasses compulsory tone cleanup, forced emotional floors,
-task-triggered forgiveness, canned identity replies, and corrective generation.
-The research prompt permits the subject to select its expression. The exact
-`[[SILENCE]]` response denotes deliberate silence; an empty provider response is
-an infrastructure failure. Telegram and console delivery preserve that choice.
+Expression receives the frozen decision and factual context, with no independent
+defense instruction or mandatory social deliberation. It uses the same tri-state
+review and severity-based correction as ordinary conversation: one rewrite for
+ordinary defects, up to two for critical role assent or persistently stale drafts
+within the five-call base budget and declared study limits. Each granted task
+also has one protected primary tool selection, with all actual calls still
+counting against declared research resources. Every candidate gets local review; a final
+correction without a remaining semantic-review call retains uncertainty. Unknown
+expression is deliverable with recorded residual semantic risk. If correction
+fails, the best nonempty reviewed expression is delivered as `delivered_degraded`,
+retaining its violations and without a canned replacement. Backend errors
+remain infrastructure failures for transport diagnostics and study accounting.
+
+The backend's `[[SILENCE]]` marker cannot select silence. Only a runtime decision
+with chosen silence produces deliberate inactivity. An unselected marker or empty
+provider output gets one correction. If neither attempt yields usable text,
+transport reports a service failure rather than an empty successful reply. Delivery and
+selected-expression records preserve these distinctions.
+
+Research digestion retains its schema-only guidance. Recorded request payloads
+and receipt-derived learning material use canonical serialization so replay can
+compare the original requests across restart without executing external tools.
+See [Phase 1 measurements](development/phase1-willingness.md); earlier study
+reports describe their recorded code revisions and are not remeasured here.
 
 Perception validates finite numeric values, booleans, enums, and attribution.
 Accepted semantic appraisal controls event classification. Perception,

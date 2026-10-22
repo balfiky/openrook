@@ -139,6 +139,7 @@ const state = createSurfaceState({
   const modulatorNames = ["arousal", "valence", "certainty", "bonding", "energy", "resolution"];
 
   const soulFields = [
+    ["character_seed", "Character seed", "number"],
     ["name", "Name", "text"],
     ["identity", "Identity", "textarea"],
     ["voice", "Voice", "textarea"],
@@ -149,6 +150,7 @@ const state = createSurfaceState({
     ["boundaries", "Boundaries", "list"],
     ["core_values", "Core Values", "map"],
     ["initial_traits", "Initial Traits", "map"],
+    ["dispositions", "Dispositions (pride, patience, forgiveness, assertiveness)", "map"],
   ];
 
   const els = {
@@ -1589,6 +1591,7 @@ const state = createSurfaceState({
       if (!el) continue;
       if (type === "list") payload[name] = splitList(el.value);
       else if (type === "map") payload[name] = parseMap(el.value);
+      else if (type === "number") payload[name] = Number(el.value);
       else payload[name] = el.value;
     }
     await runJsonAction("soulOutput", async () => {

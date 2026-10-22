@@ -117,6 +117,9 @@ async def admin_update_soul(req: api_mod.AdminSoulUpdateRequest) -> dict:
 
     payload = {
         "soul": {
+            "schema_version": req.schema_version,
+            "character_seed": req.character_seed,
+            "dispositions": req.dispositions,
             "name": req.name,
             "identity": req.identity,
             "voice": req.voice,
@@ -227,6 +230,7 @@ def _parse_soul_draft_json(raw: str) -> dict:
 
 
 _SOUL_FIELDS = {
+    "schema_version", "character_seed", "dispositions",
     "name",
     "identity",
     "voice",
@@ -374,6 +378,9 @@ def _plain_list(text: str) -> list[str]:
 
 def _coerce_soul_payload(data: dict) -> dict:
     return {
+        "schema_version": data.get("schema_version", 2),
+        "character_seed": data.get("character_seed", 0),
+        "dispositions": data.get("dispositions", {}),
         "name": _trim_text(str(data.get("name") or ""), 64),
         "identity": _trim_text(str(data.get("identity") or ""), 2000),
         "voice": _trim_text(str(data.get("voice") or ""), 2000),
@@ -448,6 +455,9 @@ def _admin_soul_payload(
         )
     return {
         "soul": {
+            "schema_version": soul.schema_version,
+            "character_seed": soul.character_seed,
+            "dispositions": dict(soul.dispositions),
             "name": soul.name,
             "identity": soul.identity,
             "voice": soul.voice,

@@ -120,14 +120,27 @@ async def test_autonomous_work_is_checkpointed_before_restart(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_selected_expression_and_silence_survive_delivery(tmp_path):
+async def test_expression_service_cannot_choose_silence_instead_of_the_runtime(tmp_path):
+    from core.willingness import RelationshipDynamics
     runtime, backend = manager(tmp_path)
     try:
-        response = await runtime.handle_message("web", "alice", "chat", "You are useless.")
-        assert response == backend.response
+        assert await runtime.handle_message("web", "alice", "chat", "You are useless.") == backend.response
         backend.response = "[[SILENCE]]"
-        assert await runtime.handle_message("web", "alice", "chat", "Anything else?") == ""
-        assert runtime._sessions["web:alice:chat"].last_debug.deliberate_silence
+        with pytest.raises(RuntimeError, match="no deliverable text"):
+            await runtime.handle_message("web", "alice", "chat", "Anything else?")
+        session = runtime._sessions["web:alice:chat"]
+        events = session.pipeline.relationship_memory.build_context("alice").recent_events
+        failed_turn = next(json.loads(e.summary) for e in events
+                           if e.event_kind == "turn_decision" and json.loads(e.summary)["input"] == "Anything else?")
+        assert failed_turn["delivery_outcome"] == "expression_failure"
+        session.pipeline.engine.state.energy = 0
+        session.pipeline._dynamics = RelationshipDynamics(h=1, r=1)
+        before = len(backend.calls)
+        assert await runtime.handle_message("web", "alice", "chat", "Hello") == ""
+        assert session.last_debug.delivery_outcome == "chosen_silence"
+        assert session.last_debug.deliberate_silence
+        # Perception may still be requested; selected silence invokes no expression.
+        assert not any(s.startswith("Express the committed decision") for s, _ in backend.calls[before:])
     finally:
         await runtime.shutdown()
 

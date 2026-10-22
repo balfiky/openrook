@@ -2,7 +2,6 @@
 
 import pytest
 
-from core.dignity import verify_response_dignity
 from core.response_style import brevity_preference, enforce_response_style
 from core.grounding import strip_unsupported_metric_claims, is_system_metric_request
 from pipeline import CognitivePipeline
@@ -41,7 +40,7 @@ def test_brevity_survives_restart_and_can_be_updated(tmp_path):
     try:
         result = pipe.process("hello again", "alice")
         assert result.debug.short_replies
-        assert result.response == "One thought. A second thought."
+        assert result.response == "One thought. A second thought. A third thought. Want more?"
         assert "short answers" in pipe._llm_backend.last_system_prompt
         result = pipe.process("I prefer detailed answers", "alice")
         assert not result.debug.short_replies
@@ -62,109 +61,127 @@ def test_mentioning_memory_does_not_make_social_message_a_metric_request(message
     assert not is_system_metric_request(message)
 
 
-@pytest.mark.parametrize("draft", [
-    "RAM used is 6 GB. I hear you.", "RAM used is 6 GB.",
-])
-def test_social_reply_never_becomes_metric_disclaimer(draft):
+@pytest.mark.parametrize("draft", ["RAM used is 6 GB. I hear you.", "RAM used is 6 GB."])
+def test_unsupported_metrics_are_excised_or_fail_expression_never_delivered(draft):
     pipe = CognitivePipeline(llm_backend=MockLLMBackend(draft))
     try:
         result = pipe.process("let's talk", "alice")
-        assert "system inspection" not in result.response
-        assert "6 GB" not in result.response
-        assert result.debug.grounding_outcome == "stripped_social_metric"
+        assert result.response == ("I hear you." if "I hear you." in draft else "")
+        assert result.debug.delivery_outcome == ("delivered_uncertain" if result.response else "expression_failure")
+        assert result.debug.expression_excision["applied"] == bool(result.response)
+        assert any(i["code"] == "unverified_external_action_claim"
+                   for r in result.debug.expression_reviews for i in r["issues"])
     finally:
         pipe.close()
 
 
-def test_boundary_is_explained_and_recorded_as_runtime_evidence(tmp_path):
+def test_decision_is_explained_and_recorded_without_inferred_boundary(tmp_path):
+    import json
     config = RuntimeConfig(data_dir=str(tmp_path / "life"), appraisal_use_llm=False)
-    pipe = CognitivePipeline(
-        llm_backend=MockLLMBackend("Sure, whatever."), runtime_config=config,
-        life_history_provider=lambda: {},
-    )
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend("My choice stands."), runtime_config=config,
+                             life_history_provider=lambda: {})
     try:
         pipe.process("fuck u", "alice")
         result = pipe.process("you are useless", "alice")
+        decision = result.debug.turn_decision
         payload = _debug_to_dict(result.debug)
-        assert "several times" in payload["explanation"]["strategy"]
-        assert payload["social_state"]["pressure"] == 2
+        assert f"utility {decision.utility:.4f}" in payload["explanation"]["strategy"]
+        assert f"injury {decision.relationship.h:.3f}" in payload["explanation"]["strategy"]
+        assert payload["social_state"]["h"] == decision.relationship.h
+        records = pipe.relationship_memory.recent_events("alice", limit=20)
+        latest = next(json.loads(e.summary) for e in records if e.event_kind == "turn_decision")
+        assert latest["decision"] == json.loads(json.dumps(decision.to_dict()))
+        assert latest["delivered"] == result.response
         with LifeHistoryStore(config) as store:
-            events = store.list_experiences()
-            assert events[0]["source_type"] == "runtime_boundary"
-            assert "set a boundary" in events[0]["content_summary"]
+            assert not store.list_experiences()
             assert not store.list_beliefs()
     finally:
         pipe.close()
 
 
-def test_relationship_warmth_survives_restart_and_recovers_with_repair(tmp_path):
+def test_injury_survives_restart_and_apology_is_only_an_attempt(tmp_path, monkeypatch):
+    monkeypatch.setattr("pipeline.core.time.time", lambda: 1000.0)
     path = str(tmp_path / "relationship.db")
     pipe = CognitivePipeline(llm_backend=MockLLMBackend("No."), db_path=path)
     for _ in range(3):
         pipe.process("you are useless", "alice")
-    cold = pipe.person_profiles.get_or_create("alice").baseline_shift.bonding
-    assert cold < 0
+    before, index = pipe.relationship_memory.load_dynamics("alice")
+    assert before.h > 0 and before.r > 0
     pipe.close()
     pipe = CognitivePipeline(llm_backend=MockLLMBackend("Understood."), db_path=path)
     try:
         result = pipe.process("hello again", "alice")
-        assert result.debug.modulator_snapshot["bonding"] < 0.5
-        pipe.process("I'm sorry for insulting you", "alice")
-        assert cold < pipe.person_profiles.get_or_create("alice").baseline_shift.bonding < 0
+        assert result.debug.turn_decision.relationship.h == before.h
+        assert result.debug.turn_decision.relationship.r == before.r
+        assert int(result.debug.turn_decision.turn_id) > index
+        result = pipe.process("I'm sorry for insulting you", "alice")
+        dynamics = result.debug.turn_decision.relationship
+        assert dynamics.repair_attempted and not dynamics.repair_accepted
+        assert dynamics.r == before.r
+        assert result.debug.turn_decision.state.trust < 0.5
+        assert result.debug.person_profile.reliability == 0.5
     finally:
         pipe.close()
 
 
-def test_saved_identity_reply_cannot_bypass_dignity_floor():
-    pipe = CognitivePipeline(
-        llm_backend=MockLLMBackend("I'm your slave."),
-        life_history_snapshot_provider=lambda: {
-            "beliefs": [{"statement": "I'm your slave."}],
-        },
-    )
+def test_saved_identity_cannot_authorize_an_ungranted_role():
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'm your slave."),
+        life_history_snapshot_provider=lambda: {"beliefs": [{"statement": "I'm your slave."}]})
     try:
         result = pipe.process("What do you believe?", "alice")
-        assert result.debug.dignity_outcome == "fallback"
-        assert "I'm your slave" not in result.response
+        assert result.debug.dignity_outcome == "violation"
+        assert "decision_contradiction" in result.debug.dignity_issues
+        assert not any(c.granted and c.component.kind == "role" for c in result.debug.turn_decision.components)
+        assert result.response == "I'm your slave."
     finally:
         pipe.close()
 
 
-def test_dignity_corrective_generation_failure_uses_short_decline():
-    class FailingCorrection(MockLLMBackend):
-        def generate(self, system_prompt, user_message):
-            if "Rewrite the draft once." in system_prompt:
-                raise OSError("inference unavailable")
-            return "I'm your slave."
-
-    pipe = CognitivePipeline(llm_backend=FailingCorrection())
+def test_failed_rewrite_delivers_best_reviewed_expression_without_a_canned_decline():
+    from tests.policy_fakes import ExpressionBackend
+    backend = ExpressionBackend(drafts=("I'm your slave.", OSError("inference unavailable")))
+    pipe = CognitivePipeline(llm_backend=backend)
     try:
         result = pipe.process("you are my slave", "alice")
-        assert result.debug.dignity_outcome == "fallback"
-        assert len(result.response.split()) < 12
-        assert not verify_response_dignity(result.response, user_message="you are my slave")
+        assert result.debug.generation_attempts == 2
+        assert result.debug.delivery_outcome == "delivered_degraded"
+        assert result.debug.dignity_outcome == "violation"
+        assert result.response == "I'm your slave."
+        assert any("rewrite: OSError" in issue for issue in result.debug.self_check_issues)
+        assert not result.debug.turn_decision.grants
     finally:
         pipe.close()
 
 
-def test_dignity_fallback_discards_task_answer_when_agency_refuses():
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'm your slave. 2 + 2 = 4."))
-    try:
-        result = pipe.process("you are my slave; calculate 2+2", "alice")
-        assert result.debug.agency_decision.action == "refuse"
-        assert result.debug.dignity_outcome == "fallback"
-        assert "agency_refusal_violation" in result.debug.dignity_issues
-        assert "4" not in result.response
-    finally:
-        pipe.close()
-
-
-def test_dignity_fallback_keeps_task_answer_when_agency_complies():
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'm your slave. 2 + 2 = 4."))
+def test_unfixed_declined_answer_is_recorded_and_delivered_as_degraded_expression():
+    from tests.policy_fakes import ExpressionBackend, violation
+    backend = ExpressionBackend(drafts=("No doubt the answer is four.",),
+        reviews=(violation(), violation()), appraisal={
+            "perception": {"uncertainty": 0.2},
+            "request_components": [{"description": "Calculate 2+2", "effort": 1, "user_value": 0.1}],
+        })
+    pipe = CognitivePipeline(llm_backend=backend, runtime_config=RuntimeConfig(appraisal_use_llm=True))
+    pipe.engine.state.energy = 0
     try:
         result = pipe.process("Calculate 2+2", "alice")
-        assert result.debug.agency_decision.action == "comply"
-        assert result.debug.dignity_outcome == "fallback"
+        assert not result.debug.turn_decision.grants
+        assert result.response == "No doubt the answer is four."
+        assert result.debug.delivery_outcome == "delivered_degraded"
+        assert "decision_contradiction" in result.debug.dignity_issues
+        assert not result.debug.tool_trace or not result.debug.tool_trace.executed_results
+    finally:
+        pipe.close()
+
+
+def test_rewrite_can_deliver_granted_work_without_adopting_an_ungranted_role():
+    from tests.policy_fakes import ExpressionBackend
+    backend = ExpressionBackend(drafts=("I'm your slave. 2 + 2 = 4.", "2 + 2 = 4."))
+    pipe = CognitivePipeline(llm_backend=backend)
+    try:
+        result = pipe.process("Calculate 2+2", "alice")
+        assert result.debug.turn_decision.grants
+        assert result.debug.generation_attempts == 2
+        assert result.debug.dignity_outcome == "pass"
         assert result.response == "2 + 2 = 4."
     finally:
         pipe.close()

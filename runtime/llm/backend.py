@@ -15,7 +15,7 @@ from typing import Any
 import requests
 
 from core.provider_client import FastChatCompletionsClient
-from core.inference import request_timeout
+from core.inference import output_token_limit, request_timeout, sampling_parameters
 from core.llm_content import reply_text
 from core.dual_process.generator import LLMBackend
 from runtime.security import validate_http_url
@@ -58,6 +58,11 @@ class OpenAICompatibleLLMBackend:
             self._headers["Authorization"] = f"Bearer {api_key}"
         self._session = self._new_session()
         self._last_request_at: float | None = None
+
+    def set_output_token_limit(self, output_tokens: int) -> None:
+        if type(output_tokens) is not int or not 1 <= output_tokens <= 8192:
+            raise ValueError("Invalid output token limit")
+        self._max_output_tokens = output_tokens
 
     def set_research_limits(self, *, output_tokens: int, timeout: float) -> None:
         if type(output_tokens) is not int or not 1 <= output_tokens <= 8192 or not 0 < timeout <= 120:
@@ -135,9 +140,10 @@ class OpenAICompatibleLLMBackend:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            "max_tokens": self._max_output_tokens,
+            "max_tokens": output_token_limit(self._max_output_tokens),
             "chat_template_kwargs": {"enable_thinking": False},
             "reasoning_effort": "none",
+            **sampling_parameters(),
         }
         if self._research_single_attempt:
             payload.pop("chat_template_kwargs", None)

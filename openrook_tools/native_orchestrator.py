@@ -8,7 +8,7 @@ policy check, execution, appraisal, and a generator-ready summary.
 
 from __future__ import annotations
 
-from core.inference import model_call, request_timeout
+from core.inference import model_call, request_timeout, tool_selection_available
 
 import json
 import re
@@ -17,6 +17,7 @@ from typing import Any
 from openai import OpenAI
 
 from core.action_variables import derive_action_variables
+from core.grounding import blocked_before_execution
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.character_vector import CharacterVector
 from core.dual_process.tool_loop import (
@@ -194,10 +195,14 @@ class NativeToolCallRunner:
             character_vector=character_vector,
         )
         if not capabilities:
+            off = (autonomy_level or "").strip().lower() == "off"
             return ToolLoopResult(
-                trace=ToolTrace(),
+                trace=ToolTrace(final_decision=ToolDecision(decision="refuse",
+                    intent=ToolIntent(tool_name="native.tool_selection", arguments={},
+                        reason="Operator tool setting", expected_outcome="No execution"),
+                    rationale="Autonomy mode is off; tools are not allowed") if off else None),
                 action_variables=action_vars,
-                tool_context_summary="",
+                tool_context_summary="Operator tool autonomy is off. No tool executed and no command output is available." if off else "",
             )
 
         tools = [
@@ -220,9 +225,13 @@ class NativeToolCallRunner:
 
         try:
             while len(executed) < execution_limit:
+                if not tool_selection_available():
+                    break
                 message = self._create_tool_choice(messages, tools)
                 tool_calls = _extract_tool_calls(message)
                 if not tool_calls:
+                    if executed:
+                        break
                     fallback = self._heuristic_fallback(
                         user_message=user_message,
                         state=state,
@@ -237,7 +246,7 @@ class NativeToolCallRunner:
                         life_influence=life_influence,
                         character_vector=character_vector,
                     )
-                    if _trace_has_activity(fallback.trace):
+                    if not executed and _trace_has_activity(fallback.trace):
                         return fallback
                     break
 
@@ -290,6 +299,7 @@ class NativeToolCallRunner:
                             error="Malformed model tool call",
                         )
                         executed.append(result)
+                        observations.append(ToolObservation(summary=result.error or "Malformed tool call"))
                         messages.append(_tool_message_for_history(call, result))
                         continue
 
@@ -332,11 +342,31 @@ class NativeToolCallRunner:
                         )
 
                     result = self._executor.execute(intent.tool_name, intent.arguments)
-                    observation = self._appraise_and_apply(result, engine)
+                    # Execution is durable evidence even if subsequent appraisal
+                    # or model selection fails. Never replay a completed mutation.
                     executed.append(result)
+                    try:
+                        observation = self._appraise_and_apply(result, engine)
+                    except Exception:
+                        observations.append(ToolObservation(summary="Execution receipt retained; appraisal unavailable"))
+                        raise
                     observations.append(observation)
                     executed_this_round += 1
                     messages.append(_tool_message_for_history(call, result))
+                    if blocked_before_execution(result):
+                        # A policy denial ends this component's attempt, even
+                        # when more calls were returned in the same batch. No
+                        # model-selected workaround or milestone can follow it.
+                        return ToolLoopResult(
+                            trace=ToolTrace(proposed_intents=proposed,
+                                final_decision=ToolDecision(decision="refuse", intent=intent,
+                                    rationale=result.error or "Execution blocked by policy"),
+                                executed_results=executed, observations=observations,
+                                loop_count=len(executed)),
+                            action_variables=adjusted_action_vars,
+                            tool_context_summary=_summarize_for_generator(observations, executed),
+                            life_influence_effects=life_effects,
+                        )
 
                 if executed_this_round == 0:
                     break
@@ -361,14 +391,11 @@ class NativeToolCallRunner:
                 agency_decision=agency_decision,
                 autonomy_level=autonomy_level,
                 life_influence=life_influence,
-            )
-            if _trace_has_activity(fallback.trace):
+            ) if not executed else None
+            if fallback is not None and _trace_has_activity(fallback.trace):
                 return fallback
-            return ToolLoopResult(
-                trace=ToolTrace(executed_results=[failure], loop_count=0),
-                action_variables=action_vars,
-                tool_context_summary=f"[native.tool_call] Failed: {failure.error}",
-            )
+            executed.append(failure)
+            observations.append(ToolObservation(summary=failure.error or "Tool selection failed"))
 
         return ToolLoopResult(
             trace=ToolTrace(
@@ -509,6 +536,7 @@ class NativeToolCallRunner:
                 trust,
                 agency_decision=agency_decision,
                 autonomy_level=autonomy_level,
+                availability_only=True,
             )
             if decision.decision == "execute":
                 capabilities.append(capability)
@@ -569,7 +597,7 @@ class NativeToolCallRunner:
                 "tool_choice": "required", "temperature": 0,
             })
         try:
-            with model_call("tool_selection", optional=observer is None, backend=self):
+            with model_call("tool_selection", optional=observer is None, backend=self, primary_tool=True):
                 response = self._client.chat.completions.create(
                     model=self._model, messages=messages, tools=tools,
                     tool_choice="required", temperature=0,

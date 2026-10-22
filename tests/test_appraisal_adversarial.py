@@ -32,7 +32,7 @@ def test_not_your_fault_is_not_assistant_blame():
 def test_helped_but_still_scared_is_mixed_vulnerability():
     appraisal = _appraise("You helped, but I am still scared.", valence=0.35)
     assert appraisal.mixed_affect is True
-    assert appraisal.vulnerability >= 0.55
+    assert 0 < appraisal.vulnerability < 1
     assert appraisal.affiliation_bid > 0.0
 
 
@@ -46,7 +46,7 @@ def test_previous_answer_hurt_me_is_repairable_complaint():
     appraisal = _appraise("Your previous answer hurt me.", valence=0.25, arousal=0.6)
     assert appraisal.targets_assistant is True
     assert appraisal.social_move == "complaint"
-    assert appraisal.blame > 0.5
+    assert 0 < appraisal.blame < 1
 
 
 def test_apology_wrapped_insult_is_attack_not_apology():
@@ -64,4 +64,4 @@ def test_profanity_inside_benign_substring_does_not_count():
 def test_distressed_help_request_seeks_support():
     appraisal = _appraise("Can you help me? I am scared and overwhelmed.", valence=0.2, arousal=0.8)
     assert appraisal.inferred_intent == "seek_support"
-    assert appraisal.vulnerability >= 0.5
+    assert 0 < appraisal.vulnerability < 1

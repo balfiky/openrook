@@ -16,11 +16,8 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import sqlite3
 import tempfile
-import threading
 import time
 
 import pytest
@@ -133,22 +130,31 @@ class TestInactivityTimeout:
         """Each session has its own independent idle timer."""
         async def run():
             with tempfile.TemporaryDirectory() as tmpdir:
-                config = _make_config(tmpdir, session_timeout_seconds=0.6)
+                # Build both sessions before testing short idle windows: session
+                # construction can exceed those windows under suite load.
+                config = _make_config(tmpdir, session_timeout_seconds=60)
                 manager = SessionManager(config, backend_factory=_mock_factory)
                 try:
                     await _send(manager, "hi", user_id="alice")
-                    await asyncio.sleep(0.1)
                     await _send(manager, "hi", user_id="bob")
 
                     assert len(manager.active_sessions) == 2
 
-                    # Wait for alice's timer but leave enough slack so bob's
-                    # later timer should still be active despite request latency.
-                    await asyncio.sleep(0.45)
-                    await asyncio.sleep(0.05)
+                    # Only Alice's next activity arms the shorter timeout.
+                    # Bob must retain his independent, longer timer.
+                    config.session_timeout_seconds = 0.15
+                    await _send(manager, "second", user_id="alice")
+                    deadline = time.monotonic() + 2
+                    while "console:alice:direct" in manager.active_sessions and time.monotonic() < deadline:
+                        await asyncio.sleep(0.01)
 
                     assert "console:alice:direct" not in manager.active_sessions
                     assert "console:bob:direct" in manager.active_sessions
+                    await _send(manager, "second", user_id="bob")
+                    deadline = time.monotonic() + 2
+                    while "console:bob:direct" in manager.active_sessions and time.monotonic() < deadline:
+                        await asyncio.sleep(0.01)
+                    assert not manager.active_sessions
                 finally:
                     await manager.shutdown()
 
@@ -255,6 +261,7 @@ class TestGracefulShutdown:
                 # Shutdown while processing — should wait for it
                 await manager.shutdown()
                 assert processing_completed
+                assert await task == "done"
 
         asyncio.run(run())
 
@@ -463,10 +470,14 @@ class TestUnresolvedItemsPersistence:
                 config = _make_config(tmpdir, session_timeout_seconds=0.1)
                 manager = SessionManager(config, backend_factory=_mock_factory)
                 try:
-                    await _send(
-                        manager,
-                        "You betrayed and deceived me completely!",
-                    )
+                    from datetime import datetime, timezone
+                    from core.types import UnresolvedItem
+                    session = await manager.ensure_session("console", "user", "direct")
+                    session.pipeline.engine.add_unresolved(UnresolvedItem(
+                        id="pending", source="incomplete_task", description="An unfinished task",
+                        created_at=datetime.now(timezone.utc), intensity=0.7, decay_rate=0.02,
+                    ))
+                    await _send(manager, "Hello")
                     state_path = config.session_state_path("console:user:direct")
 
                     state = await _wait_for_saved_state(state_path)

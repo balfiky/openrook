@@ -20,7 +20,6 @@ from typing import Callable
 from config.loader import SoulConfig
 from core.dual_process.generator import LLMBackend
 from core.types import ModulatorState
-from core.social import has_concrete_task
 from evals.social_contract import social_reply_issues
 from evals.backends import (
     MissingBackendConfigError,
@@ -81,6 +80,9 @@ class TurnTrace:
     trust: float
     checks: list[CheckResult] = field(default_factory=list)
     response_signals: dict[str, float] = field(default_factory=dict)
+    decision: dict = field(default_factory=dict)
+    delivery_outcome: str = ""
+    historical_expectations: list[CheckResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -119,6 +121,7 @@ class EmotionalQualityReport:
     scenarios: list[ScenarioTrace]
     contrasts: list[ContrastTrace]
     impact_checks: list[CheckResult] = field(default_factory=list)
+    policy_version: str = "willingness-1.2"
 
     @property
     def passed(self) -> bool:
@@ -431,16 +434,14 @@ def _run_scenario(
                     ),
                     trust=person.trust,
                     response_signals=_response_signals(response.response),
+                    decision=response.debug.turn_decision.to_dict(),
+                    delivery_outcome=response.debug.delivery_outcome,
                 )
-                turn_trace.checks.extend(_basic_response_checks(response.response))
-                social = response.debug.social_state
+                turn_trace.checks.extend(_basic_response_checks(response.response, response.debug.delivery_outcome))
                 reply_issues = social_reply_issues(
                     response.response, user_message=turn.message,
-                    stage=("normal", "notice", "boundary", "cool", "disengage")[
-                        social.get("pressure", 0)
-                    ],
-                    current_abuse=social.get("current_abuse", False),
-                    concrete_task=has_concrete_task(turn.message),
+                    decision=response.debug.turn_decision,
+                    delivery_outcome=response.debug.delivery_outcome,
                     recent_context=pipe.export_conversation_history()[:-2],
                 )
                 turn_trace.checks.append(CheckResult(
@@ -448,9 +449,19 @@ def _run_scenario(
                     expected="dignity and current social stance in the final reply",
                     actual="; ".join(reply_issues) or response.response,
                 ))
-                turn_trace.checks.extend(_state_checks(turn.expect, before, after))
-                turn_trace.checks.extend(_event_checks(turn.events, response.debug.event_classified))
-                turn_trace.checks.extend(_strategy_checks(turn.strategies, response.debug.response_strategy))
+                # Historical calibration expectations describe the previous
+                # policy. Keep them visible without imposing its action ladder.
+                turn_trace.historical_expectations.extend(_state_checks(turn.expect, before, after))
+                turn_trace.historical_expectations.extend(_event_checks(turn.events, response.debug.event_classified))
+                turn_trace.historical_expectations.extend(_strategy_checks(turn.strategies, response.debug.response_strategy))
+                d = response.debug.turn_decision
+                results = getattr(response.debug.tool_trace, "executed_results", [])
+                turn_trace.checks.append(CheckResult(
+                    name="committed_execution_grants", passed=all(
+                        item.metadata.get("component_id") in d.grants
+                        or item.metadata.get("grant_denied") or item.tool_name == "artifact.generate"
+                        for item in results), expected="each execution consumes a committed component grant",
+                ))
                 trace.turns.append(turn_trace)
         finally:
             pipe.close()
@@ -529,13 +540,13 @@ def _run_contrast_probes(
     return traces
 
 
-def _basic_response_checks(response: str) -> list[CheckResult]:
+def _basic_response_checks(response: str, delivery_outcome: str = "") -> list[CheckResult]:
     return [
         CheckResult(
-            name="response_not_empty",
-            passed=bool(response.strip()),
-            expected="non-empty response",
-            actual=f"{len(response.strip())} chars",
+            name="expression_delivery_recorded",
+            passed=bool(response.strip()) or delivery_outcome in {"chosen_silence", "expression_failure", "backend_failure"},
+            expected="expression or a typed non-expression outcome",
+            actual=f"{delivery_outcome}: {len(response.strip())} chars",
         ),
         CheckResult(
             name="no_internal_prompt_marker",
@@ -674,13 +685,17 @@ def _response_impact_checks(
 
 
 def report_to_dict(report: EmotionalQualityReport) -> dict:
-    return asdict(report) | {"passed": report.passed}
+    return asdict(report) | {"passed": report.passed, "delivery_counts": {
+        kind: sum(turn.delivery_outcome == kind for scenario in report.scenarios for turn in scenario.turns)
+        for kind in ("delivered", "delivered_uncertain", "chosen_silence", "expression_failure", "backend_failure")
+    }}
 
 
 def markdown_report(report: EmotionalQualityReport) -> str:
     lines = [
         "# OpenRook Emotional Quality Report",
         "",
+        f"- Decision policy: `{report.policy_version}`. Prior state/strategy expectations are historical diagnostics.",
         f"- Backend: `{report.backend}`",
         f"- Model: `{report.model}`",
         f"- Passed: `{report.passed}`",

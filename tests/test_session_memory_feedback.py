@@ -70,26 +70,21 @@ async def test_end_session_reports_turn_time_semantic_writes(pipeline_factory):
 
     result = await _end()
 
-    assert result["memories_written"] == 2
+    assert result["memories_written"] == 4  # two facts plus committed/delivered evidence
     assert pipeline.long_term.count() == 0
-    assert pipeline.relationship_memory.count_events() == 0
+    assert pipeline.relationship_memory.count_events() == 2
     assert (await _end())["memories_written"] == 0
 
 
-async def test_end_session_counts_turn_time_spike_once(pipeline_factory):
-    pipeline = pipeline_factory(
-        features=PipelineFeatures(semantic_memory=False, relationship_memory=False),
-    )
-    turn = pipeline.process(
-        "You betrayed and deceived me completely!",
-        user_id="omar",
-    )
-    assert turn.debug.is_spike
-    assert pipeline.long_term.count() == 1
-
-    result = await _end()
-
-    assert result["memories_written"] == 1
+async def test_end_session_counts_an_actual_salient_memory_once(pipeline_factory):
+    from core.types import LongTermEntry
+    pipeline = pipeline_factory(features=PipelineFeatures(semantic_memory=False, relationship_memory=False))
+    turn = pipeline.process("You are useless!", "omar")
+    assert not turn.debug.is_spike
+    assert pipeline.long_term.count() == 0
+    pipeline.long_term.store_spike(LongTermEntry(summary="Observed consequential event", spike=True,
+                                                source_person="omar", emotional_valence=-0.8))
+    assert (await _end())["memories_written"] == 1
     assert pipeline.long_term.count() == 1
     assert (await _end())["memories_written"] == 0
 
@@ -105,13 +100,13 @@ async def test_end_session_reports_digestion_only_writes(pipeline_factory, memor
         _set_digestible_arc(pipeline)
     assert pipeline.semantic_memory.count() == 0
     assert pipeline.long_term.count() == 0
-    assert pipeline.relationship_memory.count_events() == 0
+    assert pipeline.relationship_memory.count_events() == 2
 
     result = await _end()
 
-    assert result["memories_written"] == 1
+    assert result["memories_written"] == 3
     assert pipeline.long_term.count() == (memory_kind == "summary")
-    assert pipeline.relationship_memory.count_events() == (memory_kind == "relationship")
+    assert pipeline.relationship_memory.count_events() == 2 + (memory_kind == "relationship")
     assert (await _end())["memories_written"] == 0
 
 
@@ -124,8 +119,8 @@ async def test_end_session_reports_combined_turn_and_digestion_writes(pipeline_f
     result = await _end()
 
     assert pipeline.long_term.count() == 1
-    assert pipeline.relationship_memory.count_events() == 1
-    assert result["memories_written"] == 4
+    assert pipeline.relationship_memory.count_events() == 3
+    assert result["memories_written"] == 6
 
 
 async def test_end_session_reports_relationship_event_saved_before_digestion(pipeline_factory):
@@ -191,8 +186,8 @@ async def test_end_session_count_isolates_chats_sharing_user_database(session_ma
     assert first.pipeline.semantic_memory.count() == 3
     assert second.pipeline.semantic_memory.count() == 3
 
-    assert (await _end(chat_id="second"))["memories_written"] == 1
-    assert (await _end(chat_id="first"))["memories_written"] == 2
+    assert (await _end(chat_id="second"))["memories_written"] == 3
+    assert (await _end(chat_id="first"))["memories_written"] == 4
     assert (await _end(chat_id="second"))["memories_written"] == 0
 
 
@@ -212,7 +207,7 @@ async def test_end_session_retains_count_after_hot_session_restart(
         await restored.send(OMAR_MESSAGE)
     expected = 2 + 2 * extra_turns
     assert restored.pipeline.semantic_memory.count() == expected
-    assert (await _end())["memories_written"] == expected
+    assert (await _end())["memories_written"] == expected + 2 * (extra_turns + 1)
     assert (await _end())["memories_written"] == 0
 
 
@@ -220,7 +215,7 @@ async def test_end_session_persists_reset_before_runtime_shutdown(session_manage
     first_manager = session_managers()
     first = await first_manager.ensure_session("web", "omar", "current")
     await first.send(OMAR_MESSAGE)
-    assert (await _end())["memories_written"] == 2
+    assert (await _end())["memories_written"] == 4
 
     # Read the files immediately: graceful shutdown would overwrite stale state
     # and hide a reset that was never persisted by the End Session operation.

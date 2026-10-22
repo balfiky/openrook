@@ -23,6 +23,7 @@ from fastapi import APIRouter
 from interface import routes_admin_config as _config_mod
 from interface import routes_admin_identity as _identity_mod
 from interface import routes_admin_runtime as _runtime_mod
+from interface import routes_evaluation as _evaluation_mod
 
 from interface.routes_admin_config import (  # noqa: F401
     AdminConfigUpdateRequest,
@@ -101,3 +102,4 @@ router = APIRouter()
 router.include_router(_config_mod.router)
 router.include_router(_identity_mod.router)
 router.include_router(_runtime_mod.router)
+router.include_router(_evaluation_mod.router)
