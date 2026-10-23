@@ -195,7 +195,7 @@ def test_declined_conversation_keeps_its_exact_subject_without_changing_the_choi
     prompt, raw = backend.calls[0]
     current = json.loads(raw.split("Current turn (respond to this):\n")[1])
     assert current["components"][0]["description"] == decision.components[0].component.description
-    assert not current["components"][0]["granted"]
+    assert current["components"][0]["choice"] == "decline"
     assert "Declining a proposition does not concede its premise" in prompt
     assert decision.to_dict() == snapshot
 

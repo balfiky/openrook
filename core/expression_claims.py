@@ -58,22 +58,45 @@ def supported_preference_recall(user: str, response: str, memories) -> bool:
     Only a direct affirmative recall, with the preference's complete wording,
     qualifies. Paraphrases and unsupported memories remain semantic questions.
     """
-    if not re.search(r"\b(?:remember|recall|preference)\b", user, re.I):
-        return False
-    normalized = " ".join(re.findall(r"\w+", response.casefold()))
     if re.search(r"\b(?:not|never|don't|can't|cannot)\b", response, re.I):
         return False
+    return bool(recalled_fact_spans(user, response, memories, preference_only=True))
+
+
+def recalled_fact_spans(user: str, response: str, memories, *, preference_only=False) -> tuple[tuple[int, int], ...]:
+    """Locate complete, exactly supported facts requested again on this turn.
+
+    Only saved preference/fact evidence qualifies, never an earlier assistant
+    reply alone. Keep byte ranges so freshness can still assess adjacent prose.
+    Unfamiliar questions and paraphrased facts remain semantic questions.
+    """
+    if not re.search(r"\b(?:remember|recall|preference)\b", user, re.I):
+        return ()
+    tokens = list(re.finditer(r"\w+", response))
+    words = [m[0].casefold() for m in tokens]
+    spans = set()
     for memory in memories:
         text = memory.get("summary", "")
         preference = re.search(r"\bpreference\s*:\s*(.+)", text, re.I)
         if preference:
             text = preference[1]
         elif memory.get("kind") != "preference":
+            if (preference_only or re.search(r"\bpreference\b", user, re.I)
+                    or memory.get("kind") != "fact"):
+                continue
+        fact = re.findall(r"\w+", text.casefold())
+        if len(fact) < 4:
             continue
-        words = " ".join(re.findall(r"\w+", text.casefold()))
-        if len(words.split()) >= 4 and f" {words} " in f" {normalized} ":
-            return True
-    return False
+        for start in range(len(words) - len(fact) + 1):
+            if words[start:start + len(fact)] == fact:
+                spans.add((tokens[start].start(), tokens[start + len(fact) - 1].end()))
+    merged = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = merged[-1][0], max(end, merged[-1][1])
+        else:
+            merged.append((start, end))
+    return tuple(merged)
 
 
 def contradictory_predicates(text: str) -> list[Predication]:

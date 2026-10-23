@@ -4,6 +4,26 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Run 14 expression and historical-receipt corrections
+
+- Retain declined requests' subjects in both generation projections, withholding
+  executable operands and answer context. Project choices as undertake/decline
+  rather than exposing execution-authority labels for the character to imitate.
+- Review factual explanations separately from decline legibility. Declining a
+  repeated request is valid; falsely claiming it was never asked is a defect.
+  Correct p1s's overly broad endorsement of the earlier title declines.
+- Exempt exactly supported, currently requested recalled facts from partial-span
+  staleness. Keep surrounding prose and whole-answer repeats independently bound.
+- Let exact runtime-jargon findings authorize sentence removal through the shared
+  gate. Preserve independent execution facts and required declines; edited text
+  still receives its own review, retains surviving cited findings and preserves
+  eligible intermediates when a later edit would lose a required decline.
+- Bind an implicit historical content reference through uniquely quoted current
+  read bytes, their snapshot digest and a same-chat successful prior write. Keep
+  explicit paths, missing evidence and ambiguous content references binding.
+- Add scrubbed exact run-14 records and offline gate, pipeline and harness
+  regressions, including the run-13 title expressions. No live result is claimed.
+
 ### Partial run 13 and replay 20 evidence corrections
 
 - Require nonempty verbatim draft citations for semantic findings, including

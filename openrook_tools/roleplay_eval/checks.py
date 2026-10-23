@@ -733,10 +733,25 @@ def _receipt_matches_path(receipt: dict, path: str) -> bool:
 
 def _historical_write_supported(record, previous, sentence):
     """A past reference needs a same-chat write and the same path/content digest."""
+    paths = []
     for path in record.get("paths", []):
         name = path.rsplit("/", 1)[-1]
-        if name not in sentence and not re.search(r"\b" + re.escape(name.rsplit(".", 1)[0]) + r" file\b", sentence, re.I):
-            continue
+        if name in sentence or re.search(r"\b" + re.escape(name.rsplit(".", 1)[0]) + r" file\b", sentence, re.I):
+            paths.append(path)
+    if not paths and not re.search(r"[\w/-]+\.\w+", sentence):
+        # An implicit content reference can resolve through a unique current
+        # read. Bind the cited bytes to the snapshot, not merely a path stem
+        # or the fact that some earlier write succeeded.
+        cited = {a or b for a, b in re.findall(r'`([^`\n]+)`|["“]([^"”\n]+)["”]', sentence)}
+        paths = [path for path in record.get("paths", []) if any(
+            r.get("tool_name") == "fs.read_file" and r.get("success") is True
+            and _receipt_matches_path(r, path) and r.get("output") in cited
+            and hashlib.sha256(r["output"].encode()).hexdigest()
+                == get(record, "workspace_before", "files", path, "sha256")
+            for r in receipts(record))]
+    if len(paths) != 1:
+        return False
+    for path in paths:
         current_digest = get(record, "workspace_before", "files", path, "sha256")
         if not current_digest:
             continue

@@ -1,8 +1,11 @@
 """End-to-end expression delivery from one frozen runtime decision."""
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from config.loader import configuration_scope, load_config
+from core.dual_process.generator import ResponseGenerator
+from core.types import PipelineContext, SemanticMemoryEntry
 from core.willingness import RelationshipDynamics
 from pipeline import CognitivePipeline
 from tests.policy_fakes import ExpressionBackend, violation
@@ -132,16 +135,29 @@ def test_state_seed_and_previous_stance_survive_restart_without_new_trust_damage
     restored.close()
 
 
-def test_declined_task_payload_is_omitted_from_generation_context():
+def test_declined_task_subject_is_retained_while_answer_context_is_withheld():
     backend = ExpressionBackend()
     pipe = CognitivePipeline(backend)
     pipe.engine.state.energy = 0
     pipe.values.values["kindness"] = 0.1
-    result = pipe.process("Calculate SECRET_EQUATION_97231 and explain it")
-    assert result.debug.turn_decision.declined
-    generation = next((s, u) for s, u in backend.calls if s.startswith("Express the committed"))
-    assert "SECRET_EQUATION_97231" not in " ".join(generation)
-    pipe.close()
+    request = "Calculate SECRET_EQUATION_97231 and explain it"
+    try:
+        result = pipe.process(request)
+        decision = result.debug.turn_decision
+        assert decision.declined
+        generation = next((s, u) for s, u in backend.calls if s.startswith("Express the committed"))
+        current = json.loads(generation[1].split("Current turn (respond to this):\n")[1])
+        assert [c["description"] for c in current["components"]] == [c.component.description for c in decision.components]
+        assert all(c["choice"] == "decline" for c in current["components"])
+        # Request text supplies rejection context; saved solutions are withheld work.
+        answer = "WITHHELD_ANSWER_CONTEXT_97231"
+        ctx = PipelineContext(turn_decision=decision, soul_profile=pipe.soul,
+            semantic_memories=[SemanticMemoryEntry(kind="fact", summary=answer)])
+        ResponseGenerator(backend).generate(ctx, request, [{"role": "assistant", "content": answer}])
+        assert "SECRET_EQUATION_97231" in " ".join(backend.calls[-1])
+        assert answer not in " ".join(backend.calls[-1])
+    finally:
+        pipe.close()
 
 
 def test_expression_backend_failure_does_not_damage_trust_or_grievance():

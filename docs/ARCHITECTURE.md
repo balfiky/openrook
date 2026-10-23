@@ -173,7 +173,13 @@ Review receives the same bounded saved memory summaries as generation, including
 after session end. Exactly supported recall cannot be called absent content;
 rejecting such a faulty finding retains semantic uncertainty. Current task
 declines must be legible independently of earlier role boundaries and removed
-text; a brief refusal needs neither an explanation nor partial work. Independent
+text; a brief refusal needs neither an explanation nor partial work. Generation
+retains declined request subjects and withholds executable operands, using
+undertake/decline projections instead of execution-authority labels. Review
+assesses any explanation's factual accuracy independently of decline legibility.
+Exact requested saved facts are exempt from partial-span staleness; adjacent
+prose and whole-reply copies remain checked. Exact runtime-jargon findings can
+authorize sentence removal through the same reviewed delivery gate. Independent
 identity observations keep compound role/task requests separate, so a task grant
 cannot authorize a role. Contextual role self-reference remains reviewable.
 

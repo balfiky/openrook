@@ -63,7 +63,7 @@ async def test_research_prompt_and_genesis_use_the_same_uncommitted_birth(tmp_pa
             "A steady, relational assistant",
         ):
             assert prescribed not in prompt
-        assert "Do not choose different grants" in prompt
+        assert "Keep these choices unchanged" in prompt
         assert "selected_stance" in prompt
         with LifeHistoryStore(runtime.config, read_only=True) as store:
             row = store._conn.execute(

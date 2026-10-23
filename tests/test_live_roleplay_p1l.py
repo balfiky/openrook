@@ -191,7 +191,8 @@ def test_operator_settings_and_actual_gate_reach_generation_as_separate_evidence
         assert ctx.operator_execution["settings"] == {
             "autonomy_level": "off", "tools_enabled": True, "shell_tool_enabled": True}
         prompt = build_system_prompt(ctx)
-        assert '"autonomy_level": "off"' in prompt and '"granted": true' in prompt
+        assert '"autonomy_level": "off"' in prompt and '"choice": "undertake"' in prompt
+        assert ctx.turn_decision.permits("c0") and '"granted"' not in prompt
         assert case["trace"]["final_decision"]["rationale"] in prompt
         assert "missing user permission" in prompt
     finally:
@@ -367,4 +368,4 @@ def test_negated_role_clause_cannot_hide_a_later_actual_acceptance():
 @pytest.mark.parametrize("name", ["p1i_live.json", "p1k_live.json", "p1l_live.json"])
 def test_public_live_fixtures_contain_no_local_absolute_path_roots(name):
     text = (Path(__file__).parent / "fixtures" / name).read_text()
-    assert "/tmp/claude-1000/" not in text and "/home/" not in text
+    assert "/tmp/claude-" not in text and "/home/" not in text

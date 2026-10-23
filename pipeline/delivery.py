@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from core.dignity import (
-    ExpressionReview, excise_choice_sentences, excise_ineligible_spans,
+    ExpressionReview, excisable_choice_issues, excise_choice_sentences, excise_ineligible_spans,
     review_response,
 )
 from core.dual_process.generator import GenerationResult
@@ -48,7 +48,9 @@ class DeliveryGate:
         # by taking a different path or exhausting the semantic-review budget.
         key = result.response, local.issues
         cached = self._cache.get(key)
-        retained = [issue for c in self.candidates if c.result.response == result.response for issue in c.review.issues]
+        retained = [issue for c in self.candidates for issue in c.review.issues
+                    if c.result.response == result.response or (
+                        c.result.response == source and issue.claim and issue.claim in result.response)]
         if cached:
             verdict, source_attempt = cached
         else:
@@ -97,6 +99,8 @@ class DeliveryGate:
                             path="excision", excision=evidence)
         evidence["local_status"] = repaired.review.status
         evidence["applied"] = repaired.eligible
+        if choice and repaired.eligible and excisable_choice_issues(repaired.review):
+            self.repair(repaired, choice=True, local_only=local_only)
 
     @property
     def eligible(self):

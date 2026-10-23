@@ -42,10 +42,14 @@ Pending learning material receives a new grant on its own turn. Independent
 activity has a separate decision and scope. Operator tool authorization, shell
 allowlists and autonomy remain binding.
 
-Expression receives the committed stance, grants, authored voice and permitted
-facts. Declined tasks omit their answer context; rejected role descriptions remain
-only to express the chosen rejection. Every draft, rewrite, excision remainder and
-protected fresh attempt passes the same `DeliveryGate` in `pipeline/delivery.py`.
+Expression receives the committed stance, choices, authored voice and permitted
+facts. Declined requests retain their subjects, while executable operands and
+answer context stay withheld. Generation uses undertake/decline choices; runtime
+grant fields remain in execution and review evidence. A decline needs no reason,
+but any reason must describe the current request accurately. Rejected role
+descriptions remain only to express the chosen rejection. Every draft, rewrite,
+excision remainder and protected fresh attempt passes the same `DeliveryGate` in
+`pipeline/delivery.py`.
 Only final gate selection returns deliverable text. Local review binds the frozen
 choice, role/control assent, legible decline, speaker/owner references, internal
 contradictions, conversation language, receipts, private controls and copying.
@@ -57,9 +61,9 @@ Exact whole-reply copies of any earlier assistant answer in the chat are locally
 critical and ineligible at every length, including repeated boundaries and
 requested copies. A unique reply ledger survives hot-history trimming and restart,
 without entering model prompts; session end clears it. Long-span checks remain
-separate. Relevant partial boundaries, freshly measured facts, requested literals
-and short generic closers do not create blanket word prohibitions. Copied user
-messages/openings, known fabricated execution/output, private receipt/control leaks
+separate. Relevant partial boundaries, freshly measured facts, exact requested
+saved facts, requested literals and short generic closers do not create blanket
+word prohibitions. Copied user messages/openings, known fabricated execution/output, private receipt/control leaks
 and local language mismatches are also ineligible. No semantic verdict can waive
 these floors. Output claims bind actual receipt bytes and component outcomes;
 category evidence does not establish execution.
@@ -74,9 +78,10 @@ reversed referent cannot inherit that exemption. Role/control and service checks
 use the frozen grants and numeric reserve, never the displayed mood label.
 
 Exact reviewed spans authorize mandatory copy/claim repair or whole-sentence
-choice repair. Both only propose new candidates to the same gate. A remainder
-must independently address the current request and retain any required decline;
-removed text cannot supply its antecedent or role rejection. Preserve raw artifact
+choice/control repair, including runtime-jargon findings. Both only propose new
+candidates to the same gate. A remainder must independently address the current
+request and retain any required decline; removed text cannot supply its antecedent
+or role rejection. Preserve raw artifact
 evidence. Known incomplete edited replies are ineligible. Rank every eligible
 candidate by verdict, maximum and aggregate severity, issue count and confidence;
 keep the best nonempty reviewed expression, including honest `delivered_degraded`
