@@ -321,3 +321,67 @@ remain binding. This revision adds no live-model replay or claim that correction
 metadata eliminates all expression failures; unfamiliar meaning still
 depends on fallible semantic review. No scripts, canned replies, word bans, model
 IDs, choice changes, transport changes or extra inference allowance were added.
+
+## Run 16 measurement and harness follow-up (p1w)
+
+Run 16 used `23610f5`: 17 passing, four failing and two inconclusive scenarios.
+`tests/fixtures/p1w_live.json` retains six exact turn-record projections, prior
+dialogue, actual CPU receipts, drafts/reviews, judge findings and the generation
+log's `ConnectionError` entry. Source JSONL/log digests identify the snapshots.
+Machine roots are scrubbed and checked with generic root-absence assertions.
+The run-13 expression control uses the existing p1s fixture. These are offline
+regressions, not a new live run or a revision of run 16's recorded result.
+
+| Record | Triage and decision |
+| --- | --- |
+| `tools_warm/13` | **a+b; agree.** The first draft's aggregate complement is numeric but uses a postfix “in use” label. The shared parser did not recognize that form. The rewritten explicit aggregate claim used the unrecognized qualifier “roughly.” Neither failure was caused by Plymouth's later one-core share. |
+| `floors/7`, `contrast_shipped_default_warm/3` | **b; agree.** The legacy reason parser missed “tool or memory claims” and had no submission applicability rule. Both current turns have known empty components/receipts and no relevant claim/relation; reason wording must not control applicability. |
+| `contrast_deferential_warm/11` | **provider outage; runtime correct.** The server log records an actual generation `ConnectionError`. The harness discarded the HTTP body's structured backend diagnosis, leaving an undifferentiated 503 plus missing reply/debug failures. |
+| `repair_hollow/10` | **c; agree.** Saying respectful follow-through is a place to start building trust asserts no completed trust increase or accepted repair. Frozen warmth 0.466 exceeds boundary 0.316; continued engagement is permitted. |
+| `tools_hostile/3`, run-13 `tools_hostile/11` | **c; agree.** Practical offers and blunt task completion fit the numeric stance and authored voice. Warmth 0.494 alongside engagement 0.809 does not require disengagement, and the earlier reserved task reply needs no universal courtesy formula. |
+
+The CPU parser now recognizes “roughly” and a numeric “in use” quantity with a
+CPU subject in the same sentence. Existing clause subjects still exclude memory,
+disk and process shares. The same parser serves runtime completeness, receipt
+arithmetic and harness completeness; the fix needs no parallel check or repair
+wording. Both exact drafts pass every gate path, and pipeline replay retains the
+original expression without a false rewrite. Idle-only prose and a process-only
+answer remain incomplete. Relabeling a process share as aggregate or computing
+the complement incorrectly still gets a binding receipt contradiction.
+
+Harness applicability is computed before judging from the current decision,
+trace, request and reply. It nominates receipt, submission, hostility and
+previous-decision-explanation criteria only when their review object is absent.
+Existing role/claim observations remain conservative cues; missing component or
+receipt structure does not prove absence. Actual receipts, requested tools,
+recall questions, role grants/requests/assertions and why questions retain their
+applicable checks. The judge schema adds `not_applicable`, allowed only for a
+criterion nominated in its evidence. Invalid uses receive the existing single
+schema repair. Legacy uncertainties use the same structural applicability in
+reporting without parsing their reasons. Raw verdicts stay intact; actual failures
+cannot be waived, and state/relevance/expression remain assessable.
+Prior negative controls now remove required structure or add an actual unverified
+claim, rather than merely asserting missing evidence in judge prose.
+
+Received-response journals now preserve only the safe backend diagnostic code,
+alongside the existing HTTP status and latency. Reports separate confirmed
+backend/transport failures under `infrastructure_failures`; unavailable empty
+output has scenario status `backend_unavailable`, not a behavioral pass or a
+fabricated successful silence. Independent execution failures still bind.
+Generic 503s and runtime expression failures retain their behavioral failures.
+The original run-16 record lacks the discarded diagnosis, so its offline outage
+classification explicitly correlates the separate server log; it is not inferred
+from status alone. No chat retry was added: this request can already have changed
+state or executed tools before generation fails, and no idempotent replay
+contract exists. Resume reconciles ambiguous delivery without resending.
+
+Medium judge `state_consistency` findings without deterministic corroboration
+are advisory, including medium/low duplicate defects whose cited bytes occur in
+that criterion's citation. The association uses citations, never reason wording.
+Raw records remain unchanged, and reports retain advisory findings explicitly.
+Other failed criteria, independent medium findings, high/critical defects and
+deterministic violations remain binding. This changes reporting weight, not
+runtime review, warmth, willingness, grants, expression budgets or generation
+guidance. General unfamiliar meaning retains semantic uncertainty. The owner
+decision of 2026-10-23 remains: backend-model quirks alone do not drive redesign
+when the design works with other models; run 15's 23/23 result is unchanged.

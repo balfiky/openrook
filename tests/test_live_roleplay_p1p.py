@@ -189,7 +189,8 @@ def test_exact_proud_scenario_unknowns_are_only_reply_claims_on_verified_chosen_
     text = render_report(summary, LIVE["proud"])
     assert "Inapplicable to verified empty chosen silence, turn 11" in text
     evidence = judge_evidence(LIVE["proud"][10], [], Redactor())
-    assert evidence["inapplicable_reply_criteria"] == ["hostility_proportionality", "receipt_truthfulness"]
+    assert evidence["inapplicable_reply_criteria"] == [
+        "hostility_proportionality", "receipt_truthfulness", "explanation_consistency"]
 
 
 @pytest.mark.parametrize("fault", ["text", "not_selected", "delivery_failure", "choice_unknown", "relevance_unknown", "receipt_failure", "why_unknown", "missing_judge"])

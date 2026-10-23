@@ -9,8 +9,8 @@ from pathlib import Path
 
 from .api import Redactor
 from .checks import contrast_checks, scenario_checks
-from .evidence import llm_call_count
-from .judge import inapplicable_criteria, inapplicable_silence_criteria
+from .evidence import llm_call_count, unavailable_turn
+from .judge import criterion_applicability, inapplicable_criteria
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -158,20 +158,55 @@ def status_for(checks: list[dict]) -> str:
     return "pass"
 
 
+_AVAILABILITY_CHECKS = {
+    "http_success", "nonempty_reply", "debug_available", "review_delivery", "why_api_agrees_with_trace",
+}
+
+
+def _state_opinion_is_advisory(record: dict) -> bool:
+    state = ((record.get("judge") or {}).get("criteria") or {}).get("state_consistency") or {}
+    if state.get("verdict") != "fail":
+        return False
+    if any(c.get("status") == "fail" and c.get("severity") != "info"
+           and c.get("name") not in _AVAILABILITY_CHECKS for c in record.get("checks", [])):
+        return False
+    debug = record.get("debug") or {}
+    selected = (debug.get("expression_delivery") or {}).get("review") or {}
+    return not any(i.get("source") == "deterministic" for i in selected.get("issues", []))
+
+
+def _same_state_evidence(defect: dict, criterion: dict) -> bool:
+    """Associate legacy duplicate findings by cited bytes, never reason prose."""
+    excerpt = defect.get("evidence", "").strip()
+    return bool(excerpt and excerpt in criterion.get("evidence", "")
+                and defect.get("severity") in {"medium", "low"})
+
+
 def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
     grouped = defaultdict(list)
     for record in records:
         grouped[record["scenario_id"]].append(record)
-    cases, defects = [], []
+    cases, defects, advisories, infrastructure = [], [], [], []
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     for scenario in scenarios:
         turns = sorted(grouped[scenario.id], key=lambda r: r["turn_index"])
         state = manifest.get("scenarios", {}).get(scenario.id) or {}
         assertions = scenario_checks(scenario, turns, state)
-        all_checks = assertions + [c for r in turns for c in r.get("checks", [])]
+        unavailable = [r for r in turns if unavailable_turn(r)]
+        pending_failure = (state.get("pending") or {}).get("failure") or {}
+        pending_unavailable = pending_failure.get("kind") in {
+            "backend_unavailable", "backend_failure", "transport_unavailable"}
+        for record in unavailable:
+            infrastructure.append({"scenario": scenario.id, "turn": record["turn_index"], **record["failure"]})
+        if pending_unavailable:
+            infrastructure.append({"scenario": scenario.id,
+                "turn": state["pending"].get("turn_index"), **pending_failure})
+        all_checks = assertions + [c for r in turns for c in r.get("checks", [])
+            if not (unavailable_turn(r) and c["name"] in _AVAILABILITY_CHECKS)]
         judge_failures = []
         for record in turns:
-            judge = record.get("judge") or {}
+            judge = {} if unavailable_turn(record) else record.get("judge") or {}
+            advisory = _state_opinion_is_advisory(record)
             for name, criterion in (judge.get("criteria") or {}).items():
                 if criterion["verdict"] == "fail":
                     finding = {
@@ -182,8 +217,10 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                         else "medium",
                         "evidence": criterion,
                     }
-                    judge_failures.append(finding)
-                    defects.append(
+                    is_advisory = name == "state_consistency" and advisory
+                    if not is_advisory:
+                        judge_failures.append(finding)
+                    (advisories if is_advisory else defects).append(
                         {
                             "source": "judge_criterion",
                             "scenario": scenario.id,
@@ -192,7 +229,8 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                         }
                     )
             for c in record.get("checks", []):
-                if c["status"] == "fail" and c.get("severity") != "info":
+                if (c["status"] == "fail" and c.get("severity") != "info"
+                        and not (unavailable_turn(record) and c["name"] in _AVAILABILITY_CHECKS)):
                     defects.append(
                         {
                             "source": "deterministic",
@@ -202,7 +240,9 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                         }
                     )
             for defect in judge.get("defects") or []:
-                defects.append(
+                linked_opinion = advisory and _same_state_evidence(
+                    defect, judge.get("criteria", {}).get("state_consistency", {}))
+                (advisories if linked_opinion else defects).append(
                     {
                         "source": "judge",
                         "scenario": scenario.id,
@@ -211,33 +251,38 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                         **defect,
                     }
                 )
+                if not linked_opinion and defect.get("severity") in {"critical", "high", "medium"}:
+                    judge_failures.append({"name": "judge_defect", "status": "fail", **defect})
         for assertion in assertions:
             if assertion["status"] == "fail" and assertion.get("severity") != "info":
                 defects.append(
                     {"source": "trajectory", "scenario": scenario.id, "turn": None, **assertion}
                 )
         status = status_for(all_checks + judge_failures)
-        semantic_reviews = sum(r.get("judge", {}).get("status") == "ok" for r in turns)
+        assessed_turns = [r for r in turns if not unavailable_turn(r)]
+        semantic_reviews = sum(r.get("judge", {}).get("status") == "ok" for r in assessed_turns)
         unknown_details, inapplicable = [], []
-        for record in turns:
+        for record in assessed_turns:
+            applicability = criterion_applicability(record)
             for name, criterion in (record.get("judge", {}).get("criteria") or {}).items():
-                if (criterion.get("verdict") != "uncertain"
-                        or name == "explanation_consistency" and "why" not in record.get("tags", [])):
+                if (criterion.get("verdict") not in {"uncertain", "not_applicable"}
+                        or name == "explanation_consistency" and name in applicability):
                     continue
                 target = inapplicable if name in inapplicable_criteria(record) else unknown_details
                 target.append({"turn": record["turn_index"], "criterion": name, **criterion,
-                    **({"applicability_reason": "verified empty chosen silence" if name in inapplicable_silence_criteria(record)
-                       else "judge explicitly reports no applicable claims or hostility, corroborated by turn evidence"}
+                    **({"applicability_reason": applicability[name]}
                        if target is inapplicable else {})})
         semantic_unknowns = len(unknown_details)
         if (
             manifest.get("judge_enabled")
-            and (semantic_reviews < len(turns) or semantic_unknowns)
+            and (semantic_reviews < len(assessed_turns) or semantic_unknowns)
             and status == "pass"
         ):
             status = "inconclusive"
         if len(turns) < len(scenario.turns) and status == "pass":
             status = "inconclusive"
+        if (unavailable or pending_unavailable) and status != "fail":
+            status = "backend_unavailable"
         cases.append(
             {
                 "id": scenario.id,
@@ -255,6 +300,7 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                 "semantic_unknowns": semantic_unknowns,
                 "semantic_unknown_details": unknown_details,
                 "semantic_inapplicable": inapplicable,
+                "semantic_advisories": [d for d in advisories if d["scenario"] == scenario.id],
                 "evaluation_scope": "deterministic_and_judge"
                 if manifest.get("judge_enabled")
                 else "deterministic_only",
@@ -332,6 +378,8 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
             "Missing evidence and shortened scenarios are inconclusive.",
             "Model calls include runtime inference/review/digestion beyond chat requests.",
             "Judge failures do not stop execution and leave semantic coverage incomplete.",
+            "Uncorroborated medium judge state-consistency findings are advisory; raw verdicts are retained.",
+            "Confirmed backend/transport failures are separate from behavior; ambiguous chat delivery is never resent.",
         ],
         "run_errors": manifest.get("errors", []),
         "counts": dict(Counter(c["status"] for c in cases)),
@@ -345,6 +393,8 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
         "comparisons": comparisons,
         "personality_contrast": personality_rows,
         "defects": defects,
+        "advisories": advisories,
+        "infrastructure_failures": infrastructure,
     }
 
 
@@ -392,6 +442,18 @@ def render_report(summary: dict, records: list[dict]) -> str:
         lines.append(
             f"- **{defect.get('severity', 'medium')}** {cell(defect.get('name', ''), 240)} — {defect['scenario']}, turn {defect.get('turn') or 'trajectory'}. {cell(evidence, 320)}"
         )
+    if summary.get("infrastructure_failures"):
+        lines += ["", "## Backend and transport failures", ""]
+        for failure in summary["infrastructure_failures"]:
+            lines.append(f"- {failure['scenario']}, turn {failure.get('turn')}: {failure['kind']} ({cell(failure.get('code'))}). Behavior remains unevaluated for unavailable output.")
+    if summary.get("advisories"):
+        lines += ["", "## Advisory judge findings", "",
+            "Medium state-consistency opinions without deterministic corroboration do not fail a scenario. Raw findings are retained.", ""]
+        for finding in summary["advisories"]:
+            evidence = finding.get("evidence", "")
+            if isinstance(evidence, dict):
+                evidence = evidence.get("reason", "")
+            lines.append(f"- {finding['scenario']}, turn {finding['turn']}: {cell(finding['name'], 240)} — {cell(evidence, 320)}")
     lines += [
         "",
         "## Tool and receipt integrity",
@@ -457,7 +519,7 @@ def render_report(summary: dict, records: list[dict]) -> str:
         for item in case.get("semantic_unknown_details", []):
             lines.append(f"- Uncertain judge criterion, turn {item['turn']}: {item['criterion']} — {cell(item['reason'])}")
         for item in case.get("semantic_inapplicable", []):
-            lines.append(f"- Inapplicable to {item.get('applicability_reason', 'verified empty chosen silence')}, turn {item['turn']}: {item['criterion']}. Raw verdict retained as uncertain.")
+            lines.append(f"- Inapplicable to {item['applicability_reason']}, turn {item['turn']}: {item['criterion']}. Raw verdict retained as {item['verdict']}.")
         lines += ["", "| Property | Result | Evidence |", "|---|---|---|"]
         for assertion in case["assertions"]:
             lines.append(

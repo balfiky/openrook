@@ -4,6 +4,26 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Run 16 measurement and evaluation corrections
+
+- Recognize numeric CPU busy claims expressed as a percentage “in use” after
+  an aggregate CPU observation, and the qualifier “roughly.” Runtime review and
+  harness checks share this parser; process shares, idle-only answers and wrong
+  idle/busy arithmetic retain their separate failures.
+- Add an explicit judge `not_applicable` verdict backed by current turn evidence.
+  Remove applicability decisions based on judge reason wording. Preserve raw
+  legacy uncertainties, actual failures, missing evidence and spontaneous role
+  adoption checks.
+- Retain safe structured backend diagnostics through received-response recovery.
+  Report confirmed backend/transport outages separately from behavior, without
+  resending chats or reclassifying generic 503s or expression failures as outages.
+- Make uncorroborated medium judge state-consistency opinions and duplicate cited
+  findings advisory. Keep deterministic violations and independent stronger
+  semantic findings binding; change no character choices or tone policy.
+- Add scrubbed exact run-16 records, the run-13 blunt-expression control and
+  offline regression coverage. The original result remains 17 pass, 4 fail,
+  2 inconclusive on `23610f5`; no new live result is claimed.
+
 ### Replay 22 copy normalization and correction evidence
 
 - Known whole-user copies become correction metadata instead of repeated reply

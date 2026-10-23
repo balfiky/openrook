@@ -3,6 +3,48 @@
 from __future__ import annotations
 
 
+_TRANSPORT_CODES = {"unreachable", "timeout", "provider_unavailable", "rate_limit"}
+_BACKEND_CODES = _TRANSPORT_CODES | {
+    "configuration", "authentication", "not_found", "empty_response", "backend_error",
+}
+
+
+def select_chat_payload(payload):
+    """Retain machine diagnostics without provider identity, destinations or prose."""
+    if not isinstance(payload, dict):
+        return None
+    result = {"response": payload.get("response"), "debug": select_debug(payload.get("debug") or {})}
+    diagnosis = payload.get("llm_error")
+    if (isinstance(diagnosis, dict) and isinstance(diagnosis.get("code"), str)
+            and diagnosis["code"] in _BACKEND_CODES):
+        result["llm_error"] = {"code": diagnosis["code"]}
+    return result
+
+
+def chat_failure(payload, status, error=None) -> dict | None:
+    """A generic 503 or error-like reply is never proof of a provider outage."""
+    payload = payload if isinstance(payload, dict) else {}
+    outcome = (payload.get("debug") or {}).get("delivery_outcome")
+    if outcome == "expression_failure":
+        return {"kind": "expression_failure"}
+    diagnosis = payload.get("llm_error") or {}
+    code = diagnosis.get("code") if isinstance(diagnosis, dict) else None
+    if (status is None or status >= 400) and isinstance(code, str) and code in _BACKEND_CODES:
+        return {"kind": "backend_unavailable" if code in _TRANSPORT_CODES else "backend_failure", "code": code}
+    if outcome == "backend_failure":
+        return {"kind": "backend_failure"}
+    if status is None and error and error != "recovered_from_history":
+        return {"kind": "transport_unavailable", "code": error}
+    return None
+
+
+def unavailable_turn(record: dict) -> bool:
+    return ((record.get("failure") or {}).get("kind") in {
+        "backend_unavailable", "backend_failure", "transport_unavailable"}
+        and not record.get("reply", "").strip()
+        and (record.get("debug") or {}).get("delivery_outcome") != "expression_failure")
+
+
 def llm_call_count(value) -> int:
     # Live debug exposes call telemetry as a list; older servers expose a count.
     if isinstance(value, list):

@@ -121,7 +121,7 @@ def cpu_idle_percentages(results) -> list[float]:
 def cpu_usage_claims(text: str):
     """Yield numeric aggregate busy claims with their original sentence spans."""
     quantity = r"(\d+(?:\.\d+)?)\s*(?:%|percent\b)"
-    qualifiers = r"(?:(?:is|at|currently|around|about|approximately|using|consuming|just under|just over)\s+|[:=]\s*)*"
+    qualifiers = r"(?:(?:is|at|currently|around|about|approximately|roughly|using|consuming|just under|just over)\s+|[:=]\s*)*"
     patterns = (
         re.compile(r"\b(?:CPU(?:\s+(?:usage|utili[sz]ation))?|"
                    r"(?:overall|aggregate|total)\s+(?:usage|utili[sz]ation|busy(?:\s+figure)?))\s*"
@@ -129,12 +129,18 @@ def cpu_usage_claims(text: str):
         re.compile(quantity + r"\s*(?:(idle|busy|used)\s+)?"
                    r"(?:(?:of|the|overall|aggregate|total|system)\s+)*(?:CPU|processor)\b", re.I),
         re.compile(quantity + r"\s*(busy)\b", re.I),
+        re.compile(quantity + r"\s*(in\s+use)\b", re.I),
     )
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
         matches = [m for pattern in patterns for m in pattern.finditer(sentence)]
         seen = set()
         for match in matches:
             prefix = re.split(r"[,;]|\b(?:and|with|while|but)\b", sentence[:match.start()], flags=re.I)[-1]
+            if match[2] and re.fullmatch(r"in\s+use", match[2], re.I):
+                inherited = re.split(r"\bidle\b", prefix, flags=re.I)[-1]
+                if (not re.search(r"\b(?:CPU|processor)\b", sentence[:match.start()], re.I)
+                        or not re.fullmatch(r"\s*(?:so\s+)?" + qualifiers, inherited, re.I)):
+                    continue  # A new named subject cannot inherit the earlier CPU label.
             if re.search(r"\b(?:process|per[- ]core|single[- ]core|core\s+\d+|load\s+average|share|RAM|memory|disk)\b", prefix, re.I):
                 continue
             # A named consumer is a process subject, even without the word

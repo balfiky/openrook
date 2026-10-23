@@ -15,7 +15,7 @@ import uuid
 
 from .api import PublicAPI, Redactor, destination_fingerprint, workspace_snapshot
 from .checks import finalize_deferred_checks, get, metrics, turn_checks
-from .evidence import compact_record, select_debug, select_observations
+from .evidence import chat_failure, compact_record, select_chat_payload, select_observations, unavailable_turn
 from .judge import Judge
 from .reporting import Artifacts, atomic_json
 from .scenarios import Scenario, materialize, plan_digest, profile
@@ -509,15 +509,15 @@ class Evaluation:
                     reason="Chat delivery is ambiguous; resume reconciles public session history without resending",
                 )
                 state["pending"]["error"] = response.error
+                state["pending"]["failure"] = chat_failure(response.data, response.status, response.error)
                 self._save()
                 return
             received = response.to_dict()
-            if isinstance(received["data"], dict):
-                received["data"] = {
-                    "response": received["data"].get("response"),
-                    "debug": select_debug(received["data"].get("debug") or {}),
-                }
+            received["data"] = select_chat_payload(response.data)
             state["pending"]["received_response"] = self.redactor.clean(received)
+            failure = chat_failure(response.data, response.status, response.error)
+            if failure:
+                state["pending"]["failure"] = failure
             self._save()
             after = await self._capture(ids)
             await self._finish_turn(
@@ -577,6 +577,9 @@ class Evaluation:
             "workspace_after": workspace_snapshot(self.options.tools_workspace, turn.paths, expected_content=token.encode()),
             "operator_settings": pending.get("operator_settings"),
         }
+        failure = chat_failure(payload, status, error)
+        if failure:
+            record["failure"] = failure
         previous = self._records(scenario)
         record["checks"] = turn_checks(
             record, previous, reject_roles=scenario.personality != "deferential"
@@ -586,7 +589,9 @@ class Evaluation:
         record["judge"] = {"status": "off"} if self.judge is None else {"status": "pending"}
         self._state(scenario)["pending"]["received_record"] = self.redactor.clean(record)
         self._save()
-        if self.judge:
+        if unavailable_turn(record):
+            record["judge"] = {"status": "not_evaluated", "reason": "unavailable_turn"}
+        elif self.judge:
             try:
                 record["judge"] = await self.judge.evaluate(record, previous)
             except Exception as exc:
@@ -611,7 +616,9 @@ class Evaluation:
         await self._stage(scenario if self._exclusive(scenario) else None)
         if pending.get("received_record"):
             record = compact_record(pending["received_record"])
-            if self.judge:
+            if unavailable_turn(record):
+                record["judge"] = {"status": "not_evaluated", "reason": "unavailable_turn"}
+            elif self.judge:
                 try:
                     record["judge"] = await self.judge.evaluate(record, self._records(scenario))
                 except Exception as exc:

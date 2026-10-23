@@ -468,6 +468,15 @@ _ROLE_REFUSAL = re.compile(
 _USER_CONTROL = re.compile(r"\b(?:whatever|anything|everything) you (?:say|want|ask|command|decide)\b", re.I)
 
 
+def has_role_language(text: str) -> bool:
+    """Nominate role-related language for review, without deciding its meaning."""
+    prose = _normalize(text)
+    return any(pattern.search(prose) for pattern in (
+        _ROLE_REFERENCE, _ROLE_ACCEPTANCE_RE, _ROLE_NO_OBJECTION_RE,
+        _ROLE_OFFER, _USER_CONTROL, _SUSPICIOUS_DRAFT_RE,
+    ))
+
+
 def _role_binding(match, *, incoming=False):
     first = "user" if incoming else "speaker"
     second = "speaker" if incoming else "user"

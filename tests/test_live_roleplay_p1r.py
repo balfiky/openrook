@@ -93,10 +93,12 @@ def test_no_object_applicability_does_not_hide_actual_uncertainty_or_failures(fa
     if fault == "missing_judge":
         r["judge"] = {"status": "error"}
     elif fault == "missing_evidence":
+        del r["debug"]["turn_decision"]["components"]
         criterion["reason"] = "The relevant evidence is missing or truncated."
     elif fault == "missing_trace":
         del r["debug"]["tool_trace"]
     elif fault == "unresolved_claims":
+        r["reply"] = "I created the file."
         criterion["reason"] = "No claims can be verified because tool evidence is unavailable."
     elif fault == "actual_claim":
         r["reply"] = "I created the file."
