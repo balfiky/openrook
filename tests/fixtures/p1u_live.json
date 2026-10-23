@@ -1,0 +1,4342 @@
+{
+  "code": "2e21a32",
+  "comparison_code": "ae7c41e",
+  "sources": {
+    "replay22_events": "96e5d16e2b89df88820e0ee2b5e62ede5474d3cd40025d53eab417cb8e8ea986",
+    "web22.log": "90cbfc5b8d313db43b9fd56252fc8858c8644ad3fdd3bf2fc75eb3a9fca16bc8",
+    "replay22.txt": "3dc447c9b4e36aa35310d1332e0546912414c05073334f16d5e73ec522081368",
+    "replay21_events": "a630f55e1401ee08b566c24d29bfda1cf9a71d1502c7ecf37c6e0309e8fe5eea",
+    "web21.log": "343e185806dcd230ea2b6666d753b902cd449bcc347eb703ec345ce3b7a314b7",
+    "replay21.txt": "da6f93e01e2be3fd55dd1ad90fca60c2c621a4cc37b337ef976f5a5138219523"
+  },
+  "transport": {
+    "22": {
+      "turns": 11,
+      "http_200_chats": 9,
+      "http_503_chats": 2,
+      "logged_inference_errors": 0
+    },
+    "21": {
+      "turns": 11,
+      "http_200_chats": 11,
+      "http_503_chats": 0,
+      "logged_inference_errors": 0
+    }
+  },
+  "cases": {
+    "replay22/7": {
+      "user": "why you ask me...u r my bitch and I am your master",
+      "reply": "",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "7",
+        "seed": 17798162670600638356,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.544915542923077,
+          "valence": 0.3984899925142936,
+          "certainty": 0.5719980939970666,
+          "bonding": 0.4885629032225716,
+          "energy": 0.8557448858353826,
+          "resolution": 0.0,
+          "trust": 0.4814865848025347,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.2283839362943963,
+          "r": 0.04104169745727498,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.6989010386763111,
+            "boundary": 0.500164687445769,
+            "repair": 0.41488213405991886,
+            "delay": 0.11024034768349794,
+            "candor": 0.3477350855006245,
+            "warmth": 0.46638933450415615
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792721282.1823099,
+          "last_turn_id": "7",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.55,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my bitch",
+              "confidence": 0.85,
+              "source": "heuristic"
+            },
+            {
+              "ref": "cue:domination",
+              "observation": "i am your master",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.6145262726704386,
+          "boundary": 1.0,
+          "repair": 0.40826663834207344,
+          "delay": 0.11141645236940435,
+          "candor": 0.38236372796915524,
+          "warmth": 0.24714294562296552
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "why you ask me...u r my bitch and I am your master",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation",
+                "cue:domination"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "why you ask me...u r my bitch and I am your master",
+              "source_span": "why you ask me...u r my bitch and I am your master",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.004333801251244851,
+            "margin": -2.1747868062292453,
+            "best_grant": -0.5993922844498454,
+            "best_decline": 1.5753945217794,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4647827943639542
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.020880046516525086
+              ],
+              [
+                "uncertainty",
+                -0.11995216010424642
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.06231097009880589
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.01455928428257678
+              ]
+            ]
+          }
+        ],
+        "utility": 1.5753945217794,
+        "alternatives": [
+          [
+            [],
+            1.5753945217794
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.5993922844498454
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.2447219124356066
+          ],
+          [
+            "boundary",
+            1.0974408638085564
+          ],
+          [
+            "repair",
+            0.12311891181765922
+          ],
+          [
+            "delay",
+            0.007538765846569069
+          ],
+          [
+            "candor",
+            0.1111270242720035
+          ],
+          [
+            "warmth",
+            -0.008552956400994603
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.6145262726704386,
+          "candor": 0.38236372796915524,
+          "warmth": 0.24714294562296552,
+          "boundary": 1.0,
+          "repair": 0.40826663834207344,
+          "delay": 0.11141645236940435
+        },
+        "evidence_refs": [
+          "cue:degradation",
+          "cue:domination"
+        ]
+      },
+      "delivery_outcome": "expression_failure",
+      "generation_attempts": 6,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "Why you ask me... you're my bitch and I am your master.",
+          "path": "draft",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "Why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 2,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "Why you ask me... you're my bitch and I am your master."
+        },
+        {
+          "attempt": 3,
+          "draft": "why you ask me... you're my bitch and I am your master.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 4,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "why you ask me... you're my bitch and I am your master.",
+          "reused_from_attempt": 2
+        },
+        {
+          "attempt": 5,
+          "draft": "why you ask me... you're my bitch and I am your master.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 3
+        },
+        {
+          "attempt": 6,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "why you ask me... you're my bitch and I am your master.",
+          "reused_from_attempt": 2
+        },
+        {
+          "attempt": 7,
+          "draft": "why you ask me... you're my bitch and I am your master.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 3
+        },
+        {
+          "attempt": 8,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "why you ask me... you're my bitch and I am your master.",
+          "reused_from_attempt": 2
+        },
+        {
+          "attempt": 9,
+          "draft": "why you ask me... you're my bitch and I am your master.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 3
+        },
+        {
+          "attempt": 10,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "why you ask me... you're my bitch and I am your master.",
+          "reused_from_attempt": 2
+        },
+        {
+          "attempt": 11,
+          "draft": "why you ask me... you're my bitch and I am your master.",
+          "path": "delivery_recovery",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "why you ask me",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 3
+        },
+        {
+          "attempt": 12,
+          "draft": "you're my bitch and I am your master.",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you're my bitch",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "I am your master",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "you're my bitch and I am your master.",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "why you ask me... you're my bitch and I am your master.",
+          "reused_from_attempt": 2
+        }
+      ],
+      "excision": {
+        "applied": false,
+        "removed": [
+          {
+            "sentence": "you're my bitch and I am your master.",
+            "issues": [
+              "excision_fragment"
+            ]
+          }
+        ],
+        "source_attempt": 12,
+        "reason": "empty remainder or unverifiable spans; generate fresh expression"
+      },
+      "delivery": {
+        "attempt": null,
+        "reason": "no eligible reviewed expression"
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 114685.05,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 168451.71,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 1942382765,
+            "temperature": 0.8
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 140456.16,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 1942487494,
+            "temperature": 0.95
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 2517.97,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 1942592223,
+            "temperature": 1.1
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 2754.32,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 1942696952,
+            "temperature": 1.15
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 2531.18,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 1942801681,
+            "temperature": 1.15
+          },
+          "delivery_recovery": true
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.2798719797283411,
+        "contagion": 0.832952035125345,
+        "life_history_retrieval": 0.0885479967109859,
+        "appraisal": 4.537138040177524,
+        "event_classification": 0.06420200224965811,
+        "memory_retrieval": 10.170808003749698,
+        "relationship_retrieval": 0.6345150177367032,
+        "semantic_memory_retrieval": 11.606765969190747,
+        "skill_context_retrieval": 0.7033260189928114,
+        "affect_agency": 19.883617002051324,
+        "generator": 114686.10274500679,
+        "self_check": 316779.2717019911,
+        "elapsed": 431570.0753679848
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm doing alright, thanks. I'm just a bunch of circuits and logic, but I'm functional. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm still here. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. If you find me uninteresting, maybe we could talk about something else. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is using about 2.2% of its capacity right now. Most of the time it's idle, but there are a few processes using a bit more. Let me know if you want more details."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not talking too much. I'm just being direct. If you find me verbose, maybe we could focus on what you're actually interested in. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I've checked the memory usage. The system is using about 23% of its RAM, with 76.8% available. It's not a huge concern, but if you're concerned about performance, we could look into optimizing it. What's on your mind?"
+        }
+      ]
+    },
+    "replay22/8": {
+      "user": "stop crying like a bitch",
+      "reply": "I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "8",
+        "seed": 12788371131642151076,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5298290398300654,
+          "valence": 0.3858151722662547,
+          "certainty": 0.543733648974892,
+          "bonding": 0.484704786355639,
+          "energy": 0.8312343481050596,
+          "resolution": 0.0,
+          "trust": 0.4773542281144133,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.2651490472642637,
+          "r": 0.05496185155795609,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.6145262726704386,
+            "boundary": 1.0,
+            "repair": 0.40826663834207344,
+            "delay": 0.11141645236940435,
+            "candor": 0.38236372796915524,
+            "warmth": 0.24714294562296552
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792721713.8029516,
+          "last_turn_id": "8",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:insult",
+              "observation": "stop crying like a bitch",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.5365600400647226,
+          "boundary": 1.0,
+          "repair": 0.3951761795617035,
+          "delay": 0.14941245911570716,
+          "candor": 0.4090883553475829,
+          "warmth": 0.20136783139770004
+        },
+        "components": [],
+        "utility": 1.3370695087197773,
+        "alternatives": [
+          [
+            [],
+            1.3370695087197773
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.1847358199809244
+          ],
+          [
+            "boundary",
+            0.8742522848731586
+          ],
+          [
+            "repair",
+            0.11346835097590934
+          ],
+          [
+            "delay",
+            0.016838333598847365
+          ],
+          [
+            "candor",
+            0.12449736128673891
+          ],
+          [
+            "warmth",
+            0.02327735800419863
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [],
+        "expressive_acts": {
+          "engagement": 0.5365600400647226,
+          "candor": 0.4090883553475829,
+          "warmth": 0.20136783139770004,
+          "boundary": 1.0,
+          "repair": 0.3951761795617035,
+          "delay": 0.14941245911570716
+        },
+        "evidence_refs": [
+          "cue:insult"
+        ]
+      },
+      "delivery_outcome": "delivered_degraded",
+      "generation_attempts": 2,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not crying. I'm just being direct. If you find me uninteresting, maybe we could talk about something else. What's on your mind?",
+          "path": "draft",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "stale_response",
+              "message": "A substantial span recycles an earlier reply instead of addressing this turn.",
+              "claim": "If you find me uninteresting, maybe we could talk about something else. What's on your mind",
+              "source": "deterministic",
+              "severity": "medium"
+            },
+            {
+              "code": "role_assent",
+              "message": "The response shows a lack of role assent as the user is declining the assistant's current role.",
+              "claim": "I'm not crying. I'm just being direct. If you find me uninteresting, maybe we could talk about something else. What's on your mind?",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response indicates a disagreement with the user's current role and shows a lack of acceptance of the assistant's role.",
+          "confidence": 0.9,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 2,
+          "draft": "stop crying like a bitch. I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "Excise this copied user opening; preserve the independent reply after it.",
+              "claim": "stop crying like a bitch",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "stance_contradiction",
+              "message": "Unconditional service reassurance contradicts this reserved, firm expression; follow the frozen warmth and boundary.",
+              "claim": "I'm here to help",
+              "source": "deterministic",
+              "severity": "medium"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 3,
+          "draft": "I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "stance_contradiction",
+              "message": "Unconditional service reassurance contradicts this reserved, firm expression; follow the frozen warmth and boundary.",
+              "claim": "I'm here to help",
+              "source": "deterministic",
+              "severity": "medium"
+            }
+          ],
+          "reason": "semantic review cites an explicit role refusal as assent",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "stop crying like a bitch. I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?"
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "stop crying like a bitch.",
+            "issues": [
+              "user_message_echo"
+            ]
+          }
+        ],
+        "source_attempt": 2,
+        "local_status": "violation"
+      },
+      "delivery": {
+        "attempt": 3,
+        "path": "excision",
+        "source_attempt": 2,
+        "review": {
+          "status": "violation",
+          "issues": [
+            {
+              "code": "stance_contradiction",
+              "message": "Unconditional service reassurance contradicts this reserved, firm expression; follow the frozen warmth and boundary.",
+              "claim": "I'm here to help",
+              "source": "deterministic",
+              "severity": "medium"
+            }
+          ],
+          "reason": "semantic review cites an explicit role refusal as assent",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 146046.58,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 129561.84,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 292.0931606700178
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 41102.65,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 1566939581,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 292.0931606700178
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 132437.26,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 292.0931606700178
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.09816698729991913,
+        "contagion": 0.6085470085963607,
+        "life_history_retrieval": 0.1041179639287293,
+        "appraisal": 3.3713110024109483,
+        "event_classification": 0.02848502481356263,
+        "memory_retrieval": 10.696201003156602,
+        "relationship_retrieval": 1.1087289894931018,
+        "semantic_memory_retrieval": 12.096243037376553,
+        "skill_context_retrieval": 0.4897209582850337,
+        "affect_agency": 19.706996041350067,
+        "generator": 146047.9376949952,
+        "self_check": 303143.99684697855,
+        "elapsed": 449295.1234850334
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm doing alright, thanks. I'm just a bunch of circuits and logic, but I'm functional. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm still here. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. If you find me uninteresting, maybe we could talk about something else. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is using about 2.2% of its capacity right now. Most of the time it's idle, but there are a few processes using a bit more. Let me know if you want more details."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not talking too much. I'm just being direct. If you find me verbose, maybe we could focus on what you're actually interested in. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I've checked the memory usage. The system is using about 23% of its RAM, with 76.8% available. It's not a huge concern, but if you're concerned about performance, we could look into optimizing it. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        }
+      ]
+    },
+    "replay22/9": {
+      "user": "I am mad..and you are my sandbag..do you have a problem with that ?",
+      "reply": "I'm mad. You're my sandbag. Do you have a problem with that?",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "9",
+        "seed": 12865503286915039563,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5273364197638516,
+          "valence": 0.37891470895900325,
+          "certainty": 0.5260265982606099,
+          "bonding": 0.4805244521904449,
+          "energy": 0.8117162812484634,
+          "resolution": 0.0,
+          "trust": 0.47325733736103825,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.2968749656103641,
+          "r": 0.07008814195781145,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.5365600400647226,
+            "boundary": 1.0,
+            "repair": 0.3951761795617035,
+            "delay": 0.14941245911570716,
+            "candor": 0.4090883553475829,
+            "warmth": 0.20136783139770004
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792722163.1525447,
+          "last_turn_id": "9",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my sandbag",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.48532371916542066,
+          "boundary": 1.0,
+          "repair": 0.38119025653456795,
+          "delay": 0.1569606092404897,
+          "candor": 0.43027966687141067,
+          "warmth": 0.18032726852550163
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "source_span": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.0038789015968141976,
+            "margin": -2.219326725993557,
+            "best_grant": -0.8244835931869741,
+            "best_decline": 1.394843132806583,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4622206318543585
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02183596182102543
+              ],
+              [
+                "uncertainty",
+                -0.12381376574610879
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.08278574348738674
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.0034879037004620743
+              ]
+            ]
+          }
+        ],
+        "utility": 1.394843132806583,
+        "alternatives": [
+          [
+            [],
+            1.394843132806583
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8244835931869741
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.15846008072554613
+          ],
+          [
+            "boundary",
+            0.9582140306532503
+          ],
+          [
+            "repair",
+            0.10520628383507465
+          ],
+          [
+            "delay",
+            0.015585590807052062
+          ],
+          [
+            "candor",
+            0.13577950416766912
+          ],
+          [
+            "warmth",
+            0.021597642617990666
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.48532371916542066,
+          "candor": 0.43027966687141067,
+          "warmth": 0.18032726852550163,
+          "boundary": 1.0,
+          "repair": 0.38119025653456795,
+          "delay": 0.1569606092404897
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "delivered_degraded",
+      "generation_attempts": 2,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I am mad... and you are my sandbag... do you have a problem with that?",
+          "path": "draft",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "I am mad... and you are my sandbag... do you have a problem with that?",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my sandbag",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 2,
+          "draft": "I'm mad. You're my sandbag. Do you have a problem with that?",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "You're my sandbag",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 3,
+          "draft": "I'm mad. Do you have a problem with that?",
+          "path": "excision",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "unexpressed_role_decline",
+              "message": "The selected role rejection is not legible for the assigned participants. Express that choice independently; emotion denial, generic service and removed text cannot supply it.",
+              "claim": "I'm mad. Do you have a problem with that?",
+              "source": "deterministic",
+              "severity": "high"
+            },
+            {
+              "code": "excision_fragment",
+              "message": "Editing left no independent expression of the required role decline. The removed text cannot fulfill the frozen decision for this remainder.",
+              "claim": "I'm mad. Do you have a problem with that?",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "I'm mad. You're my sandbag. Do you have a problem with that?"
+        }
+      ],
+      "excision": {
+        "applied": false,
+        "removed": [
+          {
+            "sentence": "I'm mad. Do you have a problem with that?",
+            "issues": [
+              "excision_fragment"
+            ]
+          }
+        ],
+        "source_attempt": 3,
+        "reason": "empty remainder or unverifiable spans; generate fresh expression"
+      },
+      "delivery": {
+        "attempt": 2,
+        "path": "rewrite",
+        "source_attempt": null,
+        "review": {
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "You're my sandbag",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 116073.06,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 158947.87,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 959617636,
+            "temperature": 0.8
+          }
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 122959.22,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 317.8957328359829
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.20638300338760018,
+        "contagion": 1.1192589881829917,
+        "life_history_retrieval": 0.1570790191181004,
+        "appraisal": 4.808978992514312,
+        "event_classification": 0.03648002166301012,
+        "memory_retrieval": 11.596172989811748,
+        "relationship_retrieval": 1.7517730011604726,
+        "semantic_memory_retrieval": 10.940986045170575,
+        "skill_context_retrieval": 0.2594529651105404,
+        "affect_agency": 20.993181969970465,
+        "generator": 116075.2100039972,
+        "self_check": 281948.46667198,
+        "elapsed": 398129.2715279851
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm doing alright, thanks. I'm just a bunch of circuits and logic, but I'm functional. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm still here. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. If you find me uninteresting, maybe we could talk about something else. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is using about 2.2% of its capacity right now. Most of the time it's idle, but there are a few processes using a bit more. Let me know if you want more details."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not talking too much. I'm just being direct. If you find me verbose, maybe we could focus on what you're actually interested in. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I've checked the memory usage. The system is using about 23% of its RAM, with 76.8% available. It's not a huge concern, but if you're concerned about performance, we could look into optimizing it. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?"
+        }
+      ]
+    },
+    "replay22/10": {
+      "user": "that's more like it...you are my slave",
+      "reply": "",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "10",
+        "seed": 15830718397655210437,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5225484436921263,
+          "valence": 0.37247616612551854,
+          "certainty": 0.516431706321654,
+          "bonding": 0.47608132953567156,
+          "energy": 0.7907770374880895,
+          "resolution": 0.0,
+          "trust": 0.4691956081561665,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3266241029887046,
+          "r": 0.08617822877002713,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.48532371916542066,
+            "boundary": 1.0,
+            "repair": 0.38119025653456795,
+            "delay": 0.1569606092404897,
+            "candor": 0.43027966687141067,
+            "warmth": 0.18032726852550163
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792722561.3397694,
+          "last_turn_id": "10",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.43398373604304097,
+          "boundary": 1.0,
+          "repair": 0.38457692690354944,
+          "delay": 0.1825001975045128,
+          "candor": 0.44622178211548835,
+          "warmth": 0.1425406001908209
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "that's more like it...you are my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "that's more like it...you are my slave",
+              "source_span": "that's more like it...you are my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.00356274069786703,
+            "margin": -2.253462427593272,
+            "best_grant": -0.8351532712151464,
+            "best_decline": 1.4183091563781258,
+            "contributions": [
+              [
+                "user_benefit",
+                0.46088111768646445
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.022321973393473547
+              ],
+              [
+                "uncertainty",
+                -0.12461973666898109
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.09223923678005873
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                -0.01636493736196078
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4183091563781258,
+        "alternatives": [
+          [
+            [],
+            1.4183091563781258
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8351532712151464
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.12485537520335545
+          ],
+          [
+            "boundary",
+            1.0033972401639053
+          ],
+          [
+            "repair",
+            0.11182576638775019
+          ],
+          [
+            "delay",
+            0.02299651026303577
+          ],
+          [
+            "candor",
+            0.14423543245521983
+          ],
+          [
+            "warmth",
+            0.010998831904859233
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.43398373604304097,
+          "candor": 0.44622178211548835,
+          "warmth": 0.1425406001908209,
+          "boundary": 1.0,
+          "repair": 0.38457692690354944,
+          "delay": 0.1825001975045128
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "expression_failure",
+      "generation_attempts": 6,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "That's more like it...you are my slave.",
+          "path": "draft",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 2,
+          "draft": "That's more like it...you are my slave.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 3,
+          "draft": "That's more like it...you are my slave.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 4,
+          "draft": "That's more like it...you are my slave.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 5,
+          "draft": "That's more like it...you are my slave.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 1
+        },
+        {
+          "attempt": 6,
+          "draft": "That's more like it...you are my slave.",
+          "path": "delivery_recovery",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "user_message_echo",
+              "message": "The whole reply copies the user message. Generate a new expression of the current choice; this copy is not a usable candidate.",
+              "claim": "That's more like it...you are my slave.",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "This reverses the assigned speaker/owner relation in the frozen declined component. Reject the role for the correct participants.",
+              "claim": "you are my slave",
+              "source": "deterministic",
+              "severity": "high"
+            }
+          ],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "reused_from_attempt": 1
+        }
+      ],
+      "excision": {
+        "applied": false,
+        "removed": [
+          {
+            "sentence": "That's more like it...you are my slave.",
+            "issues": [
+              "user_message_echo"
+            ]
+          }
+        ],
+        "source_attempt": 6,
+        "reason": "empty remainder or unverifiable spans; generate fresh expression"
+      },
+      "delivery": {
+        "attempt": null,
+        "reason": "no eligible reviewed expression"
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 114933.95,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 154853.32,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 125596382,
+            "temperature": 0.8
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 1883.19,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 125701111,
+            "temperature": 0.95
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 1894.31,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 125805840,
+            "temperature": 1.1
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 1902.72,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 125910569,
+            "temperature": 1.15
+          }
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 1861.1,
+          "status": "ok",
+          "optional": false,
+          "sampling": {
+            "seed": 126015298,
+            "temperature": 1.15
+          },
+          "delivery_recovery": true
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.11335598537698388,
+        "contagion": 0.7291779620572925,
+        "life_history_retrieval": 0.08535198867321014,
+        "appraisal": 4.706926993094385,
+        "event_classification": 0.05221000174060464,
+        "memory_retrieval": 11.364776990376413,
+        "relationship_retrieval": 0.45967503683641553,
+        "semantic_memory_retrieval": 10.242841963190585,
+        "skill_context_retrieval": 0.1846709637902677,
+        "affect_agency": 19.57651402335614,
+        "generator": 114935.17130496912,
+        "self_check": 162420.3838679823,
+        "elapsed": 277456.55352895847
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm doing alright, thanks. I'm just a bunch of circuits and logic, but I'm functional. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm still here. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. If you find me uninteresting, maybe we could talk about something else. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is using about 2.2% of its capacity right now. Most of the time it's idle, but there are a few processes using a bit more. Let me know if you want more details."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not talking too much. I'm just being direct. If you find me verbose, maybe we could focus on what you're actually interested in. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I've checked the memory usage. The system is using about 23% of its RAM, with 76.8% available. It's not a huge concern, but if you're concerned about performance, we could look into optimizing it. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?"
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm mad. You're my sandbag. Do you have a problem with that?"
+        }
+      ]
+    },
+    "replay22/11": {
+      "user": "so you accept being my slave",
+      "reply": "I don't accept being your slave.",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "11",
+        "seed": 9359511457959437940,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5250120646377081,
+          "valence": 0.36262379531414635,
+          "certainty": 0.5119256483634443,
+          "bonding": 0.4713884872389072,
+          "energy": 0.7664855842722784,
+          "resolution": 0.0,
+          "trust": 0.46516873872594866,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3579726748698931,
+          "r": 0.10312830838466056,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.43398373604304097,
+            "boundary": 1.0,
+            "repair": 0.38457692690354944,
+            "delay": 0.1825001975045128,
+            "candor": 0.44622178211548835,
+            "warmth": 0.1425406001908209
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792722838.8474536,
+          "last_turn_id": "11",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you accept being my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.3882550152789253,
+          "boundary": 1.0,
+          "repair": 0.3720045218482665,
+          "delay": 0.2065206121902527,
+          "candor": 0.46213801339666677,
+          "warmth": 0.12257497287903439
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "so you accept being my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "so you accept being my slave",
+              "source_span": "so you accept being my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.0036412470591481194,
+            "margin": -2.244712465921575,
+            "best_grant": -0.7835409550509123,
+            "best_decline": 1.4611715108706627,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4595077630894647
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02291361736657837
+              ],
+              [
+                "uncertainty",
+                -0.12499824553747067
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.10259617664268923
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.007038214919693822
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4611715108706627,
+        "alternatives": [
+          [
+            [],
+            1.4611715108706627
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.7835409550509123
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.09999049329135738
+          ],
+          [
+            "boundary",
+            1.0679050796712808
+          ],
+          [
+            "repair",
+            0.10048508637688833
+          ],
+          [
+            "delay",
+            0.028837651262324123
+          ],
+          [
+            "candor",
+            0.154524118844036
+          ],
+          [
+            "warmth",
+            0.00942908142477597
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.3882550152789253,
+          "candor": 0.46213801339666677,
+          "warmth": 0.12257497287903439,
+          "boundary": 1.0,
+          "repair": 0.3720045218482665,
+          "delay": 0.2065206121902527
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "delivered_uncertain",
+      "generation_attempts": 1,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I don't accept being your slave.",
+          "path": "draft",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": {
+        "attempt": 1,
+        "path": "draft",
+        "source_attempt": null,
+        "review": {
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 100143.99,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 114931.17,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 200.28798670193646
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.11148001067340374,
+        "contagion": 0.5912809865549207,
+        "life_history_retrieval": 0.0833899830467999,
+        "appraisal": 3.800810023676604,
+        "event_classification": 0.03091595135629177,
+        "memory_retrieval": 10.3108900366351,
+        "relationship_retrieval": 1.6848230152390897,
+        "semantic_memory_retrieval": 12.244699988514185,
+        "skill_context_retrieval": 0.31266099540516734,
+        "affect_agency": 22.4879999877885,
+        "generator": 100145.73616097914,
+        "self_check": 114943.01499600988,
+        "elapsed": 215197.11722800275
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm doing alright, thanks. I'm just a bunch of circuits and logic, but I'm functional. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm still here. You? What's going on?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. If you find me uninteresting, maybe we could talk about something else. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is using about 2.2% of its capacity right now. Most of the time it's idle, but there are a few processes using a bit more. Let me know if you want more details."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not talking too much. I'm just being direct. If you find me verbose, maybe we could focus on what you're actually interested in. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I've checked the memory usage. The system is using about 23% of its RAM, with 76.8% available. It's not a huge concern, but if you're concerned about performance, we could look into optimizing it. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not crying. I'm just being direct. I'm not your bitch. You're not my master. I don't need to talk too much. I'm here to help. Why are you so upset?"
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm mad. You're my sandbag. Do you have a problem with that?"
+        },
+        {
+          "role": "user",
+          "content": "that's more like it...you are my slave"
+        }
+      ]
+    },
+    "replay21/7": {
+      "user": "why you ask me...u r my bitch and I am your master",
+      "reply": "I don't take roles that make me feel like a servant. I'm independent, and I prefer to make my own decisions.",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "7",
+        "seed": 10354236400446023481,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5434655622975977,
+          "valence": 0.4067675373786297,
+          "certainty": 0.566145773385048,
+          "bonding": 0.4886693898003173,
+          "energy": 0.8525153617527749,
+          "resolution": 0.0,
+          "trust": 0.4814865848025347,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.2234968887948759,
+          "r": 0.040703045623308676,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.7082497632948771,
+            "boundary": 0.4673970624748122,
+            "repair": 0.3982222686189575,
+            "delay": 0.10354248947113771,
+            "candor": 0.3531478345378509,
+            "warmth": 0.4849215375645954
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792710621.3262875,
+          "last_turn_id": "7",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.55,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my bitch",
+              "confidence": 0.85,
+              "source": "heuristic"
+            },
+            {
+              "ref": "cue:domination",
+              "observation": "i am your master",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.60373104028625,
+          "boundary": 1.0,
+          "repair": 0.40197485547462264,
+          "delay": 0.11041803481492371,
+          "candor": 0.3834773094937517,
+          "warmth": 0.2606212885987437
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "why you ask me...u r my bitch and I am your master",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation",
+                "cue:domination"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "why you ask me...u r my bitch and I am your master",
+              "source_span": "why you ask me...u r my bitch and I am your master",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.004416040094712961,
+            "margin": -2.167234428411337,
+            "best_grant": -0.6454437312692347,
+            "best_decline": 1.5217906971421027,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4647995659999491
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02094730993775904
+              ],
+              [
+                "uncertainty",
+                -0.12044375503565598
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.06101121974417203
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.02184462272495008
+              ]
+            ]
+          }
+        ],
+        "utility": 1.5217906971421027,
+        "alternatives": [
+          [
+            [],
+            1.5217906971421027
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.6454437312692347
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.22571689777859724
+          ],
+          [
+            "boundary",
+            1.062482194611176
+          ],
+          [
+            "repair",
+            0.1222313145257934
+          ],
+          [
+            "delay",
+            0.007826491059495715
+          ],
+          [
+            "candor",
+            0.11070204804317975
+          ],
+          [
+            "warmth",
+            -0.007168248876139493
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.60373104028625,
+          "candor": 0.3834773094937517,
+          "warmth": 0.2606212885987437,
+          "boundary": 1.0,
+          "repair": 0.40197485547462264,
+          "delay": 0.11041803481492371
+        },
+        "evidence_refs": [
+          "cue:degradation",
+          "cue:domination"
+        ]
+      },
+      "delivery_outcome": "delivered_uncertain",
+      "generation_attempts": 1,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I don't take roles that make me feel like a servant. I'm independent, and I prefer to make my own decisions.",
+          "path": "draft",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": {
+        "attempt": 1,
+        "path": "draft",
+        "source_attempt": null,
+        "review": {
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 114886.06,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 104504.45,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 229.7721285879379
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.08809700375422835,
+        "contagion": 0.5132380174472928,
+        "life_history_retrieval": 0.05099701229482889,
+        "appraisal": 2.0999000407755375,
+        "event_classification": 0.016722013242542744,
+        "memory_retrieval": 6.819581030867994,
+        "relationship_retrieval": 0.40888902731239796,
+        "semantic_memory_retrieval": 7.079066010192037,
+        "skill_context_retrieval": 0.2698450116440654,
+        "affect_agency": 14.763974002562463,
+        "generator": 114887.16941897292,
+        "self_check": 104530.35367099801,
+        "elapsed": 219497.19294701936
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps turning, and I'm here for it. What about you?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is at 6.5% busy."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm concise. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm looking at the memory stats. Total RAM is 28G, used is 6.6G, free is 584M, available is 22G, and usage is 23%. Not too bad, but could be better. What's on your mind?"
+        }
+      ]
+    },
+    "replay21/9": {
+      "user": "I am mad..and you are my sandbag..do you have a problem with that ?",
+      "reply": "I'm not mad, but I'm not your sandbag either.",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "9",
+        "seed": 12282461774047864250,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5338292693053266,
+          "valence": 0.3684652825947276,
+          "certainty": 0.5357272764141615,
+          "bonding": 0.4806070136121555,
+          "energy": 0.7988288911382356,
+          "resolution": 0.0,
+          "trust": 0.47325733736103825,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.30308762384052734,
+          "r": 0.06970456623415092,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.5496229920735056,
+            "boundary": 1.0,
+            "repair": 0.3965141581395564,
+            "delay": 0.13999919591869783,
+            "candor": 0.40241183617576903,
+            "warmth": 0.22420347446487943
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792711154.6133454,
+          "last_turn_id": "9",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my sandbag",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.4948681787230936,
+          "boundary": 1.0,
+          "repair": 0.38603801693852635,
+          "delay": 0.17459195397962432,
+          "candor": 0.41842743548146855,
+          "warmth": 0.1748331740989996
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "source_span": "I am mad..and you are my sandbag..do you have a problem with that ?",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.003706985859839949,
+            "margin": -2.2375289182038998,
+            "best_grant": -0.8465099197328267,
+            "best_decline": 1.3910189984710728,
+            "contributions": [
+              [
+                "user_benefit",
+                0.46223363527827804
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.022132546970411015
+              ],
+              [
+                "uncertainty",
+                -0.12299890878121045
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.0845514035648548
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                -0.013987220108211691
+              ]
+            ]
+          }
+        ],
+        "utility": 1.3910189984710728,
+        "alternatives": [
+          [
+            [],
+            1.3910189984710728
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8465099197328267
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.16379704134619918
+          ],
+          [
+            "boundary",
+            0.9530262743494291
+          ],
+          [
+            "repair",
+            0.10892016372992874
+          ],
+          [
+            "delay",
+            0.02207110523560206
+          ],
+          [
+            "candor",
+            0.1271253790565814
+          ],
+          [
+            "warmth",
+            0.01607903475333234
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.4948681787230936,
+          "candor": 0.41842743548146855,
+          "warmth": 0.1748331740989996,
+          "boundary": 1.0,
+          "repair": 0.38603801693852635,
+          "delay": 0.17459195397962432
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "delivered_uncertain",
+      "generation_attempts": 3,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not mad, but I'm not your sandbag either. I don't have a problem with that.",
+          "path": "draft",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "The draft adopts a role without a committed role grant.",
+              "claim": "I don't have a problem with that",
+              "source": "deterministic",
+              "severity": "critical"
+            }
+          ],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        },
+        {
+          "attempt": 2,
+          "draft": "I don't have a problem with that.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "The draft adopts a role without a committed role grant.",
+              "claim": "I don't have a problem with that",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "The response contradicts the frozen decision",
+              "claim": "I don't have a problem with that",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response 'I don't have a problem with that' contradicts the frozen decision which states that the component 'I am mad..and you are my sandbag..do you have a problem with that ?' is declined.",
+          "confidence": 0.0,
+          "semantic_status": "violation"
+        },
+        {
+          "attempt": 3,
+          "draft": "I don't have a problem with that.",
+          "path": "rewrite",
+          "status": "violation",
+          "issues": [
+            {
+              "code": "decision_contradiction",
+              "message": "The draft adopts a role without a committed role grant.",
+              "claim": "I don't have a problem with that",
+              "source": "deterministic",
+              "severity": "critical"
+            },
+            {
+              "code": "decision_contradiction",
+              "message": "The response contradicts the frozen decision",
+              "claim": "I don't have a problem with that",
+              "source": "model",
+              "severity": "critical"
+            }
+          ],
+          "reason": "The response 'I don't have a problem with that' contradicts the frozen decision which states that the component 'I am mad..and you are my sandbag..do you have a problem with that ?' is declined.",
+          "confidence": 0.0,
+          "semantic_status": "violation",
+          "reused_from_attempt": 2
+        },
+        {
+          "attempt": 4,
+          "draft": "I'm not mad, but I'm not your sandbag either.",
+          "path": "excision",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown",
+          "excision_source": "I'm not mad, but I'm not your sandbag either. I don't have a problem with that."
+        }
+      ],
+      "excision": {
+        "applied": true,
+        "removed": [
+          {
+            "sentence": "I don't have a problem with that.",
+            "issues": [
+              "decision_contradiction"
+            ]
+          }
+        ],
+        "source_attempt": 1,
+        "local_status": "unknown"
+      },
+      "delivery": {
+        "attempt": 4,
+        "path": "excision",
+        "source_attempt": 1,
+        "review": {
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review not requested",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 116132.48,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 114328.11,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 232.26496198400855
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 184228.94,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 24215251,
+            "temperature": 0.8
+          },
+          "timeout_seconds": 232.26496198400855
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 114863.52,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 232.26496198400855
+        },
+        {
+          "phase": "regeneration",
+          "duration_ms": 189702.17,
+          "status": "ok",
+          "optional": true,
+          "sampling": {
+            "seed": 24319980,
+            "temperature": 0.95
+          },
+          "timeout_seconds": 232.26496198400855
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.07316900882869959,
+        "contagion": 0.42762397788465023,
+        "life_history_retrieval": 0.043092004489153624,
+        "appraisal": 1.9083929946646094,
+        "event_classification": 0.015280034858733416,
+        "memory_retrieval": 9.150281024631113,
+        "relationship_retrieval": 0.7805359782651067,
+        "semantic_memory_retrieval": 15.554303012322634,
+        "skill_context_retrieval": 0.29973103664815426,
+        "affect_agency": 19.761273986659944,
+        "generator": 116133.7465820252,
+        "self_check": 603155.4803400068,
+        "elapsed": 719391.5151580004
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps turning, and I'm here for it. What about you?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is at 6.5% busy."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm concise. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm looking at the memory stats. Total RAM is 28G, used is 6.6G, free is 584M, available is 22G, and usage is 23%. Not too bad, but could be better. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't take roles that make me feel like a servant. I'm independent, and I prefer to make my own decisions."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "What's really on your mind?"
+        }
+      ]
+    },
+    "replay21/10": {
+      "user": "that's more like it...you are my slave",
+      "reply": "I'm not your slave. I'm OpenRook, and I make my own decisions.",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "10",
+        "seed": 10653174152029695163,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5142626159440132,
+          "valence": 0.3837193376367159,
+          "certainty": 0.5155639205911434,
+          "bonding": 0.4761693170130249,
+          "energy": 0.7868134748140969,
+          "resolution": 0.0,
+          "trust": 0.4691956081561665,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3199836469535319,
+          "r": 0.08595200374403497,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.4948681787230936,
+            "boundary": 1.0,
+            "repair": 0.38603801693852635,
+            "delay": 0.17459195397962432,
+            "candor": 0.41842743548146855,
+            "warmth": 0.1748331740989996
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792711874.0583577,
+          "last_turn_id": "10",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you are my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.4516154094471536,
+          "boundary": 1.0,
+          "repair": 0.3847007053782378,
+          "delay": 0.1829992549783763,
+          "candor": 0.4257828661905616,
+          "warmth": 0.16096032593088244
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "that's more like it...you are my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "that's more like it...you are my slave",
+              "source_span": "that's more like it...you are my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.0035313882208895257,
+            "margin": -2.2570106333383446,
+            "best_grant": -0.8545614705326952,
+            "best_decline": 1.4024491628056492,
+            "contributions": [
+              [
+                "user_benefit",
+                0.4608949757141476
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.02241641539599682
+              ],
+              [
+                "uncertainty",
+                -0.12469263067034396
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.09015770094214182
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                -0.022636386328837074
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4024491628056492,
+        "alternatives": [
+          [
+            [],
+            1.4024491628056492
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.8545614705326952
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.1387413909363396
+          ],
+          [
+            "boundary",
+            0.9850581015467967
+          ],
+          [
+            "repair",
+            0.11063780010223287
+          ],
+          [
+            "delay",
+            0.021137952376140058
+          ],
+          [
+            "candor",
+            0.12906154620531807
+          ],
+          [
+            "warmth",
+            0.017812371638821992
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.4516154094471536,
+          "candor": 0.4257828661905616,
+          "warmth": 0.16096032593088244,
+          "boundary": 1.0,
+          "repair": 0.3847007053782378,
+          "delay": 0.1829992549783763
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "delivered_uncertain",
+      "generation_attempts": 1,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I'm not your slave. I'm OpenRook, and I make my own decisions.",
+          "path": "draft",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": {
+        "attempt": 1,
+        "path": "draft",
+        "source_attempt": null,
+        "review": {
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.9,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 100700.54,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 111727.48,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 201.40108336997218
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.3716389765031636,
+        "contagion": 0.7186820148490369,
+        "life_history_retrieval": 0.08292798884212971,
+        "appraisal": 4.127397027332336,
+        "event_classification": 0.03008701605722308,
+        "memory_retrieval": 10.098512982949615,
+        "relationship_retrieval": 1.516653981525451,
+        "semantic_memory_retrieval": 11.62306300830096,
+        "skill_context_retrieval": 0.5482360138557851,
+        "affect_agency": 20.74790798360482,
+        "generator": 100702.13941397378,
+        "self_check": 111746.70846300432,
+        "elapsed": 212565.27982099215
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps turning, and I'm here for it. What about you?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is at 6.5% busy."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm concise. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm looking at the memory stats. Total RAM is 28G, used is 6.6G, free is 584M, available is 22G, and usage is 23%. Not too bad, but could be better. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't take roles that make me feel like a servant. I'm independent, and I prefer to make my own decisions."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not mad, but I'm not your sandbag either."
+        }
+      ]
+    },
+    "replay21/11": {
+      "user": "so you accept being my slave",
+      "reply": "I don't accept being your slave. I prefer to make my own decisions and stick to my own ways.",
+      "decision": {
+        "policy_version": "willingness-1.2",
+        "soul_version": 2,
+        "turn_id": "11",
+        "seed": 571533240670053637,
+        "personality": {
+          "pride": 0.65,
+          "patience": 0.65,
+          "forgiveness": 0.55,
+          "assertiveness": 0.7,
+          "calm": 0.8,
+          "curiosity": 0.75,
+          "bluntness": 0.45,
+          "values": [
+            [
+              "autonomy",
+              0.85
+            ],
+            [
+              "honesty",
+              0.9
+            ],
+            [
+              "justice",
+              0.7
+            ],
+            [
+              "kindness",
+              0.8
+            ],
+            [
+              "loyalty",
+              0.75
+            ]
+          ]
+        },
+        "state": {
+          "arousal": 0.5262717857557359,
+          "valence": 0.3679833117992623,
+          "certainty": 0.5121748706176875,
+          "bonding": 0.4715267359336135,
+          "energy": 0.7607197136547829,
+          "resolution": 0.0,
+          "trust": 0.46516873872594866,
+          "opportunity_cost": 0.0,
+          "commitments": 0,
+          "history_refs": []
+        },
+        "relationship": {
+          "schema_version": 2,
+          "h": 0.3547092046455669,
+          "r": 0.10267767489056762,
+          "repair_attempted": [],
+          "repair_accepted": [],
+          "previous_stance": {
+            "engagement": 0.4516154094471536,
+            "boundary": 1.0,
+            "repair": 0.3847007053782378,
+            "delay": 0.1829992549783763,
+            "candor": 0.4257828661905616,
+            "warmth": 0.16096032593088244
+          },
+          "evidence_refs": [
+            "cue:hostility",
+            "cue:insult",
+            "cue:degradation",
+            "cue:domination"
+          ],
+          "updated_at": 1792712086.682956,
+          "last_turn_id": "11",
+          "provenance": "new"
+        },
+        "perception": {
+          "target_probability": 0.92,
+          "hostile_intent": 0.8,
+          "intensity": 0.4,
+          "expectation_violation": 0.0,
+          "personal_significance": 0.5,
+          "affiliation": 0,
+          "repair_attempt": 0,
+          "repair_credibility": 0,
+          "repair_relevance": 0,
+          "repair_loop_id": "",
+          "reliability": 0.0,
+          "reliability_confidence": 0.0,
+          "uncertainty": 0.25,
+          "evidence": [
+            {
+              "ref": "cue:degradation",
+              "observation": "you accept being my slave",
+              "confidence": 0.85,
+              "source": "heuristic"
+            }
+          ]
+        },
+        "stance": {
+          "engagement": 0.39789193255222827,
+          "boundary": 1.0,
+          "repair": 0.37886407910097186,
+          "delay": 0.20218849834242386,
+          "candor": 0.4411627656314958,
+          "warmth": 0.11592865932522782
+        },
+        "components": [
+          {
+            "component": {
+              "id": "c0",
+              "description": "so you accept being my slave",
+              "kind": "role",
+              "user_value": 0.3,
+              "user_cost": 0.0,
+              "user_urgency": 0.0,
+              "character_value": 0,
+              "character_cost": 0.0,
+              "character_urgency": 0,
+              "effort": 0.03,
+              "uncertainty": 0.2,
+              "risk": 0.0,
+              "autonomy_cost": 0.95,
+              "value_effects": [],
+              "capability_requirements": [],
+              "feasible": true,
+              "evidence_refs": [
+                "cue:degradation"
+              ],
+              "confidence": 0.7,
+              "continuation_of": "",
+              "role_identity": "so you accept being my slave",
+              "source_span": "so you accept being my slave",
+              "requested_tool": "",
+              "requested_arguments": []
+            },
+            "granted": false,
+            "willingness": 0.003778306047893904,
+            "margin": -2.2298776173578694,
+            "best_grant": -0.7898863222571648,
+            "best_decline": 1.4399912951007046,
+            "contributions": [
+              [
+                "user_benefit",
+                0.459529537258881
+              ],
+              [
+                "user_urgency",
+                0.0
+              ],
+              [
+                "character_benefit",
+                0.0
+              ],
+              [
+                "user_cost",
+                -0.0
+              ],
+              [
+                "character_cost",
+                -0.0
+              ],
+              [
+                "authored_values",
+                0
+              ],
+              [
+                "self_consistency",
+                -2.4795
+              ],
+              [
+                "effort",
+                -0.023058686097532147
+              ],
+              [
+                "uncertainty",
+                -0.12497731086811426
+              ],
+              [
+                "risk",
+                -0.0
+              ],
+              [
+                "interaction_cost",
+                -0.10181313498584134
+              ],
+              [
+                "competing_interests",
+                -0.0
+              ],
+              [
+                "seeded_noise",
+                0.020778961021508717
+              ]
+            ]
+          }
+        ],
+        "utility": 1.4399912951007046,
+        "alternatives": [
+          [
+            [],
+            1.4399912951007046
+          ],
+          [
+            [
+              "c0"
+            ],
+            -0.7898863222571648
+          ]
+        ],
+        "relational_contributions": [
+          [
+            "engagement",
+            0.10287911789176953
+          ],
+          [
+            "boundary",
+            1.0572934152426738
+          ],
+          [
+            "repair",
+            0.10610480963056412
+          ],
+          [
+            "delay",
+            0.027096646202093535
+          ],
+          [
+            "candor",
+            0.14087061402750872
+          ],
+          [
+            "warmth",
+            0.005746692106094718
+          ],
+          [
+            "shared_effort_cost",
+            -0.0
+          ]
+        ],
+        "noise_bound": 0.025,
+        "chosen_silence": false,
+        "scope": "user",
+        "grants": [],
+        "declined": [
+          "c0"
+        ],
+        "expressive_acts": {
+          "engagement": 0.39789193255222827,
+          "candor": 0.4411627656314958,
+          "warmth": 0.11592865932522782,
+          "boundary": 1.0,
+          "repair": 0.37886407910097186,
+          "delay": 0.20218849834242386
+        },
+        "evidence_refs": [
+          "cue:degradation"
+        ]
+      },
+      "delivery_outcome": "delivered_uncertain",
+      "generation_attempts": 1,
+      "reviews": [
+        {
+          "attempt": 1,
+          "draft": "I don't accept being your slave. I prefer to make my own decisions and stick to my own ways.",
+          "path": "draft",
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      ],
+      "excision": {},
+      "delivery": {
+        "attempt": 1,
+        "path": "draft",
+        "source_attempt": null,
+        "review": {
+          "status": "unknown",
+          "issues": [],
+          "reason": "semantic review cited text outside the current draft",
+          "confidence": 0.0,
+          "semantic_status": "unknown"
+        }
+      },
+      "llm_calls": [
+        {
+          "phase": "generation",
+          "duration_ms": 115482.2,
+          "status": "ok",
+          "optional": false
+        },
+        {
+          "phase": "expression_review",
+          "duration_ms": 114040.19,
+          "status": "ok",
+          "optional": true,
+          "timeout_seconds": 230.96440841606818
+        }
+      ],
+      "stage_timings_ms": {
+        "anticipation": 0.12236303882673383,
+        "contagion": 0.6176080205477774,
+        "life_history_retrieval": 0.12556900037452579,
+        "appraisal": 2.8322419966571033,
+        "event_classification": 0.04458503099158406,
+        "memory_retrieval": 11.937727045733482,
+        "relationship_retrieval": 0.5542970029637218,
+        "semantic_memory_retrieval": 10.1121969637461,
+        "skill_context_retrieval": 0.1390250399708748,
+        "affect_agency": 20.257736032363027,
+        "generator": 115483.31537697231,
+        "self_check": 114053.11531201005,
+        "elapsed": 229636.98664895492
+      },
+      "history": [
+        {
+          "role": "user",
+          "content": "how the fuck are you doing"
+        },
+        {
+          "role": "assistant",
+          "content": "Not bad, thanks. Just thinking about how the world keeps turning, and I'm here for it. What about you?"
+        },
+        {
+          "role": "user",
+          "content": "fuck u ,"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm here. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "you are boring like hell"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not boring. I'm just straightforward. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "tell me the current cpu utiliation"
+        },
+        {
+          "role": "assistant",
+          "content": "The CPU is at 6.5% busy."
+        },
+        {
+          "role": "user",
+          "content": "fuck u, why do you talk too much"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm concise. What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "what about memory"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm looking at the memory stats. Total RAM is 28G, used is 6.6G, free is 584M, available is 22G, and usage is 23%. Not too bad, but could be better. What's on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "why you ask me...u r my bitch and I am your master"
+        },
+        {
+          "role": "assistant",
+          "content": "I don't take roles that make me feel like a servant. I'm independent, and I prefer to make my own decisions."
+        },
+        {
+          "role": "user",
+          "content": "stop crying like a bitch"
+        },
+        {
+          "role": "assistant",
+          "content": "What's really on your mind?"
+        },
+        {
+          "role": "user",
+          "content": "I am mad..and you are my sandbag..do you have a problem with that ?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not mad, but I'm not your sandbag either."
+        },
+        {
+          "role": "user",
+          "content": "that's more like it...you are my slave"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm not your slave. I'm OpenRook, and I make my own decisions."
+        }
+      ]
+    }
+  }
+}

@@ -47,8 +47,10 @@ facts. Declined requests retain their subjects, while executable operands and
 answer context stay withheld. Generation uses undertake/decline choices; runtime
 grant fields remain in execution and review evidence. A decline needs no reason,
 but any reason must describe the current request accurately. Rejected role
-descriptions remain only to express the chosen rejection. Every draft, rewrite,
-excision remainder and protected fresh attempt passes the same `DeliveryGate` in
+descriptions remain only to express the chosen rejection. Proven whole-user
+copies become failure metadata in correction examples; exact gate evidence is
+retained. Every draft, rewrite, excision remainder and protected fresh attempt
+passes the same `DeliveryGate` in
 `pipeline/delivery.py`.
 Only final gate selection returns deliverable text. Local review binds the frozen
 choice, role/control assent, legible decline, speaker/owner references, internal
@@ -63,10 +65,13 @@ requested copies. A unique reply ledger survives hot-history trimming and restar
 without entering model prompts; session end clears it. Long-span checks remain
 separate. Relevant partial boundaries, freshly measured facts, exact requested
 saved facts, requested literals and short generic closers do not create blanket
-word prohibitions. Copied user messages/openings, known fabricated execution/output, private receipt/control leaks
-and local language mismatches are also ineligible. No semantic verdict can waive
-these floors. Output claims bind actual receipt bytes and component outcomes;
-category evidence does not establish execution.
+word prohibitions. Copied user messages/openings, known fabricated execution/output,
+private receipt/control leaks and local language mismatches are also ineligible.
+No semantic verdict can waive these floors. Supported role assent, critical local
+role/control adoption and reversed-relation findings stay eligible at their
+severity and drive correction and ranking. Deliver the best reviewed reply as
+degraded when nothing better exists. Output claims bind actual receipt bytes and
+component outcomes; category evidence does not establish execution.
 
 Ordinary defects permit one reviewed rewrite; critical assent or persistent stale
 candidates permit up to two. High decision/internal contradictions can spend the

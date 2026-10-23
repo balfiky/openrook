@@ -4,6 +4,24 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Replay 22 copy normalization and correction evidence
+
+- Known whole-user copies become correction metadata instead of repeated reply
+  examples; gate records retain exact drafts and independent execution evidence.
+- Compare copies across unambiguous contractions, abbreviated copulas and
+  punctuation joining clauses. Preserve negation, participants and conjunctions
+  inside noun phrases; keep whole-answer and copied-opening checks binding.
+- Restore supported role assent and critical local role/control adoption as
+  eligible findings at their severity. Keep reversed-relation findings for
+  correction and ranking; deliver the best reviewed reply as degraded when no
+  better candidate exists. Remove the role-relation prompt projection and
+  expanded assent matcher; restore prior attempt and call expectations.
+- Keep scrubbed replay-22 evidence and replay-21 controls with offline coverage
+  across delivery paths and copy recovery. The 2026-10-23 product decision retains
+  best-reviewed delivery: backend behavior alone does not drive redesign when the
+  design works with other models. Provider run 15 passed 23/23 on `2e21a32`;
+  this revision claims no new live-model result. Preserve run-13/14 fixes and budgets.
+
 ### Run 14 expression and historical-receipt corrections
 
 - Retain declined requests' subjects in both generation projections, withholding

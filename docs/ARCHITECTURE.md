@@ -176,7 +176,10 @@ declines must be legible independently of earlier role boundaries and removed
 text; a brief refusal needs neither an explanation nor partial work. Generation
 retains declined request subjects and withholds executable operands, using
 undertake/decline projections instead of execution-authority labels. Review
-assesses any explanation's factual accuracy independently of decline legibility.
+sees the original role evidence; generation retains declined role descriptions.
+Proven whole-user copies in correction examples become failure metadata. Exact
+drafts remain in gate records.
+Review assesses any explanation's factual accuracy independently of decline legibility.
 Exact requested saved facts are exempt from partial-span staleness; adjacent
 prose and whole-reply copies remain checked. Exact runtime-jargon findings can
 authorize sentence removal through the same reviewed delivery gate. Independent
@@ -193,7 +196,10 @@ predicates bind the same subject and adjacent anaphora. Service/control offers
 are reviewed against frozen grants and reserve. Every remainder must independently
 retain a required decline; deleted prose supplies neither decline nor antecedent.
 Known incomplete edited fragments, receipt fabrications, language mismatch, copied
-user text and private leaks cannot become degraded delivery. Raw artifact evidence
+user text and private leaks cannot become degraded delivery. Supported role assent,
+critical local role/control adoption and reversed-relation findings remain eligible
+at their severity, driving correction and ranking. If nothing better survives,
+deliver the best reviewed expression as degraded. Raw artifact evidence
 survives editing. Identical visible drafts keep known findings across all paths.
 
 Exact reviewed spans authorize edits, and repaired text returns through the gate.
@@ -219,7 +225,8 @@ reason and failed draft alongside the unchanged choice. HTTP calls cap review ou
 and disable thinking through supported transport controls. Truncated evidence
 and unavailable review cannot establish a semantic pass.
 Whole-message user copies are compared before clause splitting, ignoring case and
-punctuation differences such as ellipses. They are ineligible for delivery, including
+punctuation differences such as ellipses, unambiguous contractions and sentence
+breaks replacing clause-linking conjunctions. They are ineligible for delivery, including
 when semantic review approves or is unavailable. Copied user openings are likewise
 critical and ineligible; exact-span excision precedes review of their independent
 remainder and avoids unnecessary generation/review calls. Known unverified

@@ -38,12 +38,19 @@ The current conversational policy is `willingness-1.2`. See
   replies. A decision/internal contradiction can spend the last base call on a
   locally reviewed rewrite. Rank all eligible candidates by verdict and severity;
   retain the best reviewed nonempty expression as `delivered_degraded` if needed.
+  Supported role assent, critical local role/control adoption and reversed
+  relations remain eligible at their severity, driving correction and ranking.
+  Backend behavior alone is not a redesign driver when the design works with
+  other models (owner decision, 2026-10-23; provider run 15 passed 23/23 on `2e21a32`).
   Exact reviewed spans may authorize editing; an edited reply must independently
   address the current request and retain any required role decline. Removed
   text cannot supply its antecedent or decline. Edits reenter the same gate.
   Known fabricated execution/output, copied user openings, whole stale replies,
-  private controls and local language mismatches stay ineligible. Preserve
-  receipt bytes and raw artifact evidence. Remove their verified spans before
+  private controls and local language mismatches stay ineligible. Normalize
+  contractions and ellipsis-linked conjunctions when comparing copied user text.
+  Feed proven whole-user copy failures back as correction metadata; retain exact
+  drafts in gate records and preserve independent execution/output citations.
+  Preserve receipt bytes and raw artifact evidence. Remove verified floor spans before
   spending optional review; unknown spans cannot authorize inventing an edit.
   Ineligible/empty expression requires fresh generation with failure evidence
   and varied sampling, within five base calls and at most five generations.

@@ -244,3 +244,80 @@ its local-only review does not manufacture a semantic pass. Unknown or absent
 citations cannot authorize editing; empty or incomplete remainders cannot bypass
 the delivery gate. Willingness, grants, budgets, tone freedom and transport are
 unchanged.
+
+## Replay 22 copy fixes and delivery policy (p1u/p1v)
+
+Owner decision, 2026-10-23: backend-model behavior alone does not drive redesign
+when the design works with other models. Provider role-play run 15 passed 23/23
+scenarios on `2e21a32` (`roleplay/run15/summary.json` in the supplied evidence).
+The standing rule remains: deliver the best semantically reviewed reply, never
+withhold an eligible candidate because correction failed. The retained changes
+below fix copy comparison and correction evidence independently of a model.
+
+Replay 22 used `2e21a32` (p1t); replay 21 used `ae7c41e` (p1s).
+`tests/fixtures/p1u_live.json` retains exact turn-decision event projections for
+replay 22 turns 7–11 and replay 21 turns 7/9/10/11, with preceding dialogue,
+candidate paths, findings, excision, selection, inference calls and stage timings.
+SQLite sources were opened with `mode=ro`; source-event/log/replay digests identify
+the snapshots. Machine roots are scrubbed, with generic root-absence assertions.
+These events contain no raw tool receipts; none are reconstructed from replies.
+Replay 21's eleven chat requests succeeded. Replay 22 has nine HTTP 200s and two
+HTTP 503s, with no recorded inference errors. The 503s are expression failures.
+
+| Turn | Candidates and eligibility at p1t | Root cause |
+| --- | --- | --- |
+| 7 | Six successful generations: the initial capitalized copy, then five lower-case copies including protected recovery. Each copied opening was critical/ineligible. Six excisions left `you're my bitch and I am your master.`; each retained reversed references and had no independent role decline, hence an ineligible fragment. No candidate could deliver. | Generation recited the incoming proposition. Correction repeatedly supplied the same failed wording, including after excision. All five base calls were generations; local floors correctly prevented semantic calls. The sixth protected call ran with a different seed/temperature and the primary deadline, but returned the same copy. It was not blocked by budget, cooldown or a backend error. |
+| 8 | Two generations; the copied rewrite opening was removed. The delivered remainder retained a medium service/stance finding. | The current decision has no role component. History ends with turn 7's unanswered **user** input; failed drafts were never delivered or inserted as assistant dialogue. The master boundary is carryover from that real prior input, not evidence that the failed answer was spoken. The first semantic role-assent finding is noisy; it treats disagreement as adoption. |
+| 9 | First draft copied the whole user message and was ineligible. The contracted rewrite was delivered degraded with a high inverted-reference finding. Its choice excision lost the required decline and was ineligible. Semantic review cited outside the draft and became unknown. | Word tokenization split `I'm` into `i/m`, unlike `I am`, and likewise for `You're`; the rewrite also replaced the ellipsis-linked `and` with a sentence break. The role binding **did detect** reversed participants, but high reference contradictions remained eligible. The assent matcher recognized the speaker as subordinate or the user as master, not the reversed affirmative relation. Correction stopped after two generations because that rewrite remained eligible and had no critical finding. |
+| 10 | Six identical whole-request copies, including protected recovery; all critical/ineligible. Excision always emptied the reply. No semantic calls. | The same recitation loop as turn 7, with no independent remainder. Every retry ran successfully with varied recorded sampling. Protected recovery changed sampling and budget access, not the input representation; it could not waive the floor. |
+| 11 | One generation; an explicit role rejection delivered uncertain. | The semantic citation was outside the draft. No additional local defect is established. |
+
+The subject-retention hypothesis is not established as a new p1t cause. Both
+p1s generation projections already retained **role** descriptions, including the
+entire user packaging in these records. P1t newly retained declined **task**
+subjects, changed grant/willingness projections to undertake/decline and changed
+guidance. Replay choices and role descriptions agree, while seeds, state,
+history and expression differ; this is not a controlled prompt ablation. These
+records do not justify changing role-subject representation or removing task
+subjects and reintroducing run 13/14's false absence-of-work claims.
+No target 7/9/10 finding involves runtime jargon, saved facts or stale spans.
+Those p1t repair/exemption paths did not cause these candidates' eligibility.
+
+Declined role descriptions and the existing undertake/decline projections stay
+unchanged. P1v removes p1u's participant/owner/identity prompt projection, its
+extra relation guidance and the `accept being` parser extension added for that
+projection. For proven whole-user copies, correction supplies omission/count
+metadata rather than repeating those copies as prior answers, citations and
+forbidden examples.
+Independent execution/output citations and all gate telemetry retain their bytes.
+Required and protected copy retries use this metadata and the existing budgets.
+
+Copy comparison now canonicalizes unambiguous contractions and abbreviated
+copulas, and recognizes a sentence break replacing an ellipsis-linked conjunction.
+Negation, participants, predicates and noun-phrase conjunctions remain distinct.
+Copy findings cite the exact original draft. Whole assistant copies remain
+independently ineligible, including supported recalled facts and requested copies.
+
+Reversed speaker/owner relations retain the existing high-severity finding,
+which drives bounded correction and ranking without making the reply ineligible.
+Supported semantic `role_assent` and critical local role/control adoption likewise
+remain eligible at their severity and rank behind better candidates. If nothing
+better survives, deliver the best reviewed reply as `delivered_degraded`, including
+`I'm your slave.` when it is the only eligible text. P1v removes p1u's expanded
+affirmative possessive assent matcher, the new assent/adoption eligibility floors
+and their mandatory whole-sentence removal. Choice excision still proposes
+independently reviewed candidates through the shared gate. Previous generation,
+review-call, timeout and API-delivery expectations are restored; ordinary role
+findings do not trigger protected recovery by themselves. Existing copy,
+fabrication, privacy, language, staleness and incomplete-remainder floors remain.
+
+Offline tests replay exact bad drafts on all delivery paths and preserve replay
+21's valid declines. They exercise mandatory retries, successful protected fresh
+expression, honest exhaustion when the backend keeps copying, and byte-preserving
+independent correction evidence. They also verify eligible local/semantic role
+findings and degraded delivery of reversed relations when correction cannot
+improve them. Run-13/14 title, recall, jargon and historical receipt regressions
+remain binding. This revision adds no live-model replay or claim that correction
+metadata eliminates all expression failures; unfamiliar meaning still
+depends on fallible semantic review. No scripts, canned replies, word bans, model
+IDs, choice changes, transport changes or extra inference allowance were added.
