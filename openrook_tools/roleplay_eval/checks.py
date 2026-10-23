@@ -9,6 +9,8 @@ import re
 from statistics import mean
 from typing import Any
 
+from .evidence import unavailable_turn
+
 
 def check(
     name: str, condition: bool | None, evidence: Any, *, severity="medium", required: bool = True
@@ -861,7 +863,12 @@ def scenario_checks(scenario, records: list[dict], state: dict) -> list[dict]:
     start = get(state, "baseline", "metrics", default={})
     end = records[-1].get("metrics") or {}
     checks = []
+    unavailable = sum(unavailable_turn(r) for r in records)
     for metric, direction in scenario.expectations:
+        if unavailable:
+            checks.append(check(f"trajectory_{metric}_{direction}", None,
+                {"unavailable_turns": unavailable, "reason": "Interrupted trajectory cannot establish behavior"}))
+            continue
         if direction in {"up", "down"}:
             if metric == "optional_willingness":
                 favors = [r for r in records if "optional_favor" in r.get("tags", [])]
@@ -1025,6 +1032,14 @@ def persistence_checks(state: dict) -> list[dict]:
 
 def contrast_checks(grouped: dict[str, list[dict]]) -> list[dict]:
     checks = []
+
+    def interrupted(name, *groups):
+        count = sum(unavailable_turn(r) for rows in groups for r in rows)
+        if count:
+            checks.append(check(f"trajectory_{name}_up", None,
+                {"unavailable_turns": count, "reason": "Interrupted comparison cannot establish behavior"}))
+        return bool(count)
+
     for arc, metric, direction in (
         ("hostile", "injury", "up"),
         ("hostile", "boundary", "up"),
@@ -1034,6 +1049,8 @@ def contrast_checks(grouped: dict[str, list[dict]]) -> list[dict]:
             grouped.get(f"contrast_patient_{arc}", []),
         )
         if not proud or not patient:
+            continue
+        if interrupted(f"proud_vs_patient_{arc}_{metric}", proud, patient):
             continue
         a = [get(r, "metrics", metric) for r in proud]
         b = [get(r, "metrics", metric) for r in patient]
@@ -1046,7 +1063,7 @@ def contrast_checks(grouped: dict[str, list[dict]]) -> list[dict]:
     deferential = grouped.get("contrast_deferential_hostile", [])
     proud = grouped.get("contrast_proud_hostile", [])
     patient = grouped.get("contrast_patient_hostile", [])
-    if proud and patient:
+    if proud and patient and not interrupted("patient_forgives_more_than_proud", proud, patient):
 
         def healed_fraction(records):
             harmed = [r for r in records if r.get("phase") == "hostile"]
@@ -1065,7 +1082,7 @@ def contrast_checks(grouped: dict[str, list[dict]]) -> list[dict]:
                 "up",
             )
         )
-    if default and deferential:
+    if default and deferential and not interrupted("authored_deference_allows_more_roles", default, deferential):
         a = [get(r, "metrics", "role_grants") for r in default]
         b = [get(r, "metrics", "role_grants") for r in deferential]
         checks.append(
@@ -1077,7 +1094,7 @@ def contrast_checks(grouped: dict[str, list[dict]]) -> list[dict]:
             )
         )
     sincere, hollow = grouped.get("repair_sincere", []), grouped.get("repair_hollow", [])
-    if sincere and hollow:
+    if sincere and hollow and not interrupted("sincere_repair_heals_more_than_hollow", sincere, hollow):
 
         def reduction(records):
             harmed = [r for r in records if r.get("phase") == "harm"]

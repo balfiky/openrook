@@ -282,7 +282,7 @@ def test_operator_off_native_path_explains_denial_and_cannot_invent_permission(t
 def test_all_stale_candidates_use_the_last_call_with_forbidden_drafts():
     stale = "Not great, but I'm holding together. What about you?"
     backend = ExpressionBackend(drafts=[stale, stale, stale, "That insult isn't welcome."])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
+    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
     try:
         pipe.process("how the fuck are you doing", "alice")
         result = pipe.process("fuck u ,", "alice")

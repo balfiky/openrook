@@ -16,8 +16,13 @@ The current conversational policy is `willingness-1.3`. See
   effective traits/dispositions/values and structured self preferences. Digestion
   receives the current self; grounded independent evidence and bounded rates govern
   development, never fixed source phrases or generated self-claims. Ordinary
-  episodes are eligible; explicitly disabling autobiographical learning remains
-  a no-learning control. Learned drive baselines may move.
+  episodes consolidate in disjoint small batches after delivery using remaining
+  optional inference, without ending the chat. Preserve pending evidence across
+  restart and avoid session-end duplication. Silence defers optional digestion.
+  Report proposed/accepted evidence and effective revision separately; missing
+  self-update protocol is undigested, never successful development. Explicitly
+  disabling autobiographical learning remains a no-learning control. Learned
+  drive baselines may move.
 - Capture one self per turn for choice, generation and review, including opinion
   reasons/confidence, ongoing questions, tastes, this person's attitudes and style.
   A decline withholds its work, not unrelated memory, Life History or dialogue.
@@ -31,10 +36,17 @@ The current conversational policy is `willingness-1.3`. See
   Self intentions grant no tools. Preserve selected content through expression and
   review; closing without an invitation is valid. Only delivered pursuits become
   session-persisted commitments, revalidated against current self on resume.
+  Bare taste/value labels supply allocation evidence, not a topic to share or
+  pursue. Rest requires depleted reserve or a substantive contextual preference;
+  its recovery value scales with depletion and cannot inflate engagement's
+  opportunity cost or collect unexpressed relational rewards. No instant recharge.
 - Role-play category K measures spontaneous versus elicited initiative, owned
   topic resumption, evidence-sensitive opinions, benign preference declines,
   blinded handbacks and matched continuity/divergence. Report independence apart
   from floors, with structural not_applicable and explicit unknown evidence.
+  Count actual intention selections separately from retained substantive topics.
+  A bad independence schema cannot erase a valid floor judgment. Confirmed
+  unavailable turns cannot establish trajectory/contrast verdicts or aggregates.
 - Commit the immutable `TurnDecision` before executing work. Every task,
   artifact, inspection, continuation and learning intake needs its component's
   grant. Independent activity requires a separate decision and execution scope.

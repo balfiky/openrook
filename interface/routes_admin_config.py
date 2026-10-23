@@ -275,6 +275,7 @@ _SECRET_ENV_VARS = {
 
 _CONFIG_FIELD_SECTIONS = {
     "data_dir": "runtime",
+    "soul_path": "runtime",
     "max_queue_per_user": "runtime",
     "max_active_sessions": "runtime",
     "session_timeout_seconds": "runtime",
@@ -387,7 +388,8 @@ def _read_soul_name() -> str:
     """Return the agent name from soul.yaml without going through the async config."""
     try:
         import yaml as _yaml
-        path = api_mod._soul_yaml_path()
+        from config.loader import resolve_soul_path
+        path = resolve_soul_path(api_mod.RUNTIME_CONFIG_PATH)
         with open(path, encoding="utf-8") as f:
             data = _yaml.safe_load(f) or {}
         return (data.get("soul") or {}).get("name") or "OpenRook"

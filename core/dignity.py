@@ -880,7 +880,11 @@ def _review_guidance(payload):
         parts.append("Realize the selected intention's actual topic and grounded reasons. Pursuit, views, "
             "disagreement, deferral, redirection and closure are relevant. A reply can end without an invitation "
             "or availability offer. Unselected proposals need no verbal rejection. Preserve held opinions under "
-            "pressure; revise for retained counterevidence. Do not demand agreement with the user.")
+            "pressure; revise for retained counterevidence. Do not demand agreement with the user. "
+            "Check substantive fidelity separately from answering the user: a list of values, generic "
+            "check-in or agenda handback cannot replace the selected question/view/discovery. "
+            "An invitation must advance that purpose and fit the retained self; otherwise report "
+            "decision_contradiction with the actual offending reply span.")
     if payload.get("developing_self"):
         parts.append("Use developing_self as the retained personality shared with generation and choice: "
             "traits, opinions with reasons, ongoing interests, own tastes, attitudes to this person and style. "

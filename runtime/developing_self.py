@@ -208,7 +208,8 @@ class DevelopingSelf:
                 text=row["raw_excerpt"], quality=1.0, influence=0.5)
 
     def consolidate(self, experience_id: int, proposals: list, *, text: str,
-                    quality: float, influence: float, person_ids: list[str] | None = None) -> list[dict]:
+                    quality: float, influence: float, person_ids: list[str] | None = None,
+                    evidence_material: str | None = None) -> list[dict]:
         """Accumulate independent grounded observations, then move slowly.
 
         Assertions and generated self-descriptions are not observations. One
@@ -235,7 +236,8 @@ class DevelopingSelf:
             evidence = str(raw.get("evidence") or "").strip()
             reason = str(raw.get("reason") or "").strip()[:900]
             if (raw.get("evidence_kind") not in {"experience", "observed_outcome", "interaction"}
-                    or not evidence or evidence not in text or not reason):
+                    or not evidence or evidence not in (evidence_material if evidence_material is not None else text)
+                    or not reason):
                 continue
             if domain == "opinions" and not str(raw.get("proposition") or "").strip():
                 continue

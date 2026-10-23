@@ -14,11 +14,12 @@ from core.clock import clock as time
 from core.clock import identifiers as uuid
 from dataclasses import asdict, replace
 from typing import Any, Callable
+from types import SimpleNamespace
 
 from config.loader import get_config, research_configuration
 from runtime.developing_self import birth_state, project_self, soul_from_self
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.inference import call_telemetry, expression_retry, final_expression_attempt, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
+from core.inference import call_telemetry, expression_retry, final_expression_attempt, generate, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
 from core.types import (
     AgencyDecision,
     AppraisalFrame,
@@ -301,6 +302,9 @@ class CognitivePipeline:
         self._component_executor = component_executor
         self.last_intake_receipt: str = ""
         self._owned_pursuits: dict[str, dict] = {}
+        self._development_history: list[dict] = []
+        self._development_episode_id = uuid.uuid4().hex
+        self._development_checkpointed = False
 
         # Session-scoped task plan (Phase 7)
         self._active_task_plan: TaskPlan | None = None
@@ -1515,7 +1519,11 @@ class CognitivePipeline:
         )
         self.short_term.record(outcome_event, self.engine.state)
 
-        self.engine.drain_energy(intensity=event.intensity)
+        # Incoming events already carry their own energy effect. Selected
+        # silence performs no expression work; recovery still uses elapsed
+        # time, never an invented instant recharge for choosing rest.
+        if not gen_result.deliberate_silence:
+            self.engine.drain_energy(intensity=event.intensity)
         debug.energy_after = self.engine.state.energy
         debug.emotion_label = self.engine.to_emotion_label()
         debug.modulator_snapshot = self.engine.snapshot()
@@ -1543,6 +1551,7 @@ class CognitivePipeline:
         person.trust = max(0.0, min(1.0, person.trust + st.trust_delta))
         self.person_profiles.save(person)
         debug.person_profile = person
+        self._record_live_development(st)
         self._record_social_turn(st)
 
         # ---- Self-observations (1-3 per turn) ----
@@ -1608,6 +1617,7 @@ class CognitivePipeline:
                   "expression_excision": st.debug.expression_excision,
                   "expression_delivery": st.debug.expression_delivery,
                   "llm_calls": call_telemetry(),
+                  "self_development": st.debug.self_development,
                   "stage_timings_ms": {**st.timings, "elapsed": (time.perf_counter() - st.t_total) * 1000},
                   "state_after": self.engine.snapshot()}
         self.relationship_memory.record_event(RelationshipEvent(
@@ -2516,6 +2526,9 @@ class CognitivePipeline:
             "last_state_update_at": self._last_state_update_at,
             "last_external_input_at": self._last_external_input_at,
             "owned_pursuits": self._owned_pursuits if self._features.self_intent else {},
+            "development_history": self._development_history,
+            "development_episode_id": self._development_episode_id,
+            "development_checkpointed": self._development_checkpointed,
         }
 
     def restore_session_state(self, state: dict[str, Any]) -> None:
@@ -2533,6 +2546,9 @@ class CognitivePipeline:
         self._saved_session_memory_writes = int(state.get("session_memories_written", 0))
         self._memory_write_baseline = self._memory_write_count()
         self._episode_id = str(state.get("episode_id") or self._episode_id)
+        self._development_history = list(state.get("development_history", []))[-16:]
+        self._development_episode_id = str(state.get("development_episode_id") or self._development_episode_id)
+        self._development_checkpointed = bool(state.get("development_checkpointed", False))
         self.short_term.restore_state(state.get("short_term", []))
         if int(state.get("schema_version", 1)) < 2:
             # Old events already affected persisted mood/trust. Retain their
@@ -2628,6 +2644,9 @@ class CognitivePipeline:
             except Exception as exc:  # never let learning break session teardown
                 log.warning("Autobiographical ingest failed: %s", exc)
         self._episode_id = uuid.uuid4().hex
+        self._development_history.clear()
+        self._development_episode_id = uuid.uuid4().hex
+        self._development_checkpointed = False
 
         # Clear conversation history and session-scoped state
         self._conversation_history.clear()
@@ -2646,8 +2665,8 @@ class CognitivePipeline:
         self._memory_write_baseline = self._memory_write_count()
         return result
 
-    # Sessions whose peak emotional intensity / trust movement clear these
-    # gates are worth remembering as identity; everything quieter is not.
+    # Research retains its existing episode salience gates. Ordinary episodes
+    # need material, rather than an emotional-intensity or trust threshold.
     _AUTOBIO_PEAK_INTENSITY = 0.6
     _AUTOBIO_TRUST_DELTA = 0.08
 
@@ -2672,6 +2691,13 @@ class CognitivePipeline:
         if self._research_owner is not None:
             self._research_owner.queue_autobiography(self._episode_id, result, user_id)
             return
+        # Checkpointed turns already supplied evidence. Session-end summaries
+        # must not repackage them as another independent encounter.
+        if self._development_history:
+            self._ingest_live_development(user_id, self._llm_backend)
+            return
+        if self._development_checkpointed:
+            return
         from runtime.life_history import LifeHistoryStore
         agent_name = self.soul.name
         arc = result.emotional_arc_label or "a conversation"
@@ -2689,6 +2715,7 @@ class CognitivePipeline:
                 llm_client=self._llm_backend,
                 metadata={
                     "input_mode": "autobiographical",
+                    "development_only": True,
                     "occurrence_id": f"autobiography:{self._episode_id}",
                     "arc": arc,
                     "peak_intensity": round(result.peak_intensity, 3),
@@ -2696,6 +2723,64 @@ class CognitivePipeline:
                     "topics": result.topics[:8],
                 },
             )
+
+    def _record_live_development(self, st: _TurnState) -> None:
+        """Consolidate small, disjoint episodes after delivery, within its budget.
+
+        The batch size bounds interpretation cost; it requires no conversational
+        behavior. Choice and expression keep their frozen pre-learning snapshot.
+        Research retains its separate recorded learning-job lifecycle.
+        """
+        if (self._research_mode or not self._autobiographical_learning
+                or not self._features.life_history_context or self._runtime_config is None):
+            return
+        if st.debug.delivery_outcome in {"backend_failure", "expression_failure"}:
+            return
+        self._development_history.append({
+            "user": st.user_message, "expression": st.gen_result.response,
+            "delivery_outcome": st.debug.delivery_outcome,
+            "observed_state": self.engine.snapshot(), "turn_id": st.turn_id,
+        })
+        self._development_history = self._development_history[-16:]
+        st.debug.self_development = {"status": "pending", "pending_turns": len(self._development_history)}
+        if len(self._development_history) < 2 or st.gen_result.deliberate_silence or not remaining_calls():
+            return
+        backend = SimpleNamespace(generate=lambda system, user: generate(
+            self._llm_backend, "self_development", system, user, optional=True))
+        started = time.perf_counter()
+        try:
+            st.debug.self_development = self._ingest_live_development(st.user_id, backend)
+        except (ResearchBudgetExceeded, ResearchStudyLimit):
+            raise
+        except Exception as exc:
+            # Retain pending material and its occurrence ID for the next
+            # available checkpoint; no inferred personality on failure.
+            st.debug.self_development["status"] = "unavailable"
+            st.debug.self_development["error"] = type(exc).__name__
+        st.timings["self_development"] = (time.perf_counter() - started) * 1000
+
+    def _ingest_live_development(self, user_id: str, backend) -> dict:
+        from runtime.life_history import LifeHistoryStore
+        dialogue = [item for turn in self._development_history for item in (
+            {"role": "user", "content": turn["user"]},
+            {"role": "assistant", "content": turn["expression"]})]
+        material = {"dialogue": dialogue,
+            "observed_outcomes": [{k: v for k, v in turn.items() if k not in {"user", "expression"}}
+                                  for turn in self._development_history],
+            "assistant_dialogue_is_expression_not_independent_self_evidence": True}
+        with LifeHistoryStore(self._runtime_config) as store:
+            result = store.ingest_external_text(
+                title=f"Interaction episode with {user_id}"[:180],
+                text=json.dumps(material, ensure_ascii=False),
+                source_type="conversation_learning_text", source_ref=f"session:{user_id}",
+                participants=[self.soul.name, user_id], llm_client=backend,
+                metadata={"input_mode": "autobiographical", "development_only": True,
+                    "occurrence_id": f"autobiography:{self._development_episode_id}"})
+            development = result.get("development", {})
+        self._development_history.clear()
+        self._development_episode_id = uuid.uuid4().hex
+        self._development_checkpointed = True
+        return development
 
     def apply_rest(self, hours: float) -> None:
         """Simulate time passing between sessions. Recovers energy, decays modulators."""

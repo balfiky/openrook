@@ -345,6 +345,7 @@ class ConfigUpdateRequest(BaseModel):
     """
 
     data_dir: str | None = None
+    soul_path: str | None = None
     max_queue_per_user: int | None = Field(default=None, ge=1)
     max_active_sessions: int | None = Field(default=None, ge=1)
     session_timeout_seconds: float | None = Field(default=None, ge=1)
@@ -648,6 +649,7 @@ async def update_config(req: ConfigUpdateRequest) -> dict:
 
     config = RuntimeConfig(
         data_dir=_keep_str(req.data_dir, existing.data_dir, fallback="data"),
+        soul_path=existing.soul_path if req.soul_path is None else req.soul_path.strip(),
         max_queue_per_user=_keep(req.max_queue_per_user, existing.max_queue_per_user),
         max_active_sessions=_keep(req.max_active_sessions, existing.max_active_sessions),
         session_timeout_seconds=_keep(req.session_timeout_seconds, existing.session_timeout_seconds),
@@ -1143,6 +1145,9 @@ async def _reload_runtime_from_config(config: RuntimeConfig) -> dict:
         _session_manager = None
         reloaded_web_manager = True
 
+    # Reload only after the old sessions have drained with their original soul.
+    from config.loader import reset_config
+    reset_config()
     await _restart_telegram_channel(config)
     return {
         "reloaded_web_manager": reloaded_web_manager,
@@ -1315,22 +1320,10 @@ _DEFAULT_SOUL_NAME = "OpenRook"
 
 
 def _soul_yaml_path() -> str:
-    """Path where /admin/soul writes soul.yaml.
+    """Write beside the selected runtime config unless explicitly overridden."""
+    from config.loader import resolve_soul_path
 
-    If OPENROOK_CONFIG_DIR is set, write there (persists across pip upgrades).
-    Otherwise fall back to the packaged config dir so the loader still
-    finds it without any env setup — at the cost of being overwritten by
-    ``pip install --upgrade``. The admin UI surfaces that trade-off on
-    save.
-    """
-    from config import loader as _loader  # imported lazily to avoid cycles
-
-    override = project_env("CONFIG_DIR", "").strip()
-    if override:
-        path = os.path.expanduser(override)
-        os.makedirs(path, exist_ok=True)
-        return str(os.path.join(path, "soul.yaml"))
-    return str(os.path.join(os.path.dirname(os.path.abspath(_loader.__file__)), "soul.yaml"))
+    return str(resolve_soul_path(RUNTIME_CONFIG_PATH, for_write=True))
 
 
 def _soul_looks_default() -> bool:
@@ -1443,6 +1436,8 @@ def main() -> None:
     global RUNTIME_CONFIG_PATH
     RUNTIME_CONFIG_PATH = args.config
     os.environ["OPENROOK_RUNTIME_CONFIG"] = args.config
+    from config.loader import reset_config
+    reset_config()
 
     try:
         cfg = _bootstrap_runtime_config(args.config)

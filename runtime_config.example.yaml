@@ -4,6 +4,9 @@
 # The real app reads and writes runtime_config.yaml.
 
 data_dir: data
+# Optional isolated identity file; blank uses OPENROOK_CONFIG_DIR/soul.yaml or
+# config/soul.yaml beside this runtime file. Does not change prompt overrides.
+soul_path: ''
 max_queue_per_user: 3
 max_active_sessions: 10
 session_timeout_seconds: 1800.0

@@ -124,13 +124,14 @@ def _run_terminal_setup(
 
     config.write_yaml(str(config_path))
     _create_runtime_dirs(config)
-    _write_soul_yaml(soul, _soul_yaml_path(env))
+    soul_path = _soul_yaml_path(env, runtime_config_path=config_path)
+    _write_soul_yaml(soul, soul_path)
     _mark_setup_complete(config)
 
     output_fn("")
     output_fn(f"Saved config: {config_path}")
     output_fn(f"Data directory: {Path(config.data_dir).expanduser().resolve()}")
-    output_fn(f"Identity file: {_soul_yaml_path(env)}")
+    output_fn(f"Identity file: {soul_path}")
     output_fn("")
     output_fn("Start the terminal chat:")
     output_fn(f"  openrook --config {config_path}")
@@ -482,12 +483,10 @@ def _create_runtime_dirs(config: RuntimeConfig) -> None:
     Path(config.resolved_tools_workspace).expanduser().mkdir(parents=True, exist_ok=True)
 
 
-def _soul_yaml_path(environ: dict[str, str] | None = None) -> Path:
-    env = environ if environ is not None else os.environ
-    override = project_env("CONFIG_DIR", "", environ=env).strip()
-    if override:
-        return Path(override).expanduser().resolve() / "soul.yaml"
-    return Path(config_loader.__file__).resolve().parent / "soul.yaml"
+def _soul_yaml_path(
+    environ: dict[str, str] | None = None, *, runtime_config_path: Path | None = None,
+) -> Path:
+    return config_loader.resolve_soul_path(runtime_config_path, for_write=True, environ=environ)
 
 
 def _write_soul_yaml(soul: dict, path: Path) -> None:

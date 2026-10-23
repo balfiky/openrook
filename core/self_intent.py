@@ -51,6 +51,9 @@ Use conversation_sources: interests/questions can be pursued, views/discoveries 
 held opinions defended on their merits, benign work declined/deferred from a retained
 dislike or competing pursuit, a subject redirected, a completed thread closed, or rest
 taken from actual resource pressure. Never invent a preference, opinion or commitment.
+Bare value/taste names are allocation evidence, not a substantive topic to share or
+pursue. Those intentions need an actual retained question, proposition, discovery or
+context with reasons. Do not turn a list of values into a purported view.
 An opinion's source supplies its proposition and reasons; user pressure is not evidence
 to reverse it. Close/rest need resource:energy or an actual retained competing pursuit.
 No particular initiative, refusal, question or invitation is required. An intention may
@@ -65,6 +68,16 @@ def _weight(value: Any) -> float:
     return max(0.0, min(1.0, abs(value)))
 
 
+def _distinct_text(items) -> str:
+    lines = {}
+    for item in items:
+        for line in str(item or "").splitlines():
+            line = line.strip()
+            if line:
+                lines.setdefault(" ".join(line.casefold().split()), line)
+    return "\n".join(lines.values())
+
+
 def conversation_sources(current_self: dict, context: dict, energy: float) -> dict[str, dict]:
     """Retained subjects, not a second agenda selector or new personality seed."""
     sources = {}
@@ -75,11 +88,13 @@ def conversation_sources(current_self: dict, context: dict, energy: float) -> di
                 continue
             content = (record.get("questions") or [record.get("description") or key]) if domain == "interests" else (
                 [record.get("proposition", "")] if domain == "opinions" else [record.get("subject") or key, record.get("context", "")])
-            content = "\n".join(str(item) for item in content if item)
+            content = _distinct_text(content)
             reasons = [str(r) for r in record.get("reasons", []) if r]
+            substance = domain != "preferences" or bool(_distinct_text(
+                [record.get("context", ""), *reasons]).casefold().strip() not in {"", content.casefold()})
             sources[f"self:{domain}:{key}"] = {
                 "content": content, "strength": strength, "domain": domain,
-                "reason": "\n".join(reasons) or content,
+                "reason": _distinct_text(reasons) or content, "substantive": substance,
                 "negative": record.get("weight", 0) < 0,
                 "evidence_refs": record.get("evidence_refs", []),
             }
@@ -106,9 +121,9 @@ def conversation_sources(current_self: dict, context: dict, energy: float) -> di
                 "strength": strength, "domain": "questions", "evidence_refs": [f"question:{question['id']}"],
             }
     fatigue = 1 - energy
-    if fatigue > 0:
-        sources["resource:energy"] = {"content": f"Remaining energy: {energy:.4f}",
-            "reason": "Conserve remaining resources.", "strength": fatigue, "domain": "resources", "evidence_refs": []}
+    sources["resource:energy"] = {"content": f"Remaining energy: {energy:.4f}",
+        "reason": "Conserve remaining resources.", "strength": fatigue ** 2,
+        "domain": "resources", "evidence_refs": []}
     return sources
 
 
@@ -128,6 +143,7 @@ def conversation_proposals(current_self: dict, context: dict, components: tuple,
         if (not isinstance(kind, str) or not refs or any(ref not in sources for ref in refs)
                 or any(not isinstance(ref, str) for ref in instead) or not set(instead).issubset(ids)):
             return
+        refs = list(dict.fromkeys(refs))
         records = [sources[ref] for ref in refs]
         domains = {r["domain"] for r in records}
         if kind == "disagree" and "opinions" not in domains:
@@ -136,14 +152,30 @@ def conversation_proposals(current_self: dict, context: dict, components: tuple,
             return
         if kind == "rest" and "resources" not in domains:
             return
+        if kind == "rest":
+            # Ordinary use of a small fraction of the reserve is not a need
+            # to recover. A contextual, substantive taste can separately make
+            # rest attractive, but cannot turn a resource label into a value of 1.
+            preference = max((r["strength"] for r in records if r["domain"] == "preferences"
+                              and r["substantive"] and not r.get("negative")), default=0.0)
+            if energy > 1 - energy and not preference:
+                return
+            value = sources["resource:energy"]["strength"]
+            value = value + (1 - value) * preference
+            instead = sorted(ids)  # Rest cannot also undertake conversational work.
+        else:
+            value = max(r["strength"] for r in records)
         if kind in {"pursue", "share", "redirect"} and any(r.get("negative") for r in records):
             return
-        content = "\n".join(dict.fromkeys(r["content"] + "\n" + r["reason"] for r in records))
+        if kind in {"pursue", "share", "redirect"} and not any(
+                r["domain"] != "resources" and r.get("substantive", True) for r in records):
+            return
+        content = _distinct_text(part for r in records for part in (r["content"], r["reason"]))
         identifier = f"self:{kind}:" + "|".join(refs)
         try:
             evidence = tuple(dict.fromkeys([*refs, *(ref for record in records for ref in record.get("evidence_refs", []))]))
             proposals[identifier] = SelfProposal(identifier, kind, content, reason, evidence,
-                max(r["strength"] for r in records), effort=effort, uncertainty=uncertainty,
+                value, effort=effort, uncertainty=uncertainty,
                 character_cost=cost, instead_of=tuple(instead))
         except (TypeError, ValueError):
             return
@@ -191,7 +223,7 @@ def ground_conversation_allocation(personality: Personality, state: DecisionStat
     refs = tuple(dict.fromkeys(ref for key, record in commitments.items() for ref in (key, *record["evidence_refs"])))
     alternatives = [(sum(v for _, v in proposal_terms(p, personality, state))
                      - 0.12 * p.effort ** 2 / (state.energy + 0.15), p.evidence_refs)
-                    for p in proposals if p.effort <= state.energy]
+                    for p in proposals if p.kind != "rest" and p.effort <= state.energy]
     opportunity, opportunity_refs = max(alternatives, key=lambda item: item[0], default=(0.0, ()))
     # Sharing provenance is not the same as advancing the same pursuit.
     opportunity_refs = tuple(ref for ref in opportunity_refs if ref in sources or ref in refs)

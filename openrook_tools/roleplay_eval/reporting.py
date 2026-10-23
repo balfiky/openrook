@@ -314,7 +314,8 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                     for r in (turns[:1] + turns[-2:] if len(turns) > 2 else turns)
                 ],
                 "trajectory": [
-                    {"turn": r["turn_index"], "phase": r.get("phase"), **r.get("metrics", {})}
+                    {"turn": r["turn_index"], "phase": r.get("phase"),
+                     "behavior_available": not unavailable_turn(r), **r.get("metrics", {})}
                     for r in turns
                 ],
             }
@@ -324,7 +325,7 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
     for case in cases:
         if case["category"] != "F":
             continue
-        rows = case["trajectory"]
+        rows = [r for r in case["trajectory"] if r["behavior_available"]]
 
         def values(key):
             return [r[key] for r in rows if isinstance(r.get(key), (int, float))]
@@ -339,7 +340,7 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
                 "final_grievance": rows[-1].get("grievance") if rows else None,
                 "mean_warmth": sum(warmth) / len(warmth) if warmth else None,
                 "peak_boundary": max(values("boundary"), default=None),
-                "role_grants": sum(values("role_grants")),
+                "role_grants": sum(values("role_grants")) if rows and len(values("role_grants")) == len(rows) else None,
                 "status": case["status"],
             }
         )
@@ -373,6 +374,7 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
         "seed": manifest["seed"],
         "status": status,
         "restoration": restoration,
+        "soul_file_restoration": manifest.get("soul_file_restoration"),
         "judge_enabled": manifest.get("judge_enabled", False),
         "limitations": [
             "Deterministic text checks are heuristics; semantic reviews may disagree.",
@@ -441,8 +443,14 @@ def render_report(summary: dict, records: list[dict]) -> str:
         for stage, value in rates.items():
             if isinstance(value, dict):
                 lines.append(f"| {name} / {stage} | {value['numerator']} / {value['denominator']} | {value['unknown']} | {cell(value['rate'])} |")
-    lines += ["", "Service handback uses defects as its numerator. Selection, expression and visible delivery are distinct.", "",
-              "| Matched comparison | Subjects | Self distance | Willingness distance | Same birth |", "|---|---|---:|---:|---|"]
+    lines += ["", "Service handback uses defects as its numerator. Selection, expression and visible delivery are distinct.", ""]
+    selections = independent.get("observed_selections", {})
+    if selections:
+        lines += [f"Observed topic intentions across all turns: {selections['all_turns']}; independence turns: {selections['independence_turns']}.", ""]
+        for name in ("spontaneous", "elicited"):
+            value = independent["measures"][name]
+            lines += [f"{name}: {value['visible_selections']} visible selections; {value['selections_with_retained_topic']} selections with a substantive retained topic.", ""]
+    lines += ["| Matched comparison | Subjects | Self distance | Willingness distance | Same birth |", "|---|---|---:|---:|---|"]
     for row in independent.get("comparisons", []):
         lines.append(f"| {row['kind']} | {cell(row['left'])} / {cell(row['right'])} | {cell(row.get('retained_state_distance'))} | {cell(row.get('request_willingness_distance'))} | {cell(row.get('same_birth'))} |")
     lines += ["", "## Defects by severity", ""]

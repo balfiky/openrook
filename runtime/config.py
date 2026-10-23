@@ -56,6 +56,9 @@ class RuntimeConfig:
 
     # Storage
     data_dir: str = "data"
+    # Optional soul file for an isolated subject/run. Empty uses the operator
+    # config directory; other YAML and prompt overrides remain independent.
+    soul_path: str = ""
 
     # Backpressure
     max_queue_per_user: int = 3

@@ -67,6 +67,7 @@ class DebugState:
     retrieved_memories: list[LongTermEntry] = field(default_factory=list)
     semantic_memories: list[SemanticMemoryEntry] = field(default_factory=list)
     life_history_context: dict[str, Any] = field(default_factory=dict)
+    self_development: dict[str, Any] = field(default_factory=dict)
     character_vector: CharacterVector | None = None
     coherence_verdict: CoherenceVerdict | None = None
     life_influence: LifeInfluence = field(default_factory=LifeInfluence)

@@ -10,6 +10,7 @@ from config.environment import project_env
 
 import copy
 import math
+from collections.abc import Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -26,26 +27,46 @@ import yaml
 _DEFAULT_CONFIG_DIR = Path(__file__).parent
 
 
-def _user_override_dir() -> Path | None:
-    """Optional operator-owned config dir that overrides packaged defaults.
+def config_override_dir(
+    runtime_config_path: str | Path | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Resolve the operator write directory, even if it does not exist yet."""
+    runtime_path = Path(runtime_config_path or project_env(
+        "RUNTIME_CONFIG", "runtime_config.yaml", environ=environ,
+    )).expanduser()
+    override = project_env("CONFIG_DIR", "", environ=environ).strip()
+    return Path(override).expanduser().resolve() if override else runtime_path.resolve().parent / "config"
 
-    Set ``OPENROOK_CONFIG_DIR`` to a writable directory to keep operator edits
-    (typically soul.yaml) out of site-packages so ``pip install --upgrade``
-    does not clobber them. Files present here override the packaged
-    defaults one-for-one; missing files fall through to the packaged copy.
-    """
-    env = project_env("CONFIG_DIR", "").strip()
-    if not env:
-        return None
-    path = Path(env).expanduser()
-    return path if path.is_dir() else None
+
+def resolve_soul_path(
+    runtime_config_path: str | Path | None = None,
+    *,
+    for_write: bool = False,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Resolve soul reads/writes together; a run override affects only identity."""
+    from runtime.config import RuntimeConfig
+
+    runtime_path = Path(runtime_config_path or project_env(
+        "RUNTIME_CONFIG", "runtime_config.yaml", environ=environ,
+    )).expanduser()
+    runtime = RuntimeConfig.from_yaml(str(runtime_path))
+    operator_path = config_override_dir(runtime_path, environ=environ) / "soul.yaml"
+    target = Path(runtime.soul_path).expanduser().resolve() if runtime.soul_path.strip() else operator_path
+    if for_write or target.exists():
+        return target
+    return operator_path if operator_path.exists() else _DEFAULT_CONFIG_DIR / "soul.yaml"
 
 
 def _resolve_yaml_path(filename: str, config_dir: Path | None) -> Path:
     if config_dir is not None:
         return config_dir / filename
-    override = _user_override_dir()
-    if override is not None and (override / filename).exists():
+    if filename == "soul.yaml":
+        return resolve_soul_path()
+    override = config_override_dir()
+    if (override / filename).exists():
         return override / filename
     return _DEFAULT_CONFIG_DIR / filename
 
@@ -53,8 +74,8 @@ def _resolve_yaml_path(filename: str, config_dir: Path | None) -> Path:
 def _resolve_prompt_path(filename: str, config_dir: Path | None) -> Path:
     if config_dir is not None:
         return config_dir / "prompts" / filename
-    override = _user_override_dir()
-    if override is not None and (override / "prompts" / filename).exists():
+    override = config_override_dir()
+    if (override / "prompts" / filename).exists():
         return override / "prompts" / filename
     return _DEFAULT_CONFIG_DIR / "prompts" / filename
 

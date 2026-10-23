@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -58,6 +59,9 @@ def main() -> None:
             "(use --config for a custom path)."
         )
     config = RuntimeConfig.from_yaml(str(config_path))
+    os.environ["OPENROOK_RUNTIME_CONFIG"] = str(config_path.resolve())
+    from config.loader import reset_config
+    reset_config()
     if config.llm_backend != "codex" and not (config.llm_model or "").strip():
         raise SystemExit(
             f"No LLM model selected in {config_path}. "

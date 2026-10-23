@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from copy import deepcopy
 import hashlib
 import json
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+import yaml
 
 from openrook_tools.roleplay_eval.api import PublicAPI, Redactor, workspace_snapshot
 from openrook_tools.roleplay_eval.checks import (
@@ -66,6 +68,7 @@ class FakeServer:
     def __init__(self):
         self.config = {
             "data_dir": "runtime-data",
+            "soul_path": "",
             "tools_workspace": "workspace",
             "tools_enabled": False,
             "autonomy_level": "assisted",
@@ -74,13 +77,34 @@ class FakeServer:
             "proactive_enabled": False,
             "llm_model": "private_model_selection",
         }
-        self.soul = {**profile("patient", 7), "identity": "private operator identity"}
+        soul = {**profile("patient", 7), "identity": "private operator identity"}
+        self.original_soul_path = "/server/config/soul.yaml"
+        self.soul_files = {self.original_soul_path: (
+            "# Authored formatting must survive staging.\r\n"
+            + yaml.safe_dump({"soul": soul}, sort_keys=False).replace("0.5", "0.50").replace("\n", "\r\n")
+        ).encode()}
         self.original = deepcopy((self.config, self.soul))
         self.sessions, self.chats, self.mutations = {}, [], []
         self.active = self.peak = 0
         self.boot = time.time() - 100
         self.lose_next_response = False
         self.judge_response = judgment()
+
+    @property
+    def soul_path(self):
+        return self.config["soul_path"] or self.original_soul_path
+
+    @property
+    def soul(self):
+        return yaml.safe_load(self.soul_files.get(
+            self.soul_path, self.soul_files[self.original_soul_path],
+        ))["soul"]
+
+    def soul_snapshot(self):
+        source = self.soul_path if self.soul_path in self.soul_files else self.original_soul_path
+        content = self.soul_files[source]
+        return {"path": source, "exists": True, "content_base64": base64.b64encode(content).decode(),
+                "sha256": hashlib.sha256(content).hexdigest()}
 
     def session(self, ids):
         key = (self.config["data_dir"], ids["user_id"], ids["chat_id"])
@@ -114,9 +138,10 @@ class FakeServer:
         if path == "/admin/soul":
             if method == "POST":
                 assert self.active == 0, "Identity changed during an in-flight chat"
-                self.soul = data
+                self.soul_files[self.soul_path] = yaml.safe_dump({"soul": data}).encode()
                 self.mutations.append((path, data))
-            return httpx.Response(200, json={"soul": self.soul})
+            return httpx.Response(200, json={"soul": self.soul, "path": self.soul_path,
+                                            "file": self.soul_snapshot()})
         if path == "/v1/health":
             return httpx.Response(200, json={"uptime_seconds": time.time() - self.boot})
         if path == "/v1/ready":
@@ -430,12 +455,19 @@ def test_fake_run_resume_reports_redaction_and_concurrency(tmp_path, monkeypatch
     secret = "runtime_secret_sentinel"
     monkeypatch.setenv("OPENROOK_API_KEY", secret)
     server, out = FakeServer(), tmp_path / "report"
+    original_bytes = server.soul_files[server.original_soul_path]
     scenarios = select_scenarios(["positive_arc", "negative_arc", "mixed_requests"])
     evaluation, summary = asyncio.run(
         run_fake(server, out, scenarios, max_turns=2, key=secret, judge=True)
     )
     assert len(server.chats) == 6 and server.peak == 2 and summary["turns"] == 6
     assert (server.config, server.soul) == server.original
+    assert server.soul_files[server.original_soul_path] == original_bytes
+    assert summary["soul_file_restoration"] == {
+        "original_sha256": hashlib.sha256(original_bytes).hexdigest(),
+        "restored_sha256": hashlib.sha256(original_bytes).hexdigest(),
+        "verified": True,
+    }
     assert evaluation.recovery_path.stat().st_mode & 0o777 == 0o600
     assert evaluation.recovery_dir.stat().st_mode & 0o777 == 0o700
     ids = {r["user_id"] for r in case_records(out)}
@@ -534,6 +566,7 @@ def test_pause_restart_resume_and_restore(tmp_path):
 
 def test_restore_only_unstages_a_paused_run(tmp_path):
     server, out = FakeServer(), tmp_path / "results"
+    original_bytes = server.soul_files[server.original_soul_path]
     scenario = Scenario(
         "pause", "G", (Turn("before"), Turn("after")), exclusive=True, restart_after=1
     )
@@ -541,7 +574,85 @@ def test_restore_only_unstages_a_paused_run(tmp_path):
     assert evaluation.paused
     _, summary = asyncio.run(run_fake(server, out, [scenario], restore_only=True))
     assert (server.config, server.soul) == server.original and summary["restoration"] == "restored"
+    assert server.soul_files[server.original_soul_path] == original_bytes
+    assert summary["soul_file_restoration"]["verified"] is True
     assert len(server.chats) == 1
+
+
+@pytest.mark.parametrize("defect", ["missing_snapshot", "digest_mismatch", "missing_path_setting"])
+def test_incompatible_soul_recovery_blocks_before_any_mutation(tmp_path, defect):
+    server = FakeServer()
+
+    async def handler(request):
+        response = await server(request)
+        data = response.json()
+        if request.url.path == "/admin/soul":
+            if defect == "missing_snapshot":
+                data.pop("file")
+            elif defect == "digest_mismatch":
+                data["file"]["sha256"] = "0" * 64
+        if request.url.path == "/admin/config" and defect == "missing_path_setting":
+            data["config"].pop("soul_path")
+        return httpx.Response(200, json=data)
+
+    _, summary = asyncio.run(run_fake(handler, tmp_path, [Scenario("safe", "A", (Turn("hello"),))]))
+    assert not server.chats and not server.mutations
+    assert summary["run_errors"] and summary["turns"] == 0
+
+
+def test_restoration_detects_semantically_identical_reserialization(tmp_path):
+    server = FakeServer()
+
+    async def handler(request):
+        if request.method == "POST" and request.url.path == "/admin/soul":
+            assert server.soul_path != server.original_soul_path
+        response = await server(request)
+        if request.url.path == "/chat":
+            # An external writer changed only formatting during the run.
+            server.soul_files[server.original_soul_path] = yaml.safe_dump({"soul": server.original[1]}).encode()
+        return response
+
+    _, summary = asyncio.run(run_fake(handler, tmp_path, [Scenario("formatting", "A", (Turn("hello"),))]))
+    assert server.soul == server.original[1]
+    assert summary["restoration"] == "failed"
+    assert summary["soul_file_restoration"]["verified"] is False
+    assert summary["soul_file_restoration"]["original_sha256"] != summary["soul_file_restoration"]["restored_sha256"]
+    assert any("original bytes" in error for error in summary["run_errors"])
+
+
+def test_ignored_soul_path_cannot_write_the_original_file(tmp_path):
+    server = FakeServer()
+
+    async def handler(request):
+        response = await server(request)
+        if request.url.path == "/admin/soul":
+            assert request.method == "GET", "Unisolated identity must never be written"
+            data = response.json()
+            data["path"] = server.original_soul_path
+            return httpx.Response(200, json=data)
+        return response
+
+    _, summary = asyncio.run(run_fake(handler, tmp_path, [Scenario("safe", "A", (Turn("hello"),))]))
+    assert not server.chats
+    assert (server.config, server.soul) == server.original
+    assert "isolate the staged soul" in summary["scenarios"][0]["reason"]
+
+
+@pytest.mark.parametrize("defect", ["legacy", "corrupt_bytes"])
+def test_unsafe_recovery_journal_is_rejected_before_resume_mutations(tmp_path, defect):
+    server, out = FakeServer(), tmp_path / "results"
+    scenarios = [Scenario("safe", "A", (Turn("hello"),))]
+    evaluation, _ = asyncio.run(run_fake(server, out, scenarios))
+    journal = json.loads(evaluation.recovery_path.read_text())
+    if defect == "legacy":
+        journal.pop("soul_file")
+    else:
+        journal["soul_file"]["content_base64"] = base64.b64encode(b"corrupt").decode()
+    atomic_json(evaluation.recovery_path, journal)
+    mutations = deepcopy(server.mutations)
+    _, summary = asyncio.run(run_fake(server, out, scenarios, restore_only=True))
+    assert server.mutations == mutations
+    assert summary["run_errors"]
 
 
 def test_judge_failure_is_nonfatal_and_evidence_is_blinded(tmp_path):

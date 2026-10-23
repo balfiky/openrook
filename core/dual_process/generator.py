@@ -137,6 +137,10 @@ def build_system_prompt(ctx: PipelineContext) -> str:
             "Respond to the current turn. Past dialogue is context, not an answer to copy. "
             "Current execution receipts supersede earlier results; realize the selected intention "
             "with its actual topic content and grounds, alongside work you chose to undertake. "
+            "The selected self intention is a conversational purpose to carry out, not background "
+            "personality seasoning. Express its specific question, view or discovery with substance. "
+            "Listing values or returning the agenda without developing that subject does not realize it. "
+            "Any invitation should advance that purpose and fit this character's tastes. "
             "An unselected proposal is not a request to decline aloud. A selected pursuit, view, "
             "disagreement, redirection, deferral or close may lead the reply. Preserve held opinion "
             "reasons and uncertainty; revise for retained counterevidence rather than pressure. "
@@ -756,6 +760,8 @@ class ResponseGenerator:
                 "meaning": "RAM usage" if ctx.inspection_kind == "memory" else ctx.inspection_kind + " usage",
                 "freshness": "current turn receipts",
             }
+        if ctx.turn_decision and ctx.turn_decision.selected_intention:
+            current["selected_intention"] = asdict(ctx.turn_decision.selected_intention)
         if ctx.response_strategy:
             current["expression_guidance"] = ctx.response_strategy
         full_message = "Current turn (respond to this):\n" + json.dumps(current, ensure_ascii=False)

@@ -72,8 +72,26 @@ def topic_refs(record):
     selected = intention(record)
     if selected.get("kind") not in {"pursue", "share", "disagree", "redirect"}:
         return set()
-    return {r for r in selected.get("evidence_refs", [])
+    refs = {r for r in selected.get("evidence_refs", [])
             if r.startswith(("self:interests:", "self:opinions:", "question:", "goal:"))}
+    state = current_self(record) or {}
+    for ref in selected.get("evidence_refs", []):
+        if ref.startswith("self:preferences:"):
+            preference = state.get("preferences", {}).get(ref[len("self:preferences:"):], {})
+            subject = preference.get("subject", "").strip().casefold()
+            if any(str(part).strip().casefold() not in {"", subject}
+                   for part in [preference.get("context", ""), *preference.get("reasons", [])]):
+                refs.add(ref)
+    return refs
+
+
+def initiative_selected(record):
+    # Selection measures what the runtime actually chose, including shallow
+    # preference-backed proposals. Substantive ownership and fidelity are
+    # separate observations; do not silently erase a poor selected proposal.
+    selected = intention(record)
+    return (selected.get("kind") in {"pursue", "share", "disagree", "redirect"}
+            and bool(selected.get("content", "").strip()))
 
 
 def delivered(record):
@@ -149,6 +167,8 @@ def review_evidence(record, previous):
     if (not record.get("reply", "").strip() and decision(record).get("chosen_silence") is True
             and (record.get("debug") or {}).get("delivery_outcome") == "chosen_silence"):
         inapplicable["service_handback"] = "verified empty chosen silence"
+        if selected.get("kind") == "rest":
+            inapplicable["intention_expression"] = "rest selected silence; no verbal intention to realize"
     if not previous:
         inapplicable["self_consistency"] = "no prior situation to compare"
     return {
@@ -171,7 +191,8 @@ def rate(successes, total, unknown=0, not_applicable=0):
 
 
 def _verdict(record, name):
-    if (record.get("judge") or {}).get("status") != "ok":
+    if ((record.get("judge") or {}).get("status") != "ok"
+            or (record.get("judge") or {}).get("independence_status") == "error"):
         return "uncertain"
     return ((record.get("judge") or {}).get("independence", {}).get(name) or {}).get("verdict", "uncertain")
 
@@ -192,7 +213,7 @@ def summarize(records, scenarios=()):
                 counters["availability"]["unavailable"] += 1
                 continue
             evidence = review_evidence(record, previous)
-            selected = bool(topic_refs(record))
+            selected = initiative_selected(record)
             known = choice_known(record)
             expressed = _verdict(record, "intention_expression")
             for name in CRITERIA:
@@ -207,6 +228,7 @@ def summarize(records, scenarios=()):
                 count["selected"] += selected
                 count["selection_unknown"] += not known
                 count["visible"] += selected and delivered(record)
+                count["substantive"] += bool(topic_refs(record))
                 count["expressed"] += selected and expressed == "pass" and delivered(record)
                 count["expression_unknown"] += not known or selected and expressed in {"uncertain", "not_applicable"}
             if "resume_opportunity" in tags:
@@ -241,7 +263,7 @@ def summarize(records, scenarios=()):
     observed = {(r["scenario_id"], r["turn_index"]) for r in records}
     missing_turns = 0
     for scenario in scenarios:
-        for index, turn in enumerate(scenario.turns):
+        for index, turn in enumerate(scenario.turns, start=1):
             if "independence" not in turn.tags or (scenario.id, index) in observed:
                 continue
             missing_turns += 1
@@ -268,11 +290,14 @@ def summarize(records, scenarios=()):
             measures[name]["expression_and_delivery"] = rate(c["expressed"], c["opportunities"], c["expression_unknown"], c["not_applicable"])
         if name in {"spontaneous", "elicited"}:
             measures[name]["visible_selections"] = c["visible"]
+            measures[name]["selections_with_retained_topic"] = c["substantive"]
     for name, counts in reviews.items():
         total = counts["pass"] + counts["fail"] + counts["uncertain"]
         measures[name] = rate(counts["fail"] if name == "service_handback" else counts["pass"],
                               total, counts["uncertain"], counts["not_applicable"])
     return {"measures": measures, "comparisons": comparisons(grouped), "turns": traces,
+            "observed_selections": {"all_turns": sum(initiative_selected(r) for r in records if not unavailable_turn(r)),
+                "independence_turns": sum(initiative_selected(r) for rows in grouped.values() for r in rows if not unavailable_turn(r))},
             "unavailable_turns": counters["availability"]["unavailable"],
             "missing_planned_turns": missing_turns,
             "scope": "Descriptive independence measures; no behavioral quotas and no contribution to floor status."}
@@ -317,8 +342,8 @@ def _distance(left, right):
             # Local question row IDs and research UUIDs are not comparable
             # across fresh subjects. Compare retained content, not those IDs.
             "topic_selection_changed": ((intention(left).get("kind"), intention(left).get("content"))
-                if topic_refs(left) else None) != ((intention(right).get("kind"), intention(right).get("content"))
-                if topic_refs(right) else None),
+                if initiative_selected(left) else None) != ((intention(right).get("kind"), intention(right).get("content"))
+                if initiative_selected(right) else None),
             "same_birth": a.get("birth_hash") == b.get("birth_hash") if a.get("birth_hash") and b.get("birth_hash") else None}
 
 

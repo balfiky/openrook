@@ -113,7 +113,7 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 | `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
 | `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
 | `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites, ineligible-span repair and one protected final delivery attempt; local and available semantic review | 0–5 |
-| `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update and debug | 0 |
+| `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update, optional ordinary self-development and debug | 0–1 |
 
 The conversational base budget is five inference calls, including optional work.
 Each granted atomic task also receives one protected primary tool selection;
@@ -165,6 +165,15 @@ without a priority field; waiting/completed goals consume none. Supported reques
 character benefits and dislike costs use retained references instead of zeroing
 all ordinary work's self value. All terms and alternative utilities remain in the
 frozen decision. A conversational intention never grants tool execution.
+Phase 2c stops treating bare taste/value names as shareable subjects and
+deduplicates content/reasons across retained sources. Resource rest becomes a
+candidate when depleted reserve outweighs remaining reserve, or a contextual
+substantive retained preference favors pausing. Recovery value is quadratic in
+depletion. Rest cannot add to task opportunity cost, coexist with grants, or earn
+unexpressed relational rewards. Selected silence skips expression energy drain;
+it grants no instant recharge; elapsed recovery keeps the engine's existing rules.
+A selected substantive intention
+still requires expression when relational engagement is zero.
 Delivered pursuits become session commitments, with original topic/evidence
 references preserved across interruption/restart and revalidated against the
 current self. A selected close can release the pursuit. Generation and semantic
@@ -324,11 +333,24 @@ the observed metric topic, so a RAM reading cannot support an earlier CPU claim.
 Auxiliary deadlines adapt to configured request limits and measured generation
 latency, with an optional explicit cap and configurable short cooldown (see README).
 
+**Ordinary live development** checkpoints disjoint batches of two completed
+interactions after expression, within remaining optional inference. This is a
+cost bound, with no required conversational behavior. The focused interpretation
+protocol requires grounded `self_updates`; it does not substitute legacy beliefs
+or future-behavior notes for effective development. Per-turn and experience
+diagnostics distinguish proposals, accepted evidence and actual revision. Pending
+material and occurrence IDs survive restart. Silence defers optional inference.
+The already frozen choice/expression/review retain their pre-learning self;
+the next turn reads any consolidated changes. No-learning and feature ablations
+skip this path. Research retains its recorded learning-job lifecycle.
+
 **Session end is separate.** `CognitivePipeline.end_session()` digests the
 session into long-term and relationship memory and clears hot history. Digestion
 can call the model; autobiographical ingestion can add digest/revision calls.
 Ordinary episodes are eligible, including quiet ones; consolidation is on by
 default, with explicit `autobiographical_learning: false` as a no-learning control.
+Only uncheckpointed material supplies new autobiographical evidence; ending a
+session does not corroborate an episode already interpreted during the chat.
 Research learning jobs retain their episode policy and can consolidate on idle/size
 boundaries without an explicit conversational session end.
 
@@ -764,6 +786,13 @@ Structural absence permits `not_applicable`; missing evidence stays unknown.
 Identifiers alone do not count as divergence. Independence measures set no
 behavioral quotas and do not change floor status. See
 [role-play evaluation](development/roleplay-eval.md).
+Phase 2c counts runtime selections separately from substantive retained subjects,
+uses 1-based planned-turn IDs, and scopes the judge's concrete schema to requested
+criteria. Valid floor assessments survive exhausted independence-schema repair;
+independence coverage stays unknown. Confirmed unavailable turns retain raw
+metrics for inspection but cannot establish trajectory/contrast verdicts or
+personality aggregates. The run-18 analysis is in
+[developing self](development/phase2-developing-self.md#phase-2c-live-follow-up).
 
 ## Historical Phase 11 Component Claim Map
 

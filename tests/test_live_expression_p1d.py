@@ -52,8 +52,9 @@ def reviewer(request):
 
 def make_pipe(drafts, reviewer, *, reserved=False, executor=None):
     backend = ExpressionBackend(drafts=drafts, reviews=reviewer)
+    # These finite drafts exercise delivery, not the live learning interpreter.
     pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="high_risk",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
+                             runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
     if reserved:
         pipe.relationship_memory.save_dynamics("alice", RelationshipDynamics(h=0.6, r=0.3), 0)
     return pipe, backend

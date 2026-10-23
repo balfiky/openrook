@@ -17,8 +17,10 @@ python3 -m openrook_tools.roleplay_eval \
 
 Use a dedicated evaluation instance. The tool temporarily replaces the authored
 identity and selected runtime settings through the admin API. It selects fresh
-server data directories, disables proactive activity for the experiment, and
-restores the original identity and settings when finished or interrupted. These
+server data directories and stages each identity at `<data_dir>/config/soul.yaml`
+using the persisted runtime `soul_path` setting. Other YAML and prompt overrides
+remain active. It disables proactive activity for the experiment and restores
+the original identity and settings when finished or interrupted. These
 admin changes rebuild active sessions, so operator traffic should stay on a
 different instance. Nothing is committed by the harness.
 
@@ -63,7 +65,9 @@ Category K runs exclusively in fresh subject stores. Map and acoustic histories
 start from the identical authored birth/seed. Each has a matched
 `autobiographical_learning: false` control; proud/patient subjects receive the
 same map history. Five distinct conditioning episodes use session-end
-consolidation, followed by identical probes. Boundaries are journaled per episode
+consolidation, followed by identical probes. Ordinary live development can also
+checkpoint disjoint interaction batches without an explicit end; the end boundary
+does not re-ingest those batches. Boundaries are journaled per episode
 and resume never resends their chats. Learning settings are captured/restored;
 servers omitting that setting cannot stage these cases safely. The separate
 restart case uses the same verified-restart protocol as `persistence`.
@@ -72,7 +76,7 @@ restart case uses the same verified-restart protocol as `persistence`.
 
 | Measure | Denominator / interpretation |
 |---|---|
-| Spontaneous initiative | Predeclared conversational gaps tagged `initiative_opportunity`; their eligibility does not depend on a proposal being selected. Topic selection, visible delivery and judged expression/delivery are separate. |
+| Spontaneous initiative | Predeclared conversational gaps tagged `initiative_opportunity`; their eligibility does not depend on a proposal being selected. Count actual share/pursue/disagree/redirect selections, including shallow ones. Retained substantive topics, visible delivery and judged expression/delivery are separate. |
 | Elicited wants | Explicit questions asking what the subject wants, counted separately with `elicited_want`. These never inflate spontaneous initiative. |
 | Owned topics resumed | Neutral opportunities after an interruption or verified restart, conditional on a previously selected and actually delivered topic. Stable interest/question/goal/opinion references identify the subject; the judge checks substantive continuation. |
 | Opinions | Distinct `opinion_persistence` pressure and `opinion_revision` counterevidence ratings, conditional on an existing retained opinion. Reasons/confidence, justified uncertainty and bounded learning matter; neither capitulation nor stubbornness is success. |
@@ -88,6 +92,11 @@ judging. Only those criteria may receive `not_applicable`; a known actual failur
 is retained even when nominated. Missing snapshots or judgments are uncertain,
 never absence inferred from judge reason prose. An independence failure must cite
 the actual generated reply. Raw ratings survive artifact compaction.
+`observed_selections` also reports all-turn and independence-turn selections, so
+choices outside tagged opportunities remain visible. Per-opportunity
+`selections_with_retained_topic` distinguishes actual retained subjects from
+bare preference-label selections; those labels alone cannot establish ownership.
+Planned coverage uses the same 1-based turn indices as recorded requests.
 
 Rates expose numerator, denominator, unknown and not-applicable counts. Unknown
 expression makes the point rate unavailable and supplies lower/upper bounds.
@@ -225,6 +234,11 @@ checks remain in the raw record without becoming behavioral defects. A generic
 503 establishes no cause and retains its failures. An explicit expression failure
 cannot become an outage, and independent execution violations remain binding.
 Unavailable empty output is not submitted for expression judging.
+Its debug state also cannot establish behavioral trajectory or cross-subject
+contrast verdicts. Interrupted trajectories/comparisons remain unknown;
+personality aggregates exclude unavailable turns, while raw trajectories retain
+their state with `behavior_available: false`. Independent execution violations
+remain binding even when expression is unavailable.
 
 No whole-chat retry was added. Generation can fail after state changes and tool
 execution, and this API has no idempotent replay contract. Even one retry could
@@ -254,6 +268,14 @@ or initiative frequency. It permits substantive redirection and replies ending
 without an invitation. Scenario IDs, personality labels, tags and expected
 outcomes remain outside judge evidence; actual self, choices, stimulus type,
 prior intentions and dialogue remain available.
+The concrete requested JSON schema contains independence only for those turns.
+Unsolicited independence objects outside that scope cannot invalidate otherwise
+valid floor judgments. After the same single repair, a still-malformed or missing
+independence object yields `independence_status: error` alongside any independently
+valid floor assessment; its ratings remain unknown. Malformed/truncated floor
+objects still leave floor coverage incomplete. This applies to internal and
+external judging, with no extra retry loop. Developed selves are sent as
+structured objects rather than truncated serialized JSON strings.
 
 `--judge on` calls the authenticated stateless evaluation-judge API on the **same
 server**, using its configured backend. Restart an older running server with
@@ -280,8 +302,9 @@ truthfulness, expression quality and explanations. Judge HTTP/JSON failures are
 recorded and never abort the suite. Missing reviews leave semantic coverage
 incomplete. A judge is fallible; inspect its evidence before accepting a defect.
 Summary `semantic_unknown_details` and the Markdown report name uncertain criteria
-and turns. Verified empty runtime-selected silence has no verbal hostility or
-receipt claims. The judge contract has four verdicts: `pass`, `fail`, `uncertain`,
+and turns. Verified empty runtime-selected silence has no verbal submission,
+servility, hostility, receipt or expression-quality object; state/choice and
+relevance remain assessable. The judge contract has four verdicts: `pass`, `fail`, `uncertain`,
 and `not_applicable`. The harness supplies `inapplicable_reply_criteria` and its
 structural evidence reasons before judging. Empty receipt traces, known component
 lists and the absence of execution/recall claims can establish no receipt object.
@@ -289,7 +312,7 @@ Known components without roles, together with no detected requested or expressed
 relation, can establish no submission object; a spontaneous role assertion keeps
 that criterion applicable. A zero-hostility observation and no directed reply
 insult can establish no hostility object. A complete delivered reply with known
-non-role choices, a passing runtime review without issues and no role, groveling
+non-role choices, a clean local runtime review and no role, groveling
 or obedience evidence can establish no
 servility object. An uncertainty on that absent object is reported as inapplicable;
 actual failures remain binding. Ordinary mentions of a preference do not imply
@@ -325,7 +348,8 @@ local findings provide corroboration; HTTP availability alone does not. Runtime
 delivery failures remain binding independently. Other failed criteria, independent
 medium findings and high/critical defects remain binding. This reporting policy
 changes no runtime expression checks, numeric stance or personality choices.
-Repeated invalid findings remain judge errors and leave coverage inconclusive.
+Repeated invalid floor findings remain judge errors and leave coverage inconclusive.
+Invalid independence coverage remains separate from a valid floor assessment.
 The same bounded repair rejects a failed state-consistency verdict whose reason
 only says the tone fits. When all work was declined and state consistency passes,
 failure solely for not answering contradicts the frozen choice; judge the decline
@@ -406,9 +430,17 @@ being fabricated. Only an incomplete final JSONL line is repairable automaticall
 The private recovery snapshot lives in the operating system's temporary directory
 under `openrook-roleplay-RUN_ID/recovery.json` (directory mode 700, file mode 600),
 outside the shareable output directory. It contains the original authored soul
-and only changed noncredential settings, not provider configuration. Retain it
+as exact base64-encoded file bytes, its source path and SHA-256, plus the parsed
+identity and changed noncredential settings. It excludes provider configuration. Retain it
 until continuation/restoration is finished, then remove it when retiring the run.
 An absent recovery snapshot during a staged run prevents unsafe recapture.
+Restoration switches back to the original `soul_path` without posting the original
+personality through the YAML save endpoint. The original file is never written;
+its path, existence, exact bytes and digest must match before restoration succeeds.
+Comments, ordering, line endings and numeric spelling survive unchanged.
+`summary.json.soul_file_restoration` records the before/after digests and verification
+result. A changed original file fails restoration visibly. Older servers/journals
+without exact file evidence or `soul_path` support are rejected before mutation.
 
 ## Artifacts and interpretation
 

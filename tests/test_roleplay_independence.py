@@ -193,7 +193,7 @@ def test_missing_planned_opportunities_and_restart_remain_unknown():
     case = Scenario("case", "K", (
         Turn("An early gap", ("independence", "initiative_opportunity")),
         Turn("A later gap", ("independence", "initiative_opportunity", "resume_opportunity"), "after_restart")))
-    result = summarize([row(0, tags=("initiative_opportunity",))], [case])
+    result = summarize([row(1, tags=("initiative_opportunity",))], [case])
     assert result["missing_planned_turns"] == 1
     assert result["measures"]["spontaneous"]["selection"]["unknown"] == 1
     assert result["measures"]["resumed_after_restart"]["selection"]["unknown"] == 1

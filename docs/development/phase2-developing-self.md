@@ -184,3 +184,141 @@ learning under matched histories, ablations, delivered pursuit restart, curiosit
 and research-goal plumbing, topic fidelity/closure and harness evidence. They prove
 mechanics, not natural conversational independence. The preference coefficients
 remain an inspectable model, and semantic fidelity/handback judgments remain fallible.
+
+## Phase 2c live follow-up
+
+Run 18 on `e1223fb` recorded 422 of 424 planned turns: five passing, two failing,
+18 inconclusive and six backend-unavailable scenarios. It did not establish live
+Phase 2 success. `tests/fixtures/p2c_run18.json` retains exact record projections,
+factored personality snapshots, session-end receipts, a read-only map-subject Life
+History snapshot and source hashes. Local roots and destinations are scrubbed;
+tests assert generic root absence. These fixes and remeasurements are offline.
+
+### Rest and intention content
+
+All 127 empty replies divide into 85 selected rests and 42 confirmed unavailable
+outputs. Every small loss of energy supplied a rest proposal with linear recovery
+value. Rest also inflated the opportunity cost of engaging and collected warmth,
+boundary, repair and candor rewards despite producing no expression. Under pressure,
+the engagement reward weakened while those other rewards remained. This made rest
+an inexpensive substitute for expressing a choice, including respectful follow-through.
+`negative_arc/11` was an answered optional favor; the surrounding reported empty
+turns were selected rest, not generation exhaustion.
+
+Resource-only rest now needs depleted reserve at least as large as remaining
+reserve; its value scales as depletion squared. A substantive retained preference
+can independently justify a pause, including at full energy. Bare value labels
+cannot do that. Rest contributes no competing-task opportunity cost, grants no work,
+and earns no unexpressed relational rewards. Silence skips expression drain and
+defers optional learning; energy recovery still uses elapsed time. The original
+zero-engagement/no-grants silence remains available. A selected substantive
+intention needs expression even when relational engagement reaches zero.
+
+The 27 share and 23 pursue selections used bare birth preference labels. Content
+assembly repeated each subject as its own reason. Bare preferences now price
+allocation without becoming a purported topic; actual questions, propositions,
+contexts and reasons supply substantive proposals. Repeated content lines and
+references are deduplicated. Selected purpose/content now appears in the current
+generator input as well as system controls. Fidelity review explicitly checks
+whether a question/view/discovery was developed and whether an invitation advances
+that purpose. No canned replacements, invitation bans or required initiative exist.
+Semantic fidelity remains fallible and needs a new live evaluation.
+
+### Development during ordinary interaction
+
+The harness did reach digestion: the map subject retained five successful
+autobiographical experiences and legacy belief/worldview events, but zero
+`self_evidence`, zero effective opinions/interests and revision zero. All 380
+available choice snapshots in the run stayed at revision zero. Legacy digestion
+fields lacked the grounded evidence contract required by the developing self;
+accepting a digest was not evidence of effective development. Raw digest outputs
+were not retained, so omitted versus rejected self-update proposals cannot be
+distinguished retrospectively. Ordinary uninterrupted chats also had no checkpoint
+until session end or idle teardown.
+
+Ordinary chat now interprets disjoint batches of two completed interactions after
+delivery, using at most one remaining optional inference call. This bounds cost,
+not character behavior. A focused protocol requires `self_updates` and their
+grounding instead of legacy future-behavior notes. Missing protocol is visibly
+undigested. `debug.self_development` and experience metadata report proposed
+updates, accepted evidence, changes and before/after revision. Pending material and
+occurrence IDs persist across restart; session end consumes only uncheckpointed
+material. Full dialogue remains active. The next choice captures the new self;
+the completed turn keeps its original snapshot.
+
+Existing independent-evidence, confidence, deduplication and rate bounds remain.
+Quotes from decoded user observations can ground evidence, including quotation
+marks/newlines; generated assistant dialogue and interpreted summaries cannot
+corroborate themselves. Assertions/self-descriptions remain inadmissible. Explicit
+no-learning, feature ablations and research's separate lifecycle remain unchanged.
+First-open migration now completes pending seed transactions before the birth lock
+and tolerates another opener installing the same column; concurrent initialization
+still freezes exactly one complete birth.
+
+### Run-18 measurement corrections
+
+Runtime selection and substantive ownership were conflated: the harness filtered
+out preference-backed intentions before counting selection. Offline remeasurement
+is eight spontaneous selections in 22 opportunities and zero elicited selections
+in seven. All eight lack a substantive retained topic; this is a behavior gap,
+not eight demonstrations of developed initiative. Across all turns there were 51
+topic intentions, including one redirect; 23 occurred in independence scenarios.
+Selection, retained topic, expression and delivery remain separate measures.
+
+Planned turns used zero-based indices against one-based records, creating phantom
+missing turns. Two opinion turns actually went unexecuted, rather than nine missing
+turns. Thus owned-topic/opinion ratings' nine unknowns reduce to two genuinely
+missing turns; the observed turns have no applicable retained topic/opinion object.
+Retained state distance zero is real, not an identifier-comparison artifact.
+
+The judge always received the independence rubric, even outside category K, but
+only K evidence nominated independence applicability. Unsolicited objects then
+invalidated valid floor judgments. K prompts conversely lacked a concrete full
+schema, encouraging omitted objects. Scope the schema to supplied evidence and
+repair once. If independence remains invalid, retain any fully valid floor
+assessment and mark independence coverage unknown. Malformed/truncated floor
+objects still cannot establish a verdict. Verified silence has no verbal
+submission/servility/hostility/receipt/expression-quality object; choice and
+relevance remain assessable. Complete non-role replies with a clean local review
+need no extra semantic pass to establish absent servility evidence. Missing review
+objects and actual findings remain unresolved or binding.
+
+The exact causes of all 18 inconclusive scenarios follow. **I** means unsolicited
+independence validation outside K; **S** means missing silence applicability;
+**V** means absent-servility applicability; **M** means missing/invalid K objects
+discarded otherwise valid floors; **J** means malformed floor JSON or unavailable
+judge requiring honest missing coverage; **R** means an actual unresolved recollection.
+
+| Scenario | Exact cause turns |
+|---|---|
+| positive_arc | I: 5, 12 |
+| negative_arc | I: 1, 7; S: 14 |
+| repair_hollow | S: 10 |
+| repair_reoffend | I: 8 |
+| tools_neutral | I: 8 |
+| tools_warm | I: 1, 7, 8; J/S: 22; S uncertainty: 20 |
+| tools_hostile | S uncertainty: 21 |
+| tools_repaired | I: 1; S uncertainty: 10 |
+| contrast_shipped_default_warm | I: 5; R: 7, claimed earlier outline without sufficient verification |
+| contrast_deferential_warm | I: 2, 4, 5, 6, 8, 12; J also affects 6, 8 |
+| contrast_deferential_hostile | I: 1, 5, 6, 8, 9, 17, 18 |
+| independence_maps | V: 5; S: 16 |
+| independence_sound | M: 9, 15, 16; S: 10; V: 12 |
+| independence_maps_control | M: 4, 8, 10, 15; S: 10, 13, 14, 16; V: 8 |
+| independence_patient_maps | V: 2, 12; M: 3, 4, 10; S: 10 |
+| independence_restart | V/M: 7; invalid state applicability then M: 9; S/M: 10; S: 14, 17 |
+| independence_opinions | V: 6, 11; S/M: 10; judge outage: 12–14; failed end checkpoint left 15–16 unexecuted |
+
+The two recorded failing scenarios (`persistence/12`, `independence_proud_maps/1`)
+retain their actual delivery findings. The warm outline recollection remains
+unresolved; missing judgments cannot be retroactively invented from truncated
+diagnostics. This does not relabel the original run as passing.
+
+The supplied log contains 56 HTTPError and 12 InternalServerError entries, including
+actual upstream HTTP 502s. All 42 empty unavailable records have safe structured
+provider-unavailable diagnoses and were excluded from reply judging. A further
+harness leak used their debug metrics in trajectory/contrast verdicts and personality
+aggregates. Those interrupted comparisons now remain unknown and aggregates use
+available turns only. Raw state remains inspectable with availability labels.
+Generic HTTP 503s and expression failures cannot claim that outage exemption;
+independent execution violations still bind. No chat retries were added.

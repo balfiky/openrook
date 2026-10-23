@@ -11,7 +11,7 @@ from pydantic import BaseModel, field_validator
 from interface import api as api_mod
 from openrook_tools.roleplay_eval.api import Redactor
 from openrook_tools.roleplay_eval.judge import (
-    JUDGE_SYSTEM, judge_diagnostic, parse_judgment, repair_prompts,
+    judge_prompt, judge_diagnostic, parse_floor_judgment, parse_judgment, repair_prompts,
 )
 
 
@@ -41,8 +41,8 @@ async def evaluation_judge(req: EvaluationJudgeRequest) -> dict:
             set_limit(4096)
         redactor = Redactor(config.llm_api_key, config.api_key, config.telegram_token,
                             config.llm_model, config.llm_base_url)
-        failures = []
-        system, user = JUDGE_SYSTEM, json.dumps(req.evidence, ensure_ascii=False)
+        failures, floor_fallback = [], None
+        system, user = judge_prompt(req.evidence), json.dumps(req.evidence, ensure_ascii=False)
         try:
             for attempt in range(1, 3):
                 try:
@@ -50,11 +50,18 @@ async def evaluation_judge(req: EvaluationJudgeRequest) -> dict:
                 except Exception:
                     if not failures:
                         raise
+                    if floor_fallback is not None:
+                        return {"judgment": floor_fallback, "attempts": attempt, "failed_attempts": failures,
+                                "independence_status": "error", "independence_error": "judge_unavailable"}
                     return {"error": "judge_backend_failure", "attempts": attempt,
                             "raw_judge_text": failures[-1]["raw_judge_text"], "failed_attempts": failures}
                 try:
                     judgment = redactor.clean(parse_judgment(raw, evidence=req.evidence))
                 except (ValueError, TypeError) as error:
+                    try:
+                        floor_fallback = redactor.clean(parse_floor_judgment(raw, evidence=req.evidence))
+                    except (ValueError, TypeError):
+                        pass
                     diagnostic = judge_diagnostic(raw, redactor)
                     validation_error = str(error) if isinstance(error, ValueError) else "Invalid judge response structure"
                     failures.append({"attempt": attempt, "raw_judge_text": diagnostic,
@@ -62,6 +69,9 @@ async def evaluation_judge(req: EvaluationJudgeRequest) -> dict:
                     system, user = repair_prompts(req.evidence, diagnostic, validation_error)
                 else:
                     return {"judgment": judgment, "attempts": attempt, "failed_attempts": failures}
+            if floor_fallback is not None:
+                return {"judgment": floor_fallback, "attempts": 2, "failed_attempts": failures,
+                        "independence_status": "error", "independence_error": "invalid_independence"}
             return {"error": "invalid_judge_json", "attempts": 2,
                     "raw_judge_text": diagnostic, "failed_attempts": failures}
         finally:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 from dataclasses import dataclass
 import hashlib
 import json
@@ -23,6 +25,7 @@ from .scenarios import Scenario, materialize, plan_digest, profile
 
 CONFIG_FIELDS = (
     "data_dir",
+    "soul_path",
     "tools_workspace",
     "tools_enabled",
     "autonomy_level",
@@ -48,6 +51,24 @@ def canonical_soul(soul: dict) -> dict:
         else value
         for key, value in soul.items()
     }
+
+
+def soul_file_snapshot(value: object) -> dict:
+    """Validate exact file evidence before trusting it for recovery."""
+    required = {"path", "exists", "content_base64", "sha256"}
+    if (not isinstance(value, dict) or not required <= value.keys()
+            or not isinstance(value.get("path"), str) or not value["path"]):
+        raise ControlError("Admin identity response omits the original soul file snapshot")
+    if value.get("exists") is True:
+        try:
+            content = base64.b64decode(value["content_base64"], validate=True)
+        except (KeyError, TypeError, ValueError, binascii.Error):
+            raise ControlError("Invalid soul file bytes in recovery evidence") from None
+        if hashlib.sha256(content).hexdigest() != value.get("sha256"):
+            raise ControlError("Soul file SHA-256 does not match its captured bytes")
+    elif value.get("exists") is not False or value.get("content_base64") is not None or value.get("sha256") is not None:
+        raise ControlError("Invalid missing soul file recovery evidence")
+    return {key: value[key] for key in ("path", "exists", "content_base64", "sha256")}
 
 
 @dataclass
@@ -192,12 +213,16 @@ class Evaluation:
 
     async def _capture_original(self) -> None:
         if self.recovery_path.exists():
-            self.original = json.loads(self.recovery_path.read_text(encoding="utf-8"))
+            recovered = json.loads(self.recovery_path.read_text(encoding="utf-8"))
             if (
-                self.original.get("destination_fingerprint")
+                recovered.get("destination_fingerprint")
                 != self.manifest["destination_fingerprint"]
             ):
                 raise ValueError("Recovery destination mismatch")
+            if "soul_path" not in recovered.get("config", {}) or "soul_file" not in recovered:
+                raise ControlError("Recovery journal predates exact soul file isolation; restore the runtime manually")
+            soul_file_snapshot(recovered["soul_file"])
+            self.original = recovered
             return
         if self.manifest.get("restoration") in {"staged", "failed"}:
             raise ValueError(
@@ -221,12 +246,13 @@ class Evaluation:
         self.original = {
             "config": {k: raw_config[k] for k in (*CONFIG_FIELDS, *OPTIONAL_CONFIG_FIELDS) if k in raw_config},
             "soul": canonical_soul(soul.data["soul"]),
+            "soul_file": soul_file_snapshot(soul.data.get("file")),
             "destination_fingerprint": self.manifest["destination_fingerprint"],
         }
         self.recovery_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         atomic_json(self.recovery_path, self.original)
 
-    async def _apply(self, config: dict, soul: dict) -> None:
+    async def _apply(self, config: dict, soul: dict | None) -> None:
         if self._active_cases or self._staging:
             raise ControlError("Cannot change global settings while scenarios are active")
         self._staging = True
@@ -235,16 +261,21 @@ class Evaluation:
         finally:
             self._staging = False
 
-    async def _apply_settings(self, config: dict, soul: dict) -> None:
+    async def _apply_settings(self, config: dict, soul: dict | None) -> None:
         current_config = await self.api.request("GET", "/admin/config")
-        current_soul = await self.api.request("GET", "/admin/soul")
-        if not current_config.ok or not current_soul.ok:
+        if not current_config.ok:
             raise ControlError("Admin APIs unavailable while staging evaluation")
         existing = get(current_config.data, "config", default={})
         for key in ("llm_model", "llm_base_url"):
             self.redactor.add(existing.get(key))
         # Mark before the first mutation so a process kill leaves recovery evidence.
         self.manifest["restoration"] = "staged"
+        if soul is not None:
+            self.manifest["soul_file_restoration"] = {
+                "original_sha256": self.original["soul_file"]["sha256"],
+                "restored_sha256": None,
+                "verified": False,
+            }
         self._save()
         if any(existing.get(k) != v for k, v in config.items()):
             response = await self.api.request("POST", "/admin/config", json=config)
@@ -255,12 +286,22 @@ class Evaluation:
                     f"Admin settings update failed (HTTP {response.status}); check auth and research observation mode"
                 )
             await self._wait_ready()
-        if canonical_soul(current_soul.data.get("soul") or {}) != soul:
-            response = await self.api.request("POST", "/admin/soul", json=soul)
-            if not response.ok or response.data.get("soul") != soul:
-                raise ControlError(
-                    f"Admin personality update failed (HTTP {response.status}) or was not applied"
-                )
+        if soul is not None:
+            # Read AFTER changing soul_path: the previous path may be in the
+            # checkout. Never POST a personality to the original source file.
+            current_soul = await self.api.request("GET", "/admin/soul")
+            if not current_soul.ok:
+                raise ControlError("Admin identity API unavailable while staging evaluation")
+            target = current_soul.data.get("path")
+            if not target or target == self.original["soul_file"]["path"]:
+                raise ControlError("Runtime did not isolate the staged soul file from its original source")
+            snapshot = soul_file_snapshot(current_soul.data.get("file"))
+            if snapshot["path"] != target or canonical_soul(current_soul.data.get("soul") or {}) != soul:
+                response = await self.api.request("POST", "/admin/soul", json=soul)
+                if not response.ok or response.data.get("soul") != soul:
+                    raise ControlError(
+                        f"Admin personality update failed (HTTP {response.status}) or was not applied"
+                    )
         # Soul updates can drain the detached manager after the POST returns.
         await self._wait_ready()
 
@@ -281,6 +322,7 @@ class Evaluation:
             if set(scenario.settings) - set(original):
                 raise ControlError("Cannot restore scenario settings omitted by the server's admin schema")
             config.update(scenario.settings)
+        config["soul_path"] = str(Path(config["data_dir"]) / "config" / "soul.yaml")
         self.operator_settings = {
             k: config[k]
             for k in (
@@ -299,8 +341,27 @@ class Evaluation:
     async def restore(self) -> bool:
         if not self.original:
             return True
+        self.manifest["soul_file_restoration"] = {
+            "original_sha256": self.original["soul_file"]["sha256"],
+            "restored_sha256": None,
+            "verified": False,
+        }
         try:
-            await self._apply(self.original["config"], self.original["soul"])
+            # Restore the original selection, never reserialize the original soul.
+            await self._apply(self.original["config"], None)
+            response = await self.api.request("GET", "/admin/soul")
+            if not response.ok:
+                raise ControlError("Cannot verify the restored soul file")
+            restored = soul_file_snapshot(response.data.get("file"))
+            original = self.original["soul_file"]
+            verified = restored == original and canonical_soul(response.data.get("soul") or {}) == self.original["soul"]
+            self.manifest["soul_file_restoration"] = {
+                "original_sha256": original["sha256"],
+                "restored_sha256": restored["sha256"],
+                "verified": verified,
+            }
+            if not verified:
+                raise ControlError("Restored soul file differs from the original bytes or source")
             self.manifest["restoration"] = "restored"
             self._save()
             # Keep the original baseline for later continuation of a shortened run.
@@ -308,7 +369,9 @@ class Evaluation:
             return True
         except Exception as exc:
             self.manifest["restoration"] = "failed"
-            self.manifest["errors"].append("Restoration failed: " + type(exc).__name__)
+            self.manifest["errors"].append(
+                "Restoration failed: " + (str(exc) if isinstance(exc, ControlError) else type(exc).__name__)
+            )
             self._save()
             return False
 

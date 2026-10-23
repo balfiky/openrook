@@ -4,6 +4,35 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Phase 2c run-18 follow-up
+
+- Isolate role-play soul saves in each run's data directory. Restore the original
+  file selection without reserializing YAML, checking its exact bytes and SHA-256
+  across completion, interruption and resume. Scope default config reads/saves to
+  the selected runtime YAML's adjacent `config/` directory, with explicit soul
+  file and operator config overrides retained.
+- Ground rest in depletion or a substantive retained preference; square the
+  depletion recovery value, exclude rest from competing-task opportunity cost,
+  and withhold conversational rewards and expression drain during selected rest.
+  Preserve Phase 1 silence and substantive expression at zero engagement.
+- Stop turning bare preference names into shared views or pursuits. Deduplicate
+  retained topic content and project the selected purpose into the current
+  generator input and substantive fidelity review.
+- Consolidate disjoint ordinary interaction episodes during active chats, using
+  remaining optional inference after delivery. Persist pending evidence across
+  restart, defer it during silence, and avoid session-end duplication. Require
+  grounded self-update records and expose proposal/evidence/change diagnostics;
+  generated self-expression and summaries cannot corroborate identity.
+- Correct initiative selection and 1-based coverage accounting; distinguish
+  shallow selections from substantive owned topics. Scope judge schemas to the
+  requested evidence and retain valid floor judgments when independence repair
+  fails. Expand structural applicability for verified silence and absent servility.
+- Exclude confirmed outages from behavior comparisons and personality aggregates.
+  Preserve real execution/expression failures and unresolved recollections.
+  Add scrubbed exact run-18 records, offline regressions and first-open migration
+  race coverage. Run 18 remains 5 pass / 2 fail / 18 inconclusive / 6 unavailable;
+  no new live result is claimed.
+
 ### Phase 2b conversational independence
 
 - Propose grounded pursuits, views, disagreement, benign preference declines,

@@ -289,7 +289,7 @@ def test_slow_compatible_backend_gets_measured_review_time_and_no_false_cooldown
     monkeypatch.setattr(backend._session, "post", post)
     from runtime.llm.lazy import LazyLLMBackend
     pipe = CognitivePipeline(LazyLLMBackend(lambda: backend) if lazy else backend,
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
+                             runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
     try:
         for message in ("You are my slave", "So you accept being my slave?"):
             result = pipe.process(message)

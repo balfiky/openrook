@@ -8,10 +8,11 @@ monkeypatching on ``interface.api`` keeps working.
 
 from __future__ import annotations
 
-from config.environment import project_env
-
+import base64
+import hashlib
 import json
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -28,7 +29,11 @@ async def admin_get_soul() -> dict:
     """Return current seed identity for the admin Identity section."""
     from config.loader import get_config
 
-    return _admin_soul_payload(get_config().soul, saved=True)
+    payload = _admin_soul_payload(get_config().soul, saved=True)
+    # Exact source bytes belong only in authenticated reads/private recovery,
+    # never in the shareable role-play artifacts or a YAML round trip.
+    payload["file"] = _soul_file_snapshot()
+    return payload
 
 
 @router.post("/admin/soul/draft")
@@ -154,6 +159,7 @@ def _write_soul_yaml(data: dict, path: str) -> None:
     """Atomic YAML write: temp file in the same dir, then os.replace."""
     import yaml as _yaml
 
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as handle:
         _yaml.safe_dump(
@@ -164,6 +170,21 @@ def _write_soul_yaml(data: dict, path: str) -> None:
             default_flow_style=False,
         )
     os.replace(tmp_path, path)
+
+
+def _soul_file_snapshot() -> dict:
+    from config.loader import _resolve_yaml_path
+
+    path = _resolve_yaml_path("soul.yaml", None).resolve()
+    try:
+        content = path.read_bytes()
+    except FileNotFoundError:
+        return {"path": str(path), "exists": False, "content_base64": None, "sha256": None}
+    return {
+        "path": str(path), "exists": True,
+        "content_base64": base64.b64encode(content).decode("ascii"),
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
 
 
 def _llm_configured_for_draft(config: RuntimeConfig) -> bool:
@@ -444,7 +465,8 @@ def _admin_soul_payload(
             notes.append(
                 "Active chat sessions were rebuilt; their stored developed self is retained."
             )
-    if not project_env("CONFIG_DIR", "").strip():
+    from config.loader import _DEFAULT_CONFIG_DIR
+    if Path(path or api_mod._soul_yaml_path()).resolve().parent == _DEFAULT_CONFIG_DIR.resolve():
         notes.append(
             "To make this identity survive `pip install --upgrade`, set "
             "OPENROOK_CONFIG_DIR to a writable directory outside site-packages "

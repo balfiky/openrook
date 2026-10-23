@@ -61,6 +61,7 @@ def select_debug(debug: dict) -> dict:
         "delivery_outcome", "expression_reviews", "expression_excision", "expression_delivery", "residual_semantic_risk",
         "tool_trace", "task_trace", "generation_attempts", "stage_timings_ms",
         "llm_call_details",
+        "self_development",
     )
     selected = {key: debug[key] for key in fields if key in debug}
     if "llm_calls" in debug:

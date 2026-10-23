@@ -551,6 +551,8 @@ def decide(
             continue
         if intention and any(g and c.id in intention.instead_of for g, c in zip(grants, components)):
             continue
+        if intention and intention.kind == "rest" and any(grants):
+            continue
         effort = sum(c.effort for g, c in zip(grants, components) if g)
         effort += intention.effort if intention else 0.0
         if intention and intention.kind != "rest" and effort > s.energy:
@@ -563,9 +565,9 @@ def decide(
         stance = tuple(unit((b + jitter[i] + 2 * inertia * previous[i]) / (curvature[i] + 2 * inertia))
                        for i, b in enumerate(coefficients))
         if intention and intention.kind == "rest":
-            # Rest relinquishes conversational engagement and its utility. It
-            # cannot collect both the reward for engaging and free recovery.
-            stance = (0.0, *stance[1:])
+            # Silence realizes none of the conversational acts. It cannot earn
+            # warmth, candor, repair or boundary rewards while recovering.
+            stance = (0.0,) * len(names)
         social_terms = tuple((name, (coefficients[i] + jitter[i]) * a
                               - 0.5 * curvature[i] * a * a - inertia * (a - previous[i]) ** 2)
                              for i, (name, a) in enumerate(zip(names, stance)))
@@ -591,7 +593,8 @@ def decide(
                         stance, tuple(chosen), best[0],
                         tuple((tuple(c.id for g, c in zip(a[1], components) if g), a[0])
                               for a in sorted(allocations, key=lambda item: item[0], reverse=True)),
-                        best[3], noise, not any(best[1]) and stance.engagement == 0, scope,
+                        best[3], noise, not any(best[1]) and stance.engagement == 0
+                        and (selected is None or selected.kind == "rest"), scope,
                         tuple(proposals), selected,
                         tuple((proposal.id, max((a[0] for a in allocations if a[4] == proposal), default=None)) for proposal in proposals),
                         own_terms[selected.id] if selected else ())

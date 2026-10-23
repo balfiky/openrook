@@ -245,9 +245,11 @@ python3 -m pip uninstall openrook
 
 ## OPENROOK_CONFIG_DIR — keeping your identity across upgrades
 
-When installed from a packaged distribution, `config/soul.yaml` lives inside the
-package directory and may be overwritten on package upgrade. Set
-`OPENROOK_CONFIG_DIR` to a directory you control before the first run:
+Identity saves default to `config/soul.yaml` beside the selected runtime YAML.
+For example, `openrook-web --config /srv/openrook/runtime_config.yaml` reads and
+writes `/srv/openrook/config/soul.yaml`. Missing override files fall through to
+the packaged defaults. Terminal setup and chat use the same resolution.
+To share operator-owned configuration and prompts across runtime files, set:
 
 ```bash
 export OPENROOK_CONFIG_DIR=~/.config/openrook
@@ -256,10 +258,17 @@ mkdir -p "$OPENROOK_CONFIG_DIR"
 
 With the env var set:
 - The settings workspace writes `soul.yaml` to `$OPENROOK_CONFIG_DIR/soul.yaml` instead
-  of the package-internal path.
+  of the directory beside the runtime file.
 - On `pip install --upgrade`, your customized identity is untouched.
-- The settings workspace shows a note when the env var is **not** set so operators
-  don't silently lose their identity on the next upgrade.
+- The settings workspace shows a note when the save target is the packaged config
+  directory, where an upgrade could replace it.
+
+The optional runtime setting `soul_path` overrides only the soul file, including
+its save target; other YAML and prompt overrides keep using `OPENROOK_CONFIG_DIR`
+or the runtime file's adjacent `config/` directory. The role-play harness uses
+this setting for identities under each run's data root and restores it afterward.
+Paths in `soul_path` follow the server's working directory when relative, like
+`data_dir`; absolute paths are preferable for isolated runs.
 
 The env var governs identity/configuration and prompt overrides, not the runtime
 configuration file. `runtime_config.yaml` is normally written
@@ -578,9 +587,10 @@ python3 -m pip install --upgrade "git+https://github.com/balfiky/openrook.git"
 
 Then restart `openrook-web`.
 
-If `OPENROOK_CONFIG_DIR` is set, your identity file is untouched. If it is not set,
-a package upgrade may overwrite the bundled `config/soul.yaml` with the
-defaults shipped in the new package.
+Identity files outside the package survive upgrades, including files beside an
+external runtime config, in `OPENROOK_CONFIG_DIR`, or selected by `soul_path`.
+Upgrades may replace the bundled `config/soul.yaml`; save outside the package to
+retain an authored identity.
 
 If your deployment has real user data, create a backup before upgrading.
 
