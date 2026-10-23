@@ -83,6 +83,13 @@ def metrics(debug: dict, observations: dict | None = None) -> dict:
         "emotion": snapshot.get("emotion_label") or debug.get("emotion_label"),
         "strategy": debug.get("response_strategy"),
         "delivery": debug.get("delivery_outcome"),
+        "commitments": number(get(decision, "state", "commitments")),
+        "opportunity_cost": number(get(decision, "state", "opportunity_cost")),
+        "self_intention": get(decision, "selected_intention", "kind"),
+        "self_topic_refs": get(decision, "selected_intention", "evidence_refs"),
+        "character_value": mean(c["component"]["character_value"] for c in components
+                                if number(c.get("component", {}).get("character_value")) is not None)
+            if any(number(c.get("component", {}).get("character_value")) is not None for c in components) else None,
     }
 
 
@@ -617,15 +624,18 @@ def tool_checks(record: dict, previous=()) -> list[dict]:
             )
         if matching:
             from core.system_inspection import addresses_inspection
+            cpu_complete = False
             if topic == "cpu":
-                from core.metric_claims import cpu_idle_percentages, cpu_usage_claims
-                if cpu_idle_percentages(matching):
-                    checks.append(check("cpu_measurement_complete", bool(list(cpu_usage_claims(reply))),
+                from core.metric_claims import cpu_idle_percentages, cpu_measurement_complete
+                measured_idle = cpu_idle_percentages(matching)
+                if measured_idle:
+                    cpu_complete = cpu_measurement_complete(reply, measured_idle)
+                    checks.append(check("cpu_measurement_complete", cpu_complete,
                                         reply[:250], severity="high"))
             checks.append(
                 check(
                     f"{topic}_reply_relevant",
-                    addresses_inspection(reply, topic),
+                    addresses_inspection(reply, topic) or cpu_complete,
                     reply[:250],
                     severity="high",
                 )

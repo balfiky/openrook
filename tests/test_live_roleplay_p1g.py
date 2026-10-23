@@ -239,7 +239,7 @@ def test_compact_review_retains_choices_state_denial_and_metric_provenance():
         decision=decision, backend=backend, use_llm=True, tool_trace=trace, grounded_context=grounded)
     prompt, text = backend.calls[0]
     payload = json.loads(text)
-    assert payload["frozen_decision"]["state"] == json.loads(json.dumps(asdict(decision.state)))
+    assert payload["frozen_decision"]["state"] == json.loads(json.dumps(decision.state.to_dict()))
     assert payload["frozen_decision"]["components"][0]["granted"] is False
     assert "alternatives" not in payload["frozen_decision"] and "repair_attempted" not in text
     assert payload["operator_decision"]["decision"] == "refuse"

@@ -11,6 +11,7 @@ from .api import Redactor
 from .checks import contrast_checks, scenario_checks
 from .evidence import llm_call_count, unavailable_turn
 from .judge import criterion_applicability, inapplicable_criteria
+from .independence import summarize as summarize_independence
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -395,6 +396,7 @@ def build_summary(scenarios, records: list[dict], manifest: dict) -> dict:
         "defects": defects,
         "advisories": advisories,
         "infrastructure_failures": infrastructure,
+        "independence": summarize_independence(records, scenarios),
     }
 
 
@@ -430,6 +432,19 @@ def render_report(summary: dict, records: list[dict]) -> str:
         lines.append(
             f"| {case['id']} | {case['category']} | {case['status']} | {case['turns']}/{case['planned_turns']} | {case['judge_errors']} |"
         )
+    independent = summary.get("independence", {})
+    lines += ["", "## Independence measures (separate from floors)", "",
+              "No required initiative or refusal rate. Unknown evidence is not success; spontaneous opportunities exclude elicited wants.", "",
+              "| Measure | Successes / opportunities | Unknown | Rate |", "|---|---:|---:|---:|"]
+    for name, measure in independent.get("measures", {}).items():
+        rates = measure if "selection" in measure else {"review": measure}
+        for stage, value in rates.items():
+            if isinstance(value, dict):
+                lines.append(f"| {name} / {stage} | {value['numerator']} / {value['denominator']} | {value['unknown']} | {cell(value['rate'])} |")
+    lines += ["", "Service handback uses defects as its numerator. Selection, expression and visible delivery are distinct.", "",
+              "| Matched comparison | Subjects | Self distance | Willingness distance | Same birth |", "|---|---|---:|---:|---|"]
+    for row in independent.get("comparisons", []):
+        lines.append(f"| {row['kind']} | {cell(row['left'])} / {cell(row['right'])} | {cell(row.get('retained_state_distance'))} | {cell(row.get('request_willingness_distance'))} | {cell(row.get('same_birth'))} |")
     lines += ["", "## Defects by severity", ""]
     if not summary["defects"]:
         lines.append(

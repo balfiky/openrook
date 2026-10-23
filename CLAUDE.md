@@ -1,8 +1,8 @@
 # OpenRook implementation notes
 
-The current conversational policy is `willingness-1.2`. See
+The current conversational policy is `willingness-1.3`. See
 [Phase 1](docs/development/phase1-willingness.md) and
-[Phase 2a](docs/development/phase2-developing-self.md) and
+[Phase 2a/2b](docs/development/phase2-developing-self.md) and
 [architecture](docs/ARCHITECTURE.md) before changing character behavior.
 
 - Language cues and model appraisal provide uncertain evidence and request
@@ -21,8 +21,20 @@ The current conversational policy is `willingness-1.2`. See
 - Capture one self per turn for choice, generation and review, including opinion
   reasons/confidence, ongoing questions, tastes, this person's attitudes and style.
   A decline withholds its work, not unrelated memory, Life History or dialogue.
-  Agenda candidates, constitution/skill/operator rerouting and research birth
-  policy remain deferred; preserve those entry paths and all delivery floors.
+  Constitution/skill/operator rerouting and research birth policy remain deferred;
+  preserve those entry paths and all delivery floors.
+- Before choice, self-intent supplies grounded conversational alternatives from
+  interests/questions, opinions/reasons, tastes, actual commitments and resources.
+  Shared appraisal can estimate disagreement, deferral, redirection and closure;
+  it cannot select them. Willingness jointly prices request grants and one optional
+  self intention. No initiative/refusal quotas, prescribed beats or appended tails.
+  Self intentions grant no tools. Preserve selected content through expression and
+  review; closing without an invitation is valid. Only delivered pursuits become
+  session-persisted commitments, revalidated against current self on resume.
+- Role-play category K measures spontaneous versus elicited initiative, owned
+  topic resumption, evidence-sensitive opinions, benign preference declines,
+  blinded handbacks and matched continuity/divergence. Report independence apart
+  from floors, with structural not_applicable and explicit unknown evidence.
 - Commit the immutable `TurnDecision` before executing work. Every task,
   artifact, inspection, continuation and learning intake needs its component's
   grant. Independent activity requires a separate decision and execution scope.

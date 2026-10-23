@@ -3,6 +3,7 @@
 import pytest
 
 from core.response_style import brevity_preference, enforce_response_style
+from core.pipeline_features import PipelineFeatures
 from core.grounding import strip_unsupported_metric_claims, is_system_metric_request
 from pipeline import CognitivePipeline
 from runtime.debug.api import _debug_to_dict
@@ -160,7 +161,9 @@ def test_unfixed_declined_answer_is_recorded_and_delivered_as_degraded_expressio
             "perception": {"uncertainty": 0.2},
             "request_components": [{"description": "Calculate 2+2", "effort": 1, "user_value": 0.1}],
         })
-    pipe = CognitivePipeline(llm_backend=backend, runtime_config=RuntimeConfig(appraisal_use_llm=True))
+    # Isolate delivery of a verbal decline; selecting rest is tested separately.
+    pipe = CognitivePipeline(llm_backend=backend, runtime_config=RuntimeConfig(appraisal_use_llm=True),
+                             features=PipelineFeatures(self_intent=False))
     pipe.engine.state.energy = 0
     try:
         result = pipe.process("Calculate 2+2", "alice")

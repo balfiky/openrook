@@ -65,7 +65,7 @@ class TestBetrayal:
         # Session 3 is the betrayal session
         points = result.sessions[3].points
         assert all(point.event_intensity == point.decision["perception"]["intensity"] for point in points)
-        assert all(point.decision["policy_version"] == "willingness-1.2" for point in points)
+        assert all(point.decision["policy_version"] == "willingness-1.3" for point in points)
 
     def test_valence_drops_during_betrayal(self, result):
         # Compare valence before and during betrayal

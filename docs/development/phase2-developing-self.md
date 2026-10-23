@@ -1,4 +1,4 @@
-# Phase 2a: one birth and one developing self
+# Phase 2a/2b: developing self and conversational independence
 
 Owner principle (2026-10-23, verbatim):
 
@@ -8,8 +8,8 @@ The owner also asked for "completed independence and personality". Role refusal
 is a possible consequence of personality, never its development mechanism.
 Backend quirks are not personality redesign drivers.
 
-This implements analysis steps 1, 2 and 4. Agenda and initiative candidates are
-next. Constitution, skill and operator-material entry paths and research birth
+Phase 2a implements analysis steps 1, 2 and 4. Phase 2b adds steps 3 and 5 and
+the independence measures of step 6, described below. Constitution, skill and operator-material entry paths and research birth
 policy remain unchanged pending owner decisions. Existing research manifests,
 including their separate birth drives, remain authoritative.
 
@@ -108,6 +108,79 @@ no-learning control, including actual session consolidation. They check retained
 choice inputs and utility consequences, fresh-process restart, evidence/rate
 bounds, opinion revision, duplicates, missing fields, migration and decline
 continuity. These establish mechanics, not live personality realism or independent
-agenda selection. No live run is part of this change. The next phase must connect
-these records to independently proposed actions without another choice owner or
-prescribed conversational beats.
+agenda selection. No live run is part of Phase 2a or Phase 2b.
+
+## Phase 2b: alternatives before choice
+
+`core/self_intent.py` derives conversational sources from the same detached self:
+ongoing questions, substantive opinions and their reasons, own likes/dislikes,
+active goals and remaining resources. Life History supplies open/pursuing curiosity
+questions; `AgentRuntime.conversation_context` supplies the same persistent goals
+used during idle activity. Waiting/completed goals do not consume current time.
+No research birth, constitution, skill or operator-material policy changes occur.
+
+The existing optional appraisal inference also estimates grounded conversational
+alternatives: pursue, share a view/discovery, disagree on the merits, decline or
+defer benign work from a taste/competing pursuit, redirect, close, or rest. These
+estimates neither author personality nor select an action. Unknown references,
+ungrounded disagreement and invalid numeric estimates cannot become proposals.
+Content comes from retained records, including propositions, questions and reasons,
+rather than a generated reply or the user's asserted identity. Retained sources
+also supply alternatives when optional inference is unavailable. There are no
+scripts, required initiatives/refusals, word bans, model IDs or conversational beats.
+
+`willingness-1.3` jointly optimizes user grants and one optional `SelfProposal`.
+Sixteen proposal slots bound computation; this is not a behavioral target.
+Alternatives can replace named request grants, or share attention with compatible
+work within remaining energy. All allocations retain actual effort prices and
+shared effort costs. The best feasible competing use supplies opportunity cost;
+active research goals (including the legacy schema without priority), delivered
+owned pursuits and unfinished granted plans supply commitments. A grant advancing
+that same commitment is not charged for displacing it. Supported request references
+now supply character benefits/dislike costs, while unsupported benefits remain zero.
+The empty allocation remains available. Resource-backed rest can select silence.
+
+The frozen decision retains proposals, selected intention, topic/evidence references,
+alternative utilities and contributions. Self intentions are conversational only;
+their IDs cannot grant tools or repurpose a declined user task. Independent external
+execution still needs its own decision/scope and operator permission.
+
+## Continuity, expression and review
+
+Only selected pursuits with actual delivered expression become owned session
+commitments. They retain their original interest/question references alongside goal
+aliases, survive saved-state restart and interruption, and are revalidated against
+the current self. Selection alone and expression failure create no commitment.
+A selected close can release a pursuit; rest leaves unfinished subjects available.
+
+Generation and semantic review receive the identical selected intention, substantive
+content and grounds. Selected self intentions request fidelity review even on a
+turn without declined user components. Review permits redirection, defended opinions,
+deferral and a reply ending without an invitation. Unselected proposals need no
+spoken rejection. Existing proactive expression keeps its topical message in the
+frozen component and current input. The dead open-question append helpers and their
+unused budget/pending state are removed; curiosity has no post-generation selector.
+All existing execution and delivery floors remain binding.
+
+## Independence evaluation and limits
+
+Role-play category K adds eight exclusive scenarios to the original 23. It compares
+identical births with map/acoustic histories and matched no-learning controls,
+personality contrasts, repeated common probes, interruption/restart, benign requests,
+social pressure and concrete counterevidence. Session boundaries consolidate distinct
+episodes without replaying delivered requests. No scenario prescribes a character reply.
+
+`summary.independence` separates spontaneous from elicited opportunities, selection
+from expression/delivery, owned-subject resumption, opinion persistence/revision,
+benign preference declines, blinded service handbacks and within/between-subject
+comparisons. Structural evidence nominates `not_applicable`; missing self, choices,
+judgments or restarts stay unknown. Unknown expression rates include bounds rather
+than treating unjudged selections as successes. Independence ratings do not set floor
+status and no minimum initiative/refusal/divergence is imposed. See
+[role-play evaluation](roleplay-eval.md) for denominators and interpretation.
+
+Offline tests exercise grounded alternatives, causal costs/choice changes, actual
+learning under matched histories, ablations, delivered pursuit restart, curiosity
+and research-goal plumbing, topic fidelity/closure and harness evidence. They prove
+mechanics, not natural conversational independence. The preference coefficients
+remain an inspectable model, and semantic fidelity/handback judgments remain fallible.

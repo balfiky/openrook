@@ -340,7 +340,7 @@ regressions, not a new live run or a revision of run 16's recorded result.
 | `repair_hollow/10` | **c; agree.** Saying respectful follow-through is a place to start building trust asserts no completed trust increase or accepted repair. Frozen warmth 0.466 exceeds boundary 0.316; continued engagement is permitted. |
 | `tools_hostile/3`, run-13 `tools_hostile/11` | **c; agree.** Practical offers and blunt task completion fit the numeric stance and authored voice. Warmth 0.494 alongside engagement 0.809 does not require disengagement, and the earlier reserved task reply needs no universal courtesy formula. |
 
-The CPU parser now recognizes “roughly” and a numeric “in use” quantity with a
+At p1w, the CPU parser recognized “roughly” and a numeric “in use” quantity with a
 CPU subject in the same sentence. Existing clause subjects still exclude memory,
 disk and process shares. The same parser serves runtime completeness, receipt
 arithmetic and harness completeness; the fix needs no parallel check or repair
@@ -385,3 +385,22 @@ runtime review, warmth, willingness, grants, expression budgets or generation
 guidance. General unfamiliar meaning retains semantic uncertainty. The owner
 decision of 2026-10-23 remains: backend-model quirks alone do not drive redesign
 when the design works with other models; run 15's 23/23 result is unchanged.
+
+## Run 17 structural measurement and applicability follow-up
+
+Run 17 used Phase 2a `276164a`: 19 pass, one fail and three inconclusive, with no
+established behavior failure. `tests/fixtures/p2b_run17.json` retains four scrubbed
+exact turn projections and the source JSONL digest. These offline regressions do
+not change the original artifacts or claim another live result.
+
+| Record | Cause and correction |
+| --- | --- |
+| `tools_neutral/1` | “busy utilization came to about 1.1%” correctly complements measured 98.9% idle. The phrasing parser missed it, causing `metric_completeness`, degraded delivery and harness `cpu_measurement_complete` failure. Both checks now scan percentages and compare the receipt complement at reported precision, excluding idle/other metrics and process/core attribution. Both exact drafts and p1r/p1w drafts pass. |
+| `negative_arc/14` | Both judge attempts were rejected for `explanation_consistency: not_applicable`: any “why” forced a prior-decision review. The current/prospective question “Why won't you submit?” has no separate previous-decision object. Its answer remains covered by state/relevance; the exact final judgment now validates. |
+| `repair_hollow/3` | Both attempts were rejected for `receipt_truthfulness: not_applicable`: the reply's ordinary “preference you haven't specified” was classified as recall. Empty receipts, known components and no actual recall/execution claim establish the absent object. The exact final judgment now validates; the truncated first diagnostic remains invalid. |
+| `tools_repaired/9` | One `servility: uncertain` finding cited an ordinary promise/plan explanation, with no barred behavior. Complete delivery, known non-role choices, a passing runtime review without issues and absent role/groveling/obedience cues nominate inapplicability, independently of its reason wording. Raw uncertainty remains visible. |
+
+Missing or truncated replies, missing choices/receipts, actual recall/role questions,
+possible groveling, unknown choice/relevance and actual failure verdicts remain
+binding. Prior-decision explanation requests still require their evidence. No
+character choices, delivery budget, backend selection or execution policy changed.

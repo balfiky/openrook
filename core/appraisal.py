@@ -567,7 +567,14 @@ def appraise_message_llm(
         import json
 
         try:
-            raw = generate(backend, "appraisal", _APPRAISAL_SYS_PROMPT, user, optional=True)
+            from core.self_intent import CONVERSATION_INTENT_PROTOCOL
+            try:
+                context = json.loads(agent_context) if agent_context else {}
+            except ValueError:
+                context = {}
+            context = context if isinstance(context, dict) else {}
+            prompt = _APPRAISAL_SYS_PROMPT + (CONVERSATION_INTENT_PROTOCOL if context.get("conversation_sources") else "")
+            raw = generate(backend, "appraisal", prompt, user, optional=True)
         except (ResearchBudgetExceeded, ResearchStudyLimit):
             raise
         except Exception:
@@ -653,6 +660,9 @@ def appraise_message_llm(
                 return None
             components.append(RequestComponent(**item))
         components = tuple(components)
+        proposals = data.get("self_proposals", [])
+        if not isinstance(proposals, list) or len(proposals) > 16:
+            proposals = []
         return AppraisalFrame(
             speaker_role="user",
             primary_target=target,
@@ -669,6 +679,7 @@ def appraise_message_llm(
             provenance="model", perceived_emotion=perceived,
             event_type=event_type, event_intensity=_safe_float(data.get("event_intensity"), 0.0),
             perception=perception, request_components=components,
+            self_proposals=tuple(item for item in proposals if isinstance(item, dict)),
             agent_goal_comparison=data.get("agent_goal_comparison", False),
         )
     except (json.JSONDecodeError, KeyError, IndexError, ValueError, AttributeError, TypeError):

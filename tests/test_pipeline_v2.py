@@ -157,9 +157,9 @@ class TestLLMCallBudget:
 
         result = pipe.process("Hello", "alice")
         assert result.debug.turn_decision.state.energy < 0.11
-        assert backend.call_count == 1
+        assert backend.call_count == (0 if result.debug.turn_decision.chosen_silence else 1)
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ([] if result.debug.turn_decision.chosen_silence else ["generation"])
 
     def test_multiple_messages_budget_consistent(self):
         """Each message stays within budget."""

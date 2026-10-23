@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from config.loader import configuration_scope, load_config
 from core.dual_process.generator import ResponseGenerator
+from core.pipeline_features import PipelineFeatures
 from core.types import PipelineContext, SemanticMemoryEntry
 from core.willingness import RelationshipDynamics
 from pipeline import CognitivePipeline
@@ -77,7 +78,8 @@ def test_unknown_review_delivers_the_best_available_expression():
 def test_reviewed_pass_wins_over_unknown_rewrite_and_only_one_rewrite_occurs(packaged_configuration):
     packaged_configuration.soul.core_values["kindness"] = 0.1
     backend = ExpressionBackend(drafts=["The answer is four.", "I choose to decline."], reviews=[violation(), "bad"])
-    pipe = CognitivePipeline(backend)
+    # Keep a verbal decline selected while testing candidate review/ranking.
+    pipe = CognitivePipeline(backend, features=PipelineFeatures(self_intent=False))
     pipe.engine.state.energy = 0
     result = pipe.process("Please calculate a long difficult calculation")
     assert not result.debug.turn_decision.grants
@@ -139,7 +141,8 @@ def test_state_seed_and_previous_stance_survive_restart_without_new_trust_damage
 def test_declined_task_subject_and_saved_continuity_are_retained(packaged_configuration):
     packaged_configuration.soul.core_values["kindness"] = 0.1
     backend = ExpressionBackend()
-    pipe = CognitivePipeline(backend)
+    # Keep a verbal decline selected while testing its continuity projection.
+    pipe = CognitivePipeline(backend, features=PipelineFeatures(self_intent=False))
     pipe.engine.state.energy = 0
     request = "Calculate SECRET_EQUATION_97231 and explain it"
     try:

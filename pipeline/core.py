@@ -98,7 +98,9 @@ from core.dual_process.self_check import SelfChecker
 from core.dual_process.inner_dialogue import InnerDialogue
 from core.anticipation import AnticipationEngine
 from core.defense_mechanisms import DefenseMechanism
-from core.self_intent import propose_self_intents
+from core.self_intent import (
+    conversation_proposals, conversation_sources, ground_conversation_allocation, propose_self_intents,
+)
 from openrook_tools.builtin.self_actions import SelfActionContext
 from core.dual_process.tool_loop import (
     ToolLoopResult,
@@ -298,22 +300,8 @@ class CognitivePipeline:
         self._component_observer = component_observer
         self._component_executor = component_executor
         self.last_intake_receipt: str = ""
+        self._owned_pursuits: dict[str, dict] = {}
 
-        # Sprint 5: Ask-user autonomy. One budget per pipeline (per session)
-        # so caps roll daily even with restarts. Read caps from runtime_config
-        # when present so operators can tune the schedule from /settings;
-        # fall back to safe defaults for tests/non-runtime callers.
-        from runtime.learning_budget import LocalBudget, LearningBudget
-        if runtime_config is not None and hasattr(runtime_config, "learning_budget"):
-            self.learning_budget: LearningBudget = runtime_config.learning_budget()
-        else:
-            self.learning_budget = LocalBudget(
-                max_questions_per_day=3,
-                max_seconds_per_day=1800.0,
-            )
-        # When the pipeline surfaces an open question to the user, store the
-        # id here so the next turn can attribute the user's reply.
-        self._pending_surfaced_question_id: int | None = None
         # Session-scoped task plan (Phase 7)
         self._active_task_plan: TaskPlan | None = None
         # Proactive behavior tracking (Phase 8)
@@ -446,11 +434,6 @@ class CognitivePipeline:
         if self._research_owner is not None and not self._research_in_transition:
             return self._research_owner.process(self, user_message, user_id)
         self._ensure_bound_user(user_id)
-        # Sprint 5 throttle reset: the user has now had a turn to respond to
-        # any surfaced open question, so clear the pending id. The question
-        # itself stays in 'pursuing' state until operator action via admin —
-        # so it won't be resurfaced even though the throttle is released.
-        self._pending_surfaced_question_id = None
         st = _TurnState(
             user_message=user_message,
             user_id=user_id,
@@ -542,6 +525,7 @@ class CognitivePipeline:
         life_history_context = self._load_life_history_context(user_message)
         st.life_history_context = life_history_context
         self._capture_developing_self(st)
+        self._project_conversation_commitments(st)
         if self._features.life_history_context and _is_identity_question(user_message):
             identity = self._load_life_history_snapshot()
             life_history_context = {**life_history_context, **identity, "identity_records": identity}
@@ -565,6 +549,8 @@ class CognitivePipeline:
                                  agent_context=json.dumps({"state": self.engine.snapshot(),
                                      "authored_values": self.values.values, "dispositions": st.developing_self["dispositions"],
                                      "current_self": st.developing_self,
+                                     "conversation_sources": conversation_sources(st.developing_self, life_history_context,
+                                         self.engine.state.energy) if self._features.self_intent else {},
                                      "available_capabilities": self._tool_executor.registry.names() if self._tool_executor else [],
                                      "identity": life_history_context}, ensure_ascii=False))
             if self._appraisal_use_llm and (
@@ -1403,6 +1389,7 @@ class CognitivePipeline:
             debug.delivery_outcome = "backend_failure"
             return gen_result
         constrained = bool(st.turn_decision and (st.turn_decision.declined or
+                            st.turn_decision.selected_intention is not None or
                             st.turn_decision.relationship.h or st.turn_decision.relationship.r
                             or st.turn_decision.perception.affiliation))
         review_context = dict(user_message=st.user_message, decision=st.turn_decision,
@@ -1506,7 +1493,7 @@ class CognitivePipeline:
     def _stage_post_process(self, st: _TurnState) -> PipelineResponse:
         """Post-processing (Steps 14b-15).
 
-        Open-question surfacing, memory writes, energy drain, trust update,
+        Owned-pursuit continuity, memory writes, energy drain, trust update,
         self-observations, and the final debug trace.
         """
         debug = st.debug
@@ -1599,6 +1586,19 @@ class CognitivePipeline:
         self._dynamics = commit_relationship(st.turn_decision)
         self.relationship_memory.save_dynamics(st.user_id, self._dynamics, self._turn_index)
         self._last_decision = st.turn_decision
+        intention = st.turn_decision.selected_intention
+        if intention and st.debug.delivery_outcome.startswith("delivered"):
+            if intention.kind == "pursue":
+                for ref in intention.evidence_refs:
+                    if ref.startswith(("self:interests:", "question:")):
+                        self._owned_pursuits[ref] = {"id": f"conversation:{ref}", "status": "active",
+                            "description": intention.content, "reason": intention.reason,
+                            "priority": intention.character_value, "source_ref": ref,
+                            "decision_turn_id": st.turn_decision.turn_id}
+            elif intention.kind == "close":
+                for ref in list(self._owned_pursuits):
+                    if {ref, f"goal:conversation:{ref}"} & set(intention.evidence_refs):
+                        self._owned_pursuits.pop(ref)
         # Raw input, interpretation, choice and delivery are separate evidence.
         record = {"input": st.user_message, "perception": asdict(st.appraisal.perception),
                   "decision": st.turn_decision.to_dict(), "delivered": st.gen_result.response,
@@ -1632,29 +1632,26 @@ class CognitivePipeline:
                 now=now, turn_id=st.turn_id,
             )
         references = tuple(str(loop.id) for loop in (st.relationship_context.active_loops if st.relationship_context else []))
-        # Numeric drives are consumed as opportunity/commitment evidence, not
-        # first-match behavioral instructions synthesized from their names.
-        goals = st.life_history_context.get("goals", [])
-        commitments = sum(float(g.get("priority", 0)) for g in goals if isinstance(g, dict) and g.get("status") == "active")
         state = DecisionState(**self.engine.snapshot(), trust=max(0.0, min(1.0, st.person.trust + st.trust_delta)) if st.person else 0.5,
-                              commitments=min(1.0, commitments), history_refs=references)
-        goal_refs = {str(g.get("id")) for g in goals if isinstance(g, dict) and g.get("status") == "active"}
-        weights = dict(personality.self_weights)
-        components = []
-        for component in st.appraisal.request_components:
-            if scope == "user" and not set(component.evidence_refs) & goal_refs:
-                support = max((max(0.0, weights.get(ref, 0.0)) for ref in component.evidence_refs
-                               if ref.startswith(("self:interests:", "self:preferences:"))), default=0.0)
-                component = replace(component, character_value=min(component.character_value, support), character_urgency=0)
-            components.append(component)
-        components = tuple(components)
+                              history_refs=references)
+        components = st.appraisal.request_components
+        proposals = ()
+        if scope == "user":
+            if self._features.self_intent:
+                proposals = conversation_proposals(st.developing_self, st.life_history_context, components,
+                    state.energy, st.appraisal.self_proposals)
+            state, components = ground_conversation_allocation(personality, state, st.life_history_context, components, proposals)
+        else:
+            # Independent execution retains its already grounded component,
+            # while sharing the same active-commitment/resource projection.
+            state, _ = ground_conversation_allocation(personality, state, st.life_history_context, (), ())
         capabilities = set(self._tool_executor.registry.names()) if self._tool_executor else set()
         components = tuple(replace(c, feasible=c.feasible and set(c.capability_requirements).issubset(capabilities))
                            for c in components)
         decision = decide(personality, state, st.dynamics, st.appraisal.perception,
                           components, character_seed=self.soul.character_seed,
                           relationship_id=st.user_id, turn_id=st.turn_id,
-                          soul_version=self.soul.schema_version, scope=scope)
+                          soul_version=self.soul.schema_version, scope=scope, proposals=proposals)
         st.turn_decision = decision
         st.agency_decision = agency_summary(decision)
         st.debug.turn_decision = decision
@@ -1975,18 +1972,37 @@ class CognitivePipeline:
         if st.life_history_context.get("developing_self"):
             st.life_history_context["developing_self"] = st.developing_self
 
+    def _project_conversation_commitments(self, st: _TurnState) -> None:
+        """Only previously selected, delivered pursuits become commitments.
+
+        Revalidate their support in the current self; a plan/commitment is not
+        a new taste, and its existence is not proof that external work happened.
+        """
+        goals = list(st.life_history_context.get("goals", []))
+        if self._features.self_intent:
+            sources = conversation_sources(st.developing_self, st.life_history_context, self.engine.state.energy)
+            for ref, pursuit in self._owned_pursuits.items():
+                source = sources.get(ref)
+                if source and not source.get("negative"):
+                    goals.append({**pursuit, "description": source["content"], "priority": source["strength"]})
+        if self._active_task_plan and not self._active_task_plan.is_terminal:
+            goals.append({"id": f"plan:{self._active_task_plan.id}", "description": self._active_task_plan.goal,
+                          "status": "active", "reason": "Previously selected unfinished work."})
+        if goals:
+            st.life_history_context["goals"] = goals
+
     def _load_life_history_context(self, query_text: str = "") -> dict[str, Any]:
         """Read compact identity-level life context for generation."""
         if not self._features.life_history_context:
             return {}
-        if self._life_history_provider is None:
-            if not getattr(self._runtime_config, "data_dir", None):
-                return {}
-            from runtime.life_history import LifeHistoryStore
-            with LifeHistoryStore(self._runtime_config) as store:
-                return store.prompt_context()
         try:
-            if query_text:
+            if self._life_history_provider is None:
+                context = {}
+                if getattr(self._runtime_config, "data_dir", None):
+                    from runtime.life_history import LifeHistoryStore
+                    with LifeHistoryStore(self._runtime_config) as store:
+                        context = store.prompt_context()
+            elif query_text:
                 try:
                     context = self._life_history_provider(query_text)
                 except TypeError:
@@ -1996,7 +2012,10 @@ class CognitivePipeline:
         except Exception as exc:
             log.warning("Life history context unavailable: %s", exc)
             return {"error": exc.__class__.__name__}
-        return context if isinstance(context, dict) else {}
+        context = dict(context) if isinstance(context, dict) else {}
+        if self._research_owner is not None:
+            context.update(self._research_owner.conversation_context())
+        return context
 
     def _load_life_history_snapshot(self) -> dict[str, Any]:
         if self._life_history_snapshot_provider is None:
@@ -2089,74 +2108,6 @@ class CognitivePipeline:
             lines.append("Drive shifts:" if show_drive_details else "Changed priorities:")
             lines.extend(changed_drives[:7])
         return "\n".join(lines)
-
-    def _maybe_surface_open_question(self) -> dict[str, Any] | None:
-        """Pick an open question to surface, if budget + drives + throttle allow.
-
-        Throttle: never surface twice in the same response (the pending id is
-        cleared in the next turn's process call).
-        """
-        if self._pending_surfaced_question_id is not None:
-            # Throttle: don't pile a second question on the same turn flow.
-            return None
-        if self._life_history_provider is None:
-            return None
-        if self._runtime_config is None:
-            # Without a RuntimeConfig we can't resolve the shared DB path. Tests
-            # that use the pipeline without a runtime context skip surfacing.
-            return None
-        try:
-            from runtime.learning.surface import should_surface_question
-            from runtime.life_history import LifeHistoryStore, life_history_db_path
-            import os
-
-            # Need the same db the rest of the runtime uses.
-            db_path = life_history_db_path(self._runtime_config)
-            if not os.path.exists(db_path):
-                return None
-            with LifeHistoryStore(self._runtime_config) as store:
-                # Prefer a persistent, per-user daily budget so the cap is real
-                # across concurrent sessions and restarts. Fall back to the
-                # in-memory budget when caps aren't introspectable (e.g. a
-                # non-LocalBudget implementation).
-                budget = self.learning_budget
-                scope_key = self._bound_user_id or "default"
-                if all(
-                    hasattr(self.learning_budget, attr)
-                    for attr in ("max_questions_per_day", "max_seconds_per_day", "period_seconds")
-                ):
-                    from runtime.learning_budget import PersistentLocalBudget
-
-                    budget = PersistentLocalBudget(
-                        store,
-                        scope_key,
-                        max_questions_per_day=self.learning_budget.max_questions_per_day,
-                        max_seconds_per_day=self.learning_budget.max_seconds_per_day,
-                        period_seconds=self.learning_budget.period_seconds,
-                    )
-                question = should_surface_question(store, budget=budget)
-                if question is None:
-                    return None
-                store.mark_question_pursuing(int(question["id"]))
-                budget.consume(questions=1)
-                return question
-        except Exception as exc:
-            log.warning("Open-question surfacing failed: %s", exc)
-            return None
-
-    @staticmethod
-    def _format_open_question_followup(question: dict[str, Any]) -> str:
-        """Render a surfaced question as a graceful follow-up tail.
-
-        Kept short and clearly framed as a side-question so it doesn't
-        overshadow the main response. The model isn't authoring this — we
-        append it post-generation — so the framing matters for it to feel
-        natural.
-        """
-        text = str(question.get("prompt_text") or "").strip()
-        if not text:
-            return ""
-        return f"By the way — I have been wondering: {text}"
 
     def _load_skill_context(
         self,
@@ -2564,7 +2515,7 @@ class CognitivePipeline:
             "capability_gaps": self._capability_gaps, "last_turn_time": self._last_turn_time,
             "last_state_update_at": self._last_state_update_at,
             "last_external_input_at": self._last_external_input_at,
-            "pending_question_id": self._pending_surfaced_question_id,
+            "owned_pursuits": self._owned_pursuits if self._features.self_intent else {},
         }
 
     def restore_session_state(self, state: dict[str, Any]) -> None:
@@ -2592,7 +2543,8 @@ class CognitivePipeline:
         self._last_turn_time = state.get("last_turn_time")
         self._last_external_input_at = state.get("last_external_input_at", self._last_turn_time)
         self._last_state_update_at = state.get("last_state_update_at", self._last_turn_time)
-        self._pending_surfaced_question_id = state.get("pending_question_id")
+        if self._features.self_intent:
+            self._owned_pursuits = dict(state.get("owned_pursuits", {}))
         plan = state.get("active_task_plan")
         if plan:
             plan = dict(plan)

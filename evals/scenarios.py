@@ -1231,7 +1231,8 @@ def phase13_life_scenarios() -> list[EvalScenario]:
             name="Life influence creates a bounded measurable policy effect",
             tags=["phase13_life", "life_history", "relationship", "strategy", "regression"],
             initial_trust=0.9,
-            life_history_context={**life_context, "goals": [{"id": "commitment", "status": "active", "priority": 0.8}]},
+            life_history_context={**life_context, "goals": [{"id": "commitment", "status": "active", "priority": 0.8,
+                "description": "Finish the already selected survey before taking on another analysis."}]},
             turns=[
                 EvalTurn(
                     user_message="I'm angry with you about the deadline.",

@@ -425,6 +425,15 @@ class AgentRuntime:
         receipts = self.store.recent_action_receipts(goal_id=goal_id)
         return receipts if self.config.research_memory_mode == "legacy" else receipts[-1:]
 
+    def conversation_context(self) -> dict[str, Any]:
+        """The same persistent commitments compete for ordinary chat time.
+
+        Reading them does not select an action, change birth policy, or grant
+        their execution. Waiting/completed goals do not consume active time.
+        """
+        return {"goals": [item for item in self.store.list("goal")
+                          if item["status"] in {"active", "waiting"}]}
+
     def _snapshot(self) -> dict[str, Any]:
         return {**self.state, **self.engine.export_state(), "saved_at": time.time()}
 

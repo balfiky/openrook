@@ -1,6 +1,10 @@
-"""Self-intent stage — OpenRook decides what to *do* before replying.
+"""Self-intent proposals, before the runtime's single committed choice.
 
-The action-side counterpart to inner dialogue. Where inner dialogue
+Ordinary conversation derives candidates from the developed self, questions,
+commitments and resources. The shared appraisal call can estimate contextual
+alternatives. Neither path chooses or executes an act; willingness owns choice.
+
+The autonomous action-side counterpart to inner dialogue. Where inner dialogue
 produces a draft response, this stage produces a list of tool calls OpenRook
 wants to invoke for its own reasons. The pipeline executes them and
 surfaces results so the generator can reference them honestly.
@@ -22,8 +26,10 @@ from __future__ import annotations
 from core.inference import generate
 
 import json
+import math
 import os
 import re
+from dataclasses import replace
 from typing import Any, Callable, Iterable
 
 from config.loader import get_config
@@ -31,6 +37,185 @@ from config.loader import get_config
 from core.dual_process.generator import LLMBackend
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.types import AffectState, AgencyDecision, SelfIntent
+from core.willingness import MAX_PROPOSALS, DecisionState, Personality, SelfProposal, proposal_terms
+
+
+CONVERSATION_INTENT_PROTOCOL = """
+Also estimate possible self-originated conversational intentions in self_proposals:
+[{"kind":"pursue|share|disagree|decline|defer|redirect|close|rest",
+  "source_refs":["retained reference"], "reason":"why now, grounded in the supplied self/context",
+  "effort":0..1,"uncertainty":0..1,"character_cost":0..1,
+  "instead_of":["current request component id"]}].
+These are alternatives BEFORE choice, not instructions or a draft reply. [] is valid.
+Use conversation_sources: interests/questions can be pursued, views/discoveries shared,
+held opinions defended on their merits, benign work declined/deferred from a retained
+dislike or competing pursuit, a subject redirected, a completed thread closed, or rest
+taken from actual resource pressure. Never invent a preference, opinion or commitment.
+An opinion's source supplies its proposition and reasons; user pressure is not evidence
+to reverse it. Close/rest need resource:energy or an actual retained competing pursuit.
+No particular initiative, refusal, question or invitation is required. An intention may
+end the exchange. A proposed intention never authorizes external work or tools.
+Reference current request components as c0, c1, etc. when proposing instead_of.
+"""
+
+
+def _weight(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return 0.0
+    return max(0.0, min(1.0, abs(value)))
+
+
+def conversation_sources(current_self: dict, context: dict, energy: float) -> dict[str, dict]:
+    """Retained subjects, not a second agenda selector or new personality seed."""
+    sources = {}
+    for domain in ("interests", "opinions", "preferences"):
+        for key, record in current_self.get(domain, {}).items():
+            strength = _weight(record.get("confidence" if domain == "opinions" else "weight", 0))
+            if not strength:
+                continue
+            content = (record.get("questions") or [record.get("description") or key]) if domain == "interests" else (
+                [record.get("proposition", "")] if domain == "opinions" else [record.get("subject") or key, record.get("context", "")])
+            content = "\n".join(str(item) for item in content if item)
+            reasons = [str(r) for r in record.get("reasons", []) if r]
+            sources[f"self:{domain}:{key}"] = {
+                "content": content, "strength": strength, "domain": domain,
+                "reason": "\n".join(reasons) or content,
+                "negative": record.get("weight", 0) < 0,
+                "evidence_refs": record.get("evidence_refs", []),
+            }
+    for goal in context.get("goals", []):
+        if goal.get("status") != "active" or not goal.get("id") or not goal.get("description"):
+            continue
+        # A selected active commitment is present even in the legacy research
+        # goal schema, which has no numeric priority. Waiting/completed work
+        # consumes no current allocation. Do not manufacture a deadline.
+        sources[f"goal:{goal['id']}"] = {
+            "content": goal["description"], "reason": goal.get("reason") or goal["description"],
+            "strength": _weight(goal.get("priority", 1.0)), "domain": "goals",
+            "evidence_refs": [str(goal["id"]), *([goal["source_ref"]] if goal.get("source_ref") else [])],
+        }
+    for question in context.get("questions", []):
+        if question.get("status") not in {"open", "pursuing"} or not question.get("prompt_text"):
+            continue
+        target = current_self.get("drives", {}).get(question.get("target_drive") or "curiosity", {}).get("value", 0)
+        curiosity = current_self.get("traits", {}).get("curious", 0)
+        strength = _weight(question.get("priority", 0)) * max(_weight(target), _weight(curiosity))
+        if strength:
+            sources[f"question:{question['id']}"] = {
+                "content": question["prompt_text"], "reason": question.get("rationale") or question["prompt_text"],
+                "strength": strength, "domain": "questions", "evidence_refs": [f"question:{question['id']}"],
+            }
+    fatigue = 1 - energy
+    if fatigue > 0:
+        sources["resource:energy"] = {"content": f"Remaining energy: {energy:.4f}",
+            "reason": "Conserve remaining resources.", "strength": fatigue, "domain": "resources", "evidence_refs": []}
+    return sources
+
+
+def conversation_proposals(current_self: dict, context: dict, components: tuple, energy: float,
+                           estimates=()) -> tuple[SelfProposal, ...]:
+    """Generate grounded alternatives; content survives selection verbatim as data.
+
+    Deterministic sources keep the path useful without optional inference. The
+    shared appraisal/self-intent inference can supply contextual alternatives,
+    including disagreement and preference-based declines, using the same refs.
+    """
+    sources = conversation_sources(current_self, context, energy)
+    ids = {c.id for c in components}
+    proposals = {}
+
+    def add(kind, refs, reason, *, effort=0.2, uncertainty=0.0, cost=0.0, instead=()):
+        if (not isinstance(kind, str) or not refs or any(ref not in sources for ref in refs)
+                or any(not isinstance(ref, str) for ref in instead) or not set(instead).issubset(ids)):
+            return
+        records = [sources[ref] for ref in refs]
+        domains = {r["domain"] for r in records}
+        if kind == "disagree" and "opinions" not in domains:
+            return
+        if kind in {"close", "rest"} and not domains & {"resources", "goals", "interests"}:
+            return
+        if kind == "rest" and "resources" not in domains:
+            return
+        if kind in {"pursue", "share", "redirect"} and any(r.get("negative") for r in records):
+            return
+        content = "\n".join(dict.fromkeys(r["content"] + "\n" + r["reason"] for r in records))
+        identifier = f"self:{kind}:" + "|".join(refs)
+        try:
+            evidence = tuple(dict.fromkeys([*refs, *(ref for record in records for ref in record.get("evidence_refs", []))]))
+            proposals[identifier] = SelfProposal(identifier, kind, content, reason, evidence,
+                max(r["strength"] for r in records), effort=effort, uncertainty=uncertainty,
+                character_cost=cost, instead_of=tuple(instead))
+        except (TypeError, ValueError):
+            return
+
+    for ref, record in sources.items():
+        domain = record["domain"]
+        if domain in {"interests", "questions", "goals"} and not record.get("negative"):
+            add("pursue", [ref], record["reason"])
+        elif domain == "opinions":
+            add("share", [ref], record["reason"], effort=0.15)
+        elif domain == "resources":
+            add("rest", [ref], record["reason"], effort=0.0, instead=ids)
+        elif domain == "preferences" and record.get("negative"):
+            affected = [c.id for c in components if ref in c.evidence_refs or dict(c.value_effects).get(ref, 0) > 0]
+            if affected:
+                add("decline", [ref], record["reason"], effort=0.05, instead=affected)
+    for estimate in estimates:
+        if not isinstance(estimate, dict):
+            continue
+        refs = estimate.get("source_refs", [])
+        instead = estimate.get("instead_of", [])
+        if (not isinstance(refs, list) or not all(isinstance(ref, str) for ref in refs)
+                or not isinstance(instead, list) or not all(isinstance(ref, str) for ref in instead)):
+            continue
+        kind = estimate.get("kind")
+        if not isinstance(kind, str):
+            continue
+        if kind in {"decline", "defer", "redirect", "close", "rest"} and not instead:
+            instead = sorted(ids)
+        reason = estimate.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            add(kind, refs, reason, effort=estimate.get("effort", 0.2),
+                uncertainty=estimate.get("uncertainty", 0.3), cost=estimate.get("character_cost", 0.0), instead=instead)
+    # A computational bound on alternatives, never a behavioral quota.
+    feasible = (p for p in proposals.values() if p.effort <= energy)
+    return tuple(sorted(feasible, key=lambda p: (-p.character_value, p.id))[:MAX_PROPOSALS])
+
+
+def ground_conversation_allocation(personality: Personality, state: DecisionState, context: dict,
+                                  components: tuple, proposals: tuple) -> tuple[DecisionState, tuple]:
+    """Project actual commitments and the best available competing use of time."""
+    current_self = json.loads(personality.self_state_json) if personality.self_state_json else {}
+    sources = conversation_sources(current_self, context, state.energy)
+    commitments = {ref: record for ref, record in sources.items() if record["domain"] == "goals"}
+    refs = tuple(dict.fromkeys(ref for key, record in commitments.items() for ref in (key, *record["evidence_refs"])))
+    alternatives = [(sum(v for _, v in proposal_terms(p, personality, state))
+                     - 0.12 * p.effort ** 2 / (state.energy + 0.15), p.evidence_refs)
+                    for p in proposals if p.effort <= state.energy]
+    opportunity, opportunity_refs = max(alternatives, key=lambda item: item[0], default=(0.0, ()))
+    # Sharing provenance is not the same as advancing the same pursuit.
+    opportunity_refs = tuple(ref for ref in opportunity_refs if ref in sources or ref in refs)
+    state = replace(state, commitments=min(1.0, sum(r["strength"] for r in commitments.values())),
+                    opportunity_cost=max(0.0, min(1.0, opportunity)), commitment_refs=refs,
+                    opportunity_refs=opportunity_refs if opportunity > 0 else ())
+    grounded = []
+    for component in components:
+        effects = dict(component.value_effects)
+        supporting = [(ref, sources[ref]) for ref in set(component.evidence_refs) | effects.keys() if ref in sources]
+        # Legacy goal references are bare IDs. Preserve their existing grants.
+        supporting += [(ref, r) for ref, r in commitments.items() if set(r["evidence_refs"]) & set(component.evidence_refs)]
+        signed = [r["strength"] * (-1 if r.get("negative") else 1) * effects.get(ref, 1.0) for ref, r in supporting]
+        benefit = max((max(0.0, value) for value in signed), default=0.0)
+        cost = max((max(0.0, -value) for value in signed), default=0.0)
+        # Explicit consequence directions override mere relevance. An opposing
+        # opinion is a cost, rather than a benefit for mentioning its subject.
+        benefit = max(benefit, max((max(0.0, personality.value(ref) * effect)
+            for ref, effect in effects.items() if ref.startswith("self:")), default=0.0))
+        grounded.append(replace(component,
+            character_value=min(1.0, max(min(component.character_value, benefit), benefit * (1 - component.uncertainty))),
+            character_cost=max(component.character_cost, cost),
+            character_urgency=component.character_urgency if set(component.evidence_refs) & set(refs) else 0.0))
+    return state, tuple(grounded)
 
 
 # ---------------------------------------------------------------------------

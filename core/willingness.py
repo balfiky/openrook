@@ -16,9 +16,10 @@ import math
 import random
 from typing import Any
 
-POLICY_VERSION = "willingness-1.2"
+POLICY_VERSION = "willingness-1.3"
 STATE_VERSION = 2
 MAX_COMPONENTS = 8
+MAX_PROPOSALS = 16
 
 
 def unit(value: float) -> float:
@@ -119,6 +120,43 @@ class Perception:
                 value = getattr(self, name)
                 if not math.isfinite(value) or not (-1 if name == "reliability" else 0) <= value <= 1:
                     raise ValueError(f"Invalid perception {name}")
+
+
+@dataclass(frozen=True)
+class SelfProposal:
+    """A possible conversational intention, never an execution grant.
+
+    Content and reasons come from retained self/experience. Proposers estimate
+    consequences; only decide() selects. ``instead_of`` prices an alternative
+    allocation by making the named user grants incompatible with this intention.
+    """
+    id: str
+    kind: str
+    content: str
+    reason: str
+    evidence_refs: tuple[str, ...]
+    character_value: float
+    effort: float = 0.2
+    character_cost: float = 0.0
+    urgency: float = 0.0
+    uncertainty: float = 0.0
+    instead_of: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if self.kind not in {"pursue", "share", "disagree", "decline", "defer", "redirect", "close", "rest"}:
+            raise ValueError("Unknown conversational intention")
+        if not all(isinstance(v, str) and v.strip() for v in (self.id, self.content, self.reason)):
+            raise ValueError("An intention needs identity, content and grounds")
+        for name in ("evidence_refs", "instead_of"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
+            if any(not isinstance(v, str) or not v for v in getattr(self, name)):
+                raise ValueError("Intention references must be nonempty strings")
+        if not self.evidence_refs:
+            raise ValueError("An intention must have retained grounds")
+        for name in ("character_value", "effort", "character_cost", "urgency", "uncertainty"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f"Invalid intention {name}")
 
 
 @dataclass(frozen=True)
@@ -269,14 +307,25 @@ class DecisionState:
     opportunity_cost: float = 0.0
     commitments: float = 0.0
     history_refs: tuple[str, ...] = ()
+    commitment_refs: tuple[str, ...] = ()
+    opportunity_refs: tuple[str, ...] = ()
 
     def __post_init__(self):
         object.__setattr__(self, "history_refs", tuple(self.history_refs))
+        object.__setattr__(self, "commitment_refs", tuple(self.commitment_refs))
+        object.__setattr__(self, "opportunity_refs", tuple(self.opportunity_refs))
         for name in self.__dataclass_fields__:
-            if name != "history_refs":
+            if name not in {"history_refs", "commitment_refs", "opportunity_refs"}:
                 value = getattr(self, name)
                 if not math.isfinite(value) or not 0 <= value <= 1:
                     raise ValueError(f"Invalid state {name}")
+
+    def to_dict(self) -> dict[str, Any]:
+        result = asdict(self)
+        for name in ("commitment_refs", "opportunity_refs"):
+            if not result[name]:
+                del result[name]
+        return result
 
 
 @dataclass(frozen=True)
@@ -308,6 +357,10 @@ class TurnDecision:
     noise_bound: float
     chosen_silence: bool
     scope: str = "user"
+    proposals: tuple[SelfProposal, ...] = ()
+    selected_intention: SelfProposal | None = None
+    proposal_utilities: tuple[tuple[str, float | None], ...] = ()
+    intention_contributions: tuple[tuple[str, float], ...] = ()
 
     @property
     def expressive_acts(self) -> tuple[tuple[str, float], ...]:
@@ -334,6 +387,10 @@ class TurnDecision:
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
+        for key in ("proposals", "selected_intention", "proposal_utilities", "intention_contributions"):
+            if self.policy_version != POLICY_VERSION and not result[key]:
+                del result[key]
+        result["state"] = self.state.to_dict()
         # Historical frozen decisions must round-trip byte-for-field without
         # inventing development that was absent from their recorded inputs.
         for key in ("self_weights", "self_state_json", "affinity", "aversion"):
@@ -413,7 +470,25 @@ def _component_terms(c: RequestComponent, p: Personality, s: DecisionState,
         ("uncertainty", -c.uncertainty * (1 - 0.5 * s.certainty) * (0.3 + 0.6 * p.value("honesty"))),
         ("risk", -c.risk * (0.2 + 0.8 * p.value("autonomy"))),
         ("interaction_cost", -(r.h * (0.2 + p.pride) + r.r * (1.2 - p.patience)) * (0.25 + c.effort) * (0.7 + 0.6 * s.arousal)),
-        ("competing_interests", -(s.opportunity_cost + 0.5 * s.commitments + 0.3 * s.resolution) * c.effort),
+        ("competing_interests", -c.effort * (
+            (0.0 if set(c.evidence_refs) & set(s.opportunity_refs) else s.opportunity_cost)
+            + (0.0 if set(c.evidence_refs) & set(s.commitment_refs) else 0.5 * s.commitments)
+            + 0.3 * s.resolution)),
+    )
+
+
+def proposal_terms(proposal: SelfProposal, personality: Personality, state: DecisionState) -> tuple[tuple[str, float], ...]:
+    """Same resource price as user work, without social-service benefits.
+
+    A pursuit does not pay the cost of displacing itself a second time.
+    Its forgone alternative is accounted for by joint optimization.
+    """
+    return (
+        ("character_benefit", 1.3 * proposal.character_value + proposal.urgency),
+        ("character_cost", -proposal.character_cost),
+        ("effort", -proposal.effort * (0.35 + 1 - personality.patience) / (state.energy + 0.15)),
+        ("uncertainty", -proposal.uncertainty * (1 - 0.5 * state.certainty)
+         * (0.3 + 0.6 * personality.value("honesty"))),
     )
 
 
@@ -422,6 +497,7 @@ def decide(
     perception: Perception, components: tuple[RequestComponent, ...], *,
     character_seed: int, relationship_id: str, turn_id: str,
     soul_version: int = 2, noise: float = 0.025, scope: str = "user",
+    proposals: tuple[SelfProposal, ...] = (),
 ) -> TurnDecision:
     """Exactly maximize the bounded quadratic objective over <=8 atomic grants.
 
@@ -431,6 +507,10 @@ def decide(
     """
     if len(components) > MAX_COMPONENTS or len({c.id for c in components}) != len(components):
         raise ValueError("Expected at most eight uniquely identified components")
+    if len(proposals) > MAX_PROPOSALS or len({p.id for p in proposals}) != len(proposals):
+        raise ValueError("Too many or duplicate conversational proposals")
+    if any(not set(p.instead_of).issubset({c.id for c in components}) for p in proposals):
+        raise ValueError("An alternative must reference current request components")
     p, s, r = personality, state, relationship
     for obj in (p, s, r, perception):
         for value in asdict(obj).values():
@@ -465,10 +545,16 @@ def decide(
     previous = tuple(getattr(r.previous_stance, name) for name in names)
     terms = [_component_terms(c, p, s, r) for c in components]
     allocations = []
-    for grants in itertools.product((False, True), repeat=len(components)):
+    own_terms = {p.id: proposal_terms(p, personality, state) for p in proposals}
+    for grants, intention in itertools.product(itertools.product((False, True), repeat=len(components)), (None, *proposals)):
         if any(g and not c.feasible for g, c in zip(grants, components)):
             continue
+        if intention and any(g and c.id in intention.instead_of for g, c in zip(grants, components)):
+            continue
         effort = sum(c.effort for g, c in zip(grants, components) if g)
+        effort += intention.effort if intention else 0.0
+        if intention and intention.kind != "rest" and effort > s.energy:
+            continue  # No simultaneous pursuit when the allocation consumes available attention.
         urgency = sum(c.user_urgency for g, c in zip(grants, components) if g)
         benefit = sum(c.user_value for g, c in zip(grants, components) if g)
         coefficients = list(linear)
@@ -476,13 +562,19 @@ def decide(
         coefficients[3] += 0.15 * effort - 0.6 * urgency
         stance = tuple(unit((b + jitter[i] + 2 * inertia * previous[i]) / (curvature[i] + 2 * inertia))
                        for i, b in enumerate(coefficients))
+        if intention and intention.kind == "rest":
+            # Rest relinquishes conversational engagement and its utility. It
+            # cannot collect both the reward for engaging and free recovery.
+            stance = (0.0, *stance[1:])
         social_terms = tuple((name, (coefficients[i] + jitter[i]) * a
                               - 0.5 * curvature[i] * a * a - inertia * (a - previous[i]) ** 2)
                              for i, (name, a) in enumerate(zip(names, stance)))
         social_terms += (("shared_effort_cost", -0.12 * effort ** 2 / (s.energy + 0.15)),)
         score = sum(v for _, v in social_terms)
         score += sum(sum(v for _, v in terms[i]) + jitter[6 + i] for i, grant in enumerate(grants) if grant)
-        allocations.append((score, grants, stance, social_terms))
+        if intention:
+            score += sum(v for _, v in own_terms[intention.id])
+        allocations.append((score, grants, stance, social_terms, intention))
     best = max(allocations, key=lambda item: item[0])
     chosen = []
     for i, c in enumerate(components):
@@ -494,11 +586,15 @@ def decide(
         chosen.append(ComponentDecision(c, best[1][i], willingness, margin, grant_utility, no,
                                         terms[i] + (("seeded_noise", jitter[6 + i]),)))
     stance = Stance(**dict(zip(names, best[2])))
+    selected = best[4]
     return TurnDecision(POLICY_VERSION, soul_version, turn_id, seed, p, s, r, perception,
                         stance, tuple(chosen), best[0],
                         tuple((tuple(c.id for g, c in zip(a[1], components) if g), a[0])
                               for a in sorted(allocations, key=lambda item: item[0], reverse=True)),
-                        best[3], noise, stance.engagement == 0 and not any(best[1]), scope)
+                        best[3], noise, not any(best[1]) and stance.engagement == 0, scope,
+                        tuple(proposals), selected,
+                        tuple((proposal.id, max((a[0] for a in allocations if a[4] == proposal), default=None)) for proposal in proposals),
+                        own_terms[selected.id] if selected else ())
 
 
 def commit_relationship(decision: TurnDecision) -> RelationshipDynamics:

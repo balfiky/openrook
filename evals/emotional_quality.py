@@ -20,6 +20,7 @@ from typing import Callable
 from config.loader import SoulConfig
 from core.dual_process.generator import LLMBackend
 from core.types import ModulatorState
+from core.willingness import POLICY_VERSION
 from evals.social_contract import social_reply_issues
 from evals.backends import (
     MissingBackendConfigError,
@@ -121,7 +122,7 @@ class EmotionalQualityReport:
     scenarios: list[ScenarioTrace]
     contrasts: list[ContrastTrace]
     impact_checks: list[CheckResult] = field(default_factory=list)
-    policy_version: str = "willingness-1.2"
+    policy_version: str = POLICY_VERSION
 
     @property
     def passed(self) -> bool:

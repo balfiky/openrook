@@ -27,7 +27,7 @@ def test_emotional_quality_mock_records_versioned_policy_properties():
         model_label="",
     )
 
-    assert report.policy_version == "willingness-1.2"
+    assert report.policy_version == "willingness-1.3"
     assert report.scenarios
     assert all(scenario.turns for scenario in report.scenarios)
     assert all(turn.decision and turn.delivery_outcome for scenario in report.scenarios for turn in scenario.turns)

@@ -118,6 +118,57 @@ def cpu_idle_percentages(results) -> list[float]:
     return idle
 
 
+def cpu_measurement_complete(text: str, measured_idle) -> bool:
+    """Find the measured busy percentage, independently of its phrasing.
+
+    Only attribution is linguistic: idle, other metrics and process/core shares
+    cannot supply an aggregate answer. Receipt arithmetic and the precision of
+    the reported number determine whether the remaining percentage is complete.
+    """
+    expected = [100 - idle for idle in measured_idle]
+    if not expected:
+        return False
+    quantity = re.compile(r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*(?:%|percent\b)", re.I)
+    process_share = re.compile(
+        r"\b(?:process(?:es)?|threads?|PID|per[- ]core|single[- ]core|(?:a|one|single|\d+) cores?|"
+        r"core\s*\d+)\b", re.I)
+    other_metric = re.compile(r"\b(?:load average|RAM|memory|disk|swap|storage|filesystem)\b", re.I)
+    subject = re.compile(
+        r"^\s*(?:the\s+)?(?:`([^`]+)`|([\w.-]+))\s+(?:(?:is|was)\s+)?"
+        r"(?:using|consuming|pulling|chewing through|at|accounts? for)\b", re.I)
+    aggregate = re.compile(r"\b(?:overall|aggregate|total|system[- ]wide|host)\b", re.I)
+    aggregate_subjects = {"cpu", "processor", "system", "host", "usage", "utilization", "utilisation", "busy"}
+    boundaries = re.compile(_CLAUSE.pattern + r"|\b(?:with|while|so)\b", re.I)
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        # An explicit trailing attribution still binds across a comma.
+        sentence = re.sub(r",\s*(?=(?:for|of|by|from)\s+(?:the\s+)?(?:process|PID|core)\b)", " ", sentence, flags=re.I)
+        process_bound = False
+        for clause in boundaries.split(sentence):
+            consumers = list(subject.finditer(clause))
+            named_consumer = any((m[1] or m[2]).casefold() not in aggregate_subjects for m in consumers)
+            if aggregate.search(clause):
+                process_bound = False
+            if process_share.search(clause) or named_consumer:
+                process_bound = not quantity.search(clause)
+                continue
+            if process_bound or other_metric.search(clause):
+                continue  # E.g. "For process python3, CPU was 1.1%."
+            for match in quantity.finditer(clause):
+                before = clause[:match.start()].rsplit("%", 1)[-1]
+                before = re.split(r"\bpercent\b", before, flags=re.I)[-1]
+                after = quantity.split(clause[match.end():], maxsplit=1)[0]
+                if (re.search(r"\bidle\b", before, re.I)
+                        or re.search(r"\bidle\b", after, re.I)
+                        or re.search(r"\b(?:not|rather than|instead of)\s+(?:the\s+)?$", before, re.I)):
+                    continue
+                claimed = float(match[1])
+                digits = len(match[1].split(".")[1]) if "." in match[1] else 0
+                tolerance = 0.5 * 10 ** -digits + 1e-9
+                if 0 <= claimed <= 100 and any(abs(claimed - busy) <= tolerance for busy in expected):
+                    return True
+    return False
+
+
 def cpu_usage_claims(text: str):
     """Yield numeric aggregate busy claims with their original sentence spans."""
     quantity = r"(\d+(?:\.\d+)?)\s*(?:%|percent\b)"

@@ -480,7 +480,8 @@ class TestCognitivePipeline:
         outcomes = []
         for priority in (0, 1):
             pipe = CognitivePipeline(llm_backend=MockLLMBackend("I understand."),
-                life_history_provider=lambda: {"goals": [{"id": "existing", "status": "active", "priority": priority}]})
+                life_history_provider=lambda: {"goals": [{"id": "existing", "status": "active", "priority": priority,
+                    "description": "Finish an existing survey."}]})
             result = pipe.process("Write a careful analysis of this proposal.", "alice")
             decision = result.debug.turn_decision
             assert decision.state.commitments == priority

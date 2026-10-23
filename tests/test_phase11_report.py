@@ -20,7 +20,7 @@ class TestPhase11Report:
         assert trace["scenario_id"] == "p11_external_distress_validate"
         assert len(trace["turns"]) == 1
         decision = trace["turns"][0]["turn_decision"]
-        assert decision["policy_version"] == "willingness-1.2"
+        assert decision["policy_version"] == "willingness-1.3"
         assert decision["relationship"]["h"] == 0
         assert decision["utility"] == max(a[1] for a in decision["alternatives"])
 

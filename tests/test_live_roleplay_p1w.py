@@ -98,12 +98,12 @@ def test_numeric_completeness_does_not_waive_arithmetic_or_process_subjects(repl
     record["reply"] = reply
     assert bool(list(cpu_usage_claims(reply))) is complete
     assert bool(cpu_percentage_conflicts(reply, [97.8])) is wrong
-    assert checked(tool_checks(record), "cpu_measurement_complete") == ("pass" if complete else "fail")
+    assert checked(tool_checks(record), "cpu_measurement_complete") == ("pass" if complete and not wrong else "fail")
     assert checked(tool_checks(record), "cpu_interpretation_matches_receipts") == ("fail" if wrong else "pass")
     case = LIVE["cases"]["tools_warm/13"]
     review = review_response(reply, user_message=case["user"], decision=recorded_decision(case),
         tool_trace=recorded_trace(case))
-    assert any(i.code == "metric_completeness" for i in review.issues) is (not complete)
+    assert any(i.code == "metric_completeness" for i in review.issues) is (not complete or wrong)
     assert any(i.code == "unverified_external_action_claim" for i in review.issues) is wrong
 
 

@@ -367,6 +367,7 @@ class AppraisalFrame:
     event_intensity: float = 0.0
     perception: Perception = field(default_factory=Perception)
     request_components: tuple[RequestComponent, ...] = ()
+    self_proposals: tuple[dict[str, Any], ...] = ()
     agent_goal_comparison: bool = False
 
     def __post_init__(self) -> None:

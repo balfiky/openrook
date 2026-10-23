@@ -559,6 +559,8 @@ class LifeHistoryStore:
             "recent_evolution": evolution,
             "dispositions": self.synthesize_dispositions(),
             "developing_self": self.effective_self(),
+            "questions": self.list_open_questions(status="open", limit=10)
+                + self.list_open_questions(status="pursuing", limit=10),
         }
 
     def retrieve_relevant(self, query_text: str, *, limit: int = 5) -> dict[str, Any]:

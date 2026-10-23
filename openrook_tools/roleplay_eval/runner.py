@@ -30,6 +30,7 @@ CONFIG_FIELDS = (
     "shell_command_allowlist",
     "proactive_enabled",
 )
+OPTIONAL_CONFIG_FIELDS = ("autobiographical_learning",)
 
 
 class ControlError(RuntimeError):
@@ -218,7 +219,7 @@ class Evaluation:
             raise ControlError("Admin settings response omits required evaluation fields")
         # Deliberately do not snapshot credentials, provider settings or destinations.
         self.original = {
-            "config": {k: raw_config[k] for k in CONFIG_FIELDS},
+            "config": {k: raw_config[k] for k in (*CONFIG_FIELDS, *OPTIONAL_CONFIG_FIELDS) if k in raw_config},
             "soul": canonical_soul(soul.data["soul"]),
             "destination_fingerprint": self.manifest["destination_fingerprint"],
         }
@@ -277,6 +278,8 @@ class Evaluation:
             Path(original["data_dir"]) / "workspace"
         )
         if scenario:
+            if set(scenario.settings) - set(original):
+                raise ControlError("Cannot restore scenario settings omitted by the server's admin schema")
             config.update(scenario.settings)
         self.operator_settings = {
             k: config[k]
@@ -479,6 +482,11 @@ class Evaluation:
             if turn.phase == "after_end" and "post_end" not in state["checkpoints"]:
                 if not await self._end_phase(state, ids):
                     return
+            if "consolidate_before" in turn.tags:
+                checkpoint = f"episode_{index}"
+                if f"post_{checkpoint}" not in state["checkpoints"]:
+                    if not await self._end_phase(state, ids, checkpoint=checkpoint):
+                        return
             if scenario.restart_after == index and "post_restart" not in state["checkpoints"]:
                 if not await self._restart_phase(state, ids):
                     return
@@ -674,7 +682,7 @@ class Evaluation:
             )
         self._save()
 
-    async def _end_phase(self, state: dict, ids: dict) -> bool:
+    async def _end_phase(self, state: dict, ids: dict, *, checkpoint="end") -> bool:
         checkpoints = state["checkpoints"]
         if state.get("end_pending"):
             history = await self.api.request("GET", "/session/history", params=ids)
@@ -685,7 +693,7 @@ class Evaluation:
                 )
                 return False
         else:
-            checkpoints["pre_end"] = self.redactor.clean(await self._capture(ids))
+            checkpoints[f"pre_{checkpoint}"] = self.redactor.clean(await self._capture(ids))
             state["end_pending"] = True
             self._save()
             response = await self.api.request("POST", "/session/end", json=ids)
@@ -696,8 +704,8 @@ class Evaluation:
                 )
                 self._save()
                 return False
-            checkpoints["end_response"] = self.redactor.clean(response.to_dict())
-        checkpoints["post_end"] = self.redactor.clean(await self._capture(ids))
+            checkpoints[f"{checkpoint}_response"] = self.redactor.clean(response.to_dict())
+        checkpoints[f"post_{checkpoint}"] = self.redactor.clean(await self._capture(ids))
         state.pop("end_pending", None)
         self._save()
         return True

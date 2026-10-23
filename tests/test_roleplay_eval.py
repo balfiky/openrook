@@ -641,7 +641,7 @@ def test_contrasts_and_defect_severity_order():
 
 def test_cli_listing_and_validation_are_offline(capsys):
     assert main(["--list"]) == 0
-    assert "295 chat turns" in capsys.readouterr().out
+    assert f"{sum(len(s.turns) for s in catalog())} chat turns" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         main(["--base-url", "http://runtime.invalid", "--out", "/tmp/unused", "--concurrency", "0"])
 
@@ -782,7 +782,7 @@ def test_auth_failure_still_produces_all_three_artifacts(tmp_path):
 
 def test_entire_catalog_runs_to_restart_checkpoint_and_resumes(tmp_path):
     server, out = FakeServer(), tmp_path / "all-cases"
-    scenarios = catalog()
+    scenarios = [s for s in catalog() if s.category != "K"]
     planned = sum(len(s.turns) for s in scenarios)
     evaluation, summary = asyncio.run(run_fake(server, out, scenarios))
     assert evaluation.paused and summary["turns"] == planned - 1

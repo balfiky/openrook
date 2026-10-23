@@ -97,9 +97,9 @@ an earlier flow; inner dialogue, defense filtering and threshold agency no longe
 select conversational behavior. The current path is:
 
 ```text
-message + context -> uncertain perception and separate request components
+message + context -> uncertain perception, request components and grounded self proposals
 developed self + resources + relationship evidence -> continuous injury/grievance update
-state + component consequences + stable seed -> frozen TurnDecision
+state + competing allocations + stable seed -> frozen TurnDecision (grants + optional self intention)
 component grants + operator permissions -> execution and receipts
 frozen decision + same developed self + continuity + permitted facts -> expression and review
 actual delivery outcome -> persistent evidence and debug explanation
@@ -123,8 +123,10 @@ A routine turn needs one expression call, or two with semantic appraisal.
 Constrained or affiliative expression adds review. Every rewrite gets local validation; semantic
 review uses the remaining budget. Critical role assent or uniformly stale drafts
 can spend a final call on a second rewrite, retaining explicit semantic uncertainty.
-Stale drafts are explicitly forbidden-to-repeat context. There is no mandatory social deliberation or conversational
-self-intent proposal. Independent activity uses `process_autonomous` and its own
+Stale drafts are explicitly forbidden-to-repeat context. There is no mandatory social deliberation.
+Conversational self-intent estimates share the optional appraisal call; retained
+sources supply candidates even when that inference is unavailable. Independent
+external activity uses `process_autonomous` and its own
 scope; a declined user request cannot be relabeled as self-directed work.
 Ineligible/empty drafts spend the remaining base budget on fresh generation, up
 to five generation attempts, with failed evidence and varied seed/temperature.
@@ -150,6 +152,23 @@ carries structured opinion, interest, taste, attitude and style weights as
 appraisal. Person-specific attitude affects allocation and cooperation cost.
 Choice inputs retain the exact self snapshot. Display affect and strategy
 labels describe the result; they do not choose tools or response instructions.
+The `willingness-1.3` allocation also compares one optional grounded self intention
+alongside user grants. `core/self_intent.py` supplies interests, questions, held
+opinions/reasons, preference-based alternatives, goals and resource pressure.
+Contextual proposals can disagree, defer, redirect or close; their sources fix the
+content. At most sixteen alternatives bound computation, without requiring an
+act. Remaining attention limits simultaneous pursuit and user work; utility can
+select no initiative or resource-backed rest/silence. Opportunity cost reflects
+the best feasible competing use; goal references avoid pricing work as displacing
+its own commitment. Legacy active research goals have an explicit commitment even
+without a priority field; waiting/completed goals consume none. Supported request
+character benefits and dislike costs use retained references instead of zeroing
+all ordinary work's self value. All terms and alternative utilities remain in the
+frozen decision. A conversational intention never grants tool execution.
+Delivered pursuits become session commitments, with original topic/evidence
+references preserved across interruption/restart and revalidated against the
+current self. A selected close can release the pursuit. Generation and semantic
+review receive the same selected content; neither must hand back the agenda.
 Legacy pressure records remain historical evidence and are not converted to
 injury or applied to trust again.
 The `willingness-1.2` update builds interpersonal trust from uncertain goodwill,
@@ -264,8 +283,11 @@ the decision or preventing a concrete preference acknowledgment. Extreme CPU
 interpretations compare aggregate usage with actual idle measurements; correct
 high-idle descriptions remain available. Successful CPU observations project
 aggregate busy = 100 - idle. Runtime/harness completeness requires that measured
-numeric aggregate, separately from relevance and accuracy; process-only or idle-only
-prose does not complete a utilization request.
+numeric complement within rounding of the reply's reported precision. The shared
+check examines percentages rather than a utilization phrasing grammar. Process/core
+attribution, other metrics and idle-only prose cannot supply the aggregate answer;
+wrong arithmetic remains incomplete. A matching observation also establishes topic
+relevance against that receipt, without requiring another CPU label.
 CPU percentages may use `%` or `percent`; named consumers retain their multicore
 process shares without being mistaken for aggregate utilization.
 Extreme memory/disk headroom interpretations use available capacity, preserving
@@ -448,7 +470,7 @@ Digestion receives the current self and records its revision/hash. Grounded
 proposals accumulate independent, confidence-weighted evidence before bounded
 changes apply; a single assertion or generated self-description cannot rewrite
 identity. Opinions retain propositions and supporting/contrary reasons; interests
-retain ongoing questions for future agenda selection. Style develops weighted
+retain ongoing questions for agenda proposals. Style develops weighted
 tendencies, and learning moves drive baselines. Source phrase detectors are
 diagnostic, not identity gates. Evidence, effective state and evolution records
 commit with the experience transaction.
@@ -457,9 +479,9 @@ One detached self reaches willingness, generation and review on every turn.
 Declines withhold their component's work/operands while preserving unrelated
 memory, Life History and dialogue. Schema 3 migrates the genesis soul, retained
 beliefs/drives and bounded numeric trait evidence once, with provenance for
-missing birth evidence. See [Phase 2a](development/phase2-developing-self.md) for
-the contract and causal offline tests. Agenda candidates, constitution/skill/operator
-rerouting and research birth policy remain deferred; their entry paths are unchanged.
+missing birth evidence. See [Phase 2a/2b](development/phase2-developing-self.md) for
+the contract and causal offline tests. Constitution/skill/operator rerouting and
+research birth policy remain deferred; their entry paths are unchanged.
 
 Life History supplies factual context and numeric active commitments to the
 frozen willingness decision. `LifeInfluence` remains a compatibility description
@@ -474,7 +496,7 @@ and retirement of remaining legacy diagnostics are later-phase work.
 The Life History store is the substrate; a small set of mechanics turns it
 from a write-only ledger into an evolving record. Code entry points:
 `runtime/life_history.py`, `core/dual_process/tool_loop.py`,
-`runtime/learning_budget.py`, `runtime/learning/surface.py`.
+`runtime/learning_budget.py`, `core/self_intent.py`.
 
 **Constitution layer (operator-set).** A single-row `identity_state` table
 holds an operator-authored constitution string (≤2000 chars). The runtime
@@ -518,20 +540,14 @@ breakdown), `POST /admin/life/open-questions/{id}/abandon`,
 `POST /admin/life/open-questions/{id}/resolve`. UI: Life page panel with
 counts + Abandon button per question.
 
-**Ask-user surfacing (Sprint 5).** During chat, after the master generator
-runs, the pipeline calls `runtime.learning.surface.should_surface_question`.
-If a `LearningBudget` allows it and an open question's target drive is
-elevated (or its kind is `drive_gap`, which is always eligible), the
-question is appended to the response as a graceful follow-up, the question
-transitions to `pursuing`, and the budget consumes one slot.
-
-`runtime.learning_budget.PersistentLocalBudget` persists per-user consumption
-in shared life-history storage across sessions and restarts. The default is
-at most 3 questions / 1800 seconds per user per rolling 24-hour budget period.
-A `CloudBudget` placeholder exists for the future cloud-API path but is
-not yet implemented. The pipeline takes a `runtime_config` argument from
-`SessionManager` so it can resolve the shared `life_history.db` path; if
-absent, surfacing no-ops without raising.
+**Conversational curiosity (Phase 2b).** Life History projects open/pursuing
+questions before choice. Their stored priority and current authored/learned drive
+provide motivation; there is no fixed elevated-drive threshold in chat. They
+compete with user work, self interests, goals and rest through willingness.
+Only selected content reaches expression, with no appended question, surfacing
+quota or post-generation agenda decision. Existing learning budgets and the
+standalone legacy surface selector remain available to their diagnostic callers;
+the pipeline's dead selector/formatter and pending-question state are removed.
 
 Bounded research experiments separately use `evals/study_budget.py` for durable
 study-wide request, tool, token-reservation, declared-price, and elapsed-time limits.
@@ -734,6 +750,20 @@ prompt-only agent comparison. The current variant also leaves the later
 Focused longitudinal regression tests additionally cover warm-start rupture
 and repair, recurring tension, explicit commitment resolution, LifeInfluence
 relationship tie-breaks, and preference plus relationship-loop retrieval.
+
+The public-API `openrook_tools.roleplay_eval` harness separately retains its
+23 existing scenarios and adds eight category-K independence cases (31 cases,
+424 turns total). Identical births receive distinct histories and no-learning
+controls; repeated common probes, personality contrasts, interruptions/restart,
+opinion pressure/counterevidence and benign requests supply structural opportunities.
+Its blinded judge emits seven independence criteria apart from the eight floor
+criteria. `summary.independence` reports spontaneous versus elicited initiative,
+selection/expression/delivery, owned topic resumption, preference declines,
+opinion persistence/revision, handbacks and matched consistency/divergence.
+Structural absence permits `not_applicable`; missing evidence stays unknown.
+Identifiers alone do not count as divergence. Independence measures set no
+behavioral quotas and do not change floor status. See
+[role-play evaluation](development/roleplay-eval.md).
 
 ## Historical Phase 11 Component Claim Map
 

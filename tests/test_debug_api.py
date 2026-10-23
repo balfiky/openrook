@@ -197,7 +197,7 @@ class TestPerUserDebug:
                     signal["name"] == "anger"
                     for signal in last_turn["affect_state"]["signals"]
                 )
-                assert last_turn["turn_decision"]["policy_version"] == "willingness-1.2"
+                assert last_turn["turn_decision"]["policy_version"] == "willingness-1.3"
                 assert "grants" in last_turn["turn_decision"]
                 assert last_turn["autonomy_level"] == "assisted"
             finally:

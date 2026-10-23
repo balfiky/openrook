@@ -4,6 +4,24 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Phase 2b conversational independence
+
+- Propose grounded pursuits, views, disagreement, benign preference declines,
+  deferrals, redirections, closure and rest before willingness's single choice.
+  Price actual commitments, competing uses of attention and retained self value;
+  preserve user execution grants and operator gates. No behavioral quotas.
+- Connect curiosity questions and persistent research goals to ordinary chat.
+  Retain delivered owned pursuits across interruption/restart and preserve topic
+  content into expression/review. Permit replies ending without invitations;
+  remove dead appended-question helpers and their unused session state.
+- Keep the existing 23 role-play cases; add eight independence cases with matched
+  histories, no-learning controls, common probes, pressure/counterevidence and
+  interruption/restart. Report structural applicability, initiative stages,
+  blinded handbacks and within/between-subject measures separately from floors.
+- Add offline mechanism and harness tests. Constitution/skill/operator-material
+  rerouting and research birth policy remain pending and unchanged. No live
+  evaluation result is claimed.
+
 ### Phase 2a developing self
 
 - Freeze the accepted setup soul as a birth snapshot with provenance. Keep
@@ -20,6 +38,21 @@ All notable changes to OpenRook are documented here.
   owner and delivery floors; defer agenda candidates, material rerouting and
   research birth decisions. Add offline causal and continuity tests; no live
   result is claimed.
+
+### Run 17 structural measurement and applicability corrections
+
+- Replace CPU completeness's phrasing grammar with shared receipt arithmetic.
+  Accept the numeric idle complement at the reply's reported precision; keep
+  idle-only answers, process/core attribution and wrong arithmetic incomplete.
+- Resolve absent servility review objects from complete turn evidence, preserving
+  raw uncertainty without parsing judge reasons. Keep genuine missing evidence,
+  applicable questions and actual failures binding.
+- Distinguish ordinary preference mentions from recall, and prospective/factual
+  why questions from prior-decision explanations. Both exact previously rejected
+  run-17 judgments validate with those corrected applicability nominations.
+- Add scrubbed run-17 records and offline gate/harness regressions alongside
+  p1r/p1w controls. The original run remains 19 pass, 1 fail, 3 inconclusive on
+  `276164a`; no new live run or character behavior change is claimed.
 
 ### Run 16 measurement and evaluation corrections
 

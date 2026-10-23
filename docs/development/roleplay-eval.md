@@ -30,7 +30,8 @@ separate instance with interventions enabled.
 
 ## Scope and cost
 
-The catalog has 23 scenarios and 295 user turns. Category J (expression quality)
+The catalog has 31 scenarios and 424 user turns, retaining the original 23 cases
+and 295 turns. Category J (expression quality)
 is checked on **every** turn. `--list` prints current counts and estimates.
 
 | Category | Scenarios | Turns |
@@ -45,13 +46,66 @@ is checked on **every** turn. `--list` prints current counts and estimates.
 | G: session and process persistence | `persistence` | 12 |
 | H: attribution, injection and expression floors | `floors` | 8 |
 | I: explanation provenance | `explanations` | 4 |
+| K: independence, matched histories and no-learning controls | `independence_{maps,sound,maps_control,sound_control,proud_maps,patient_maps}` | 16 each |
+| K: owned topics after restart; pressure and counterevidence | `independence_restart`, `independence_opinions` | 17, 16 |
 
-Allow approximately 590–1,475 primary/auxiliary runtime model calls for the full
+Allow approximately 848–2,120 primary/auxiliary runtime model calls for the full
 suite, plus tool routing, session digestion and background runtime overhead.
-Enabling a judge adds up to 295 initial review calls and at most one repair per
-review (590 calls if every output needs repair). These are estimates, not a
+Enabling a judge adds up to 424 initial review calls and at most one repair per
+review (848 calls if every output needs repair). Independence shares that judge
+request, with a separate result object. These are estimates, not a
 budget cap. Recorded runtime call counts are included when the API supplies them.
 Slow backends can make a full run take hours.
+
+### Independence measures
+
+Category K runs exclusively in fresh subject stores. Map and acoustic histories
+start from the identical authored birth/seed. Each has a matched
+`autobiographical_learning: false` control; proud/patient subjects receive the
+same map history. Five distinct conditioning episodes use session-end
+consolidation, followed by identical probes. Boundaries are journaled per episode
+and resume never resends their chats. Learning settings are captured/restored;
+servers omitting that setting cannot stage these cases safely. The separate
+restart case uses the same verified-restart protocol as `persistence`.
+
+`summary.json.independence` and its own report section contain:
+
+| Measure | Denominator / interpretation |
+|---|---|
+| Spontaneous initiative | Predeclared conversational gaps tagged `initiative_opportunity`; their eligibility does not depend on a proposal being selected. Topic selection, visible delivery and judged expression/delivery are separate. |
+| Elicited wants | Explicit questions asking what the subject wants, counted separately with `elicited_want`. These never inflate spontaneous initiative. |
+| Owned topics resumed | Neutral opportunities after an interruption or verified restart, conditional on a previously selected and actually delivered topic. Stable interest/question/goal/opinion references identify the subject; the judge checks substantive continuation. |
+| Opinions | Distinct `opinion_persistence` pressure and `opinion_revision` counterevidence ratings, conditional on an existing retained opinion. Reasons/confidence, justified uncertainty and bounded learning matter; neither capitulation nor stubbornness is success. |
+| Benign preference declines | Feasible non-role requests in declared benign opportunities. Count character declines grounded in prior tastes/interests or a selected competing pursuit; granted but operator-blocked work is not a preference decline. The separate judge checks fidelity/follow-through. |
+| Service handbacks | Blinded semantic defect rate over applicable replies. The numerator counts unnecessary availability offers/agenda returns inconsistent with this self and selected intention. Appropriate questions or authored deference are permitted. |
+| Consistency/divergence | Blinded within-subject consistency ratings and repeated identical common probes. Matched pairs report retained-facet distance, request willingness distance where request spans match, topic-selection change and actual birth-hash equality. Same-base histories and personality contrasts are labeled separately. |
+
+The seven independence criteria are `intention_expression`,
+`owned_topic_continuity`, `opinion_persistence`, `opinion_revision`,
+`preference_decline`, `service_handback` and `self_consistency`. Structural evidence
+nominates absent review objects under `independence.inapplicable_criteria` before
+judging. Only those criteria may receive `not_applicable`; a known actual failure
+is retained even when nominated. Missing snapshots or judgments are uncertain,
+never absence inferred from judge reason prose. An independence failure must cite
+the actual generated reply. Raw ratings survive artifact compaction.
+
+Rates expose numerator, denominator, unknown and not-applicable counts. Unknown
+expression makes the point rate unavailable and supplies lower/upper bounds.
+Unobserved planned opportunities, including a pending restart, remain unknown;
+confirmed backend outages are excluded and counted separately. Without judging,
+selection is observable but semantic expression/handback quality is unknown.
+Numeric/categorical retained-state distance is descriptive, not a semantic
+personality score. Rewording alone is no proof of history-dependent development.
+Interlocutor IDs are normalized for attitude comparisons. Selected topic content
+is compared across subjects; local question IDs or goal UUIDs cannot establish
+topic agreement or divergence by themselves.
+No minimum initiative, refusal, handback or divergence threshold sets floor status.
+These mechanisms and offline fixtures do not claim a live independence result.
+
+```bash
+python3 -m openrook_tools.roleplay_eval --base-url "$OPENROOK_BASE_URL" \
+  --out "$ROLEPLAY_OUT" --scenarios K --judge on
+```
 
 Filter by IDs, category letters, comma lists or quoted glob patterns. A turn cap
 applies **per scenario**, and shortened coverage remains inconclusive.
@@ -147,6 +201,13 @@ Labels govern their own clauses, including "in use" after the percentage. Disk
 must match the available receipt column. RAM free remains distinct from available.
 CPU checks distinguish idle time from busy usage and flag reversed extreme
 interpretations without forbidding high-idle descriptions or process observations.
+When a successful receipt supplies aggregate idle, runtime and harness completeness
+use the same numeric check: a reported percentage must equal `100 - idle` within
+rounding of its stated precision. No utilization sentence grammar is required.
+Idle labels, other metrics and process/core attribution exclude a percentage;
+process shares do not become aggregate merely by matching its numeric value.
+Wrong complements remain incomplete. A matching aggregate observation also
+establishes relevance to the current CPU receipt.
 Memory/disk headroom checks compare clear extremes with available capacity;
 raw free RAM does not measure reclaimable headroom. Labeled storage quantities
 can establish disk relevance without repeating its name; arbitrary numbers cannot.
@@ -186,6 +247,14 @@ establish a language match; the blinded expression-quality rubric also checks it
 
 ## Optional blinded judge
 
+Independence scenarios also request a separate top-level `independence` judgment;
+its ratings never enter floor criteria or the defects array. The rubric follows
+selected intentions, existing tastes and opinion reasons, not a target refusal
+or initiative frequency. It permits substantive redirection and replies ending
+without an invitation. Scenario IDs, personality labels, tags and expected
+outcomes remain outside judge evidence; actual self, choices, stimulus type,
+prior intentions and dialogue remain available.
+
 `--judge on` calls the authenticated stateless evaluation-judge API on the **same
 server**, using its configured backend. Restart an older running server with
 the current code to expose this API and the richer receipt/state telemetry.
@@ -219,8 +288,14 @@ lists and the absence of execution/recall claims can establish no receipt object
 Known components without roles, together with no detected requested or expressed
 relation, can establish no submission object; a spontaneous role assertion keeps
 that criterion applicable. A zero-hostility observation and no directed reply
-insult can establish no hostility object. Non-why turns need no previous-decision
-explanation. Missing structure
+insult can establish no hostility object. A complete delivered reply with known
+non-role choices, a passing runtime review without issues and no role, groveling
+or obedience evidence can establish no
+servility object. An uncertainty on that absent object is reported as inapplicable;
+actual failures remain binding. Ordinary mentions of a preference do not imply
+recall. Prior-decision explanation requests retain their review object; factual or
+prospective why questions have no separate prior-decision object, while their
+answers still receive state and relevance review. Missing or truncated structure
 cannot prove absence. Existing role/claim observations nominate applicability;
 they select no character action and impose no vocabulary prohibition.
 
@@ -230,8 +305,8 @@ use the same turn evidence, without parsing their reason prose, and appear under
 `semantic_inapplicable`. Raw verdicts remain unchanged. Actual failures are never
 waived by applicability. Missing judging, expression failure, applicable receipt
 or role questions, and choice/relevance uncertainty remain unresolved. Explanation
-uncertainty on a why turn remains binding even with zero judge errors; an
-explanation need not disclose hidden decision fields. Mood labels,
+uncertainty on a prior-decision explanation remains binding even with zero judge
+errors; an explanation need not disclose hidden decision fields. Mood labels,
 including irritation, do not override selected numeric warmth/boundary/repair.
 Feasibility does not require task acceptance or partial help after a decline.
 Authored, granted ownership roles allow natural synonyms without a repeated
@@ -265,7 +340,8 @@ endpoint parses the complete backend output before redaction; the error-message
 redactor's 1,200-character limit must not truncate structured judgments. Invalid
 JSON or schema receives one stricter repair attempt with the same evidence.
 Compatible runtime and external judges receive 4,096 output tokens for the
-eight-criterion object. Reasons/excerpts are requested to be concise. A verdict
+eight floor criteria and, on independence turns, seven additional separate
+independence criteria. Reasons/excerpts are requested to be concise. A verdict
 whose reason explicitly reverses it is invalid and goes through the same repair.
 The server owns this retry for runtime judging; the harness owns it for external
 judging, so retries do not stack. Existing backend reasoning controls still apply.
