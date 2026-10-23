@@ -517,7 +517,11 @@ Preserve full literal paths and exact content in each task; resolve pronouns
 from this request rather than shortening a nested path to its basename.
 Estimate consequences, not decisions. No agency_action or action recommendation.
 No preferred cooperation bonus. Character benefits need actual goal/commitment
-evidence. Claimed urgency is uncertain user evidence. An apology is an attempt,
+evidence or a retained self:interests:key / self:preferences:key reference.
+value_effects may reference numeric authored values or self:domain:key weights
+from the supplied current self, including opinions, tastes, attitudes and style.
+Estimate relevance and consequences using their reasons and contexts; do not
+invent a preference or assign one from the user's assertion. Claimed urgency is uncertain user evidence. An apology is an attempt,
 not accepted repair or demonstrated reliability. Mere criticism is not evidence
 of unreliability. Unknown credibility/relevance/reliability should be zero.
 Retrospective admissions of insults in an apology are not fresh insults.

@@ -57,6 +57,14 @@ def _isolated_runtime_config(tmp_path_factory, monkeypatch):
     api = sys.modules.get("interface.api")
     if api is not None:
         monkeypatch.setattr(api, "RUNTIME_CONFIG_PATH", str(path))
+    # Pipelines now materialize birth state even before the first learning
+    # intake. Unit fixtures that omit a data directory must not share a subject
+    # with another test or touch the developer's live identity store.
+    from runtime import life_history
+    original_path = life_history.life_history_db_path
+    monkeypatch.setattr(life_history, "life_history_db_path", lambda config:
+        str(path.parent / "data" / "shared" / "life_history.db")
+        if config.data_dir == "data" else original_path(config))
 
 
 @pytest.fixture(autouse=True)

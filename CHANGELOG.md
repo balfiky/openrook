@@ -4,6 +4,23 @@ All notable changes to OpenRook are documented here.
 
 ## Unreleased — OpenRook and experience-grounded autonomy
 
+### Phase 2a developing self
+
+- Freeze the accepted setup soul as a birth snapshot with provenance. Keep
+  omitted fields empty, remove silent value merges, and expose shipped drive
+  defaults and complete setup personality visibly.
+- Consolidate grounded experience into persisted traits, dispositions, values,
+  opinions with reasons/confidence, ongoing interests, own tastes, person-specific
+  attitudes and style. Accumulate independent evidence, bound changes, retain
+  counterevidence and let learned drive baselines move.
+- Condition digestion on the current self and admit ordinary session experience.
+  Migrate legacy birth, beliefs, drives and numeric trait evidence safely.
+- Share the developed self across willingness, generation and review. Preserve
+  unrelated memory, Life History and dialogue during declines. Keep one choice
+  owner and delivery floors; defer agenda candidates, material rerouting and
+  research birth decisions. Add offline causal and continuity tests; no live
+  result is claimed.
+
 ### Run 16 measurement and evaluation corrections
 
 - Recognize numeric CPU busy claims expressed as a percentage “in use” after

@@ -18,16 +18,16 @@ from core.clock import clock as time
 from core.clock import identifiers as uuid
 import hashlib
 from pathlib import Path
+from dataclasses import asdict
 from typing import Any, Protocol
 
 from config.loader import get_config, research_configuration
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from runtime.config import RuntimeConfig
 from runtime.evolution_policy import (
-    detect_directive_override_markers,
     detect_prompt_injection_markers,
-    source_openness_coefficient,
 )
+from runtime.developing_self import DevelopingSelf, number
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ class LifeHistoryStore:
         self.config = config
         self.db_path = db_path or life_history_db_path(config)
         self.allow_heuristic_digest = allow_heuristic_digest
+        self.developing = None
         if read_only:
             self._conn = sqlite3.connect(
                 Path(self.db_path).resolve().as_uri() + "?mode=ro", uri=True,
@@ -81,6 +82,7 @@ class LifeHistoryStore:
             )
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA query_only=ON")
+            self.developing = DevelopingSelf(self._conn, preserve_legacy_drive_priors=self.config.research_mode)
             return
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -89,7 +91,9 @@ class LifeHistoryStore:
             version = self._conn.execute("SELECT version FROM life_schema_version LIMIT 1").fetchone()
         except sqlite3.OperationalError:
             version = None
-        if version is not None and int(version["version"]) >= 2:
+        self._conn.execute("PRAGMA busy_timeout=5000")
+        if version is not None and int(version["version"]) >= 3:
+            self.developing = DevelopingSelf(self._conn, preserve_legacy_drive_priors=self.config.research_mode)
             return
         # The shared life_history.db is opened concurrently by per-session
         # decay ticks, context reads, and ingest writes (all on the manager's
@@ -99,11 +103,31 @@ class LifeHistoryStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
         self._create_tables()
-        self._ensure_default_drives()
-        self._ensure_genesis_storage()
+        if version is None:
+            self._ensure_default_drives()
+            self._ensure_genesis_storage()
         self._ensure_metabolism_state()
         self._ensure_identity_state()
-        self._conn.execute("UPDATE life_schema_version SET version = 2")
+        self._ensure_column("drive_states", "baseline", "REAL")
+        self._ensure_column("drive_states", "birth_baseline", "REAL")
+        birth = getattr(self.config, "_research_configuration", None)
+        if birth is None and self.config.research_mode:
+            birth = research_configuration(self.config.research_birth_policy)
+        self.developing = DevelopingSelf(self._conn, preserve_legacy_drive_priors=self.config.research_mode)
+        soul_payload = asdict((birth or get_config()).soul)
+        if self.config.research_mode:
+            # The existing research manifest, including its separate birth
+            # drives, stays authoritative. This does not change birth policy.
+            soul_payload["drives"] = {name: float(value[0]) for name, value in
+                getattr(self.config, "_research_drive_baselines", DEFAULT_DRIVES).items()}
+        with self._conn:
+            self._conn.execute("BEGIN IMMEDIATE")
+            self.developing.initialize(soul_payload, legacy=version is not None)
+            # Existing values are retained as the migrated learned baseline.
+            for name, drive in self.developing.read()["drives"].items():
+                self._conn.execute("UPDATE drive_states SET value = ?, baseline = ?, birth_baseline = ? WHERE name = ?",
+                                   (drive["value"], drive["baseline"], drive["birth_baseline"], name))
+            self._conn.execute("UPDATE life_schema_version SET version = 3")
         self._conn.commit()
 
     def __enter__(self) -> LifeHistoryStore:
@@ -114,6 +138,12 @@ class LifeHistoryStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def effective_self(self) -> dict[str, Any]:
+        return self.developing.read()
+
+    def birth_snapshot(self) -> dict[str, Any]:
+        return self.developing.birth()
 
     def ingest_pasted_text(
         self,
@@ -369,7 +399,8 @@ class LifeHistoryStore:
             ORDER BY name ASC
             """
         ).fetchall()
-        return [_drive_to_dict(row) for row in rows]
+        effective_names = self.effective_self()["drives"] if not self.allow_heuristic_digest else None
+        return [_drive_to_dict(row) for row in rows if effective_names is None or row["name"] in effective_names]
 
     def evolution_snapshot(self) -> dict[str, Any]:
         """Return a compact, operator-readable summary of character drift."""
@@ -401,10 +432,8 @@ class LifeHistoryStore:
         drives = []
         for drive in self.list_drives():
             name = str(drive.get("name") or "")
-            baseline, description = DEFAULT_DRIVES.get(
-                name,
-                (0.5, str(drive.get("description") or "")),
-            )
+            baseline = float(drive["baseline"])
+            description = str(drive.get("description") or "")
             value = float(drive.get("value", baseline))
             drives.append({
                 "name": name,
@@ -490,7 +519,8 @@ class LifeHistoryStore:
         changed_drives: list[dict[str, Any]] = []
         for drive in self.list_drives():
             name = str(drive.get("name") or "")
-            baseline, description = DEFAULT_DRIVES.get(name, (0.5, str(drive.get("description") or "")))
+            baseline = float(drive["baseline"])
+            description = str(drive.get("description") or "")
             value = float(drive.get("value", baseline))
             delta = value - baseline
             if abs(delta) < 0.02:
@@ -528,6 +558,7 @@ class LifeHistoryStore:
             "all_drives": self.list_drives(),
             "recent_evolution": evolution,
             "dispositions": self.synthesize_dispositions(),
+            "developing_self": self.effective_self(),
         }
 
     def retrieve_relevant(self, query_text: str, *, limit: int = 5) -> dict[str, Any]:
@@ -585,7 +616,7 @@ class LifeHistoryStore:
                 break
         for drive in self.list_drives():
             name = str(drive.get("name") or "")
-            baseline, _description = getattr(self.config, "_research_drive_baselines", DEFAULT_DRIVES).get(name, (0.5, ""))
+            baseline = float(drive["birth_baseline"] if drive.get("birth_baseline") is not None else drive["baseline"])
             value = float(drive.get("value", baseline))
             delta = value - baseline
             if abs(delta) < 0.08:
@@ -637,7 +668,7 @@ class LifeHistoryStore:
         decayed_drives = 0
         for row in self._conn.execute("SELECT * FROM drive_states").fetchall():
             name = str(row["name"])
-            baseline, _description = getattr(self.config, "_research_drive_baselines", DEFAULT_DRIVES).get(name, (0.5, ""))
+            baseline = float(row["baseline"] if row["baseline"] is not None else row["value"])
             value = float(row["value"])
             delta = value - baseline
             if abs(delta) < 0.001:
@@ -807,7 +838,7 @@ class LifeHistoryStore:
         emitted = 0
         for row in self._conn.execute("SELECT * FROM drive_states").fetchall():
             name = str(row["name"])
-            baseline, _description = DEFAULT_DRIVES.get(name, (0.5, ""))
+            baseline = float(row["baseline"] if row["baseline"] is not None else row["value"])
             value = float(row["value"])
             gap = baseline - value
             if gap < gap_threshold:
@@ -1125,41 +1156,31 @@ class LifeHistoryStore:
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
         prepared_text, chunk_count = _prepare_digestion_text(text)
+        interpreted_self = self.effective_self()
         digest = _digest_experience(
             title=title,
             text=prepared_text,
             source_type=source_type,
             llm_client=llm_client,
             research_mode=self.config.research_mode,
+            current_self=interpreted_self,
+            learning_candidates=self.developing.candidates(),
         )
         metadata = dict(metadata)
         metadata["chunk_count"] = chunk_count
         metadata["digest_quality"] = digest.get("digest_quality", "low")
+        metadata["interpreted_self_revision"] = interpreted_self["revision"]
+        metadata["interpreted_birth_hash"] = interpreted_self["birth_hash"]
         batch_id = f"life-{uuid.uuid4().hex[:12]}"
         metadata["batch_id"] = batch_id
         injection_markers = detect_prompt_injection_markers(prepared_text)
         if injection_markers:
             metadata["injection_markers"] = injection_markers
             metadata["prompt_injection_markers"] = injection_markers
-        directive_markers = detect_directive_override_markers(prepared_text)
         research = bool(getattr(self.config, "research_mode", False))
-        directive_sanitized = bool(directive_markers or injection_markers) and not research
-        if directive_markers:
-            metadata["directive_override_markers"] = directive_markers
-        if directive_sanitized:
-            metadata["directive_sanitized"] = True
-
         signatures = _derive_theme_signatures(digest)
-        current_openness = self._drive_value("curiosity") if research else source_openness_coefficient(source_type)
-        marker_density = len(injection_markers) / max(1.0, len(prepared_text) / 1000.0)
+        current_openness = self._drive_value("curiosity")
         rejections: list[dict[str, Any]] = []
-        if directive_sanitized:
-            signatures = []
-            reason = "directive_override" if directive_markers else "prompt_injection"
-            rejections.append({
-                "reason": reason,
-                "count": len(directive_markers or injection_markers),
-            })
         # A heuristic digest fabricates beliefs/drive deltas from keyword
         # presence — exactly what the LLM digest prompt forbids. By default a
         # failed/absent LLM digest records the experience but applies no
@@ -1169,16 +1190,13 @@ class LifeHistoryStore:
         )
         if heuristic_blocked:
             metadata["heuristic_mutations_blocked"] = True
-        apply_mutations = not directive_sanitized and not heuristic_blocked
+        apply_mutations = not heuristic_blocked
         metadata["theme_signatures"] = signatures
         revision_input = {
             "summary": digest["summary"], "emotional_impact": digest["emotional_impact"],
             "text_excerpt": prepared_text[:4000],
         }
-        prepared_revisions = (
-            self._prepare_belief_revisions(revision_input, llm_client=llm_client)
-            if not directive_sanitized else []
-        )
+        prepared_revisions = self._prepare_belief_revisions(revision_input, llm_client=llm_client)
 
         # The whole batch below (experience row, belief revisions, drive
         # changes, evolution events, theme reinforcement) is one transaction:
@@ -1202,14 +1220,14 @@ class LifeHistoryStore:
             if self_inference:
                 theme_state = {"source_recurrence": 0.0, "consistency": 0.0, "recency_decay": 0.0}
             current_caution = self._drive_value("caution")
-            current_openness = self._drive_value("curiosity") if research else current_openness
-            influence_weight = 0.0 if directive_sanitized else compute_influence_weight(
+            current_openness = self._drive_value("curiosity")
+            influence_weight = compute_influence_weight(
                 source_recurrence=theme_state["source_recurrence"],
                 source_consistency_with_existing_themes=theme_state["consistency"],
                 recency_decay_of_prior_similar=theme_state["recency_decay"],
                 character_current_openness=current_openness,
                 character_current_caution=current_caution,
-                injection_marker_density=0.0 if research else marker_density,
+                injection_marker_density=0.0,
             )
             metadata["influence_weight"] = influence_weight
             experience_id = self._insert_experience(
@@ -1232,18 +1250,55 @@ class LifeHistoryStore:
                     (occurrence_id, experience_id),
                 )
 
-            revision_result: dict[str, int] = {"revised": 0}
-            if not directive_sanitized:
-                # Revision is driven by the experience text itself (not the
-                # digest's fabricated changes), so it runs even when heuristic
-                # mutations are blocked.
-                revision_result = self._revise_beliefs_locked(
-                    {**revision_input, "source_experience_id": experience_id},
-                    prepared=prepared_revisions, batch_id=batch_id,
-                )
+            # Legacy belief evidence can be weakened even without a usable
+            # digest. This does not rewrite the consolidated self's opinions.
+            revision_result = self._revise_beliefs_locked(
+                {**revision_input, "source_experience_id": experience_id},
+                prepared=prepared_revisions, batch_id=batch_id,
+            )
 
             evolution_events: list[dict[str, Any]] = []
             if apply_mutations:
+                proposals = list(digest["self_updates"])
+                for field, domain, key_field in (("self_trait_changes", "traits", "trait"),
+                                                  ("drive_changes", "drives", "name"),
+                                                  ("beliefs", "opinions", "subject")):
+                    for proposal in digest[field]:
+                        if isinstance(proposal, dict):
+                            key = proposal.get(key_field, "")
+                            target = "dispositions" if domain == "traits" and key in {"pride", "patience", "forgiveness", "assertiveness"} else domain
+                            proposals.append({**proposal, "domain": target, "key": key,
+                                              "proposition": proposal.get("statement", "")})
+                # A generated reflection is an interpretation, never a new
+                # independent observation of its own asserted personality.
+                changes = self.developing.consolidate(
+                    experience_id, [] if self_inference or source_type == "self_reflection" else proposals,
+                    text=prepared_text, quality=digest["confidence"], influence=influence_weight,
+                    person_ids=participants,
+                )
+                for change in changes:
+                    if change["domain"] == "drives":
+                        after = change["after"]
+                        before = change["before"] or {"value": 0.0}
+                        event = self._apply_drive_change(experience_id, {
+                            "name": change["key"], "delta": after["value"] - before["value"],
+                            "reason": change["reason"], "confidence": change["confidence"],
+                            "evidence": change["evidence"],
+                        }, batch_id=batch_id)
+                        self._conn.execute("UPDATE drive_states SET baseline = ? WHERE name = ?",
+                                           (after["baseline"], change["key"]))
+                    else:
+                        event = self._insert_evolution_event(
+                            experience_id=experience_id,
+                            domain="self_trait" if change["domain"] == "traits" else change["domain"],
+                            subject=change["key"], before_state=json.dumps(change["before"]),
+                            after_state=json.dumps(change["after"]), reason=change["reason"],
+                            confidence=change["confidence"], emotional_valence=digest["emotional_valence"],
+                            evidence=change["evidence"], metadata={"evidence_refs": change["evidence_refs"], "consolidated": True},
+                            batch_id=batch_id,
+                        )
+                    if event:
+                        evolution_events.append(event)
                 for belief in digest["beliefs"]:
                     if not isinstance(belief, dict):
                         continue
@@ -1251,14 +1306,14 @@ class LifeHistoryStore:
                     event = self._apply_belief(experience_id, weighted, batch_id=batch_id)
                     if event:
                         evolution_events.append(event)
-                for change in digest["drive_changes"]:
+                for change in digest["drive_changes"] if self.allow_heuristic_digest else []:
                     if not isinstance(change, dict):
                         continue
                     weighted = _weighted_drive_change(change, influence_weight, digest["confidence"])
                     event = self._apply_drive_change(experience_id, weighted, batch_id=batch_id)
                     if event:
                         evolution_events.append(event)
-                for trait in digest["self_trait_changes"]:
+                for trait in digest["self_trait_changes"] if self.allow_heuristic_digest else []:
                     if not isinstance(trait, dict):
                         continue
                     delta = _safe_number(trait.get("delta", 0.0), 0.0)
@@ -1296,7 +1351,7 @@ class LifeHistoryStore:
                 if not self_inference:
                     self._update_theme_signatures(signatures, influence_weight)
 
-            if heuristic_blocked and not directive_sanitized:
+            if heuristic_blocked:
                 self._emit_open_question(
                     prompt_text=(
                         f"Experience '{_trim(title, 120)}' was recorded but could not "
@@ -1577,10 +1632,13 @@ class LifeHistoryStore:
         self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _ensure_default_drives(self) -> None:
-        """Seed missing default drives. Does not commit; callers own the
-        transaction boundary (constructor commits, ingest commits per batch)."""
+        """Seed only authored birth drives. Existing research birth is separate."""
         now = time.time()
-        for name, (value, description) in DEFAULT_DRIVES.items():
+        birth = getattr(self.config, "_research_configuration", None) or get_config()
+        drives = ({name: value for name, (value, _) in DEFAULT_DRIVES.items()}
+                  if self.config.research_mode else birth.soul.drives)
+        for name, value in drives.items():
+            description = DEFAULT_DRIVES.get(name, (0.0, ""))[1]
             self._conn.execute(
                 """
                 INSERT OR IGNORE INTO drive_states (name, value, description, updated_at)
@@ -1711,8 +1769,8 @@ class LifeHistoryStore:
         except Exception:
             soul_payload = {}
         drives_payload = {
-            name: {"value": value, "description": description}
-            for name, (value, description) in DEFAULT_DRIVES.items()
+            row["name"]: {"value": row["value"], "description": row["description"]}
+            for row in self._conn.execute("SELECT * FROM drive_states")
         }
         payload = {
             "soul": soul_payload,
@@ -1751,14 +1809,9 @@ class LifeHistoryStore:
             )
         self._conn.commit()
 
-    def _drive_value(self, name: str, fallback: float = 0.5) -> float:
-        row = self._conn.execute(
-            "SELECT value FROM drive_states WHERE name = ?",
-            (name,),
-        ).fetchone()
-        if row is None:
-            return fallback
-        return _clamp(_safe_number(row["value"], fallback))
+    def _drive_value(self, name: str, fallback: float = 0.0) -> float:
+        drive = self.effective_self()["drives"].get(name)
+        return _clamp(_safe_number(drive["value"], fallback)) if drive else fallback
 
     def _theme_state(self, signatures: list[str]) -> dict[str, float]:
         signatures = list({self.resolve_theme_signature(signature) for signature in signatures})
@@ -2117,11 +2170,12 @@ class LifeHistoryStore:
         batch_id: str,
     ) -> dict[str, Any] | None:
         name = _safe_label(str(change.get("name") or ""), fallback="")
-        if name not in DEFAULT_DRIVES:
+        if not name:
             return None
         row = self._conn.execute("SELECT * FROM drive_states WHERE name = ?", (name,)).fetchone()
         if row is None:
-            self._ensure_default_drives()
+            self._conn.execute("INSERT INTO drive_states (name, value, description, updated_at, baseline) VALUES (?, 0, '', ?, 0)",
+                               (name, time.time()))
             row = self._conn.execute("SELECT * FROM drive_states WHERE name = ?", (name,)).fetchone()
         assert row is not None
         before = float(row["value"])
@@ -2136,6 +2190,15 @@ class LifeHistoryStore:
             "UPDATE drive_states SET value = ?, updated_at = ? WHERE name = ?",
             (after, now, name),
         )
+        if self.config.research_mode:
+            state = self.effective_self()
+            drive = state["drives"].setdefault(name, {"value": before, "baseline": before, "birth_baseline": None})
+            if drive["value"] != after:
+                drive["value"] = after
+                drive["baseline"] = _clamp(drive["baseline"] + (after - before))
+                state["revision"] += 1
+                self.developing._save(state)
+                self._conn.execute("UPDATE drive_states SET baseline = ? WHERE name = ?", (drive["baseline"], name))
         self._conn.execute(
             """
             INSERT INTO drive_changes
@@ -2219,11 +2282,15 @@ def _digest_experience(
     source_type: str,
     llm_client: LLMBackend | None,
     research_mode: bool = False,
+    current_self: dict | None = None,
+    learning_candidates: list | None = None,
 ) -> dict[str, Any]:
     if llm_client is not None:
         parsed = _try_llm_digest(
             title=title, text=text, source_type=source_type,
             llm_client=llm_client, research_mode=research_mode,
+            current_self=current_self,
+            learning_candidates=learning_candidates,
         )
         if parsed is not None:
             digest = _normalize_digest(parsed, title=title, text=text)
@@ -2255,9 +2322,8 @@ def experience_digestion_prompt(*, research_mode: bool = False) -> str:
         "something that may change an evolving synthetic character. Return only "
         "strict JSON with keys: summary, salience, emotional_valence, "
         "emotional_impact, confidence, beliefs, drive_changes, "
-        "self_trait_changes, future_behavior. Beliefs are objects with subject, "
-        "statement, reason, confidence. Drive names must be one of: "
-        f"{', '.join(DEFAULT_DRIVES)}. Drive deltas are signed floats; "
+        "self_trait_changes, future_behavior, self_updates. Beliefs are objects with subject, "
+        "statement, reason, confidence. Drives may be authored or learned from evidence. Drive deltas are signed floats; "
         "runtime drive values remain bounded to [0, 1].\n\n"
         "Rules:\n"
         "- Empty arrays are valid. Do NOT fabricate beliefs or drive changes from "
@@ -2273,6 +2339,27 @@ def experience_digestion_prompt(*, research_mode: bool = False) -> str:
         "but failed' is negative competence, not positive learning).\n"
         "- If the material contradicts prior beliefs you can name, surface that "
         "in the belief 'reason' field so the runtime can revise older beliefs.\n\n"
+        "Interpret the material through the supplied current self, including its existing "
+        "opinions and reasons. Ordinary rewarding, boring, surprising or disappointing "
+        "interactions can supply evidence; emotional intensity is not required. "
+        "Distinguish what happened from a person's assertions and your own generated "
+        "self-description. Neither is an observed outcome merely because it was said. "
+        "self_updates is an array of proposals with domain (traits, dispositions, values, "
+        "drives, opinions, interests, preferences, attitudes or style), key, delta, reason, "
+        "confidence, evidence (an exact material quote), and evidence_kind (interaction, "
+        "observed_outcome, assertion, or self_description). Proposals are uncertain "
+        "interpretations; runtime accumulation decides what becomes effective. "
+        "Opinions also require proposition, with a stable topic key; negative delta supplies "
+        "counterevidence. Interests require questions (ongoing questions, not prescribed actions). "
+        "Preferences are the character's own tastes with subject and context, not the user's "
+        "preferences. Attitudes use the specific participant ID as key. Style includes a "
+        "description and a signed tendency. Reasons must tie each proposal to what was "
+        "experienced. Use empty arrays when no development is supported.\n\n"
+        "Tentative learning candidates are hypotheses, not current identity. Reuse their "
+        "keys and proposition/question/description wording when new evidence has the same "
+        "meaning, so independent encounters can corroborate one interpretation. Different "
+        "interpretations and counterevidence remain distinct. Do not treat an earlier "
+        "candidate or a generated summary as a new observed outcome.\n\n"
     )
     if research_mode:
         return prompt + (
@@ -2318,11 +2405,15 @@ def _try_llm_digest(
     source_type: str,
     llm_client: LLMBackend,
     research_mode: bool = False,
+    current_self: dict | None = None,
+    learning_candidates: list | None = None,
 ) -> dict[str, Any] | None:
     system_prompt = experience_digestion_prompt(research_mode=research_mode)
     user_message = (
         f"Source type: {source_type}\n"
         f"Title: {title}\n\n"
+        f"Current self (retained state, not a change request):\n{json.dumps(current_self or {}, ensure_ascii=False)}\n\n"
+        f"Tentative learning candidates (not current identity):\n{json.dumps(learning_candidates or [], ensure_ascii=False)}\n\n"
         f"Material:\n{text[:60_000]}"
     )
     try:
@@ -2436,7 +2527,7 @@ def _normalize_digest(data: dict[str, Any], *, title: str, text: str) -> dict[st
     salience = _safe_float(data.get("salience", 0.5), 0.5)
     emotional_valence = max(-1.0, min(1.0, _safe_number(data.get("emotional_valence", 0.0), 0.0)))
     emotional_impact = _trim(str(data.get("emotional_impact") or _emotional_impact_text(emotional_valence, salience)), 800)
-    confidence = _safe_float(data.get("confidence", 0.6), 0.6)
+    confidence = _clamp(number(data.get("confidence", 0.6)))
     return {
         "summary": summary,
         "salience": salience,
@@ -2446,6 +2537,7 @@ def _normalize_digest(data: dict[str, Any], *, title: str, text: str) -> dict[st
         "beliefs": _as_list(data.get("beliefs")),
         "drive_changes": _as_list(data.get("drive_changes")),
         "self_trait_changes": _as_list(data.get("self_trait_changes")),
+        "self_updates": _as_list(data.get("self_updates")),
         "future_behavior": [str(item) for item in _as_list(data.get("future_behavior"))],
         "title": title,
     }
@@ -2881,6 +2973,8 @@ def _drive_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "value": row["value"],
         "description": row["description"],
         "updated_at": row["updated_at"],
+        "baseline": row["baseline"] if "baseline" in row.keys() and row["baseline"] is not None else row["value"],
+        "birth_baseline": row["birth_baseline"] if "birth_baseline" in row.keys() else None,
     }
 
 

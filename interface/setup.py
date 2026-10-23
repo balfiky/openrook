@@ -359,13 +359,15 @@ def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn) -> dict:
             payload["relational_stance"],
             input_fn=input_fn,
         )
+    output_fn("Birth personality (all accepted fields):")
+    output_fn(json.dumps(payload, ensure_ascii=False, indent=2))
     return payload
 
 
 def _identity_preset(mode: str) -> dict:
-    from config.loader import SoulConfig
+    from config.loader import _DEFAULT_CONFIG_DIR, load_config
 
-    steady = SoulConfig()
+    steady = load_config(_DEFAULT_CONFIG_DIR).soul
     presets = {
         "steady": {
             "identity": steady.identity,
@@ -374,6 +376,7 @@ def _identity_preset(mode: str) -> dict:
             "core_values": dict(steady.core_values),
             "initial_traits": dict(steady.initial_traits),
             "dispositions": dict(steady.dispositions),
+            "drives": dict(steady.drives),
         },
         "operator": {
             "identity": "A capable operator that values accuracy, follow-through, and decisive useful action.",

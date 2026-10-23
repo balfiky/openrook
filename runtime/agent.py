@@ -786,12 +786,17 @@ class AgentRuntime:
             self.store.observe(
                 "learning_started", {"id": item["id"], "source_ref": item["source_ref"]}
             )
+            with LifeHistoryStore(self.config, read_only=True) as store:
+                current_self = store.effective_self()
+                learning_candidates = store.developing.candidates()
             digest = _digest_experience(
                 title=item["title"],
                 text=item["text"],
                 source_type=item["source_type"],
                 llm_client=backend,
                 research_mode=self.config.research_mode,
+                current_self=current_self,
+                learning_candidates=learning_candidates,
             )
             if digest.get("digest_quality") != "high":
                 raise RuntimeError("Learning backend did not produce a usable digest")

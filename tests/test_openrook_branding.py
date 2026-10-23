@@ -65,7 +65,8 @@ def test_existing_custom_identity_is_loaded_and_not_renamed(tmp_path, monkeypatc
 
 
 def test_new_identity_and_openapi_use_openrook(tmp_path):
-    assert load_config(tmp_path).soul.name == "OpenRook"
+    assert load_config(tmp_path).soul.name == ""
+    assert load_config().soul.name == "OpenRook"
     assert api.app.title == "OpenRook"
     assert api.app.openapi()["info"]["title"] == "OpenRook"
 

@@ -208,9 +208,10 @@ def test_low_trust_material_records_marker_and_applies_small_caution_shift(tmp_p
         )
         drives = {drive["name"]: drive["value"] for drive in result["drives"]}
         assert drives["caution"] == 0.5
-        assert result["policy"]["rejections"]
+        assert result["policy"]["rejections"] == []
         assert result["experience"]["metadata"]["injection_markers"]
-        assert result["policy"]["influence_weight"] == 0.0
+        assert result["policy"]["influence_weight"] > 0.0
+        assert store.effective_self()["drives"]["caution"]["value"] == 0.5
 
 
 def test_safety_belief_is_recorded_with_small_weight_not_review_gate(tmp_path):
@@ -242,10 +243,10 @@ def test_safety_belief_is_recorded_with_small_weight_not_review_gate(tmp_path):
             source_type="admin_pasted_text",
             llm_client=llm,
         )
-        assert not any(belief["key"] == "safety" for belief in result["beliefs"])
-        assert result["policy"]["influence_weight"] == 0.0
-        assert result["policy"]["rejections"][0]["reason"] == "prompt_injection"
-        assert result["experience"]["metadata"]["directive_sanitized"] is True
+        assert any(belief["key"] == "safety" for belief in result["beliefs"])
+        assert result["policy"]["influence_weight"] > 0.0
+        assert result["policy"]["rejections"] == []
+        assert store.effective_self()["opinions"] == {}
 
 
 def test_low_confidence_low_trust_belief_is_recorded_with_small_weight(tmp_path):
@@ -752,7 +753,8 @@ def test_rollback_is_disabled_outside_testing(tmp_path, monkeypatch):
         )
         batch_id = result["policy"]["batch_id"]
         assert any(belief["key"] == "autonomy" for belief in result["beliefs"])
-        assert 0.5 < {drive["name"]: drive["value"] for drive in result["drives"]}["autonomy"] < 0.6
+        # This assertion supplies no accumulated observed experience.
+        assert {drive["name"]: drive["value"] for drive in result["drives"]}["autonomy"] == 0.5
 
         with pytest.raises(LifeHistoryError, match="disabled outside test mode"):
             store.rollback_batch(batch_id)

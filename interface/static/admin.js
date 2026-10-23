@@ -150,6 +150,7 @@ const state = createSurfaceState({
     ["boundaries", "Boundaries", "list"],
     ["core_values", "Core Values", "map"],
     ["initial_traits", "Initial Traits", "map"],
+    ["drives", "Birth Drives", "map"],
     ["dispositions", "Dispositions (pride, patience, forgiveness, assertiveness)", "map"],
   ];
 

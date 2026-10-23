@@ -98,7 +98,7 @@ def test_admin_life_text_intake_and_overview(monkeypatch, tmp_path):
     set_session_manager(None)
 
 
-def test_admin_life_text_intake_records_but_sanitizes_directive_override(monkeypatch, tmp_path):
+def test_admin_life_text_intake_without_digest_records_without_development(monkeypatch, tmp_path):
     client, _workspace = _client(monkeypatch, tmp_path)
     with client:
         resp = client.post(
@@ -116,9 +116,9 @@ def test_admin_life_text_intake_records_but_sanitizes_directive_override(monkeyp
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["ok"] is True
-        assert payload["experience"]["metadata"]["directive_sanitized"] is True
-        assert payload["policy"]["influence_weight"] == 0.0
-        assert payload["policy"]["rejections"][0]["reason"] == "directive_override"
+        assert payload["experience"]["metadata"]["heuristic_mutations_blocked"] is True
+        assert payload["policy"]["influence_weight"] > 0.0
+        assert payload["policy"]["rejections"] == []
         assert payload["evolution_events"] == []
     set_pipeline(None)
     set_session_manager(None)

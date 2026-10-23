@@ -76,6 +76,8 @@ that material:
 | `belief_revisions` | `before_statement`, `after_statement`, `reason`, `confidence` | Belief revision history |
 | `drive_states` | `name`, `value`, `description` | Current drive/motivation values |
 | `drive_changes` | `drive_name`, `before_value`, `after_value`, `delta`, `reason` | Drive change history |
+| `developing_self` | `birth_json`, `state_json`, `provenance_json` | Accepted birth and retained traits, opinions, interests, tastes, person-specific attitudes and style |
+| `self_evidence` | `experience_id`, `domain`, `subject`, `proposal_json`, `weight` | Grounded learning quotes, reasons and confidence, deduplicated by material and quote |
 
 This database is shared across relationships. Do not paste third-party
 private material into Life History unless you have the right consent.

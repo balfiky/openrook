@@ -23,7 +23,7 @@
 <rect x="104" y="360" width="496" height="80" rx="6" fill="none" stroke="#3D444D" stroke-width="1.5"/>
 <path d="M116,368 H588" fill="none" stroke="#3D444D" stroke-width="1"/>
 <text x="124" y="396.0" font-family="'DejaVu Sans Mono',monospace" font-size="21" font-weight="600" text-anchor="start" fill="#E6EDF3">life_history.db</text>
-<text x="124" y="421.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">formative experience + identity</text>
+<text x="124" y="421.0" font-family="'DejaVu Sans','Inter','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#A6B0BE">birth + developed self + evidence</text>
 </g>
 <g data-node="agent_runtime.db" data-role="store" data-focal="false">
 <rect x="104" y="460" width="496" height="80" rx="6" fill="#0D1117" stroke="none" stroke-width="1.5"/>

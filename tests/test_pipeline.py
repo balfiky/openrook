@@ -282,10 +282,10 @@ class TestCognitivePipeline:
         pipe.end_session(user_id="alice")
         assert pipe.long_term.count() == after_process
 
-    def test_prompt_includes_seeded_soul(self):
+    def test_prompt_includes_effective_self(self):
         pipe = self._make_pipeline()
         pipe.process("Hello", user_id="alice")
-        assert "Soul Seed" in pipe._llm_backend.last_system_prompt
+        assert "Developing Self" in pipe._llm_backend.last_system_prompt
         assert get_config().soul.identity in pipe._llm_backend.last_system_prompt
 
     def test_semantic_preference_retrieval_surfaces_in_prompt(self, tmp_path):

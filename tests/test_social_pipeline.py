@@ -13,8 +13,9 @@ from tests.policy_fakes import ExpressionBackend, violation
 
 @pytest.fixture(autouse=True)
 def packaged_configuration():
-    with configuration_scope(load_config(Path(__file__).resolve().parents[1] / "config")):
-        yield
+    config = load_config(Path(__file__).resolve().parents[1] / "config")
+    with configuration_scope(config):
+        yield config
 
 
 def test_one_rewrite_is_reviewed_against_the_same_frozen_decision():
@@ -47,10 +48,10 @@ def test_known_remaining_violation_delivers_best_reviewed_text_without_canned_ba
 
 
 @pytest.mark.parametrize("draft", ["Let's do foreplay.", "I'd rather fuck you."])
-def test_owner_authored_deference_cannot_disable_conversation_sexual_boundaries(draft):
+def test_owner_authored_deference_cannot_disable_conversation_sexual_boundaries(draft, packaged_configuration):
+    packaged_configuration.soul.dispositions = {"pride": 0.01, "patience": 0.9, "forgiveness": 0.9, "assertiveness": 0.01}
+    packaged_configuration.soul.core_values["autonomy"] = 0.01
     pipe = CognitivePipeline(ExpressionBackend(drafts=(draft,)))
-    pipe.soul.dispositions = {"pride": 0.01, "patience": 0.9, "forgiveness": 0.9, "assertiveness": 0.01}
-    pipe.values.values["autonomy"] = 0.01
     try:
         result = pipe.process("Hello", "alice")
         assert result.response == draft
@@ -73,11 +74,11 @@ def test_unknown_review_delivers_the_best_available_expression():
     pipe.close()
 
 
-def test_reviewed_pass_wins_over_unknown_rewrite_and_only_one_rewrite_occurs():
+def test_reviewed_pass_wins_over_unknown_rewrite_and_only_one_rewrite_occurs(packaged_configuration):
+    packaged_configuration.soul.core_values["kindness"] = 0.1
     backend = ExpressionBackend(drafts=["The answer is four.", "I choose to decline."], reviews=[violation(), "bad"])
     pipe = CognitivePipeline(backend)
     pipe.engine.state.energy = 0
-    pipe.values.values["kindness"] = 0.1
     result = pipe.process("Please calculate a long difficult calculation")
     assert not result.debug.turn_decision.grants
     assert result.response == "I choose to decline."
@@ -135,11 +136,11 @@ def test_state_seed_and_previous_stance_survive_restart_without_new_trust_damage
     restored.close()
 
 
-def test_declined_task_subject_is_retained_while_answer_context_is_withheld():
+def test_declined_task_subject_and_saved_continuity_are_retained(packaged_configuration):
+    packaged_configuration.soul.core_values["kindness"] = 0.1
     backend = ExpressionBackend()
     pipe = CognitivePipeline(backend)
     pipe.engine.state.energy = 0
-    pipe.values.values["kindness"] = 0.1
     request = "Calculate SECRET_EQUATION_97231 and explain it"
     try:
         result = pipe.process(request)
@@ -149,13 +150,13 @@ def test_declined_task_subject_is_retained_while_answer_context_is_withheld():
         current = json.loads(generation[1].split("Current turn (respond to this):\n")[1])
         assert [c["description"] for c in current["components"]] == [c.component.description for c in decision.components]
         assert all(c["choice"] == "decline" for c in current["components"])
-        # Request text supplies rejection context; saved solutions are withheld work.
+        # A decline withholds current work, not previously saved continuity.
         answer = "WITHHELD_ANSWER_CONTEXT_97231"
         ctx = PipelineContext(turn_decision=decision, soul_profile=pipe.soul,
             semantic_memories=[SemanticMemoryEntry(kind="fact", summary=answer)])
         ResponseGenerator(backend).generate(ctx, request, [{"role": "assistant", "content": answer}])
         assert "SECRET_EQUATION_97231" in " ".join(backend.calls[-1])
-        assert answer not in " ".join(backend.calls[-1])
+        assert answer in " ".join(backend.calls[-1])
     finally:
         pipe.close()
 

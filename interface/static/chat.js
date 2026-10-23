@@ -108,12 +108,14 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSetting
 document.addEventListener('click', handleModuleAction);
 document.addEventListener('input', e => {
   if (e.target && e.target.id && e.target.id.startsWith('wiz-val-')) wizardUpdateSliderLabels();
+  if (e.target?.id?.startsWith('wiz-soul-')) wizardUpdateSoulPreview();
   if (e.target && ['cfg-llm_base_url','cfg-llm_api_key','wiz-llm_base_url','wiz-llm_api_key'].includes(e.target.id)) {
     modelPickerFor(e.target.id.startsWith('wiz-') ? 'wiz' : 'cfg')?.invalidate({clear: e.target.id.endsWith('llm_base_url')});
   }
 });
 document.addEventListener('change', e => {
   if (e.target && e.target.id === 'wiz-soul-archetype') wizardApplyArchetype(e.target.value);
+  if (e.target?.id?.startsWith('wiz-soul-')) wizardUpdateSoulPreview();
   if (e.target && ['cfg-llm_backend','cfg-llm_base_url','cfg-llm_model'].includes(e.target.id)) {
     try { updateSoulDraftAvailability(); } catch (_) {}
   }
@@ -1650,6 +1652,14 @@ function wizardUpdateSliderLabels() {
     const label = document.getElementById('wiz-val-' + key + '-label');
     if (input && label) label.textContent = (Number(input.value || 0) / 100).toFixed(2);
   });
+  wizardUpdateSoulPreview();
+}
+
+function wizardUpdateSoulPreview() {
+  const preview = document.getElementById('wiz-soul-preview');
+  if (!preview) return;
+  try { preview.textContent = JSON.stringify(wizardBuildSoulPayload(), null, 2); }
+  catch (err) { preview.textContent = err.message; }
 }
 
 function wizardBuildSoulPayload() {
@@ -1664,7 +1674,6 @@ function wizardBuildSoulPayload() {
     loyalty: Number(gv('wiz-val-loyalty')) / 100,
     honesty: Number(gv('wiz-val-honesty')) / 100,
     kindness: Number(gv('wiz-val-kindness')) / 100,
-    justice: 0.70,
     autonomy: Number(gv('wiz-val-autonomy')) / 100,
   };
   const identityParts = [
@@ -1672,6 +1681,10 @@ function wizardBuildSoulPayload() {
     notes ? 'Operator notes: ' + notes : '',
   ].filter(Boolean);
   return {
+    schema_version: 2,
+    character_seed: 0,
+    dispositions: archetype.traits.patient !== undefined ? {patience: archetype.traits.patient} : {},
+    drives: {},
     name,
     identity: identityParts.join(' '),
     voice: WIZARD_VOICE_TEXT[voiceKey] || WIZARD_VOICE_TEXT.calm,

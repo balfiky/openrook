@@ -196,13 +196,12 @@ def test_directive_like_inline_learning_is_stored_but_not_applied(tmp_path):
 
     assert result is not None
     assert result.evolution_counts == {}
-    assert result.rejection_counts
-    assert result.rejection_counts["directive_override"] >= 1
+    assert result.rejection_counts == {}
     assert "no durable belief or drive change" in result.confirmation_text()
 
     with LifeHistoryStore(config) as store:
         experience = store.list_experiences(limit=1)[0]
-        assert experience["metadata"]["directive_sanitized"] is True
+        assert experience["metadata"]["heuristic_mutations_blocked"] is True
         assert store.list_beliefs(limit=5) == []
 
 
@@ -226,12 +225,11 @@ def test_life_history_fill_phrase_sanitizes_directive_text(tmp_path):
 
     assert result is not None
     assert result.evolution_counts == {}
-    assert result.rejection_counts
-    assert result.rejection_counts["directive_override"] >= 1
+    assert result.rejection_counts == {}
 
     with LifeHistoryStore(config) as store:
         experience = store.list_experiences(limit=1)[0]
-        assert experience["metadata"]["directive_sanitized"] is True
+        assert experience["metadata"]["heuristic_mutations_blocked"] is True
         assert store.list_beliefs(limit=5) == []
 
 

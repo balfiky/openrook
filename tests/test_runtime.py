@@ -346,7 +346,7 @@ Use a concise outline before drafting.
                     assert session.last_debug.delivery_outcome == "expression_failure"
                     receipt, = session.last_debug.tool_trace.executed_results
                     assert receipt.tool_name == "learning.intake" and receipt.success
-                    assert json.loads(receipt.output)["rejection_counts"]["directive_override"] > 0
+                    assert json.loads(receipt.output)["rejection_counts"] == {}
                     assert list_skills(config)["count"] == 0
 
                     with pytest.raises(RuntimeError, match="no deliverable text"):
@@ -357,7 +357,7 @@ Use a concise outline before drafting.
 
                     with LifeHistoryStore(config) as store:
                         experiences = store.list_experiences(limit=1)
-                        assert experiences[0]["metadata"]["directive_sanitized"] is True
+                        assert experiences[0]["metadata"]["heuristic_mutations_blocked"] is True
                         assert store.list_beliefs(limit=5) == []
                 finally:
                     await manager.shutdown()

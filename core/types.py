@@ -526,6 +526,7 @@ class PipelineContext:
     """Full context assembled for the response generation LLM call."""
     modulator_snapshot: dict[str, float] = field(default_factory=dict)
     soul_profile: SoulConfig | None = None
+    developing_self: dict[str, Any] = field(default_factory=dict)
     person_profile: PersonProfile | None = None
     self_profile: SelfProfile | None = None
     appraisal_frame: AppraisalFrame | None = None

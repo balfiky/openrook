@@ -1,17 +1,8 @@
-"""Tests for the perception→identity loop: salient sessions become identity.
-
-When ``autobiographical_learning`` is on, an emotionally salient session is
-digested into the life-history ledger at ``end_session``. Quiet small-talk is
-not, and the feature is off by default. The distilled summary is ingested under
-the lowest source-openness tier with prompt-injection sanitization, so identity
-moves slowly and cannot be driven by hostile input.
-"""
+"""Ordinary episodes are eligible; explicit learning-off remains a control."""
 
 from __future__ import annotations
 
 import os
-
-import pytest
 
 from core.memory.digestion import DigestedSession
 from pipeline import CognitivePipeline
@@ -59,10 +50,10 @@ class TestSalienceGate:
         finally:
             pipe.close()
 
-    def test_quiet_session_is_not_eligible(self, tmp_path):
+    def test_quiet_session_is_eligible(self, tmp_path):
         pipe = _pipeline(tmp_path, enabled=True)
         try:
-            assert pipe._is_session_salient(_quiet()) is False
+            assert pipe._is_session_salient(_quiet()) is True
         finally:
             pipe.close()
 
@@ -100,14 +91,14 @@ class TestAutobiographicalIngest:
         finally:
             pipe.close()
 
-    def test_quiet_session_records_nothing(self, tmp_path):
+    def test_quiet_session_records_experience(self, tmp_path):
         pipe = _pipeline(tmp_path, enabled=True)
         cfg = pipe._runtime_config
         try:
             LifeHistoryStore(cfg).close()
             before = _experience_count(cfg)
             pipe._maybe_ingest_autobiography(_quiet(), "alice")
-            assert _experience_count(cfg) == before
+            assert _experience_count(cfg) == before + 1
         finally:
             pipe.close()
 
@@ -124,10 +115,10 @@ class TestAutobiographicalIngest:
             pipe.close()
 
 
-class TestDefaultOff:
-    def test_disabled_by_default_does_not_ingest_on_end_session(self, tmp_path):
+class TestLearningControl:
+    def test_explicitly_disabled_does_not_ingest_on_end_session(self, tmp_path):
         """With the flag off, end_session never writes autobiographical rows."""
-        cfg = RuntimeConfig(data_dir=str(tmp_path))  # default: off
+        cfg = RuntimeConfig(data_dir=str(tmp_path), autobiographical_learning=False)
         assert cfg.autobiographical_learning is False
         backend = MockLLMBackend(response="ok")
         pipe = CognitivePipeline(

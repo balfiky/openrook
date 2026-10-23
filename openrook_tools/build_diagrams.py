@@ -272,7 +272,7 @@ def build_memory_persistence(theme: Theme = LIGHT) -> Canvas:
     c.node(104, 260, 496, 80, "self_model.db",
            "assistant observations + traits", role="store", mono=True)
     c.node(104, 360, 496, 80, "life_history.db",
-           "formative experience + identity", role="store", mono=True)
+           "birth + developed self + evidence", role="store", mono=True)
     c.node(104, 460, 496, 80, "agent_runtime.db",
            "research state + evidence", role="store", mono=True)
     c.node(680, 260, 496, 108, "openrook.db",

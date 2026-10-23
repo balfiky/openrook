@@ -1,6 +1,8 @@
 """Grant integrity through every execution route, independent of backend compliance."""
 from dataclasses import replace
+import copy
 import pytest
+from config.loader import configuration_scope, get_config
 from core.action_variables import derive_action_variables
 from core.dual_process.tool_loop import make_tool_decision
 from core.grants import execution_scope
@@ -11,6 +13,14 @@ from openrook_tools.executor import ToolExecutor
 from openrook_tools.registry import ToolRegistry
 from pipeline import CognitivePipeline
 from tests.policy_fakes import ExpressionBackend, frozen
+
+
+@pytest.fixture
+def low_kindness():
+    config = copy.deepcopy(get_config())
+    config.soul.core_values["kindness"] = 0.1
+    with configuration_scope(config):
+        yield config.soul
 
 
 def executor():
@@ -73,7 +83,7 @@ def test_mixed_role_and_inspection_only_executes_granted_task():
     pipe.close()
 
 
-def test_no_tool_router_or_artifact_generation_runs_for_declined_work():
+def test_no_tool_router_or_artifact_generation_runs_for_declined_work(low_kindness):
     ex = executor()
     class Runner:
         def run_tool_loop(self, **kwargs):
@@ -81,7 +91,6 @@ def test_no_tool_router_or_artifact_generation_runs_for_declined_work():
     ex.set_tool_runner(Runner())
     pipe = CognitivePipeline(ExpressionBackend(), tool_executor=ex)
     pipe.engine.state.energy = 0
-    pipe.values.values["kindness"] = 0.1
     result = pipe.process("Write a complex file and save it as result.py")
     assert not result.debug.turn_decision.grants
     assert not ex.calls
@@ -118,12 +127,12 @@ def test_runtime_component_write_has_a_grant_and_receipt_before_expression():
     pipe.close()
 
 
-def test_declined_learning_never_reaches_a_runtime_component_handler():
+def test_declined_learning_never_reaches_a_runtime_component_handler(low_kindness):
+    low_kindness.core_values["kindness"] = 0
     def handler(*args):
         raise AssertionError("learning ran without a grant")
     pipe = CognitivePipeline(ExpressionBackend(), component_executor=handler)
     pipe.engine.state.energy = 0
-    pipe.values.values["kindness"] = 0
     result = pipe.process("Learn from this material. " + "source " * 100)
     assert not result.debug.turn_decision.grants
     assert not (result.debug.tool_trace and result.debug.tool_trace.executed_results)

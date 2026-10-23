@@ -89,15 +89,14 @@ class TestOpenRookConfigDefaults:
 
     def test_default_values(self):
         cfg = OpenRookConfig()
-        assert cfg.values["loyalty"] == 0.75
-        assert cfg.values["honesty"] == 0.9
+        assert cfg.values == {}
 
     def test_default_soul(self):
         cfg = OpenRookConfig()
         assert isinstance(cfg.soul, SoulConfig)
-        assert cfg.soul.name == "OpenRook"
-        assert "clarity" in cfg.soul.likes
-        assert cfg.soul.initial_traits["calm"] == 0.8
+        assert cfg.soul.name == ""
+        assert cfg.soul.likes == []
+        assert cfg.soul.initial_traits == cfg.soul.dispositions == cfg.soul.core_values == {}
 
     def test_default_semantic_memory(self):
         cfg = OpenRookConfig()

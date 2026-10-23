@@ -13,8 +13,9 @@ model. Five state categories plus deliberation and safety:
 
 - **memory** — short-term · long-term (valence-weighted) · relational
   arc · semantic
-- **identity** — constitution · beliefs (confidence + decay) · drives ·
-  self-traits, with a Life History ledger driving evolution
+- **identity** — immutable setup birth/provenance and one persisted developing
+  self: traits, dispositions, values, opinions with reasons/confidence, ongoing
+  interests, own tastes, attitudes toward people, style and learned drive baselines
 - **self-evolution** — wall-clock metabolism, theme→belief promotion,
   drive-gap detection, open-question lifecycle, ask-user surfacing
   (LearningBudget)
@@ -54,8 +55,10 @@ updates state, retrieves memory, runs gates, and calls the LLM backend
 when needed → persistence writes state back.
 
 Per-user locking and bounded queues provide backpressure. Runtime configuration
-comes from `runtime_config.yaml`; identity comes from `config/soul.yaml` or
-`$OPENROOK_CONFIG_DIR/soul.yaml`. The tool executor and durable stores remain
+comes from `runtime_config.yaml`; birth personality comes from `config/soul.yaml`
+or `$OPENROOK_CONFIG_DIR/soul.yaml`. Missing fields stay empty; `values_seed.yaml`
+is not merged. Shared Life History materializes the accepted soul once and retains
+effective development independently of later setup edits. Tool execution remains
 runtime-owned. The [LLM boundary](#llm-boundary) lists backend keys, and
 [auth and tool safety](#auth-and-tool-safety) describes the executor's gates.
 
@@ -95,10 +98,10 @@ select conversational behavior. The current path is:
 
 ```text
 message + context -> uncertain perception and separate request components
-soul + resources + relationship evidence -> continuous injury/grievance update
+developed self + resources + relationship evidence -> continuous injury/grievance update
 state + component consequences + stable seed -> frozen TurnDecision
 component grants + operator permissions -> execution and receipts
-frozen decision + permitted facts + authored voice -> expression and review
+frozen decision + same developed self + continuity + permitted facts -> expression and review
 actual delivery outcome -> persistent evidence and debug explanation
 ```
 
@@ -138,10 +141,14 @@ gate decisions reach generation separately from character grants.
 Supplemental tool inference reserves three base calls for expression, review and
 one fresh attempt if the review finds no deliverable candidate.
 
-`core/willingness.py` is the language-free choice owner. Soul dispositions
+`core/willingness.py` is the language-free choice owner. Effective dispositions
 (pride, patience, forgiveness, assertiveness), numeric values, resources, trust,
 relationship injury/grievance and active commitments price competing allocations.
-A stable per-turn seed supplies bounded variation. Display affect and strategy
+A stable per-turn seed supplies bounded variation. `Personality.from_self` also
+carries structured opinion, interest, taste, attitude and style weights as
+`self:domain:key` consequences; their reasons and contexts reach uncertain
+appraisal. Person-specific attitude affects allocation and cooperation cost.
+Choice inputs retain the exact self snapshot. Display affect and strategy
 labels describe the result; they do not choose tools or response instructions.
 Legacy pressure records remain historical evidence and are not converted to
 injury or applied to trust again.
@@ -297,8 +304,10 @@ latency, with an optional explicit cap and configurable short cooldown (see READ
 
 **Session end is separate.** `CognitivePipeline.end_session()` digests the
 session into long-term and relationship memory and clears hot history. Digestion
-can call the model; enabled autobiographical ingestion can add digest/revision
-calls. Research learning jobs can also consolidate salient episodes on idle/size
+can call the model; autobiographical ingestion can add digest/revision calls.
+Ordinary episodes are eligible, including quiet ones; consolidation is on by
+default, with explicit `autobiographical_learning: false` as a no-learning control.
+Research learning jobs retain their episode policy and can consolidate on idle/size
 boundaries without an explicit conversational session end.
 
 **Key invariants across all steps:**
@@ -339,7 +348,7 @@ Persistence is deliberately split:
 | `data/<platform>_<user_id>/sessions/<chat_id>.json` | per-chat session engine state |
 | `data/<platform>_<user_id>/sessions/<chat_id>.history.json` | active hot transcript restored until session end, `/reset`, or `/new` |
 | `data/shared/self_model.db` | assistant self-model shared across users |
-| `data/shared/life_history.db` | shared experience/evolution ledger for formative material |
+| `data/shared/life_history.db` | birth/provenance, consolidated self, grounded evidence and experience/evolution ledger |
 | `data/shared/agent_runtime.db` | research birth manifest, global affect, intentions, outcomes, commitments and event history |
 | `runtime_config.yaml` | operator runtime configuration (current working directory) |
 | `$OPENROOK_CONFIG_DIR/soul.yaml` | optional user-owned identity override for wheel installs |
@@ -416,12 +425,14 @@ Core records:
 | `experience_events` | what OpenRook encountered: title, source, participants, summary, salience, emotional impact |
 | `evolution_events` | what changed afterward: belief, drive, self-trait, worldview/future behavior |
 | `beliefs` / `belief_revisions` | current worldview statements plus before/after revision history |
-| `drive_states` / `drive_changes` | persistent motivation values and their change log |
+| `drive_states` / `drive_changes` | authored/learned motivation values, developing baselines and change log |
 | `theme_signatures` | recurring topic signatures with reinforcement count + accrued weight; promote to beliefs at threshold |
 | `open_questions` | epistemic gaps surfaced by reflection (contradiction / low_confidence / drive_gap), with status lifecycle |
 | `identity_state` | single-row constitution + last-updated timestamp |
 | `metabolism_state` | single-row last-decay timestamp for the rate-limited tick |
-| `genesis_marker` | single-row first-creation provenance hash for the soul + default drives |
+| `genesis_marker` | first-creation provenance hash for the soul and birth drives |
+| `developing_self` | immutable birth payload/provenance and consolidated effective self |
+| `self_evidence` | grounded proposals, source references and evidence weights, deduplicated per facet/material/quote |
 
 The admin console exposes this as `/admin` → **Life**: summary counts,
 an evolution snapshot, experience ledger, evolution timeline, beliefs, and
@@ -431,6 +442,24 @@ mix. This is the observability surface for character drift. Runtime sessions
 also load a compact prompt slice from this store — current beliefs, shifted
 drives, and recent evolution events — so normal chat can be shaped by
 identity-level experience without sending raw source material every turn.
+
+Phase 2a adds `runtime/developing_self.py` as the consolidated self in this store.
+Digestion receives the current self and records its revision/hash. Grounded
+proposals accumulate independent, confidence-weighted evidence before bounded
+changes apply; a single assertion or generated self-description cannot rewrite
+identity. Opinions retain propositions and supporting/contrary reasons; interests
+retain ongoing questions for future agenda selection. Style develops weighted
+tendencies, and learning moves drive baselines. Source phrase detectors are
+diagnostic, not identity gates. Evidence, effective state and evolution records
+commit with the experience transaction.
+
+One detached self reaches willingness, generation and review on every turn.
+Declines withhold their component's work/operands while preserving unrelated
+memory, Life History and dialogue. Schema 3 migrates the genesis soul, retained
+beliefs/drives and bounded numeric trait evidence once, with provenance for
+missing birth evidence. See [Phase 2a](development/phase2-developing-self.md) for
+the contract and causal offline tests. Agenda candidates, constitution/skill/operator
+rerouting and research birth policy remain deferred; their entry paths are unchanged.
 
 Life History supplies factual context and numeric active commitments to the
 frozen willingness decision. `LifeInfluence` remains a compatibility description
@@ -461,7 +490,8 @@ each session start (and via the operator endpoint
 `POST /admin/life/metabolism/tick`), the runtime calls `wall_clock_decay`,
 rate-limited to ≥1 day elapsed. When it fires, it:
 
-1. Decays belief confidences and drive deltas with a 30-day half-life.
+1. Decays belief confidences and drive deviations from learned baselines with a
+   30-day half-life; consolidated self development does not reset to birth.
 2. Revokes beliefs whose confidence falls below 0.2 (matching the
    contradiction-revision threshold).
 3. Decays `theme_signatures.accrued_weight` so saturated themes can drift
@@ -520,11 +550,10 @@ Decision is operator-driven — there is no automatic classifier between
 "procedural craft" (belongs in the registry with `applies_when`) and
 "dispositional content" (belongs in Life History).
 
-**Known gap.** `character_independence` is a runtime config flag with no
-enforcement code. The `genesis_marker` row is written on first store
-creation but never read for gating, so the wizard's "Character
-Independence" toggle persists across save/load but does not actually
-freeze identity edits. Treat it as informational until enforcement lands.
+**Scope.** Birth and the developing self are persisted regardless of the legacy
+`character_independence` toggle. Setup edits do not overwrite them. Constitution,
+skills and operator-material entry paths retain their existing behavior pending
+owner decisions; Phase 2a does not reroute those channels into learning.
 
 ## Debug Presentation Surfaces
 

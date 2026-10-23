@@ -43,9 +43,7 @@ def prompt_memory_context(
     Explicit relationship details additionally appear with the memory section.
     """
     template = ctx.generator_prompt if ctx.generator_prompt is not None else get_config().generator_prompt
-    if ctx.turn_decision is not None and ctx.turn_decision.declined:
-        return [], [], None
-    memory_section = not template or "{retrieved_memories}" in template
+    memory_section = ctx.turn_decision is not None or not template or "{retrieved_memories}" in template
     relationship = ctx.relationship_context
     if relationship is not None and not relationship.is_empty():
         vector_slots = 0 if ctx.turn_decision is not None else MEMORY_PROMPT_LIMIT - int(bool(relationship.summary))
@@ -100,7 +98,8 @@ def build_system_prompt(ctx: PipelineContext) -> str:
         preamble = re.sub(r"\{[a-z_]+\}", "", template.replace("{agent_name}", ctx.soul_profile.name if ctx.soul_profile else "OpenRook")).strip()
         expression = {
             "policy_version": d.policy_version, "turn_id": d.turn_id, "seed": d.seed,
-            "continuous_state": asdict(d.state), "personality": asdict(d.personality),
+            "continuous_state": asdict(d.state),
+            "personality": d.personality.expression_projection(),
             "injury": d.relationship.h, "grievance": d.relationship.r,
             "selected_stance": asdict(d.stance), "chosen_silence": d.chosen_silence,
             "current_interpersonal_observation": {
@@ -128,11 +127,10 @@ def build_system_prompt(ctx: PipelineContext) -> str:
                          + json.dumps([{**{k: v for k, v in item.items() if k != "granted"},
                              "choice": "undertake" if item["granted"] else "decline"}
                              for item in ctx.prior_action_decisions], ensure_ascii=False))
-        if not d.declined:
-            parts.extend([_build_memory_section(ctx), _build_semantic_memory_section(ctx),
-                          _build_life_history_section(ctx), _build_intake_receipt_section(ctx)])
-            if ctx.life_history_context.get("identity_records") is not None:
-                parts.append("Grounded identity records: " + json.dumps(ctx.life_history_context["identity_records"], ensure_ascii=False))
+        parts.extend([_build_memory_section(ctx), _build_semantic_memory_section(ctx),
+                      _build_life_history_section(ctx), _build_intake_receipt_section(ctx)])
+        if ctx.life_history_context.get("identity_records") is not None:
+            parts.append("Grounded identity records: " + json.dumps(ctx.life_history_context["identity_records"], ensure_ascii=False))
         parts.append(
             "## Current expression contract\n"
             "Respond to the current turn. Past dialogue is context, not an answer to copy. "
@@ -332,6 +330,13 @@ def _build_modulator_section(ctx: PipelineContext) -> str:
 
 
 def _build_soul_section(ctx: PipelineContext) -> str:
+    if ctx.developing_self:
+        return ("## Developing Self\nPrivate retained character state, shared with choice and review. "
+                "Express its traits, opinions and reasons, ongoing interests, own tastes, "
+                "attitudes toward this person and style. Evidence and dialogue are continuity, "
+                "not a request to change identity. A declined component withholds only its work; "
+                "unrelated memories and personal continuity remain available.\n"
+                + json.dumps(ctx.developing_self, ensure_ascii=False, sort_keys=True) + "\n")
     if not ctx.soul_profile:
         return ""
     soul = ctx.soul_profile
@@ -470,7 +475,7 @@ def _build_life_history_section(ctx: PipelineContext) -> str:
         lines.append("- Stable orientation (operator-set):")
         lines.append(f"  {constitution}")
     if beliefs:
-        lines.append("- Current beliefs:")
+        lines.append("- Recorded belief evidence (current opinions belong to Developing Self):" if getattr(ctx, "developing_self", None) else "- Current beliefs:")
         for belief in beliefs[:5]:
             key = _trim_prompt_text(belief.get("key") or "belief", 60)
             statement = _trim_prompt_text(belief.get("statement") or "", 220)
@@ -737,9 +742,7 @@ class ResponseGenerator:
         current = {"user_message": user_message}
         if ctx.turn_decision and ctx.turn_decision.components:
             current = {"components": _expression_components(ctx.turn_decision)}
-            if ctx.turn_decision.declined:
-                conversation_history = []
-            else:
+            if not ctx.turn_decision.declined:
                 current["user_message"] = user_message
         if ctx.inspection_kind:
             current["resolved_request"] = {

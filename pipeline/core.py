@@ -16,6 +16,7 @@ from dataclasses import asdict, replace
 from typing import Any, Callable
 
 from config.loader import get_config, research_configuration
+from runtime.developing_self import birth_state, project_self, soul_from_self
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.inference import call_telemetry, expression_retry, final_expression_attempt, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
 from core.types import (
@@ -200,6 +201,8 @@ class CognitivePipeline:
         if self._research_mode and not getattr(runtime_config, "_research_configuration", None):
             self._config = research_configuration(getattr(runtime_config, "research_birth_policy", "uncommitted"))
         self.soul = self._config.soul
+        self._birth_self = birth_state(self.soul)
+        self._effective_self = self._birth_self
         self._semantic_cfg = self._config.semantic_memory
 
         # Core engine
@@ -279,7 +282,7 @@ class CognitivePipeline:
         # RuntimeConfig defaults it on. The deterministic appraisal remains the
         # fallback whenever the LLM is absent or returns unparseable output.
         self._appraisal_use_llm = bool(getattr(runtime_config, "appraisal_use_llm", False))
-        # Auto-ingest emotionally salient sessions into the identity ledger.
+        # Consolidate ordinary episodes; the store bounds identity development.
         self._autobiographical_learning = bool(
             getattr(runtime_config, "autobiographical_learning", False)
         )
@@ -538,6 +541,7 @@ class CognitivePipeline:
         _ts = time.perf_counter()
         life_history_context = self._load_life_history_context(user_message)
         st.life_history_context = life_history_context
+        self._capture_developing_self(st)
         if self._features.life_history_context and _is_identity_question(user_message):
             identity = self._load_life_history_snapshot()
             life_history_context = {**life_history_context, **identity, "identity_records": identity}
@@ -559,7 +563,8 @@ class CognitivePipeline:
             appraise_message_llm(user_message, detected, self._llm_backend_fast,
                                  recent_context=self._conversation_history,
                                  agent_context=json.dumps({"state": self.engine.snapshot(),
-                                     "authored_values": self.values.values, "dispositions": self.soul.dispositions,
+                                     "authored_values": self.values.values, "dispositions": st.developing_self["dispositions"],
+                                     "current_self": st.developing_self,
                                      "available_capabilities": self._tool_executor.registry.names() if self._tool_executor else [],
                                      "identity": life_history_context}, ensure_ascii=False))
             if self._appraisal_use_llm and (
@@ -590,7 +595,7 @@ class CognitivePipeline:
             st.detected = detected
             debug.detected_emotion = detected
         # Personality-dependent coupling; no minimum movement for a tone cue.
-        susceptibility = (1 - self.soul.initial_traits.get("calm", 0.5)) * person.trust
+        susceptibility = (1 - st.developing_self["traits"].get("calm", 0.0)) * person.trust
         self.engine.apply_contagion(detected.arousal, detected.valence, susceptibility)
         appraisal = appraise_with_life_history(
             base_appraisal,
@@ -622,7 +627,7 @@ class CognitivePipeline:
                     evidence_refs=(f"plan:{plan.id}",)),)
         st.appraisal = appraisal
         debug.appraisal_frame = appraisal
-        personality = Personality.from_soul(self.soul, self.values.values)
+        personality = Personality.from_self(st.developing_self, st.user_id)
         previous = self._dynamics or RelationshipDynamics()
         elapsed = max(0.0, now - previous.updated_at) if previous.updated_at else st.elapsed
         dynamics, st.trust_delta = update_relationship(
@@ -1257,8 +1262,9 @@ class CognitivePipeline:
             "activity", purpose, character_value=0.6 if goals else 0.2, user_value=0,
             effort=0.3, uncertainty=0.4, evidence_refs=tuple(str(g.get("id", "")) for g in goals),
         ),)
-        self._commit_turn_decision(st, scope="self")
         st.life_history_context = {} if task_only else self._load_life_history_context(purpose)
+        self._capture_developing_self(st)
+        self._commit_turn_decision(st, scope="self")
         st.dialogue_trace = InnerDialogueTrace(rounds=[], total_llm_calls=0, reached_deadlock=False, final_candidate=json.dumps({
             "purpose": purpose, "goals": goals, "identity": st.life_history_context,
             "memories": [] if task_only else [asdict(item) for item in self.semantic_memory.retrieve(purpose, source_person=user_id)],
@@ -1408,7 +1414,8 @@ class CognitivePipeline:
                                *self.soul.boundaries, self.soul.growth_policy),
             requested_inspection=st.inspection_kind,
             recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else (),
-            grounded_context=st.life_history_context if not st.turn_decision or not st.turn_decision.declined else {})
+            grounded_context=st.life_history_context,
+            developing_self=st.developing_self)
         def needs_review(response):
             return (bool(debug.expression_reviews) or constrained
                 or _is_identity_question(st.user_message)
@@ -1613,7 +1620,9 @@ class CognitivePipeline:
     def _commit_turn_decision(self, st: _TurnState, *, scope: str = "user") -> None:
         if st.turn_decision is not None:
             return
-        personality = Personality.from_soul(self.soul, self.values.values)
+        if not st.developing_self:
+            self._capture_developing_self(st)
+        personality = Personality.from_self(st.developing_self, st.user_id)
         if scope == "self":
             now = time.time()
             st.dynamics, _ = update_relationship(
@@ -1630,9 +1639,15 @@ class CognitivePipeline:
         state = DecisionState(**self.engine.snapshot(), trust=max(0.0, min(1.0, st.person.trust + st.trust_delta)) if st.person else 0.5,
                               commitments=min(1.0, commitments), history_refs=references)
         goal_refs = {str(g.get("id")) for g in goals if isinstance(g, dict) and g.get("status") == "active"}
-        components = tuple(c if set(c.evidence_refs) & goal_refs else
-                           replace(c, character_value=0, character_urgency=0)
-                           for c in st.appraisal.request_components) if scope == "user" else st.appraisal.request_components
+        weights = dict(personality.self_weights)
+        components = []
+        for component in st.appraisal.request_components:
+            if scope == "user" and not set(component.evidence_refs) & goal_refs:
+                support = max((max(0.0, weights.get(ref, 0.0)) for ref in component.evidence_refs
+                               if ref.startswith(("self:interests:", "self:preferences:"))), default=0.0)
+                component = replace(component, character_value=min(component.character_value, support), character_urgency=0)
+            components.append(component)
+        components = tuple(components)
         capabilities = set(self._tool_executor.registry.names()) if self._tool_executor else set()
         components = tuple(replace(c, feasible=c.feasible and set(c.capability_requirements).issubset(capabilities))
                            for c in components)
@@ -1679,6 +1694,7 @@ class CognitivePipeline:
         return PipelineContext(
             modulator_snapshot=self.engine.snapshot(),
             soul_profile=self.soul,
+            developing_self=st.developing_self,
             person_profile=st.person,
             self_profile=st.self_prof,
             appraisal_frame=st.appraisal,
@@ -1754,12 +1770,15 @@ class CognitivePipeline:
         person = self.person_profiles.get_or_create(user_id)
         self_prof = self.self_profile.get_profile()
         life_history_context = self._load_life_history_context()
+        snapshot = _TurnState(user_message="", user_id=user_id, debug=debug, life_history_context=life_history_context)
+        self._capture_developing_self(snapshot)
         life_influence = derive_life_influence(life_history_context)
         debug.life_history_context = life_history_context
         debug.life_influence = life_influence
         proactive_ctx = PipelineContext(
             modulator_snapshot=self.engine.snapshot(),
             soul_profile=self.soul,
+            developing_self=snapshot.developing_self,
             person_profile=person,
             self_profile=self_prof,
             life_history_context=life_history_context,
@@ -1817,11 +1836,14 @@ class CognitivePipeline:
 
         self._refresh_relationship_state(user_id)
         self._turn_index += 1
-        st = _TurnState(user_message=action.action_type, user_id=user_id, debug=debug,
+        subject = (self._active_task_plan.goal if action.action_type == "continue_task" and self._active_task_plan
+                   else action.message or action.action_type)
+        st = _TurnState(user_message=subject, user_id=user_id, debug=debug,
                         person=person, dynamics=self._dynamics, turn_id=f"proactive:{self._turn_index}",
                         life_history_context=life_history_context, appraisal=AppraisalFrame())
+        st.developing_self = snapshot.developing_self
         st.appraisal.request_components = (RequestComponent(
-            "activity", self._active_task_plan.goal if action.action_type == "continue_task" and self._active_task_plan else action.action_type,
+            "activity", subject,
             character_value=0.4, user_value=0.3, effort=0.3, uncertainty=0.4,
         ),)
         self._commit_turn_decision(st, scope="self")
@@ -1890,6 +1912,7 @@ class CognitivePipeline:
         ctx = PipelineContext(
             modulator_snapshot=self.engine.snapshot(),
             soul_profile=self.soul,
+            developing_self=st.developing_self,
             person_profile=person,
             self_profile=self_prof,
             relationship_context=None,
@@ -1933,17 +1956,35 @@ class CognitivePipeline:
         return PipelineResponse(response=gen_result.response, debug=debug)
 
     def _effective_self_expected_traits(self) -> dict[str, float]:
-        """Seed identity provides the starting expectation; learned traits can override it."""
-        expected = dict(self.soul.initial_traits)
-        expected.update(self.self_profile.get_expected_traits())
-        return expected
+        """Generated self-descriptions do not override consolidated personality."""
+        return dict(self._effective_self["traits"])
+
+    def _capture_developing_self(self, st: _TurnState) -> None:
+        state = st.life_history_context.get("developing_self") if self._features.life_history_context else None
+        if state is None and self._features.life_history_context and getattr(self._runtime_config, "data_dir", None):
+            from runtime.life_history import LifeHistoryStore
+            with LifeHistoryStore(self._runtime_config) as store:
+                state = store.effective_self()
+        if isinstance(state, dict) and state.get("schema_version") == 1:
+            self._effective_self = state
+        elif not self._features.life_history_context:
+            self._effective_self = self._birth_self
+        st.developing_self = project_self(self._effective_self, st.user_id)
+        self.soul = soul_from_self(st.developing_self)
+        self.values = ValueHierarchy(values=dict(st.developing_self["values"]))
+        if st.life_history_context.get("developing_self"):
+            st.life_history_context["developing_self"] = st.developing_self
 
     def _load_life_history_context(self, query_text: str = "") -> dict[str, Any]:
         """Read compact identity-level life context for generation."""
         if not self._features.life_history_context:
             return {}
         if self._life_history_provider is None:
-            return {}
+            if not getattr(self._runtime_config, "data_dir", None):
+                return {}
+            from runtime.life_history import LifeHistoryStore
+            with LifeHistoryStore(self._runtime_config) as store:
+                return store.prompt_context()
         try:
             if query_text:
                 try:
@@ -2625,9 +2666,9 @@ class CognitivePipeline:
             0.0, self.engine.state.energy - result.energy_drain
         )
 
-        # Close the perception→identity loop: a salient session becomes
-        # autobiographical material the agent forms identity from.
-        if self._autobiographical_learning:
+        # Close the experience→self loop at consolidation, including ordinary
+        # episodes. Assertions and self-expression are not independent evidence.
+        if self._autobiographical_learning and self._features.life_history_context:
             try:
                 self._maybe_ingest_autobiography(result, user_id)
             except (ResearchBudgetExceeded, ResearchStudyLimit):
@@ -2659,7 +2700,9 @@ class CognitivePipeline:
     _AUTOBIO_TRUST_DELTA = 0.08
 
     def _is_session_salient(self, result: DigestedSession) -> bool:
-        """A session earns identity ingestion only if it was emotionally real."""
+        """Ordinary experience is eligible; research keeps its episode policy."""
+        if not self._research_mode:
+            return bool((result.summary or "").strip())
         return bool(
             result.spike_events
             or result.peak_intensity >= self._AUTOBIO_PEAK_INTENSITY
@@ -2668,14 +2711,7 @@ class CognitivePipeline:
         )
 
     def _maybe_ingest_autobiography(self, result: DigestedSession, user_id: str) -> None:
-        """Digest a salient session's distilled summary into the identity ledger.
-
-        Gated by salience (no small-talk), uses the distilled summary (not the
-        raw transcript), and ingests under ``conversation_learning_text`` — the
-        lowest source-openness tier — so beliefs move slowly and prompt-injection
-        text is sanitized before it can touch identity. Drift is bounded by the
-        salience gate + low influence weight + per-turn metabolism decay.
-        """
+        """Interpret an ordinary episode through the current retained self."""
         if self._runtime_config is None:
             return
         summary = (result.summary or "").strip()
@@ -2685,18 +2721,23 @@ class CognitivePipeline:
             self._research_owner.queue_autobiography(self._episode_id, result, user_id)
             return
         from runtime.life_history import LifeHistoryStore
-        agent_name = getattr(getattr(self._runtime_config, "soul", None), "name", "") or "OpenRook"
+        agent_name = self.soul.name
         arc = result.emotional_arc_label or "a conversation"
         with LifeHistoryStore(self._runtime_config) as store:
             store.ingest_external_text(
                 title=f"Lived experience with {user_id}: {arc}"[:180],
-                text=summary,
+                text=json.dumps({"session_summary": summary,
+                    "dialogue": self._conversation_history[-40:],
+                    "observed_state": self.engine.snapshot(),
+                    "summary_is_interpretation": True,
+                    "assistant_dialogue_is_expression_not_independent_self_evidence": True}, ensure_ascii=False),
                 source_type="conversation_learning_text",
                 source_ref=f"session:{user_id}",
                 participants=[agent_name, user_id],
                 llm_client=self._llm_backend,
                 metadata={
                     "input_mode": "autobiographical",
+                    "occurrence_id": f"autobiography:{self._episode_id}",
                     "arc": arc,
                     "peak_intensity": round(result.peak_intensity, 3),
                     "trust_delta": round(result.trust_delta, 3),

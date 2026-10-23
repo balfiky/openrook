@@ -2,6 +2,7 @@
 
 The current conversational policy is `willingness-1.2`. See
 [Phase 1](docs/development/phase1-willingness.md) and
+[Phase 2a](docs/development/phase2-developing-self.md) and
 [architecture](docs/ARCHITECTURE.md) before changing character behavior.
 
 - Language cues and model appraisal provide uncertain evidence and request
@@ -9,6 +10,19 @@ The current conversational policy is `willingness-1.2`. See
 - `core/willingness.py` owns choice. It uses authored dispositions and values,
   resources, trust, continuous injury/grievance, commitments and a stable turn
   seed. It contains no language matching or model calls.
+- The accepted setup soul is the sole birth personality. Missing fields stay
+  empty; never merge values_seed or add fallback identity. Shared Life History
+  freezes birth/provenance and consolidates one developing self. Decisions consume
+  effective traits/dispositions/values and structured self preferences. Digestion
+  receives the current self; grounded independent evidence and bounded rates govern
+  development, never fixed source phrases or generated self-claims. Ordinary
+  episodes are eligible; explicitly disabling autobiographical learning remains
+  a no-learning control. Learned drive baselines may move.
+- Capture one self per turn for choice, generation and review, including opinion
+  reasons/confidence, ongoing questions, tastes, this person's attitudes and style.
+  A decline withholds its work, not unrelated memory, Life History or dialogue.
+  Agenda candidates, constitution/skill/operator rerouting and research birth
+  policy remain deferred; preserve those entry paths and all delivery floors.
 - Commit the immutable `TurnDecision` before executing work. Every task,
   artifact, inspection, continuation and learning intake needs its component's
   grant. Independent activity requires a separate decision and execution scope.

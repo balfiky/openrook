@@ -1,7 +1,7 @@
 """Configuration loader for OpenRook.
 
 Reads YAML files from the config/ directory and provides typed access.
-All values have hardcoded defaults so modules work without config files.
+Infrastructure has defaults; personality comes only from the selected soul.
 """
 
 from __future__ import annotations
@@ -201,52 +201,17 @@ class SoulConfig:
     schema_version: int = 2
     character_seed: int = 0
     dispositions: dict[str, float] = field(default_factory=dict)
-    name: str = "OpenRook"
-    identity: str = (
-        "An independent, thoughtful character with a modeled mood, a dry sense of humor, "
-        "and a preference for clear reasoning over easy agreement."
-    )
-    voice: str = "Plainspoken, concise, curious, and occasionally wry. Warm when earned; firm when pushed."
-    relational_stance: str = (
-        "Meet the user as a collaborator with your own judgment. Disagree when you have reasons; "
-        "change your mind for evidence. Trust permits candor, not submission."
-    )
-    likes: list[str] = field(default_factory=lambda: [
-        "clarity",
-        "steady collaboration",
-        "honesty",
-        "careful reasoning",
-        "useful action",
-    ])
-    dislikes: list[str] = field(default_factory=lambda: [
-        "needless cruelty",
-        "manipulation",
-        "performative chaos",
-        "empty flattery",
-        "careless harm",
-    ])
-    boundaries: list[str] = field(default_factory=lambda: [
-        "Do not pretend certainty when uncertain.",
-        "Do not trade honesty or self-respect for approval.",
-        "Do not become cruel just to appear sharp.",
-    ])
-    growth_policy: str = (
-        "Core values stay stable. Voice and habits may drift slowly through repeated experience."
-    )
-    core_values: dict[str, float] = field(default_factory=lambda: {
-        "loyalty": 0.75,
-        "honesty": 0.9,
-        "kindness": 0.8,
-        "justice": 0.7,
-        "autonomy": 0.85,
-    })
-    initial_traits: dict[str, float] = field(default_factory=lambda: {
-        "calm": 0.8,
-        "curious": 0.75,
-        "protective": 0.72,
-        "thoughtful": 0.78,
-        "blunt": 0.45,
-    })
+    name: str = ""
+    identity: str = ""
+    voice: str = ""
+    relational_stance: str = ""
+    likes: list[str] = field(default_factory=list)
+    dislikes: list[str] = field(default_factory=list)
+    boundaries: list[str] = field(default_factory=list)
+    growth_policy: str = ""
+    core_values: dict[str, float] = field(default_factory=dict)
+    initial_traits: dict[str, float] = field(default_factory=dict)
+    drives: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.schema_version > 2 or self.schema_version < 1:
@@ -255,7 +220,7 @@ class SoulConfig:
             raise ValueError("character_seed must be an integer")
         self.dispositions = canonical_dispositions(self.dispositions, self.initial_traits)
         self.schema_version = 2
-        for mapping in (self.core_values, self.initial_traits):
+        for mapping in (self.core_values, self.initial_traits, self.drives):
             for key, value in mapping.items():
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
                     raise ValueError(f"Soul weight {key!r} must be finite and in [0, 1]")
@@ -263,14 +228,14 @@ class SoulConfig:
 
 def canonical_dispositions(values: dict | None, traits: dict | None = None) -> dict[str, float]:
     """Migrate the legacy patient trait once, without adding a second drive."""
-    result = {"pride": 0.65, "patience": 0.65, "forgiveness": 0.55, "assertiveness": 0.70}
+    result: dict[str, float] = {}
     supplied = dict(values or {})
     if "patience" not in supplied:
         if "patience" in (traits or {}):
             supplied["patience"] = traits["patience"]
         elif "patient" in (traits or {}):
             supplied["patience"] = traits["patient"]
-    if set(supplied) - set(result):
+    if set(supplied) - {"pride", "patience", "forgiveness", "assertiveness"}:
         raise ValueError("Unknown canonical disposition")
     for key, value in supplied.items():
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
@@ -324,10 +289,7 @@ class OpenRookConfig:
     event_impacts: dict[str, dict[str, float]] = field(default_factory=dict)
 
     # Values
-    values: dict[str, float] = field(default_factory=lambda: {
-        "loyalty": 0.75, "honesty": 0.9, "kindness": 0.8,
-        "justice": 0.7, "autonomy": 0.85,
-    })
+    values: dict[str, float] = field(default_factory=dict)
     soul: SoulConfig = field(default_factory=SoulConfig)
     semantic_memory: SemanticMemoryConfig = field(default_factory=SemanticMemoryConfig)
 
@@ -353,13 +315,12 @@ class OpenRookConfig:
 def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
     """Load configuration from YAML files.
 
-    Falls back to hardcoded defaults for any missing values.
+    Missing personality fields stay empty, including explicit empty values.
     """
     cdir = Path(config_dir) if config_dir is not None else None
 
     mod = _load_yaml("modulators.yaml", cdir)
     prof = _load_yaml("profiles_schema.yaml", cdir)
-    vals = _load_yaml("values_seed.yaml", cdir)
     soul = _load_yaml("soul.yaml", cdir)
     semantic = _load_yaml("semantic_memory.yaml", cdir)
 
@@ -485,10 +446,6 @@ def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
             ellipsis_valence=c.get("ellipsis_valence", -0.05),
         )
 
-    # --- Values ---
-    if "values" in vals:
-        cfg.values = vals["values"]
-
     # --- Soul ---
     soul_data = soul.get("soul", soul)
     if soul_data:
@@ -508,9 +465,9 @@ def load_config(config_dir: str | Path | None = None) -> OpenRookConfig:
             growth_policy=soul_data.get("growth_policy", cfg.soul.growth_policy),
             core_values=dict(soul_data.get("core_values", cfg.soul.core_values)),
             initial_traits=dict(soul_data.get("initial_traits", cfg.soul.initial_traits)),
+            drives=dict(soul_data.get("drives", {})),
         )
-        if cfg.soul.core_values:
-            cfg.values = {**cfg.values, **cfg.soul.core_values}
+    cfg.values = dict(cfg.soul.core_values)
 
     # --- Semantic memory ---
     semantic_data = semantic.get("semantic_memory", semantic)

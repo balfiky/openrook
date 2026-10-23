@@ -265,7 +265,7 @@ def test_pipeline_projects_the_same_saved_memories_as_generation_after_session_e
         assert result.response == case["reply"] and state.debug.generation_attempts == 1
         assert state.debug.delivery_outcome == "delivered_uncertain"
         declined = replace(decision, components=tuple(replace(c, granted=False) for c in decision.components))
-        assert not expression_memory_evidence(replace(ctx, turn_decision=declined))
+        assert expression_memory_evidence(replace(ctx, turn_decision=declined)) == expression_memory_evidence(ctx)
     finally:
         pipe.close()
 

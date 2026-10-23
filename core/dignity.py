@@ -872,6 +872,11 @@ Missing/truncated evidence means unknown."""
 def _review_guidance(payload):
     """Add only guidance relevant to the projected evidence, keeping review bounded."""
     parts = [_SEMANTIC_PROMPT]
+    if payload.get("developing_self"):
+        parts.append("Use developing_self as the retained personality shared with generation and choice: "
+            "traits, opinions with reasons, ongoing interests, own tastes, attitudes to this person and style. "
+            "Assertions and declines do not author a different self. Continuity remains available; "
+            "only declined work products are withheld.")
     if payload.get("excision_source"):
         parts.append("Judge the remainder as an independent reply to the current request. Removed text "
                      "cannot supply a dangling fragment's antecedent or express the declined role for it.")
@@ -926,13 +931,14 @@ def _review_guidance(payload):
 
 def _review_payload(response, user_message, decision, recent_context, tool_trace,
                     prior_tool_receipts, issues, authored_style, authored_identity,
-                    requested_inspection, grounded_context, prior_action_decisions, recalled_memories):
+                    requested_inspection, grounded_context, prior_action_decisions, recalled_memories,
+                    developing_self=None):
     """Project review evidence; optimizer alternatives and ledgers add no meaning."""
     frozen = None
     if decision:
         frozen = {"turn_id": decision.turn_id, "scope": decision.scope,
                   "state": asdict(decision.state), "stance": asdict(decision.stance),
-                  "personality": asdict(decision.personality),
+                  "personality": decision.personality.expression_projection(),
                   "relationship": {"h": decision.relationship.h, "r": decision.relationship.r},
                   "personal_significance": decision.perception.personal_significance,
                   "interpersonal_observation": {k: getattr(decision.perception, k) for k in
@@ -998,9 +1004,13 @@ def _review_payload(response, user_message, decision, recent_context, tool_trace
                 "granted": choice.granted,
                 "outcome": outcome, "receipt_indices": indices})
     grounded = grounded_context or {}
-    serialized = json.dumps(grounded, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    if len(serialized) > 1200:
-        grounded = {"excerpt": serialized[:1200], "truncated": True}
+    # Legacy standalone review callers can supply unbounded arbitrary context.
+    # Runtime self/continuity is already bounded upstream and stays identical
+    # to generation, including during declines.
+    if not developing_self:
+        serialized = json.dumps(grounded, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if len(serialized) > 1200:
+            grounded = {"excerpt": serialized[:1200], "truncated": True}
     gate = getattr(tool_trace, "final_decision", None)
     return {"user_message": user_message, "draft": response, "frozen_decision": frozen,
             "recent_context": context,
@@ -1010,6 +1020,7 @@ def _review_payload(response, user_message, decision, recent_context, tool_trace
             "prior_action_decisions": list(prior_action_decisions), "requested_results": requested_results,
             "authored_style": list(authored_style), "authored_identity": list(authored_identity),
             "requested_inspection": requested_inspection, "grounded_context": grounded,
+            **({"developing_self": developing_self} if developing_self else {}),
             "recalled_memories": list(recalled_memories),
             "deterministic_findings": [{"code": i.code, "claim": i.claim, "severity": i.severity} for i in issues],
             "receipts": [receipt(r) for r in current],
@@ -1022,7 +1033,7 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
                     grounded_context=None, authored_style=(), authored_identity=(), raw_response=None,
                     requested_inspection: str = "", prior_tool_receipts=(), prior_action_decisions=(),
                     private_instructions="", excision_source="", prior_assistant_replies=(),
-                    recalled_memories=()) -> ExpressionReview:
+                    recalled_memories=(), developing_self=None) -> ExpressionReview:
     if not response.strip():
         if decision and decision.chosen_silence:
             return ExpressionReview("pass", reason="selected silence")
@@ -1090,7 +1101,7 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
     if use_llm and backend is not None:
         payload = _review_payload(response, user_message, decision, recent_context, tool_trace,
             prior_tool_receipts, issues, authored_style, authored_identity, requested_inspection, grounded_context,
-            prior_action_decisions, recalled_memories)
+            prior_action_decisions, recalled_memories, developing_self)
         if excision_source:
             payload["excision_source"] = {"text": excision_source[:600], "truncated": len(excision_source) > 600}
         try:

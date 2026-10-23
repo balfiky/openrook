@@ -243,7 +243,9 @@ def test_failure_rolls_back_revisions_of_preexisting_beliefs(tmp_path, monkeypat
         def fail(*args, **kwargs):
             raise RuntimeError("mid-batch failure")
 
-        monkeypatch.setattr(store, "_apply_drive_change", fail)
+        # Ungrounded one-off drive proposals no longer apply. Interrupt the
+        # next actual ledger write after revision to test transaction atomicity.
+        monkeypatch.setattr(store, "_apply_belief", fail)
         with pytest.raises(RuntimeError):
             store.ingest_pasted_text(
                 title="Revision", text="Autonomy is not solitary.", llm_client=Backend()

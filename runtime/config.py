@@ -120,13 +120,10 @@ class RuntimeConfig:
     # meaning of each user message (no regex); the deterministic appraisal is
     # the fallback when no LLM is available or its output won't parse.
     appraisal_use_llm: bool = True
-    # Autobiographical learning: when True, emotionally salient conversations
-    # are digested into the identity ledger (beliefs/drives) at session end —
-    # the agent forms its own identity from living, not just operator-fed
-    # material. Default OFF: this lets lived conversation mutate identity, so
-    # it is opt-in. Guarded by a salience gate, the low conversation-source
-    # influence weight, and the existing prompt-injection sanitization.
-    autobiographical_learning: bool = False
+    # Ordinary conversations can develop the self at consolidation. Grounded
+    # evidence accumulation and bounded rates protect continuity. Explicit False
+    # is the no-learning control; research episode policy is unchanged.
+    autobiographical_learning: bool = True
     coherence_min_score: float = 0.6
     coherence_max_regenerations: int = 2
     pending_intake_ttl_turns: int = 3
@@ -239,7 +236,6 @@ class RuntimeConfig:
         if self.research_mode:
             self.character_independence = True
             self.proactive_enabled = True
-            self.autobiographical_learning = True
             if self.autonomy_level == "assisted":
                 self.autonomy_level = "autonomous"
         if self.research_calls_per_day < 1 or self.research_episode_max_turns < 1:

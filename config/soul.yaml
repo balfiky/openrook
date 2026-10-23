@@ -1,6 +1,15 @@
 soul:
   schema_version: 2
   character_seed: 0
+  # Authored birth motivations, visible and editable like traits and values.
+  drives:
+    curiosity: 0.50
+    competence: 0.50
+    autonomy: 0.50
+    continuity: 0.50
+    repair: 0.50
+    attachment: 0.50
+    caution: 0.50
   dispositions:
     pride: 0.65
     patience: 0.65

@@ -582,10 +582,7 @@ class SessionManager:
 
     def _life_history_context_provider(self, query_text: str = "") -> dict[str, Any]:
         """Load shared identity-level life context for prompt generation."""
-        from runtime.life_history import LifeHistoryStore, life_history_db_path
-
-        if not os.path.exists(life_history_db_path(self.config)):
-            return {}
+        from runtime.life_history import LifeHistoryStore
         try:
             with LifeHistoryStore(self.config) as store:
                 context = store.prompt_context()

@@ -109,10 +109,7 @@ async def admin_import_soul(req: api_mod.AdminSoulImportRequest) -> dict:
 
 @router.post("/admin/soul")
 async def admin_update_soul(req: api_mod.AdminSoulUpdateRequest) -> dict:
-    """Write a new soul.yaml, reload the config singleton, and evict the
-    cached session manager so the next chat turn builds a fresh pipeline
-    that reads the new identity. No process restart required.
-    """
+    """Save setup personality. Existing subjects retain their stored birth/self."""
     from config.loader import get_config, reset_config
 
     payload = {
@@ -130,6 +127,7 @@ async def admin_update_soul(req: api_mod.AdminSoulUpdateRequest) -> dict:
             "growth_policy": req.growth_policy,
             "core_values": req.core_values,
             "initial_traits": req.initial_traits,
+            "drives": req.drives,
         }
     }
     path = api_mod._soul_yaml_path()
@@ -240,7 +238,7 @@ _SOUL_FIELDS = {
     "dislikes",
     "boundaries",
     "core_values",
-    "initial_traits",
+    "initial_traits", "drives",
 }
 
 
@@ -391,6 +389,7 @@ def _coerce_soul_payload(data: dict) -> dict:
         "boundaries": _coerce_string_list(data.get("boundaries")),
         "core_values": _coerce_weight_dict(data.get("core_values")),
         "initial_traits": _coerce_weight_dict(data.get("initial_traits")),
+        "drives": _coerce_weight_dict(data.get("drives")),
     }
 
 
@@ -438,14 +437,12 @@ def _admin_soul_payload(
     notes: list[str] = []
     if saved:
         notes.append(
-            "Identity saved. The next chat turn will reflect the new "
-            "identity across the whole prompt stack (generator, self-check, "
-            "memory digestion, role labels)."
+            "Setup personality saved. A new subject materializes these fields at birth; "
+            "an existing subject retains its birth and developed self."
         )
         if reloaded_session_manager:
             notes.append(
-                "Active chat sessions were rebuilt so they use the new "
-                "identity immediately; no server restart needed."
+                "Active chat sessions were rebuilt; their stored developed self is retained."
             )
     if not project_env("CONFIG_DIR", "").strip():
         notes.append(
@@ -468,6 +465,7 @@ def _admin_soul_payload(
             "growth_policy": soul.growth_policy,
             "core_values": dict(soul.core_values),
             "initial_traits": dict(soul.initial_traits),
+            "drives": dict(soul.drives),
         },
         "is_default_name": soul.name.strip() == api_mod._DEFAULT_SOUL_NAME,
         "saved": saved,

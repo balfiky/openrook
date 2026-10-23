@@ -25,7 +25,7 @@ def test_style_cleanup_keeps_empathy_owned_errors_quotes_and_code():
 
 
 def test_default_seed_and_setup_agree_and_remain_owner_customizable():
-    seed = SoulConfig()
+    seed = load_config().soul
     preset = _identity_preset("steady")
     loaded = load_config().soul
     assert "modeled mood" in seed.identity
@@ -33,6 +33,7 @@ def test_default_seed_and_setup_agree_and_remain_owner_customizable():
     assert preset["identity"] == seed.identity
     assert preset["core_values"] == seed.core_values
     assert seed.core_values["honesty"] > seed.core_values["loyalty"]
+    assert SoulConfig().core_values == {} and SoulConfig().identity == ""
     loaded.voice = "My owner's custom voice."
     assert loaded.voice == "My owner's custom voice."
 

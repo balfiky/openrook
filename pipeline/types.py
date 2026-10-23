@@ -192,6 +192,7 @@ class _TurnState:
     person: PersonProfile | None = None
     detected: DetectedEmotion | None = None
     life_history_context: dict[str, Any] = field(default_factory=dict)
+    developing_self: dict[str, Any] = field(default_factory=dict)
     life_influence: LifeInfluence = field(default_factory=LifeInfluence)
     appraisal: AppraisalFrame | None = None
     event: EmotionalEvent | None = None

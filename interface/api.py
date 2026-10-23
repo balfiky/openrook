@@ -463,6 +463,7 @@ class AdminSoulUpdateRequest(BaseModel):
     boundaries: list[str] = Field(default_factory=list, max_length=32)
     core_values: dict[str, float] = Field(default_factory=dict)
     initial_traits: dict[str, float] = Field(default_factory=dict)
+    drives: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _canonical_dispositions(self):
@@ -494,7 +495,7 @@ class AdminSoulUpdateRequest(BaseModel):
                 raise ValueError(f"item too long (max 200 chars): {item[:40]}...")
         return cleaned
 
-    @field_validator("core_values", "initial_traits")
+    @field_validator("core_values", "initial_traits", "drives")
     @classmethod
     def _validate_weights(cls, values: dict[str, float]) -> dict[str, float]:
         if len(values) > 32:

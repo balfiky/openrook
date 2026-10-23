@@ -199,24 +199,62 @@ class Personality:
     values: tuple[tuple[str, float], ...] = (
         ("kindness", 0.8), ("loyalty", 0.75), ("autonomy", 0.85), ("honesty", 0.9),
     )
+    self_weights: tuple[tuple[str, float], ...] = ()
+    self_state_json: str = ""
+    affinity: float = 0.0
+    aversion: float = 0.0
 
     def __post_init__(self):
         object.__setattr__(self, "values", tuple(tuple(pair) for pair in self.values))
-        numbers = [getattr(self, name) for name in self.__dataclass_fields__ if name != "values"]
+        object.__setattr__(self, "self_weights", tuple(tuple(pair) for pair in self.self_weights))
+        numbers = [getattr(self, name) for name in self.__dataclass_fields__ if name not in {"values", "self_weights", "self_state_json"}]
         numbers.extend(weight for _, weight in self.values)
         if any(not math.isfinite(value) or not 0 <= value <= 1 for value in numbers):
             raise ValueError("Personality weights must be finite and in [0, 1]")
+        if any(not math.isfinite(value) or not -1 <= value <= 1 for _, value in self.self_weights):
+            raise ValueError("Developed preferences must be finite and in [-1, 1]")
 
     def value(self, name: str) -> float:
         # An absent authored value supplies no extra drive.
-        return dict(self.values).get(name, 0.0)
+        return dict(self.values).get(name, dict(self.self_weights).get(name, 0.0))
+
+    def expression_projection(self) -> dict[str, Any]:
+        """Numeric choice inputs; the shared self is projected separately."""
+        result = asdict(self)
+        result.pop("self_state_json")
+        for key in ("self_weights", "affinity", "aversion"):
+            if not result[key]:
+                del result[key]
+        return result
 
     @classmethod
     def from_soul(cls, soul: Any, values: dict[str, float] | None = None) -> Personality:
         traits = soul.initial_traits
-        return cls(**soul.dispositions, calm=traits.get("calm", 0.5),
-                   curiosity=traits.get("curious", 0.5), bluntness=traits.get("blunt", 0.5),
+        return cls(**{key: soul.dispositions.get(key, 0.0) for key in ("pride", "patience", "forgiveness", "assertiveness")},
+                   calm=traits.get("calm", 0.0), curiosity=traits.get("curious", 0.0), bluntness=traits.get("blunt", 0.0),
                    values=tuple(sorted((values if values is not None else soul.core_values).items())))
+
+    @classmethod
+    def from_self(cls, state: dict, person_id: str = "") -> Personality:
+        """Numeric preferences and the exact retained self behind this choice."""
+        traits = state.get("traits", {})
+        weights = []
+        for domain in ("traits", "dispositions", "drives"):
+            for key, item in state.get(domain, {}).items():
+                weights.append((f"self:{domain}:{key}", item["value"] if domain == "drives" else item))
+        for domain in ("opinions", "interests", "preferences", "attitudes", "style"):
+            for key, record in state.get(domain, {}).items():
+                if domain == "attitudes" and key != person_id:
+                    continue
+                strength = record.get("confidence", 0.0) if domain == "opinions" else record.get("weight", 0.0)
+                weights.append((f"self:{domain}:{key}", strength))
+        attitude = state.get("attitudes", {}).get(person_id, {}).get("weight", 0.0)
+        return cls(**{key: state.get("dispositions", {}).get(key, 0.0)
+                      for key in ("pride", "patience", "forgiveness", "assertiveness")},
+                   calm=traits.get("calm", 0.0), curiosity=traits.get("curious", 0.0), bluntness=traits.get("blunt", 0.0),
+                   values=tuple(sorted(state.get("values", {}).items())), self_weights=tuple(sorted(weights)),
+                   affinity=max(0.0, attitude), aversion=max(0.0, -attitude),
+                   self_state_json=json.dumps(state, sort_keys=True, ensure_ascii=False))
 
 
 @dataclass(frozen=True)
@@ -296,6 +334,11 @@ class TurnDecision:
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
+        # Historical frozen decisions must round-trip byte-for-field without
+        # inventing development that was absent from their recorded inputs.
+        for key in ("self_weights", "self_state_json", "affinity", "aversion"):
+            if not result["personality"][key]:
+                del result["personality"][key]
         result["grants"], result["declined"] = list(self.grants), list(self.declined)
         result["expressive_acts"] = dict(self.expressive_acts)
         result["evidence_refs"] = list(self.evidence_refs)
@@ -363,6 +406,7 @@ def _component_terms(c: RequestComponent, p: Personality, s: DecisionState,
         ("character_benefit", 1.3 * c.character_value + c.character_urgency),
         ("user_cost", -0.6 * kindness * c.user_cost),
         ("character_cost", -c.character_cost),
+        ("personal_attitude", 0.35 * (p.affinity - p.aversion) * (0.25 + c.user_value)),
         ("authored_values", sum(p.value(name) * effect for name, effect in c.value_effects)),
         ("self_consistency", -c.autonomy_cost * (1.4 * p.pride + 2.0 * p.value("autonomy"))),
         ("effort", -c.effort * (0.35 + 1 - p.patience) / (s.energy + 0.15)),
@@ -406,14 +450,14 @@ def decide(
     linear = (
         0.3 + 0.5 * kindness + 0.3 * p.curiosity + 0.35 * (s.trust + s.bonding)
         - r.h * (0.7 + 0.8 * p.pride) - r.r * (1.8 - p.patience)
-        - 0.6 * (1 - s.energy) - 0.45 * s.opportunity_cost,
+        - 0.6 * (1 - s.energy) - 0.45 * s.opportunity_cost + 0.35 * (p.affinity - p.aversion),
         (r.h + r.r + 2.5 * exposure) * (p.pride + p.assertiveness) - 0.25 * (1 - p.assertiveness),
         p.forgiveness * (0.15 + s.trust + s.bonding + perception.repair_credibility * perception.repair_relevance)
         - r.r * (1 - p.forgiveness),
         (1 - s.energy) + 0.3 * r.r + 0.3 * s.opportunity_cost,
         0.8 * p.bluntness + 0.5 * p.assertiveness + r.h * (0.3 + 0.6 * p.pride) - 0.4 * p.calm,
         0.65 * kindness + 0.6 * s.bonding + 0.4 * s.valence
-        - (r.h + exposure) * (0.5 + p.pride) - 0.5 * r.r,
+        - (r.h + exposure) * (0.5 + p.pride) - 0.5 * r.r + 0.35 * (p.affinity - p.aversion),
     )
     curvature = (1.5, 0.8 + 0.5 * (1 - p.assertiveness), 1.5, 1.2, 1.4, 1.5)
     inertia = 0.12 + 0.35 * p.patience
