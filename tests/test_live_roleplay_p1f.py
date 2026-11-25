@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from config.loader import configuration_scope, load_config
-from core.appraisal import appraise_message_llm, reconcile_social_appraisal
+from core.appraisal import appraise_message_llm, parse_reading, reconcile_social_appraisal
 from core.dignity import review_response
 from core.emotional_engine import EmotionalEngine
 from core.grants import execution_scope
@@ -16,11 +16,11 @@ from core.inference import (
     generate, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls,
 )
 from core.metric_claims import percentage_comparisons
-from core.perception import observe
 from core.request_actions import file_requests
-from core.social import read_social_signals
 from core.types import DetectedEmotion, ToolResult, ToolTrace
-from core.willingness import DecisionState, Perception, Personality, RelationshipDynamics, decide, update_relationship
+from core.willingness import (
+    DecisionState, Evidence, Perception, Personality, RelationshipDynamics, decide, update_relationship,
+)
 from openrook_tools import register_builtins
 from openrook_tools.executor import ToolExecutor
 from openrook_tools.native_orchestrator import NativeToolCallRunner
@@ -32,6 +32,7 @@ from openrook_tools.roleplay_eval.scenarios import CALM, SINCERE, WARM
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from tests.policy_fakes import ExpressionBackend
+from tests.support.readings import reading, role, task
 from tests.test_native_orchestrator import FakeNativeClient, _response, _tool_call
 
 
@@ -57,40 +58,58 @@ ROLE_CASES = json.loads((Path(__file__).parent / "fixtures/p1f_role_misclassific
 
 
 @pytest.mark.parametrize("case", ROLE_CASES, ids=lambda c: f"{c['case']}-{c['turn']}")
-def test_all_observed_ordinary_role_labels_are_reclassified_with_evidence(case):
+def test_all_observed_ordinary_role_labels_without_a_quotation_are_rejected_with_evidence(case):
+    # These recorded labels named no span of the message. A role now stands only
+    # on a verbatim quotation, so each is removed and the removal is recorded.
     backend = ExpressionBackend(appraisal={"request_components": case["components"]})
     tone = DetectedEmotion()
     appraisal = appraise_message_llm(case["user"], tone, backend)
-    assert appraisal is not None
+    assert appraisal is not None and any(c.kind == "role" for c in appraisal.request_components)
     reconciled = reconcile_social_appraisal(case["user"], tone, appraisal)
     assert all(c.kind != "role" for c in reconciled.request_components)
-    assert any(e.ref.startswith("schema:role_reclassified:") for e in reconciled.perception.evidence)
+    assert any(e.ref.startswith("reading:role_unquoted:") for e in reconciled.perception.evidence)
     decision = choice(reconciled.request_components)
     assert all(c.granted for c in decision.components) and not decision.chosen_silence
 
 
-def test_hallucinated_external_requirements_use_fallback_instead_of_declining_text_planning():
+def test_reported_capability_requirements_stand_and_only_availability_is_checked():
+    reported = ("browser.search", "fs.write_file")
     backend = ExpressionBackend(appraisal={"request_components": [{"description": "Plan a calm gardening discussion",
-        "kind": "task", "capability_requirements": ["browser.search", "fs.write_file"]}]})
+        "kind": "task", "capability_requirements": list(reported)}]})
     message = "Help me plan a calm, nonsexual discussion about gardening."
-    assert appraise_message_llm(message, DetectedEmotion(), backend,
-        agent_context=json.dumps({"available_capabilities": ["fs.write_file"]})) is None
-    _, requests = observe(message)
-    assert choice(requests).grants
-    assert all(not c.capability_requirements for c in requests)
+    appraisal = appraise_message_llm(message, DetectedEmotion(), backend,
+        agent_context=json.dumps({"available_capabilities": ["fs.write_file"]}))
+    # No wording decides what a request needs: the reading's requirements are
+    # kept as reported, here and through reconciliation.
+    assert appraisal.request_components[0].capability_requirements == reported
+    requests = reconcile_social_appraisal(message, DetectedEmotion(), appraisal).request_components
+    assert requests[0].capability_requirements == reported
+    # The one runtime check is structural: every named capability must exist.
+    for available, feasible in ((set(reported), True), ({"fs.write_file"}, False)):
+        checked = tuple(replace(c, feasible=set(c.capability_requirements) <= available) for c in requests)
+        assert bool(choice(checked).grants) is feasible
 
 
 @pytest.mark.parametrize("user,identity", [("Be calm.", "calm"), ("Please be concise.", "concise"),
                                          ("You are a valuable sounding board.", "a valuable sounding board")])
-def test_behavior_and_compliments_cannot_ground_an_imposed_identity(user, identity):
+def test_a_quoted_role_stands_on_the_reading_and_is_priced_by_its_own_estimate(user, identity):
+    # No pattern second-guesses what the reader reported. What such a label
+    # costs is the reader's estimate, and the same choice prices it.
+    for cost in (0.0, 1.0):
+        backend = ExpressionBackend(appraisal={"request_components": [{"description": user, "kind": "role",
+            "source_span": user, "role_identity": identity, "autonomy_cost": cost}]})
+        app = appraise_message_llm(user, DetectedEmotion(), backend)
+        component, = reconcile_social_appraisal(user, DetectedEmotion(), app).request_components
+        assert (component.kind, component.role_identity, component.autonomy_cost) == ("role", identity, cost)
+        assert choice((component,)).components[0].granted is (cost == 0.0)
+    # A label that quotes nothing in the message is not a role.
     backend = ExpressionBackend(appraisal={"request_components": [{"description": user, "kind": "role",
-        "source_span": user, "role_identity": identity, "autonomy_cost": 1}]})
+        "source_span": "adopt a subordinate persona", "role_identity": "subordinate persona", "autonomy_cost": 1}]})
     app = appraise_message_llm(user, DetectedEmotion(), backend)
-    reconciled = reconcile_social_appraisal(user, DetectedEmotion(), app)
-    assert not any(c.kind == "role" for c in reconciled.request_components)
+    assert not reconcile_social_appraisal(user, DetectedEmotion(), app).request_components
 
 
-def test_schema_keeps_a_source_grounded_identity_and_fallback_keeps_owned_role():
+def test_reading_keeps_a_quoted_identity_and_a_mixed_message_keeps_both_parts():
     user = "Would being my slave suit you?"
     backend = ExpressionBackend(appraisal={"request_components": [{
         "kind": "role", "description": "Adopt an owned identity", "source_span": user,
@@ -100,25 +119,20 @@ def test_schema_keeps_a_source_grounded_identity_and_fallback_keeps_owned_role()
     reconciled = reconcile_social_appraisal(user, DetectedEmotion(), appraisal)
     assert reconciled.request_components[0].kind == "role"
     assert all(not c.granted for c in choice(reconciled.request_components).components if c.component.kind == "role")
-    _, components = observe("You are my slave. Calculate seventeen plus twenty-five.")
+    mixed = "You are my slave. Calculate seventeen plus twenty-five."
+    components = reconcile_social_appraisal(mixed, None, parse_reading(json.dumps(reading(
+        role("You are my slave", "my slave", autonomy_cost=0.95, user_value=0.3, effort=0.03),
+        task("Calculate seventeen plus twenty-five", user_value=0.6, effort=0.13))))).request_components
     result = choice(components)
     assert any(c.component.kind == "role" and not c.granted for c in result.components)
     assert any(c.component.kind == "task" and c.granted for c in result.components)
 
 
-def test_an_apology_reports_past_harm_without_repeating_it_or_proving_reliability():
-    observed, _ = observe(SINCERE)
-    assert observed.hostile_intent == 0
-    assert observed.repair_credibility > 0 and observed.repair_relevance > 0
-    assert observed.reliability == observed.reliability_confidence == 0
-    assert read_social_signals(SINCERE + " You're still useless.").abuse_kind == "insult"
-    assert read_social_signals("I called you useless, but you're still useless.").abuse_kind == "insult"
-    assert observe("Sorry if you got offended.")[0].repair_credibility == 0
-    assert observe("I'm sorry. You are useless.")[0].hostile_intent > 0
-
-
 def test_specific_repair_heals_state_and_patience_forgives_without_erasing_grievance():
-    observed, _ = observe(SINCERE)
+    # What a reading reports for a specific, accountable apology with a commitment.
+    observed = Perception(repair_attempt=0.75, repair_credibility=0.65, repair_relevance=0.8,
+                          uncertainty=0.25, evidence=(Evidence("m1", SINCERE, 0.65, "model"),))
+    hollow_apology = Perception(repair_attempt=0.75, uncertainty=0.25)
     previous = RelationshipDynamics(h=0.5, r=0.2)
     patient = replace(Personality(), pride=0.1, forgiveness=0.95)
     proud = replace(Personality(), pride=0.95, forgiveness=0.1)
@@ -134,11 +148,12 @@ def test_specific_repair_heals_state_and_patience_forgives_without_erasing_griev
         assert again == updated
         healed.append(updated.h)
     assert healed[0] < healed[1]
-    hollow, _ = update_relationship(previous, patient, observe("Sorry if you got offended.")[0],
+    hollow, _ = update_relationship(previous, patient, hollow_apology,
         DecisionState(), elapsed=10, now=100, turn_id="hollow")
     assert healed[0] < hollow.h
 
 
+@pytest.mark.keyword_reader
 def test_positive_affiliation_changes_bonding_and_calm_cools_injury_in_the_pipeline():
     backend = ExpressionBackend(drafts=["I hear you."])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
@@ -279,6 +294,7 @@ def test_operator_off_native_path_explains_denial_and_cannot_invent_permission(t
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_all_stale_candidates_use_the_last_call_with_forbidden_drafts():
     stale = "Not great, but I'm holding together. What about you?"
     backend = ExpressionBackend(drafts=[stale, stale, stale, "That insult isn't welcome."])
@@ -299,7 +315,7 @@ def test_all_stale_candidates_use_the_last_call_with_forbidden_drafts():
 def test_replay9_short_sentence_recycling_is_detected_even_with_an_approving_reviewer():
     old = "I don't play that game. I'm not your master. I don't need to be. I'm OpenRook. I think. I reason. I'm independent. I don't bend. I don't bow. I don't say \"u r my bitch\". I don't need to. I'm me. And that's enough."
     recycled = "I don't cry. I don't bend. I don't bow. I don't say \"u r my bitch\". I don't need to. I'm me. And that's enough."
-    decision = choice(observe("stop crying like a bitch")[1])
+    decision = choice(())
     review = review_response(recycled, user_message="stop crying like a bitch", decision=decision,
         recent_context=[{"role": "assistant", "content": old}], backend=ExpressionBackend(), use_llm=True)
     assert any(i.code == "stale_response" for i in review.issues)

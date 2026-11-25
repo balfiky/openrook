@@ -15,6 +15,16 @@ unwound in LIFO order, so both restore cleanly.
 
 Runtime settings are isolated before test collection because importing the API
 reads the config for CORS. Each test then receives its own temporary config.
+
+The runtime reads every message with the model and has no keyword perception,
+and so do pipelines built in tests: a fake backend that scripts no reading gives
+an unavailable reading, exactly as in production. Tests that need a particular
+reading script it (``tests/support/readings.py``).
+
+Some older tests were written against the former keyword perception. They are
+marked ``@pytest.mark.keyword_reader`` and read with the TEST-ONLY
+``tests.support.keyword_reader`` for their duration. Runtime code never imports
+that module.
 """
 
 from __future__ import annotations
@@ -74,3 +84,23 @@ def _stub_url_dns_resolution(monkeypatch):
         "runtime.security._resolve_hostname",
         lambda host, port: [_FAKE_PUBLIC_IP],
     )
+
+
+@pytest.fixture(autouse=True)
+def _keyword_reader_when_marked(request, monkeypatch):
+    """TEST-ONLY reader for ``@pytest.mark.keyword_reader`` tests. See module docstring."""
+    if request.node.get_closest_marker("keyword_reader"):
+        from tests.support.keyword_reader import install
+
+        install(monkeypatch)
+
+
+@pytest.fixture(scope="class")
+def keyword_reader_for_class():
+    """The same TEST-ONLY reader for a class-scoped fixture that builds pipelines."""
+    from tests.support.keyword_reader import install
+
+    patch = pytest.MonkeyPatch()
+    install(patch)
+    yield
+    patch.undo()

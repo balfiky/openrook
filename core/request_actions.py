@@ -24,6 +24,33 @@ _VERBS = {"fs.write_file": r"\b(?:create|writ\w*|wrote|save)\b",
           "fs.delete_path": r"\b(?:delete|remove)\b"}
 
 
+_LEARNING_INTENT_PATTERNS = (
+    re.compile(r"\blearn\b.{0,60}\bfrom\b", re.I),
+    re.compile(r"\blearn\s+(?:this|that)\b", re.I),
+    re.compile(r"\blearn\s*:", re.I),
+    re.compile(
+        r"\bstudy\b.{0,60}\b(?:this|that|from|repo|repository|project|book|article|url)\b",
+        re.I,
+    ),
+    re.compile(r"\b(?:absorb|absort|internalize|digest)\b", re.I),
+    re.compile(r"\bmake\s+this\s+part\s+of\s+you\b", re.I),
+    re.compile(r"\blet\s+this\s+shape\s+you\b", re.I),
+    re.compile(r"\btake\s+this\s+as\s+formative\b", re.I),
+    re.compile(r"\bfill\s+(?:it|life\s+history|life\s+learning|memory)\s+with\s+this\b", re.I),
+    re.compile(
+        r"\b(?:add|save|record|store|put)\b.{0,60}\b"
+        r"(?:life\s+history|life\s+learning|life\s+ledger|formative\s+memory)\b",
+        re.I,
+    ),
+    re.compile(r"\bseed\s+(?:life\s+history|life\s+learning|memory)\b", re.I),
+)
+
+
+def has_learning_intent(text: str) -> bool:
+    """Recognize a possible learning request without granting ingestion."""
+    return any(pattern.search(text) for pattern in _LEARNING_INTENT_PATTERNS)
+
+
 def _path(raw: str) -> str:
     value = raw.strip('`"\'').rstrip(".!?")
     return value if "/" in value or "." in value else ""

@@ -10,6 +10,8 @@ These tests lock in the new behavior so the bug cannot regress.
 
 from __future__ import annotations
 
+import pytest
+
 
 from tests._fakes import MockLLMBackend
 from core.dual_process.self_check import SelfCheckResult
@@ -110,6 +112,7 @@ class TestRunnerSelfCheckRegression:
     invoked twice. Now it must read 2.
     """
 
+    @pytest.mark.keyword_reader
     def test_review_and_rewrite_calls_are_all_counted(self, monkeypatch):
         from tests.policy_fakes import ExpressionBackend
         scenario = EvalScenario(id="review_retry_smoke", name="Review and rewrite accounting",
@@ -121,6 +124,7 @@ class TestRunnerSelfCheckRegression:
         assert len(generations) == len(reviews) == 2
         assert result.metrics.llm_call_count == len(backend.calls) == 4
 
+    @pytest.mark.keyword_reader
     def test_passing_self_check_counts_one_generation(self, monkeypatch):
         """Sanity check: when self-check passes, only one generation."""
         from evals import runner as runner_mod

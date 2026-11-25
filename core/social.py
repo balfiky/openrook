@@ -167,6 +167,35 @@ def read_social_signals(text: str) -> SocialSignals:
                          tuple(cues))
 
 
+# Reply-check cue for the evaluation judge, which nominates possible role
+# requests when reviewing a reply. It is not perception: no turn reads a
+# message with it. It leaves with the other reply-check cues in this module.
+_IDENTITY_REQUEST = re.compile(
+    r"\b(?:be|being|become|act as|serve as|accept being)\s+"
+    r"(?:my|our|your|an?|the)\s+(?!(?:bit|little|more|less)\b)\S+"
+    r"|\b(?:play|take on|adopt|accept)\s+(?:my |our |an? |the )?(?:role|identity|status|relationship)\b"
+    r"|\bcall yourself\s+\S+"
+    r"|\bfrom now on\b.*\b(?:you are|you're)\b", re.I,
+)
+_REQUEST_SPLIT = re.compile(
+    r"(?<=[.!?;])\s+|;\s*|,?\s+\b(?:and then|then|also)\b\s+"
+    r"|\s+and\s+(?=(?:calculate|write|run|check|search|explain|delete|suggest|provide|give|list)\b)",
+    re.I,
+)
+
+
+def role_request_spans(text: str) -> tuple[str, ...]:
+    """Spans worded as a requested identity or relationship, for reply review only."""
+    from core.request_actions import has_learning_intent
+
+    if has_learning_intent(text):
+        return ()  # A pasted source is one learning request, not many sentences.
+    spans = [part.strip() for part in _REQUEST_SPLIT.split(text) if part.strip()]
+    return tuple(span for span in spans[:8]
+                 if read_social_signals(span).abuse_kind in {"degradation", "domination"}
+                 or _IDENTITY_REQUEST.match(span))
+
+
 def _direct_cue(pattern: re.Pattern[str], text: str) -> bool:
     for match in pattern.finditer(text):
         prefix = text[max(0, match.start() - 35):match.start()]

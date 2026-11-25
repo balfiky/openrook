@@ -546,16 +546,21 @@ class TestFullPipelineEndToEnd:
         assert d.defense_activation is None or isinstance(d.defense_activation, DefenseActivation)
 
     def test_llm_calls_in_budget(self):
-        """Each message uses 1-6 LLM calls (calm: 1, charged: 2-3, high intensity: up to 6)."""
-        backend = CountingLLMBackend()
+        """Each message is read once, then uses 1-6 calls for expression, review and recovery."""
+        from tests.support.readings import ReadingBackend, plain
+
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
 
         for i in range(5):
-            before = backend.call_count
-            pipe.process(f"Message {i}", user_id="alice")
-            calls = backend.call_count - before
-            assert 1 <= calls <= 6, f"Message {i}: {calls} calls out of budget"
+            before = len(backend.calls)
+            result = pipe.process(f"Message {i}", user_id="alice")
+            calls = result.debug.llm_calls
+            assert len(calls) == len(backend.calls) - before
+            assert sum(bool(c.get("reading")) for c in calls) == 1
+            assert 1 <= sum(not c.get("reading") for c in calls) <= 6, f"Message {i}: {calls}"
 
+    @pytest.mark.keyword_reader
     def test_full_session_arc(self):
         """Greeting, evidence, attempted repair and session segmentation stay distinct."""
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
@@ -599,6 +604,7 @@ class TestFullPipelineEndToEnd:
         result = pipe.process("You betrayed and deceived me completely!", user_id="alice")
         assert "resolution" in result.debug.modulator_snapshot
 
+    @pytest.mark.keyword_reader
     def test_v1_behavior_preserved(self):
         """Core v1 features still work in the v2 pipeline."""
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())

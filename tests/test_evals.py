@@ -7,7 +7,6 @@ through the real pipeline with mock backends.
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
@@ -31,7 +30,6 @@ from evals.scenarios import (
     phase11_human_scenarios,
     emotional_core_scenarios,
     tool_loop_scenarios,
-    task_planning_scenarios,
     proactive_scenarios,
     defense_resolution_scenarios,
     relationship_scenarios,
@@ -410,6 +408,7 @@ class TestIntegrationScenarios:
         result = run_scenario(scenario)
         assert result.passed, _failures(result)
 
+    @pytest.mark.keyword_reader
     def test_escalation(self):
         scenario = emotional_core_scenarios()[2]
         result = run_scenario(scenario)
@@ -553,6 +552,7 @@ class TestPhase11Scenarios:
         result = run_scenario(scenario)
         assert result.passed, _failures(result)
 
+    @pytest.mark.keyword_reader
     def test_repair_closes_loop(self):
         scenario = phase11_human_scenarios()[5]
         result = run_scenario(scenario)
@@ -565,6 +565,7 @@ class TestLifeAndSemanticScenarios:
         result = run_scenario(scenario)
         assert result.passed, _failures(result)
 
+    @pytest.mark.keyword_reader
     def test_life_influence_affects_policy_scenario(self):
         scenario = next(s for s in phase13_life_scenarios() if s.id == "life_influence_affects_policy")
         result = run_scenario(scenario)
@@ -604,6 +605,7 @@ class TestRunnerBatch:
         for r in report.results:
             assert "phase11" in r.tags
 
+    @pytest.mark.keyword_reader
     def test_run_by_phase13_life_tag(self):
         report = run_by_tag(all_scenarios(), "phase13_life")
         assert report.total_scenarios == 6
@@ -612,6 +614,7 @@ class TestRunnerBatch:
             for result in report.results if not result.passed
         ]
 
+    @pytest.mark.keyword_reader
     def test_run_by_character_independence_tag(self):
         report = run_by_tag(all_scenarios(), "character_independence")
         assert report.total_scenarios == 6

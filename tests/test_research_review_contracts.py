@@ -127,6 +127,7 @@ async def test_replay_rejects_an_unfinished_recorded_request(tmp_path):
     assert {"unconsumed_requests": {"model": 1, "native": 0}} in report["mismatches"]
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.asyncio
 async def test_native_requests_replay_through_the_real_runner_without_external_calls(tmp_path):
     from core.types import ToolCapability, ToolCategory, ToolResult
@@ -345,6 +346,7 @@ class StoppingBackend(ResearchBackend):
         return super().generate(system_prompt, user_message)
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["daily", "study", "runtime"])
 async def test_generated_artifact_preserves_resource_stops_and_ordinary_failure(tmp_path, kind):

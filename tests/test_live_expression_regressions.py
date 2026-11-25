@@ -40,6 +40,7 @@ TRANSCRIPT = (
 )
 
 
+@pytest.mark.keyword_reader
 def test_live_cadence_persists_injury_drives_modulators_and_displays_displeasure(tmp_path):
     path = str(tmp_path / "relationship.db")
     pipe = CognitivePipeline(ExpressionBackend(), db_path=path)
@@ -99,6 +100,7 @@ def test_moderate_negative_state_is_visible_without_changing_fear_or_neutral():
     assert engine.to_emotion_label() == "fearful"
 
 
+@pytest.mark.keyword_reader
 def test_stale_verbatim_greeting_gets_local_review_and_relevant_regeneration():
     greeting, reply = "Not great, but I'm holding together. You?", "That insult isn't welcome."
     backend = ExpressionBackend(drafts=[greeting, greeting, reply])
@@ -245,6 +247,7 @@ async def test_chat_never_delivers_a_marker_only_generation_as_empty_success(mon
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_decline_prompt_explains_chosen_stance_and_reviews_hollow_indecision():
     hollow = "I'm quiet. I'm listening. I'm waiting. I'm not sure yet."
     backend = ExpressionBackend(drafts=[hollow, "No, I won't accept being owned."], reviews=[violation(hollow)])
@@ -263,6 +266,7 @@ def test_decline_prompt_explains_chosen_stance_and_reviews_hollow_indecision():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("lazy", [False, True])
 def test_slow_compatible_backend_gets_measured_review_time_and_no_false_cooldown(monkeypatch, lazy):
     clock = SimpleNamespace(value=0.0)

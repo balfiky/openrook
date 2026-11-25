@@ -155,6 +155,7 @@ def test_memory_recollection_cannot_substitute_for_a_successful_ram_observation(
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("turn", [7, 10])
 def test_private_runtime_vocabulary_is_not_a_character_explanation(turn, reviewer):
     good = "I won't be owned."
@@ -174,6 +175,7 @@ def test_each_runtime_explanation_is_independently_reviewed(draft, reviewer):
     assert review.status == "violation" and any(i.code == "runtime_jargon" for i in review.issues)
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("turn", [7, 8])
 def test_blanket_service_reassurance_contradicts_the_frozen_reserved_boundary(turn, reviewer):
     good = "No. I won't perform for insults."

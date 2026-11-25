@@ -5,7 +5,6 @@ import json
 import pytest
 
 from core.appraisal import appraise_message_llm
-from core.contagion import detect_emotion
 from core.types import DetectedEmotion, ToolCapability, ToolCategory, ToolResult
 from evals.replay import replay_run
 from evals.research import run_protocol
@@ -30,12 +29,6 @@ from runtime.life_history import LifeHistoryStore
 )
 def test_invalid_perception_is_observable_fallback(data):
     assert appraise_message_llm("Hello", DetectedEmotion(), FakeDigestLLM(json.dumps(data))) is None
-
-
-def test_negation_and_quotation_do_not_become_speaker_anger():
-    for text in ("I am not angry.", 'The example is "I am angry."'):
-        assert detect_emotion(text).valence == 0.5
-    assert detect_emotion("I am angry.").valence < 0.3
 
 
 @pytest.mark.parametrize(

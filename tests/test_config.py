@@ -248,13 +248,14 @@ class TestModulesUseConfig:
         assert CHARGE_NEGATIVE_DELTA == cfg.topic.charge_negative_delta
         assert CONTRADICTION_THRESHOLD == cfg.contradiction.threshold
 
-    def test_contagion_uses_config(self):
-        from core.contagion import (
-            _CAPS_RATIO_THRESHOLD, _EXCLAMATION_BOOST,
-        )
-        cfg = get_config()
-        assert _CAPS_RATIO_THRESHOLD == cfg.contagion_detection.caps_ratio_threshold
-        assert _EXCLAMATION_BOOST == cfg.contagion_detection.exclamation_boost
+    def test_contagion_has_no_tunable_word_or_punctuation_table(self):
+        import core.contagion as contagion
+
+        # Tone is part of the model's reading. No style thresholds are read
+        # from configuration by the runtime any more.
+        assert not [name for name in vars(contagion) if name.isupper() or name.startswith("_CAPS")
+                    or name.startswith("_EXCLAMATION") or name == "_PATTERNS"]
+        assert contagion.detect_emotion("GREAT!!!") == contagion.neutral_tone()
 
     def test_digestion_uses_config(self):
         from core.memory.digestion import SPIKE_INTENSITY_THRESHOLD

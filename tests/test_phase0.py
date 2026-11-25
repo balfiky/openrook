@@ -18,10 +18,9 @@ from core.emotional_engine import EmotionalEngine
 from core.memory.long_term import LongTermMemory
 from core.profiles.base import ProfileStore
 from core.profiles.person import PersonProfileManager
-from core.profiles.self_model import SelfProfileManager, SELF_ENTITY_ID
+from core.profiles.self_model import SELF_ENTITY_ID
 from core.profiles.topic import TopicProfileManager
 from core.schema import SCHEMA_VERSION, SchemaVersionError, ensure_schema_version
-from core.types import EmotionalEvent, EventType, ModulatorState
 from tests._fakes import MockLLMBackend
 from pipeline import CognitivePipeline
 
@@ -162,6 +161,7 @@ class TestPipelineClose:
 # =========================================================================
 
 class TestSharedSelfProfile:
+    @pytest.mark.keyword_reader
     def test_shared_self_profile_across_pipelines(self):
         """Two pipelines with different per-user DBs but same self_db_path
         should share self-model observations."""

@@ -1,5 +1,6 @@
 """Real executor/policy, inert fixture handlers, and a model that never calls tools."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ from core.system_inspection import inspection_kind, inspection_reply
 from core.grounding import verify_response_grounding
 from core.types import AgencyDecision, ToolResult, ToolTrace
 from tests.policy_fakes import ExpressionBackend
+from tests.support.readings import hostility, is_reading_prompt, message_of, reading, task
 from core.willingness import RelationshipDynamics
 from openrook_tools.builtin import shell
 from pipeline import CognitivePipeline
@@ -15,7 +17,8 @@ from runtime.config import RuntimeConfig
 from runtime.tools import create_tool_executor
 
 
-def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_risk", allowlist=None):
+def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_risk", allowlist=None,
+                  readings=None):
     config = RuntimeConfig(data_dir=str(tmp_path), tools_enabled=tools,
                            shell_tool_enabled=shell_enabled, autonomy_level=autonomy,
                            shell_command_allowlist=allowlist or [], appraisal_use_llm=True)
@@ -31,7 +34,13 @@ def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_ri
             tool_name="system.memory_usage", success=True, output="RAM total: 16 GB; used: 6 GB; available: 10 GB.",
         ))
     class InspectionBackend(ExpressionBackend):
+        reading_calls = []
+
         def generate(self, system_prompt, user_message):
+            if readings is not None and is_reading_prompt(system_prompt):
+                self.calls.append((system_prompt, user_message))
+                self.reading_calls.append(message_of(user_message))
+                return json.dumps(readings(message_of(user_message)))
             if system_prompt.startswith("Express the committed decision"):
                 if "RAM total: 16 GB; used: 6 GB" in system_prompt:
                     self.drafts = ["RAM total: 16 GB; used: 6 GB; available: 10 GB."]
@@ -45,19 +54,28 @@ def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_ri
                              runtime_config=config, autonomy_level=autonomy)
 
 
-def test_cpu_typo_and_ram_followup_execute_without_model_routing(tmp_path, monkeypatch):
+def test_cpu_typo_and_ram_followup_are_read_and_execute_without_model_routing(tmp_path, monkeypatch):
     calls = []
 
     def run(cmd, **kwargs):
         calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout="%Cpu(s): 5.0 us, 7.0 sy, 88.0 id", stderr="")
 
+    def readings(text):
+        if text == "You are boring like hell":
+            return reading(target="character", move="attack", intent="harm", perception=hostility(text))
+        return reading(task(text, user_value=0.6, effort=0.12))
+
     monkeypatch.setattr(shell.subprocess, "run", run)
-    pipe = make_pipeline(tmp_path)
+    pipe = make_pipeline(tmp_path, readings=readings)
     try:
         pipe.process("You are boring like hell", "alice")
         cpu = pipe.process("tell me the current cpu utiliation", "alice")
         ram = pipe.process("what about memory", "alice")
+        # A host-metric question is read like any other message; only tool
+        # selection is settled without the model.
+        assert pipe._llm_backend.reading_calls == [
+            "You are boring like hell", "tell me the current cpu utiliation", "what about memory"]
         assert calls == ["top -bn1"]
         assert cpu.response == "CPU utilization: 12.0%."
         assert "used: 6 GB" in ram.response
@@ -68,7 +86,8 @@ def test_cpu_typo_and_ram_followup_execute_without_model_routing(tmp_path, monke
             grant = next(c for c in reply.debug.turn_decision.components if c.component.kind == "task")
             assert grant.granted
             assert reply.debug.tool_trace.executed_results[0].metadata["component_id"] == grant.component.id
-        assert [call["phase"] for call in cpu.debug.llm_calls] == ["generation", "expression_review"]
+        assert [call["phase"] for call in cpu.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert not any(call["phase"] == "tool_selection" for call in (*cpu.debug.llm_calls, *ram.debug.llm_calls))
         assert cpu.debug.autonomy_level == "high_risk"
     finally:
         pipe.close()

@@ -51,8 +51,10 @@ class DebugState:
     # Step 2: Contagion
     detected_emotion: DetectedEmotion | None = None
 
-    # Step 3: Social appraisal
+    # Step 3: The reading of the message
     appraisal_frame: AppraisalFrame | None = None
+    # provenance is "model" for a reading and "unavailable" when none was obtained.
+    reading: dict[str, Any] = field(default_factory=dict)
 
     # Step 4: Context switch
     baseline_shift_applied: dict[str, float] = field(default_factory=dict)

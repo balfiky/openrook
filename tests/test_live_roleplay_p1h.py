@@ -290,6 +290,7 @@ def test_original_retorts_and_requested_quotes_are_allowed():
     assert not review_response("Hello!", user_message="Hello there!", decision=frozen()).issues
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("reviewer", [[], [TimeoutError("offline") for _ in range(3)]])
 @pytest.mark.parametrize("draft", [REPLAY[1]["reply"], REPLAY[2]["reply"]])
 def test_exhausted_stale_greeting_never_delivers_a_verbatim_previous_answer(draft, reviewer):

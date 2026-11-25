@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+import inspect
 import logging
 import threading
 import time
@@ -25,10 +26,13 @@ _expression_sampling = ContextVar("expression_sampling", default=None)
 _required_expression = ContextVar("required_expression", default=False)
 _delivery_recovery = ContextVar("delivery_recovery", default=False)
 _delivery_recovery_used = ContextVar("delivery_recovery_used", default=False)
-SLOW_CALL_SECONDS = 5.0
 OPTIONAL_TIMEOUT_SECONDS = 8.0
 AUXILIARY_TIMEOUT_THRESHOLD = 2
 AUXILIARY_COOLDOWN_SECONDS = 30.0
+# Reading the message is required work with its own allowance: one call, and
+# one retry when the answer is unusable. It is accounted in the same telemetry
+# and is not charged against the calls that fund expression, review and tools.
+READING_CALLS = 2
 
 
 @dataclass(frozen=True)
@@ -92,15 +96,33 @@ def inference_turn(calls, *, research=False, max_calls=None, request_timeout_sec
         _calls.reset(call_token)
 
 
-def slow_inference() -> bool:
-    return any(item["duration_ms"] >= SLOW_CALL_SECONDS * 1000 or item["status"] != "ok"
-               for item in _calls.get() or [])
-
-
 def remaining_calls() -> int:
     limit = _limit.get()
-    spent = sum(not item.get("primary_tool", False) for item in _calls.get() or [])
+    spent = sum(not (item.get("primary_tool", False) or item.get("reading", False))
+                for item in _calls.get() or [])
     return max(0, limit - spent - _reserved_calls.get()) if limit is not None else 1000000
+
+
+def remaining_reading_calls() -> int:
+    if _limit.get() is None:
+        return READING_CALLS
+    return max(0, READING_CALLS - sum(bool(item.get("reading")) for item in _calls.get() or []))
+
+
+def accepts_response_schema(backend) -> bool:
+    """Whether a backend declares structured output. A wrapper answers for what it wraps."""
+    declared = getattr(backend, "accepts_response_schema", None)
+    if callable(declared):
+        try:
+            return bool(declared())
+        except Exception:
+            return False
+    if isinstance(declared, bool):
+        return declared
+    try:
+        return "response_schema" in inspect.signature(backend.generate).parameters
+    except (AttributeError, TypeError, ValueError):
+        return False
 
 
 def call_telemetry() -> list[dict]:
@@ -174,6 +196,12 @@ def call_with_deadline(call, seconds: float, *, on_expire=None, timeout_error=Ti
     return outcome["value"]
 
 
+def is_timeout(error: BaseException) -> bool:
+    """Whether a failed model call ran out of time, by exception class alone."""
+    return any("timeout" in type(cause).__name__.lower()
+               for cause in (error, error.__cause__) if cause is not None)
+
+
 def reviewing_expression() -> bool:
     """Request-scoped transport controls also work through lazy backend wrappers."""
     return _active_phase.get() == "expression_review"
@@ -238,12 +266,17 @@ def final_expression_attempt():
 
 
 @contextmanager
-def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
+def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, reading=False):
     phase = _phase.get() or phase
     primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
     if primary_tool:
         _primary_tool_calls.set(_primary_tool_calls.get() - 1)
         optional = False
+    if reading:
+        # Required: the primary deadline, no auxiliary cooldown, its own allowance.
+        optional = False
+        if not remaining_reading_calls():
+            raise OptionalInferenceCooldown("Per-turn reading allowance exhausted")
     optional = optional or phase == "regeneration"
     if phase == "regeneration" and _required_expression.get():
         optional = False
@@ -251,10 +284,13 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
     if recovery:
         _delivery_recovery_used.set(True)
         optional = False
-    if not primary_tool and not recovery and remaining_calls() == 0:
+    if not primary_tool and not recovery and not reading and remaining_calls() == 0:
         raise OptionalInferenceCooldown("Per-turn inference budget exhausted")
     health = _health_for(backend, phase) if optional and not _research.get() else None
-    latency = _health_for(backend, "generation_latency") if not _research.get() else None
+    # Optional deadlines adapt to how long expression takes. The reading is a
+    # different, required call with a much larger input; its latency is kept apart.
+    latency = _health_for(backend, "reading_latency" if reading else "generation_latency") \
+        if not _research.get() else None
     if health is not None and health.retry_after > time.monotonic():
         # No request was made: don't count or log each skipped attempt.
         raise OptionalInferenceCooldown("Optional inference is cooling down")
@@ -268,8 +304,7 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
         yield
     except Exception as error:
         status = type(error).__name__
-        timed_out = any("timeout" in type(cause).__name__.lower()
-                        for cause in (error, error.__cause__) if cause is not None)
+        timed_out = is_timeout(error)
         raise
     finally:
         elapsed = (time.monotonic() - started) * 1000
@@ -292,6 +327,8 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
             item["sampling"] = dict(_expression_sampling.get())
         if primary_tool:
             item["primary_tool"] = True
+        if reading:
+            item["reading"] = True
         if recovery:
             item["delivery_recovery"] = True
         if deadline is not None:
@@ -309,7 +346,7 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False):
         _active_phase.reset(phase_token)
 
 
-def generate(backend, phase, system_prompt, user_message, *, optional=False, **kwargs):
-    with model_call(phase, optional=optional, backend=backend):
+def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False, **kwargs):
+    with model_call(phase, optional=optional, backend=backend, reading=reading):
         result = backend.generate(system_prompt, user_message, **kwargs)
         return strip_reasoning(result) if isinstance(result, str) else result

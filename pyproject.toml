@@ -111,6 +111,7 @@ config = ["*.yaml", "prompts/*.md"]
 testpaths = ["tests"]
 markers = [
     "uat: installed/browser user acceptance tests",
+    "keyword_reader: older test that reads with the TEST-ONLY tests/support/keyword_reader.py",
 ]
 
 [tool.ruff]

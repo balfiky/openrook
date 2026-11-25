@@ -215,7 +215,11 @@ async def test_main_generation_timeout_keeps_friendly_503_and_setting_hint(monke
         pipe.close()
 
 
-@pytest.mark.parametrize("phase", ["expression_review", "self_intent", "tool_selection"])
+@pytest.mark.parametrize("phase", [
+    "expression_review", "self_intent",
+    # The tool request is recognised by the test-only keyword reader.
+    pytest.param("tool_selection", marks=pytest.mark.keyword_reader),
+])
 def test_timeout_is_recorded_in_its_actual_execution_scope(monkeypatch, phase):
     from openai import APITimeoutError
     import httpx

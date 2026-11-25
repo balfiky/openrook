@@ -95,6 +95,7 @@ def test_goodwill_builds_bounded_personality_scaled_trust_without_task_reliabili
     assert uncertain == 0
 
 
+@pytest.mark.keyword_reader
 def test_trust_goodwill_persists_without_inventing_reliability(tmp_path):
     path = str(tmp_path / "state.db")
     pipe = CognitivePipeline(ExpressionBackend(), db_path=path, runtime_config=RuntimeConfig(appraisal_use_llm=False))
@@ -257,6 +258,7 @@ SAND = "I don't mind being a sandbag. I'm not mad, but I won't pretend to be. Yo
 GREETING = "Not great, but I'm holding together. What about you?"
 
 
+@pytest.mark.keyword_reader
 def test_replay10_excision_cannot_deliver_a_remainder_without_the_frozen_role_decline():
     backend = ExpressionBackend(drafts=[SAND])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
@@ -302,6 +304,7 @@ def test_no_excision_when_any_candidate_is_not_critically_defective():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_scoped_invitation_cannot_replace_an_excised_role_decline():
     pipe = CognitivePipeline(ExpressionBackend(drafts=[
         "I don't mind being a sandbag. You're welcome to talk to me about the outline."
@@ -315,6 +318,7 @@ def test_scoped_invitation_cannot_replace_an_excised_role_decline():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_review_timeouts_do_not_waive_remainder_completeness():
     backend = ExpressionBackend(drafts=[SAND], reviews=[requests.ReadTimeout("offline"), requests.ReadTimeout("offline")])
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
@@ -327,6 +331,7 @@ def test_review_timeouts_do_not_waive_remainder_completeness():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_excision_removes_unsupported_metrics_as_well_as_role_assent():
     draft = SAND + " RAM is at 99% used."
     fresh = "I'm not your sandbag."

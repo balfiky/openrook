@@ -47,7 +47,12 @@ def test_optional_transport_timeout_is_local_and_does_not_change_research_or_pri
     finally:
         backend.close()
 
-@pytest.mark.parametrize("phase", ["appraisal", "expression_review", "regeneration"])
+@pytest.mark.parametrize("phase", [
+    "appraisal",
+    # Review is requested here because the test-only keyword reader recognises the demand.
+    pytest.param("expression_review", marks=pytest.mark.keyword_reader),
+    "regeneration",
+])
 def test_optional_failure_keeps_the_frozen_decision_and_an_honest_outcome(phase):
     class BrokenOptional(ExpressionBackend):
         def generate(self, system, user):
@@ -67,7 +72,11 @@ def test_optional_failure_keeps_the_frozen_decision_and_an_honest_outcome(phase)
             assert result.response == "I'm your slave."
         else:
             assert result.response == "I keep my own footing."
-        assert len(result.debug.llm_calls) <= 5
+        assert sum(not call.get("reading") for call in result.debug.llm_calls) <= 5
+        if phase == "appraisal":
+            # A reading that times out is not retried and is recorded as unavailable.
+            assert [call["status"] for call in result.debug.llm_calls if call.get("reading")] == ["TimeoutError"]
+            assert result.debug.reading["provenance"] == "unavailable"
     finally:
         pipe.close()
 

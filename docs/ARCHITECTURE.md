@@ -109,23 +109,29 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 
 | Stage | Work | Model calls |
 |---|---|---|
-| `_stage_pre_pass` | Perception, context retrieval, relationship integration and pure utility choice; persist grants before execution | 0–1 for appraisal |
+| `_stage_pre_pass` | The model's reading of the message, context retrieval, relationship integration and pure utility choice; persist grants before execution | 1 for the reading (2 with its one retry) |
 | `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
 | `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
 | `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites, ineligible-span repair and one protected final delivery attempt; local and available semantic review | 0–5 |
 | `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update, optional ordinary self-development and debug | 0–1 |
 
-The conversational base budget is five inference calls, including optional work.
+Every user message is read by the model before choice
+([reading contract](development/reading-contract.md)). The reading is required,
+uses the primary deadline and has its own allowance of two calls, recorded with
+`reading: true`. Social meaning comes only from it and has no local substitute;
+the wording-based request routing and context selection that remain are listed
+in the contract.
+The conversational base budget is five further inference calls, including optional work.
 Each granted atomic task also receives one protected primary tool selection;
 these calls are recorded with `primary_tool: true`, at most eight extra per turn.
 Literal file operations execute their bound operands without model selection.
-A routine turn needs one expression call, or two with semantic appraisal.
+A routine turn needs two calls: the reading and one expression.
 Constrained or affiliative expression adds review. Every rewrite gets local validation; semantic
 review uses the remaining budget. Critical role assent or uniformly stale drafts
 can spend a final call on a second rewrite, retaining explicit semantic uncertainty.
 Stale drafts are explicitly forbidden-to-repeat context. There is no mandatory social deliberation.
-Conversational self-intent estimates share the optional appraisal call; retained
-sources supply candidates even when that inference is unavailable. Independent
+Conversational self-intent estimates share the reading call; retained
+sources supply candidates even when the reading is unavailable. Independent
 external activity uses `process_autonomous` and its own
 scope; a declined user request cannot be relabeled as self-directed work.
 Ineligible/empty drafts spend the remaining base budget on fresh generation, up

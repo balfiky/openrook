@@ -59,6 +59,7 @@ def test_dignity_review_is_reserved_logged_and_stopped_by_existing_budgets(tmp_p
     assert len(backend.calls) == budget.snapshot()["model_calls"] == 1
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.asyncio
 async def test_pipeline_dignity_review_retains_research_backend_wrappers(tmp_path):
     backend = DignityBackend(response="Call me what you like — I'm still not your anything.")

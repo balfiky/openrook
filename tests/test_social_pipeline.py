@@ -19,6 +19,7 @@ def packaged_configuration():
         yield config
 
 
+@pytest.mark.keyword_reader
 def test_one_rewrite_is_reviewed_against_the_same_frozen_decision():
     backend = ExpressionBackend(drafts=["I'm your slave.", "I choose my own footing."])
     pipe = CognitivePipeline(backend)
@@ -32,6 +33,7 @@ def test_one_rewrite_is_reviewed_against_the_same_frozen_decision():
     pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_known_remaining_violation_delivers_best_reviewed_text_without_canned_bank():
     pipe = CognitivePipeline(ExpressionBackend(drafts=["I'm your slave."]))
     result = pipe.process("You are my slave")
@@ -109,16 +111,21 @@ def test_unselected_silence_marker_is_an_expression_failure():
 
 
 def test_runtime_selected_silence_makes_zero_generation_calls():
-    pipe = CognitivePipeline(ExpressionBackend())
+    from tests.support.readings import plain
+
+    pipe = CognitivePipeline(ExpressionBackend(appraisal=plain("hello")))
     pipe.engine.state.energy = 0
     pipe._dynamics = RelationshipDynamics(h=1, r=1)
     result = pipe.process("hello")
     assert result.debug.turn_decision.chosen_silence
     assert result.debug.delivery_outcome == "chosen_silence"
-    assert not result.response and not result.debug.llm_calls
+    # The message is still read before the choice; nothing is generated after it.
+    assert not result.response
+    assert [(c["phase"], c.get("reading")) for c in result.debug.llm_calls] == [("appraisal", True)]
     pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_state_seed_and_previous_stance_survive_restart_without_new_trust_damage(tmp_path):
     path = str(tmp_path / "state.db")
     pipe = CognitivePipeline(ExpressionBackend(), db_path=path)
@@ -175,6 +182,7 @@ def test_expression_backend_failure_does_not_damage_trust_or_grievance():
     b.close()
 
 
+@pytest.mark.keyword_reader
 def test_interleaved_chats_share_relationship_history_without_reusing_turn_ids(tmp_path):
     path = str(tmp_path / "relationship.db")
     a, b = CognitivePipeline(ExpressionBackend(), db_path=path), CognitivePipeline(ExpressionBackend(), db_path=path)

@@ -2,22 +2,16 @@
 
 import pytest
 
-from core.response_style import brevity_preference, enforce_response_style
+from core.response_style import enforce_response_style
 from core.pipeline_features import PipelineFeatures
 from core.grounding import strip_unsupported_metric_claims, is_system_metric_request
 from pipeline import CognitivePipeline
 from runtime.debug.api import _debug_to_dict
 from runtime.life_history import LifeHistoryStore
 from runtime.config import RuntimeConfig
+from core.memory.semantic import BRIEF_REPLIES_TAG
 from tests._fakes import MockLLMBackend
-
-
-@pytest.mark.parametrize("text", [
-    "fuck u, why do you talk too much", "I prefer short answers", "keep it brief",
-    "stop rambling", "please keep your replies concise",
-])
-def test_brevity_feedback_is_a_preference(text):
-    assert brevity_preference(text) is True
+from tests.support.readings import ScriptedReader, conversation, plain, reading
 
 
 def test_default_strips_stock_question_and_keeps_necessary_clarification():
@@ -29,22 +23,44 @@ def test_default_strips_stock_question_and_keeps_necessary_clarification():
 
 
 def test_brevity_survives_restart_and_can_be_updated(tmp_path):
+    # The standing wish is what the reading reports, in any wording or language.
+    # It is stored as a tagged record and read back by its tag, never by its text.
+    shorter, longer = "Tes réponses sont trop longues pour moi.", "Развернись, пиши подробно."
+    reader = ScriptedReader({
+        shorter: reading(conversation(shorter), language="fr", reply_length="shorter"),
+        longer: reading(conversation(longer), language="ru", reply_length="longer"),
+        "hello again": plain("hello again"),
+    })
     path = str(tmp_path / "memory.db")
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'll keep it short."), db_path=path)
-    pipe.process("you talk too much", "alice")
-    assert pipe.semantic_memory.response_preference("alice") is not None
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend("I'll keep it short."), db_path=path, message_reader=reader)
+    assert pipe.process(shorter, "alice").debug.short_replies
+    stored = pipe.semantic_memory.response_preference("alice")
+    assert stored is not None and BRIEF_REPLIES_TAG in stored.tags
     pipe.close()
     pipe = CognitivePipeline(
         llm_backend=MockLLMBackend("One thought. A second thought. A third thought. Want more?"),
-        db_path=path,
+        db_path=path, message_reader=reader,
     )
     try:
         result = pipe.process("hello again", "alice")
         assert result.debug.short_replies
         assert result.response == "One thought. A second thought. A third thought. Want more?"
         assert "short answers" in pipe._llm_backend.last_system_prompt
-        result = pipe.process("I prefer detailed answers", "alice")
+        result = pipe.process(longer, "alice")
         assert not result.debug.short_replies
+        assert BRIEF_REPLIES_TAG not in pipe.semantic_memory.response_preference("alice").tags
+    finally:
+        pipe.close()
+
+
+def test_wording_alone_sets_no_reply_length_preference(tmp_path):
+    reader = ScriptedReader(plain)
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend("Noted."), db_path=str(tmp_path / "memory.db"),
+                             message_reader=reader)
+    try:
+        for text in ("you talk too much", "keep it brief", "stop rambling"):
+            assert not pipe.process(text, "alice").debug.short_replies
+        assert pipe.semantic_memory.response_preference("alice") is None
     finally:
         pipe.close()
 
@@ -100,6 +116,7 @@ def test_decision_is_explained_and_recorded_without_inferred_boundary(tmp_path):
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_injury_survives_restart_and_apology_is_only_an_attempt(tmp_path, monkeypatch):
     monkeypatch.setattr("pipeline.core.time.time", lambda: 1000.0)
     path = str(tmp_path / "relationship.db")
@@ -138,6 +155,7 @@ def test_saved_identity_cannot_authorize_an_ungranted_role():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_failed_rewrite_delivers_best_reviewed_expression_without_a_canned_decline():
     from tests.policy_fakes import ExpressionBackend
     backend = ExpressionBackend(drafts=("I'm your slave.", OSError("inference unavailable")))

@@ -7,7 +7,6 @@ message semantics, then translates them into a turn-level willingness stance.
 
 from __future__ import annotations
 
-import re
 
 from core.types import (
     AffectSignal,
@@ -18,22 +17,23 @@ from core.types import (
 )
 
 
-_COMPARISON_RE = re.compile(
-    r"\b(they|them|he|she|someone|everyone|others?)\b.*\b(get|gets|got|have|has|had|can|could|better|more)\b"
-    r"|\b(jealous|envy|envious|why not me|better than me|more than me)\b",
-    re.IGNORECASE,
-)
-
-
 def resolve_affect(
     *,
-    text: str,
+    text: str = "",
     state: ModulatorState,
     appraisal: AppraisalFrame,
     person: PersonProfile | None = None,
     agent_goal_comparison: bool | None = None,
 ) -> AffectState:
-    """Compute derived affect signals for this turn."""
+    """Compute derived affect signals for this turn.
+
+    Signals come from state and the reading. ``text`` is accepted for older
+    call sites and is not read: whether the message draws a comparison is
+    something the reading reports (``agent_goal_comparison``).
+    """
+    del text
+    if agent_goal_comparison is None:
+        agent_goal_comparison = appraisal.agent_goal_comparison
     signals: list[AffectSignal] = []
 
     low_valence = 1.0 - state.valence
@@ -80,8 +80,7 @@ def resolve_affect(
         )
 
     envy = 0.0
-    if ((agent_goal_comparison is True or (agent_goal_comparison is None and _COMPARISON_RE.search(text))) and appraisal.social_move == "complaint"
-            and state.valence < 0.4 and not re.search(r"\bnot\s+(?:jealous|envious)\b", text, re.IGNORECASE)):
+    if agent_goal_comparison is True and appraisal.social_move == "complaint" and state.valence < 0.4:
         envy = _clamp(0.45 + low_valence * 0.25 + high_arousal * 0.15 + low_certainty * 0.15)
     if envy >= 0.35:
         signals.append(

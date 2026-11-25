@@ -1,13 +1,16 @@
 """Cognitive pipeline with one versioned choice owner.
 
-Perception and context retrieval -> personality-dependent relationship update ->
-pure willingness optimization -> immutable component grants -> scoped execution
-and receipts -> expression from continuous state -> tri-state validation and
-bounded correction -> delivery and grounded outcome records.
+The model's reading of the message and context retrieval -> personality-dependent
+relationship update -> pure willingness optimization -> immutable component
+grants -> scoped execution and receipts -> expression from continuous state ->
+tri-state validation and bounded correction -> delivery and grounded outcome
+records.
 
-Ordinary conversation needs one expression call, or two with semantic appraisal.
-Constrained expression adds review; a rewrite adds generation and review. The
-base budget is five calls, including supplemental tool/learning inference. Only
+Every user message is read by the model: a required call with its own allowance
+of two (one retry for an unusable answer). Ordinary conversation then needs one
+expression call. Constrained expression adds review; a rewrite adds generation
+and review. The base budget for that work is five calls, including supplemental
+tool/learning inference. Only
 when bounded drafts leave no safe remainder may one protected final expression
 attempt use an additional call, recorded as delivery_recovery. Each
 granted task also has one protected primary tool selection, fully accounted. No

@@ -14,7 +14,7 @@ from core.clock import clock as time
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from core.perception import has_learning_intent as _has_learning_intent
+from core.request_actions import has_learning_intent as _has_learning_intent
 from openrook_tools.builtin.web_provider import RequestsWebProvider
 from runtime.config import RuntimeConfig
 from runtime.life_history import LifeHistoryStore

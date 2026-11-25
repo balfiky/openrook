@@ -13,7 +13,8 @@ derived from the utility margin between granting and declining a component.
 Strategy and affect labels are descriptive. Bounded seed variation resolves
 near ties; it does not supply the measured character variation below.
 
-`core/social.py` and `core/perception.py` retain uncertain language observations.
+Uncertain observations of a message now come from the model's reading alone
+([reading contract](reading-contract.md)); `core/social.py` remains for reply checks.
 Appraisal cannot select agency. A useful task and a requested relationship role
 are separate components. The same language can lead to different choices under
 different authored values, dispositions, resources and history. The shipped

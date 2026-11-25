@@ -161,6 +161,8 @@ def _debug_to_dict(debug) -> dict:
     d["appraisal_frame"] = (
         debug.appraisal_frame.to_dict() if getattr(debug, "appraisal_frame", None) else None
     )
+    # Whether the model's reading of the message was obtained ("model") or not ("unavailable").
+    d["reading"] = dict(getattr(debug, "reading", None) or {})
 
     # Context switch
     d["baseline_shift_applied"] = debug.baseline_shift_applied

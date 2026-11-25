@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import tempfile
 import json
-from dataclasses import replace
 
 import pytest
 
@@ -37,13 +36,15 @@ def _snap(pipe: CognitivePipeline) -> dict[str, float]:
 
 
 def _perceive(monkeypatch, perception):
-    """Supply fixed evidence; language and backend alignment do not choose."""
-    from core.appraisal import appraise_message
+    """Supply the reading's evidence explicitly; no wording or backend chooses it."""
+    from core.types import AppraisalFrame
+    from core.willingness import RequestComponent
 
-    def appraise(text, detected):
-        return replace(appraise_message(text, detected), perception=perception, provenance="model")
+    def read(text, **_):
+        return AppraisalFrame(provenance="model", perception=perception, request_components=(
+            RequestComponent("c0", text, kind="conversation", effort=0.1, source_span=text),))
 
-    monkeypatch.setattr("pipeline.core.appraise_message", appraise)
+    monkeypatch.setattr("pipeline.core.default_message_reader", lambda pipeline: read)
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +60,7 @@ class TestTrustBuilding:
         "you're the best",
     ]
 
+    @pytest.mark.keyword_reader
     def test_praise_builds_interpersonal_trust_without_demonstrating_reliability(self):
         pipe = _pipe()
         for msg in self.WARM_MESSAGES:
@@ -80,6 +82,7 @@ class TestTrustBuilding:
 # ---------------------------------------------------------------------------
 
 class TestBetrayalAfterTrust:
+    @pytest.mark.keyword_reader
     def test_betrayal_after_trust(self):
         pipe = _pipe()
 
@@ -235,6 +238,7 @@ class TestSessionPersistence:
 # ---------------------------------------------------------------------------
 
 class TestEmotionalContagion:
+    @pytest.mark.keyword_reader
     def test_excited_message_raises_arousal_and_valence(self):
         pipe = _pipe()
         result = pipe.process(
@@ -245,6 +249,7 @@ class TestEmotionalContagion:
         assert 0.5 < snap["arousal"] < result.debug.detected_emotion.arousal
         assert 0.5 < snap["valence"] < result.debug.detected_emotion.valence
 
+    @pytest.mark.keyword_reader
     def test_depressed_message_drops_valence(self):
         pipe = _pipe()
         result = pipe.process(
@@ -260,6 +265,7 @@ class TestEmotionalContagion:
 # ---------------------------------------------------------------------------
 
 class TestContextSwitching:
+    @pytest.mark.keyword_reader
     def test_different_histories_different_states(self):
         warm_pipe = _pipe()
         hostile_pipe = _pipe()
@@ -363,6 +369,7 @@ class TestTopicSensitivity:
 # ---------------------------------------------------------------------------
 
 class TestSpikeDetection:
+    @pytest.mark.keyword_reader
     def test_hostility_is_integrated_once_and_recorded_as_evidence(self):
         pipe = _pipe()
         message = "You are a useless idiot!"

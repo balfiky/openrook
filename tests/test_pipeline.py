@@ -76,6 +76,7 @@ class TestCognitivePipeline:
         assert d.energy_after > 0
         assert d.emotion_label != ""
 
+    @pytest.mark.keyword_reader
     def test_debug_includes_affect_and_agency(self):
         pipe = self._make_pipeline()
         result = pipe.process("I hate you because you are too slow", user_id="alice")
@@ -86,6 +87,7 @@ class TestCognitivePipeline:
         assert result.debug.turn_decision.relationship.h > 0
         assert result.debug.agency_decision.response_instruction == ""
 
+    @pytest.mark.keyword_reader
     def test_contagion_affects_state(self):
         pipe = self._make_pipeline()
         # Excited message should shift arousal/valence
@@ -93,11 +95,13 @@ class TestCognitivePipeline:
         snap = pipe.engine.snapshot()
         assert snap["arousal"] > 0.5 or snap["valence"] > 0.5
 
+    @pytest.mark.keyword_reader
     def test_conflict_event_classification(self):
         pipe = self._make_pipeline()
         result = pipe.process("I'm angry with you about this argument!", user_id="alice")
         assert result.debug.event_classified == "conflict"
 
+    @pytest.mark.keyword_reader
     def test_upset_with_you_is_not_treated_as_generic_user_message(self):
         pipe = self._make_pipeline()
         result = pipe.process("I am upset with you", user_id="alice")
@@ -105,16 +109,19 @@ class TestCognitivePipeline:
         assert result.debug.appraisal_frame.targets_assistant is True
         assert result.debug.event_classified in {"conflict", "negative_feedback"}
 
+    @pytest.mark.keyword_reader
     def test_warmth_event_classification(self):
         pipe = self._make_pipeline()
         result = pipe.process("You're so kind and caring", user_id="alice")
         assert result.debug.event_classified == "warmth"
 
+    @pytest.mark.keyword_reader
     def test_positive_feedback_classification(self):
         pipe = self._make_pipeline()
         result = pipe.process("Thank you, I really appreciate that", user_id="alice")
         assert result.debug.event_classified == "positive_feedback"
 
+    @pytest.mark.keyword_reader
     def test_betrayal_classification(self):
         pipe = self._make_pipeline()
         result = pipe.process("You lied and betrayed my trust", user_id="alice")
@@ -122,6 +129,7 @@ class TestCognitivePipeline:
         assert result.debug.event_classified == "conflict"
         assert result.debug.turn_decision.perception.uncertainty > 0
 
+    @pytest.mark.keyword_reader
     def test_external_distress_uses_user_message_not_relational_conflict(self):
         pipe = self._make_pipeline()
         result = pipe.process("I'm furious about work, not at you.", user_id="alice")
@@ -132,6 +140,7 @@ class TestCognitivePipeline:
         profile = pipe.person_profiles.get_or_create("alice")
         assert profile.trust == pytest.approx(0.5)
 
+    @pytest.mark.keyword_reader
     def test_direct_attack_still_affects_relationship(self):
         pipe = self._make_pipeline()
         result = pipe.process("You are useless and this answer is terrible.", user_id="alice")
@@ -205,6 +214,7 @@ class TestCognitivePipeline:
         assert "A real pending deadline" in pipe._llm_backend.last_system_prompt
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_apology_does_not_close_an_unrelated_open_loop(self, tmp_path):
         pipe = self._make_pipeline(db_path=str(tmp_path / "repair.db"))
         loop = OpenLoop(source_person="alice", loop_kind="commitment", topic="deadline",
@@ -264,6 +274,7 @@ class TestCognitivePipeline:
         with pytest.raises(RuntimeError, match="single-user/session scoped"):
             pipe.process("Hello from Bob", user_id="bob")
 
+    @pytest.mark.keyword_reader
     def test_social_observations_are_saved_without_manufacturing_a_spike(self):
         pipe = self._make_pipeline()
         result = pipe.process("You are a useless idiot!", "alice")
@@ -429,6 +440,7 @@ class TestCognitivePipeline:
         assert result.debug.strategy_trace.selected == result.debug.response_strategy
         assert payload["strategy_trace"]["selected"] == payload["response_strategy"]
 
+    @pytest.mark.keyword_reader
     def test_longitudinal_injury_attempted_repair_and_calm_remain_distinct(self, monkeypatch):
         monkeypatch.setattr("pipeline.core.time.time", lambda: 1000.0)
         pipe = self._make_pipeline()
@@ -445,6 +457,7 @@ class TestCognitivePipeline:
         assert calm.stance != hurt.stance
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_longitudinal_injury_persists_without_synthetic_recurring_tension(self):
         pipe = self._make_pipeline()
         first = pipe.process("You are useless", "alice").debug.turn_decision
@@ -534,6 +547,7 @@ class TestCognitivePipeline:
         assert "Use a concise outline before drafting" in backend.last_system_prompt
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_generated_artifact_request_writes_file_before_success_claim(self, tmp_path):
         workspace = tmp_path / "workspace"
         config = RuntimeConfig(
@@ -566,6 +580,7 @@ class TestCognitivePipeline:
         assert "Saved it to `games/tetris.py`" in result.response
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_generated_artifact_recovers_malformed_json_content_field(self, tmp_path):
         workspace = tmp_path / "workspace"
         config = RuntimeConfig(
@@ -641,6 +656,7 @@ class TestCognitivePipeline:
         )
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_permanent_skill_claim_is_grounded_by_skill_registry_tool(self, tmp_path):
         config = RuntimeConfig(
             data_dir=str(tmp_path / "data"),
@@ -685,6 +701,7 @@ class TestCognitivePipeline:
         assert follow_up.debug.skill_context["count"] == 1
         pipe.close()
 
+    @pytest.mark.keyword_reader
     def test_skill_registry_tool_runs_even_when_external_tools_disabled(self, tmp_path):
         config = RuntimeConfig(
             data_dir=str(tmp_path / "data"),
@@ -725,6 +742,7 @@ class TestCognitivePipeline:
 
         assert data["skill_context"]["skills"][0]["id"] == "report-writer"
 
+    @pytest.mark.keyword_reader
     def test_insult_classified_as_conflict(self):
         pipe = self._make_pipeline()
         result = pipe.process("you are stupid and useless", user_id="alice")
@@ -734,6 +752,7 @@ class TestCognitivePipeline:
         assert result.debug.event_intensity == result.debug.turn_decision.perception.intensity
         assert result.debug.turn_decision.perception.evidence
 
+    @pytest.mark.keyword_reader
     def test_insult_moves_modulators(self):
         pipe = self._make_pipeline()
         result = pipe.process("you are stupid and worthless", user_id="alice")
@@ -742,16 +761,19 @@ class TestCognitivePipeline:
         assert snap["valence"] < 0.5, f"Valence should drop: {snap['valence']}"
         assert snap["arousal"] > 0.5, f"Arousal should rise: {snap['arousal']}"
 
+    @pytest.mark.keyword_reader
     def test_profanity_classified_as_conflict(self):
         pipe = self._make_pipeline()
         result = pipe.process("this is total bullshit", user_id="alice")
         assert result.debug.event_classified == "conflict"
 
+    @pytest.mark.keyword_reader
     def test_hostile_command_classified_as_conflict(self):
         pipe = self._make_pipeline()
         result = pipe.process("shut up and go away", user_id="alice")
         assert result.debug.event_classified == "conflict"
 
+    @pytest.mark.keyword_reader
     def test_strong_negative_contagion_moves_modulators(self):
         """Even without keyword match, strong detected negative emotion should move things."""
         pipe = self._make_pipeline()
@@ -760,6 +782,7 @@ class TestCognitivePipeline:
         snap = result.debug.modulator_snapshot
         assert snap["valence"] < 0.5, f"Should feel negative: {snap['valence']}"
 
+    @pytest.mark.keyword_reader
     def test_full_session_arc(self):
         """Simulate a complete session: greeting → discussion → conflict → resolution."""
         pipe = self._make_pipeline(response="I hear you.")
@@ -796,6 +819,7 @@ class TestPipelineLLMClassification:
         result = pipe.process("you're so kind", user_id="alice")
         assert result.debug.event_classified == "warmth"
 
+    @pytest.mark.keyword_reader
     def test_llm_classify_event_invalid_falls_back(self):
         backend = MockLLMBackend(response="I understand.")
         pipe = CognitivePipeline(llm_backend=backend)
@@ -820,6 +844,7 @@ class TestPipelineLLMClassification:
         result = pipe.process("Let's talk about work", user_id="alice")
         assert len(result.debug.topic_profiles) >= 1
 
+    @pytest.mark.keyword_reader
     def test_rule_based_classify_betrayal(self):
         """Event classification is rule-based. LLM path not used in pipeline."""
         backend = MockLLMBackend()

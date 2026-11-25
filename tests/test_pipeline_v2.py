@@ -1,11 +1,14 @@
 """Integration tests for the v2 pipeline — Phase 5."""
 
+import pytest
+
 
 from datetime import datetime, timezone
 
 from tests._fakes import MockLLMBackend
 from core.types import Anticipation, InnerDialogueTrace, DefenseActivation, UnresolvedItem
 from pipeline import CognitivePipeline, PipelineResponse
+from tests.support.readings import ReadingBackend, plain
 
 
 def _add_non_spike_unresolved(pipe: CognitivePipeline) -> None:
@@ -119,59 +122,63 @@ class TestV2EndToEnd:
 # ---------------------------------------------------------------------------
 
 class TestLLMCallBudget:
-    def test_calm_message_1_call(self):
-        """Calm message (low arousal, no resolution): master(1) = 1 (inner dialogue skipped)."""
-        backend = CountingLLMBackend()
+    """Every turn reads the message once; expression needs no further deliberation."""
+
+    def test_calm_message_is_one_reading_and_one_expression(self):
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
-        pipe.process("How are you today?", user_id="alice")
-        assert backend.call_count == 1, f"Expected 1 call for calm message, got {backend.call_count}"
+        result = pipe.process("How are you today?", user_id="alice")
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert len(backend.calls) == 2 and backend.reading_calls == ["How are you today?"]
 
     def test_unresolved_state_does_not_require_extra_deliberation(self):
-        backend = CountingLLMBackend()
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         _add_non_spike_unresolved(pipe)
 
         result = pipe.process("Hello", "alice")
         assert result.debug.turn_decision.state.resolution > 0
-        assert backend.call_count == 1
+        assert len(backend.calls) == 2
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
 
     def test_high_arousal_is_a_choice_input_without_a_slow_path(self):
-        backend = CountingLLMBackend()
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.state.arousal = 0.95
         _add_non_spike_unresolved(pipe)
 
         result = pipe.process("Hello", "alice")
         assert result.debug.turn_decision.state.arousal > 0.9
-        assert backend.call_count == 1
+        assert len(backend.calls) == 2
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
 
     def test_low_energy_is_a_choice_input_without_a_slow_path(self):
-        backend = CountingLLMBackend()
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.state.energy = 0.1
         _add_non_spike_unresolved(pipe)
 
         result = pipe.process("Hello", "alice")
+        expression = [] if result.debug.turn_decision.chosen_silence else ["generation"]
         assert result.debug.turn_decision.state.energy < 0.11
-        assert backend.call_count == (0 if result.debug.turn_decision.chosen_silence else 1)
+        assert len(backend.calls) == 1 + len(expression)
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ([] if result.debug.turn_decision.chosen_silence else ["generation"])
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", *expression]
 
     def test_multiple_messages_budget_consistent(self):
-        """Each message stays within budget."""
-        backend = CountingLLMBackend()
+        """Each message is read once and stays within the expression budget."""
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         for i in range(5):
-            before = backend.call_count
-            pipe.process(f"Message {i}", user_id="alice")
-            calls_this_msg = backend.call_count - before
-            assert 1 <= calls_this_msg <= 6, (
-                f"Message {i}: {calls_this_msg} calls"
-            )
+            before = len(backend.calls)
+            result = pipe.process(f"Message {i}", user_id="alice")
+            calls = result.debug.llm_calls
+            assert len(calls) == len(backend.calls) - before
+            assert sum(bool(c.get("reading")) for c in calls) == 1
+            # Five base calls and at most one protected delivery recovery.
+            assert 1 <= sum(not c.get("reading") for c in calls) <= 6, f"Message {i}: {calls}"
 
 
 # ---------------------------------------------------------------------------
@@ -182,12 +189,14 @@ class TestV1BehaviorPreserved:
     def _make_pipeline(self) -> CognitivePipeline:
         return CognitivePipeline(llm_backend=MockLLMBackend())
 
+    @pytest.mark.keyword_reader
     def test_contagion_still_works(self):
         pipe = self._make_pipeline()
         pipe.process("I'm so excited and thrilled!!!", user_id="alice")
         snap = pipe.engine.snapshot()
         assert snap["arousal"] > 0.5 or snap["valence"] > 0.5
 
+    @pytest.mark.keyword_reader
     def test_assistant_targeted_conflict_classification_preserved(self):
         pipe = self._make_pipeline()
         result = pipe.process("I'm angry with you about this argument!", user_id="alice")
@@ -200,6 +209,7 @@ class TestV1BehaviorPreserved:
             pipe.process(f"Message {i}", user_id="alice")
         assert pipe.engine.state.energy < initial
 
+    @pytest.mark.keyword_reader
     def test_social_decisions_are_persisted_without_a_forced_spike(self):
         pipe = self._make_pipeline()
         result = pipe.process("You are useless", "alice")
@@ -244,6 +254,7 @@ class TestV1BehaviorPreserved:
 # ---------------------------------------------------------------------------
 
 class TestResolutionIntegration:
+    @pytest.mark.keyword_reader
     def test_interpersonal_injury_uses_relationship_dynamics(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
         result = pipe.process("You are useless", "alice")
@@ -252,6 +263,7 @@ class TestResolutionIntegration:
         assert not pipe.engine.active_unresolved()
         assert pipe.engine.state.resolution == 0
 
+    @pytest.mark.keyword_reader
     def test_generic_repair_does_not_resolve_an_identified_obligation(self):
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())
         _add_non_spike_unresolved(pipe)
@@ -358,6 +370,7 @@ class TestInnerDialogueIntegration:
         assert trace.total_llm_calls == 0
         assert result.debug.turn_decision.state.resolution > 0
 
+    @pytest.mark.keyword_reader
     def test_dialogue_trace_with_counting_backend(self):
         """CountingLLMBackend + non-spike unresolved → APPROVED in 1 round."""
         pipe = CognitivePipeline(llm_backend=CountingLLMBackend())
@@ -412,6 +425,7 @@ class TestDefenseIntegration:
 # ---------------------------------------------------------------------------
 
 class TestFullV2Arc:
+    @pytest.mark.keyword_reader
     def test_full_v2_session(self):
         """Greeting, evidence, attempted repair and session segmentation stay distinct."""
         pipe = CognitivePipeline(llm_backend=MockLLMBackend())

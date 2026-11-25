@@ -16,7 +16,6 @@ import time
 import pytest
 
 from config.loader import load_config, reset_config
-from core.contagion import _detect_via_rules
 from core.dual_process.generator import build_system_prompt
 from tests._fakes import MockLLMBackend
 from core.types import (
@@ -25,6 +24,7 @@ from core.types import (
     PipelineContext,
 )
 from pipeline import CognitivePipeline
+from tests.support.readings import ReadingBackend, hostility, plain, reading
 
 
 # ---------------------------------------------------------------------------
@@ -261,32 +261,8 @@ class TestContradictionDedup:
         assert len(pipe.engine.active_unresolved()) == 2
 
 
-# ---------------------------------------------------------------------------
-# 9. Rule-based contagion produces meaningful certainty/intensity
-# ---------------------------------------------------------------------------
-
-class TestRuleBasedContagionSignals:
-    """Fallback contagion should produce non-default certainty and intensity
-    for obviously emotional text."""
-
-    def test_extreme_insult_has_intensity(self):
-        result = _detect_via_rules("You are a stupid worthless idiot!")
-        assert result.intensity > 0.3, (
-            f"intensity={result.intensity:.2f} — extreme text should have high intensity"
-        )
-        assert result.certainty != 0.5, (
-            "certainty should not stay at default 0.5 for keyword-matched text"
-        )
-
-    def test_happy_text_has_intensity(self):
-        result = _detect_via_rules("I am so thrilled and excited and overjoyed!")
-        assert result.intensity > 0.3
-        assert result.certainty > 0.5  # consistent positive signals
-
-    def test_neutral_text_low_certainty(self):
-        result = _detect_via_rules("The meeting is at 3pm.")
-        assert result.certainty < 0.5  # no emotional keywords = low certainty
-        assert result.intensity < 0.2
+# 9. (Keyword tone detection left the runtime; its tests live with the
+#    test-only keyword reader in tests/test_keyword_reader_support.py.)
 
 
 # ---------------------------------------------------------------------------
@@ -415,16 +391,13 @@ class TestLLMCallReduction:
     """Pipeline should use rule-based paths for contagion, event classification,
     topic detection, and self-check unless the turn is truly high-risk."""
 
-    def test_calm_message_1_llm_call(self):
-        """Calm message: master(1) = 1 LLM call (inner dialogue skipped entirely)."""
-        from tests.test_pipeline_v2 import CountingLLMBackend
-
-        backend = CountingLLMBackend()
+    def test_calm_message_is_read_once_and_expressed_once(self):
+        """Calm message: the reading and the master call (inner dialogue skipped entirely)."""
+        backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
-        pipe.process("Hello, how are you?", user_id="alice")
-        assert backend.call_count == 1, (
-            f"Expected 1 LLM call for calm message, got {backend.call_count}"
-        )
+        result = pipe.process("Hello, how are you?", user_id="alice")
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert len(backend.calls) == 2
 
     def test_contagion_uses_no_llm(self):
         """Contagion detection must not invoke the LLM backend."""
@@ -515,20 +488,29 @@ class TestStickyDialogueAndTimings:
             self.expressions += 1
             return f"I understand expression {self.expressions}."
 
-    def test_calm_turn_uses_1_call(self):
-        """A calm turn like 'how r u' uses exactly 1 LLM call."""
-        backend = self._CountingBackend()
+    @staticmethod
+    def _reading_backend():
+        """Readings stated explicitly: one hostile message, everything else plain talk."""
+        hostile = reading(target="character", move="attack", intent="harm",
+                          perception=hostility("I hate you"))
+        return ReadingBackend(lambda text: hostile if text == "I hate you" else plain(text),
+                              drafts=[f"I understand expression {i}." for i in range(1, 9)])
+
+    def test_calm_turn_is_one_reading_and_one_expression(self):
+        """A calm turn like 'how r u' is read once and answered with one call."""
+        backend = self._reading_backend()
         pipe = CognitivePipeline(llm_backend=backend)
-        pipe.process("how r u", user_id="alice")
-        assert backend.call_count == 1
+        result = pipe.process("how r u", user_id="alice")
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert len(backend.calls) == 2
 
     def test_hostile_turn_uses_choice_and_review_without_dialogue(self):
-        backend = self._CountingBackend()
+        backend = self._reading_backend()
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("I hate you", "alice")
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation", "expression_review"]
-        assert backend.call_count == 2
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert len(backend.calls) == 3
         assert result.debug.turn_decision.relationship.h > 0
 
     def test_extreme_turn_may_still_use_llm_self_check(self):
@@ -539,22 +521,22 @@ class TestStickyDialogueAndTimings:
         assert backend.call_count >= 1
 
     def test_calm_after_injury_retains_state_without_extra_deliberation(self):
-        backend = self._CountingBackend()
+        backend = self._reading_backend()
         pipe = CognitivePipeline(llm_backend=backend)
         first = pipe.process("I hate you", "alice").debug.turn_decision
-        backend.call_count = 0
+        before = len(backend.calls)
         result = pipe.process("how r u again", "alice")
         assert result.debug.turn_decision.relationship.r > 0
         assert result.debug.turn_decision.relationship.r <= first.relationship.r
         assert result.debug.dialogue_trace.total_llm_calls == 0
         assert result.debug.defense_activation is None
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation", "expression_review"]
-        assert backend.call_count == 2
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert len(backend.calls) - before == 3
 
     def test_unresolved_context_influences_choice_without_mandatory_dialogue(self):
         from datetime import datetime, timezone
         from core.types import UnresolvedItem
-        backend = self._CountingBackend()
+        backend = self._reading_backend()
         pipe = CognitivePipeline(llm_backend=backend)
         pipe.engine.add_unresolved(UnresolvedItem(
             id="c1", source="contradiction", description="said X then Y",
@@ -563,7 +545,7 @@ class TestStickyDialogueAndTimings:
         result = pipe.process("how r u", "alice")
         assert result.debug.turn_decision.state.resolution > 0
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
         assert pipe.engine.active_unresolved()[0].id == "c1"
 
     def test_stage_timings_present(self):

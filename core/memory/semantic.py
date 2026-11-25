@@ -18,7 +18,6 @@ from config.loader import SemanticMemoryConfig
 from core.life_influence import LifeInfluence, curiosity_salience_bonus
 from core.schema import ensure_schema_version
 from core.types import SemanticMemoryEntry
-from core.response_style import brevity_preference
 from runtime.evolution_policy import (
     detect_directive_override_markers,
     detect_prompt_injection_markers,
@@ -32,6 +31,11 @@ _STOPWORDS = {
     "or", "our", "that", "the", "this", "to", "us", "we", "what", "you",
     "your",
 }
+
+# A standing wish about reply length, as the reading reported it. The record
+# carries the wish as a tag; its text is never matched to recover it.
+BRIEF_REPLIES_TAG = "brief_replies"
+DETAILED_REPLIES_TAG = "detailed_replies"
 
 _PREFERENCE_PATTERNS = (
     re.compile(r"\bI (?:prefer|like|love|want)\s+(.+)", re.IGNORECASE),
@@ -272,7 +276,8 @@ class SQLiteSemanticMemory:
         for row in rows:
             entry = self._row_to_entry(row)
             text = f"{entry.summary}\n{entry.content}"
-            if not _has_directive_override_text(text) and brevity_preference(text) is not None:
+            if not _has_directive_override_text(text) and (
+                    BRIEF_REPLIES_TAG in entry.tags or DETAILED_REPLIES_TAG in entry.tags):
                 return entry
         return None
 
@@ -408,8 +413,13 @@ def derive_semantic_entries(
     topic: str = "",
     event_intensity: float = 0.0,
     life_influence: LifeInfluence | None = None,
+    reply_length: str = "",
 ) -> list[SemanticMemoryEntry]:
-    """Create canonical semantic-memory records from a completed turn."""
+    """Create canonical semantic-memory records from a completed turn.
+
+    ``reply_length`` is the standing wish about reply length that the reading
+    of this message reported ("shorter", "longer" or nothing).
+    """
     entries: list[SemanticMemoryEntry] = []
     now = time.time()
     raw_text = f"User: {user_message}\nAssistant: {assistant_response}"
@@ -436,19 +446,15 @@ def derive_semantic_entries(
         )
 
     if config.write_preferences:
-        brief = brevity_preference(user_message)
+        brief = {"shorter": True, "longer": False}.get(reply_length)
         if brief is not None:
-            wording = "short answers." if brief else "I prefer detailed answers."
-            for pattern in _PREFERENCE_PATTERNS:
-                match = pattern.search(user_message)
-                if match:
-                    wording = _trim(match.group(1), limit=120)
-                    break
             entries.append(SemanticMemoryEntry(
                 timestamp=now, kind="preference", source_person=user_id,
-                topic="response_style", summary=f"User preference: {wording}",
+                topic="response_style",
+                summary="User preference: " + ("short answers." if brief else "detailed answers."),
                 content=user_message, source="conversation", confidence=0.95,
-                salience=max(base_salience, 0.65), tags=["preference", "response_style"],
+                salience=max(base_salience, 0.65),
+                tags=["preference", "response_style", BRIEF_REPLIES_TAG if brief else DETAILED_REPLIES_TAG],
             ))
         for pattern in _PREFERENCE_PATTERNS:
             if brief is not None:

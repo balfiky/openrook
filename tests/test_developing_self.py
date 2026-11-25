@@ -85,6 +85,7 @@ def history(store, sign, *, count=8):
         ingest(store, updates, evidence)
 
 
+@pytest.mark.keyword_reader
 def test_different_histories_change_retained_self_and_choice_inputs(tmp_path, base):
     states = []
     with configuration_scope(OpenRookConfig(soul=base)):

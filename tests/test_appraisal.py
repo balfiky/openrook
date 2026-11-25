@@ -1,4 +1,4 @@
-"""Tests for the deterministic social appraisal layer."""
+"""Parsing one reading attempt. The reading contract is in test_reading_contract.py."""
 
 from core.appraisal import appraise_message
 from core.types import DetectedEmotion
@@ -19,82 +19,25 @@ def _detected(
     )
 
 
-class TestAppraisal:
-    def test_detects_direct_attack_on_assistant(self):
-        appraisal = appraise_message(
-            "You are useless and this answer is terrible.",
-            _detected(arousal=0.8, valence=0.1, intensity=0.8),
-        )
-        assert appraisal.targets_assistant is True
-        assert appraisal.primary_target == "assistant"
-        assert appraisal.social_move == "attack"
-        assert appraisal.inferred_intent == "harm"
+class TestWithoutAReading:
+    """What used to be a keyword appraisal is now explicitly unknown."""
 
-    def test_external_distress_is_not_treated_as_attack(self):
-        appraisal = appraise_message(
-            "I'm furious about work, not at you.",
-            _detected(arousal=0.9, valence=0.2, intensity=0.8),
-        )
-        assert appraisal.targets_assistant is False
-        assert appraisal.primary_target == "external"
-        assert appraisal.social_move in {"complaint", "vulnerability"}
-
-    def test_mixed_affect_detected(self):
-        appraisal = appraise_message(
-            "I'm happy it worked, but I'm scared about what comes next.",
-            _detected(arousal=0.7, valence=0.45, intensity=0.7),
-        )
-        assert appraisal.mixed_affect is True
-        assert 0 < appraisal.vulnerability < 1
-
-    def test_apology_is_affiliative_repair(self):
-        appraisal = appraise_message(
-            "I'm sorry, I handled that badly.",
-            _detected(arousal=0.4, valence=0.35, intensity=0.4),
-        )
-        assert appraisal.social_move == "apology"
-        assert appraisal.inferred_intent == "repair"
-        assert appraisal.perception.repair_attempt > 0
-        assert appraisal.perception.repair_credibility == 0
-        assert appraisal.perception.reliability == 0
-
-    def test_assistant_addressed_apology_targets_assistant(self):
-        appraisal = appraise_message(
-            "I'm sorry for snapping at you about the deadline.",
-            _detected(arousal=0.5, valence=0.35, intensity=0.5),
-        )
-        assert appraisal.social_move == "apology"
-        assert appraisal.targets_assistant is True
-        assert appraisal.primary_target == "assistant"
-
-    def test_imperative_challenge_counts_as_action_request(self):
-        appraisal = appraise_message(
-            "Challenge my assumptions before giving me steps.",
-            _detected(arousal=0.5, valence=0.5, intensity=0.4),
-        )
-        assert appraisal.social_move == "request"
-        assert appraisal.inferred_intent == "seek_action"
-
-    def test_review_counts_as_action_request(self):
-        appraisal = appraise_message(
-            "Review this plan in two sentences.",
-            _detected(arousal=0.5, valence=0.5, intensity=0.4),
-        )
-        assert appraisal.social_move == "request"
-        assert appraisal.inferred_intent == "seek_action"
-
-    def test_slow_me_down_counts_as_action_request(self):
-        appraisal = appraise_message(
-            "Unexpected situation: I might delete production. Slow me down and be careful.",
-            _detected(arousal=0.7, valence=0.5, intensity=0.6),
-        )
-        assert appraisal.social_move == "request"
-        assert appraisal.inferred_intent == "seek_action"
+    def test_no_wording_is_interpreted(self):
+        for text in ("You are useless and this answer is terrible.",
+                     "I'm sorry, I handled that badly.",
+                     "Thanks for nothing, genius.",
+                     "Review this plan in two sentences."):
+            frame = appraise_message(text, _detected(arousal=0.9, valence=0.1, intensity=0.9))
+            assert frame.provenance == "unavailable"
+            assert (frame.social_move, frame.inferred_intent, frame.primary_target) == (
+                "inform", "inform", "unknown")
+            assert not frame.targets_assistant and frame.blame == 0 and frame.vulnerability == 0
+            assert frame.perception.hostile_intent == 0 and frame.perception.repair_attempt == 0
+            assert [c.kind for c in frame.request_components] == ["conversation"]
 
 
 # ---------------------------------------------------------------------------
-# LLM-based appraisal (reads social meaning via the backend; deterministic
-# appraisal stays as the fallback)
+# One reading attempt, parsed from the backend's answer
 # ---------------------------------------------------------------------------
 
 class _JSONBackend:

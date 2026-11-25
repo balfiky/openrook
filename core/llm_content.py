@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -65,6 +66,40 @@ def strip_expression_artifacts(text: str, *, style_text=(), user_message: str = 
 def strip_internal_expression_markers(text: str) -> str:
     """Reserved runtime controls are never dialogue, including inline echoes."""
     return _INTERNAL_EXPRESSION_MARKER.sub("", text).strip()
+
+
+_JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*(?:```|\Z)", re.I | re.S)
+
+
+def json_payload(text: str) -> str:
+    """The JSON text of a model answer, without an optional Markdown code fence."""
+    text = (text or "").strip()
+    if text[:1] in ("{", "["):
+        return text  # Already a document; backticks inside its strings are content.
+    fenced = _JSON_FENCE.search(text)
+    return fenced[1].strip() if fenced else text
+
+
+def first_json_object(text: str) -> dict[str, Any] | None:
+    """The first complete JSON object in a model answer, or None when there is none.
+
+    Models wrap an object in prose or a code fence, or keep talking after it.
+    The first balanced object is taken as written. An answer that holds no
+    object at all (a list, a number, plain text) yields None.
+    """
+    text = text or ""
+    decoder = json.JSONDecoder()
+    start = text.find("{")
+    while start != -1:
+        try:
+            value, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            start = text.find("{", start + 1)
+            continue
+        if isinstance(value, dict):
+            return value
+        start = text.find("{", start + 1)
+    return None
 
 
 def strip_reasoning(text: str) -> str:

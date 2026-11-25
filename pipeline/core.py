@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from config.loader import get_config, research_configuration
 from runtime.developing_self import birth_state, project_self, soul_from_self
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.inference import call_telemetry, expression_retry, final_expression_attempt, generate, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls, slow_inference
+from core.inference import call_telemetry, expression_retry, final_expression_attempt, generate, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls
 from core.types import (
     AgencyDecision,
     AppraisalFrame,
@@ -48,9 +48,10 @@ from core.types import (
     ValueHierarchy,
 )
 from core.appraisal import (
-    appraise_message,
-    appraise_message_llm,
+    MessageReader,
     appraise_with_life_history,
+    read_message,
+    reader_context,
     reconcile_social_appraisal,
 )
 from core.affect import resolve_affect
@@ -58,8 +59,6 @@ from core.strategy import agency_summary, decision_trace, summarize_decision
 from core.dignity import (
     dignity_correction_instruction, needs_semantic_review, excisable_choice_issues,
 )
-from core.social import is_casual_greeting, read_social_signals
-from core.response_style import brevity_preference
 from core.system_inspection import inspection_intent, inspection_kind
 from core.action_variables import derive_action_variables
 from core.task_planning import is_continue_request, is_status_request, summarize_plan_status
@@ -75,6 +74,7 @@ from core.memory.long_term import LongTermMemory
 from core.memory.digestion import digest_session, DigestedSession
 from core.memory.relationship import NullRelationshipMemory, RelationshipMemory
 from core.memory.semantic import (
+    BRIEF_REPLIES_TAG,
     NullSemanticMemory,
     create_semantic_memory,
     derive_semantic_entries,
@@ -82,7 +82,7 @@ from core.memory.semantic import (
 from core.life_influence import LifeInfluence, curiosity_salience_bonus, derive_life_influence
 from core.character_vector import assemble_character_vector, format_character_vector_prompt
 from core.pipeline_features import PipelineFeatures
-from core.contagion import detect_emotion
+from core.contagion import neutral_tone
 from core.profiles.base import ProfileStore
 from core.profiles.person import PersonProfileManager
 from core.profiles.self_model import SelfProfileManager, SELF_ENTITY_ID
@@ -135,6 +135,17 @@ from pipeline.types import DebugState, PipelineResponse, _TurnState
 
 log = logging.getLogger(__name__)
 
+
+def default_message_reader(pipeline: "CognitivePipeline") -> MessageReader:
+    """The reader a pipeline uses when none is injected: the model's reading.
+
+    This is the single place a pipeline's reader is chosen. There is no
+    alternative reader in the runtime.
+    """
+    del pipeline
+    return read_message
+
+
 # ---------------------------------------------------------------------------
 # CognitivePipeline
 # ---------------------------------------------------------------------------
@@ -159,6 +170,7 @@ class CognitivePipeline:
         runtime_config: Any | None = None,
         component_executor: Callable[..., ToolResult | None] | None = None,
         component_observer: Callable[[str], tuple[RequestComponent, ...] | None] | None = None,
+        message_reader: MessageReader | None = None,
     ) -> None:
         """Create a cognitive pipeline.
 
@@ -183,6 +195,9 @@ class CognitivePipeline:
                                    ``data/shared/life_history.db``.
             skill_provider: Optional callable returning enabled imported skill
                             guidance for generation.
+            message_reader: Optional reader of each user message
+                            (``core.appraisal.MessageReader``). Defaults to
+                            the model reader; every turn is read by it.
         """
         self._features = features or PipelineFeatures()
         if llm_backend is None:
@@ -273,18 +288,15 @@ class CognitivePipeline:
         self._turn_index = 0
         self._last_decision = None
         self._short_replies = False
-        self._slow_inference = False
 
         # Agentic tools (Phase 2+)
         self._tool_executor = tool_executor
         self._tool_runner = tool_executor.tool_runner if tool_executor is not None else None
         self._autonomy_level = autonomy_level
-        # LLM-based social appraisal (the model reads interpersonal meaning
-        # instead of regex). Off when there's no RuntimeConfig (unit tests keep
-        # the deterministic path + its exact-value assertions); production
-        # RuntimeConfig defaults it on. The deterministic appraisal remains the
-        # fallback whenever the LLM is absent or returns unparseable output.
-        self._appraisal_use_llm = bool(getattr(runtime_config, "appraisal_use_llm", False))
+        # Every user message is read by the model. The reading is required
+        # work of the turn and has no local substitute; ``appraisal_use_llm``
+        # in older configuration files no longer switches anything.
+        self._message_reader: MessageReader = message_reader or default_message_reader(self)
         # Consolidate ordinary episodes; the store bounds identity development.
         self._autobiographical_learning = bool(
             getattr(runtime_config, "autobiographical_learning", False)
@@ -416,15 +428,9 @@ class CognitivePipeline:
                             request_timeout_seconds=getattr(self._runtime_config, "llm_request_timeout_seconds", None),
                             auxiliary_timeout_seconds=getattr(self._runtime_config, "llm_auxiliary_timeout_seconds", None),
                             auxiliary_cooldown_seconds=getattr(self._runtime_config, "llm_auxiliary_cooldown_seconds", 30.0)):
-            try:
-                result = self._process_turn(user_message, user_id)
-                result.debug.llm_calls = calls
-                return result
-            finally:
-                self._slow_inference = slow_inference()
-
-    def _optional_inference_available(self) -> bool:
-        return self._research_mode or not (self._slow_inference or slow_inference())
+            result = self._process_turn(user_message, user_id)
+            result.debug.llm_calls = calls
+            return result
 
     def _process_turn(self, user_message: str, user_id: str = "default") -> PipelineResponse:
         """Process a user message through the full v2 cognitive pipeline.
@@ -518,9 +524,9 @@ class CognitivePipeline:
         debug.anticipation = anticipation
         timings["anticipation"] = (time.perf_counter() - _ts) * 1000
 
-        # ---- Step 2: CONTAGION (0 LLM calls — rule-based) ----
+        # ---- Step 2: TONE — unknown until the message has been read ----
         _ts = time.perf_counter()
-        detected = detect_emotion(user_message, llm_client=None)
+        detected = neutral_tone()
         st.detected = detected
         debug.detected_emotion = detected
         timings["contagion"] = (time.perf_counter() - _ts) * 1000
@@ -533,8 +539,9 @@ class CognitivePipeline:
         if self._features.life_history_context and _is_identity_question(user_message):
             identity = self._load_life_history_snapshot()
             life_history_context = {**life_history_context, **identity, "identity_records": identity}
-            if "evolution_events" in identity:
-                life_history_context["recent_evolution"] = identity["evolution_events"]
+            evolution = identity.get("evolution_events")
+            if evolution is not None:
+                life_history_context["recent_evolution"] = evolution
             st.life_history_context = life_history_context
         debug.life_history_context = life_history_context
         life_influence = derive_life_influence(life_history_context)
@@ -542,34 +549,32 @@ class CognitivePipeline:
         debug.life_influence = life_influence
         timings["life_history_retrieval"] = (time.perf_counter() - _ts) * 1000
 
-        # ---- Step 3: APPRAISAL (LLM read of social meaning; deterministic
-        # fallback when no backend / parse fails — keeps tests + offline path) ----
+        # ---- Step 3: READING (required; the model reads every message) ----
+        # No greeting, vocabulary, host-metric or latency condition skips it,
+        # and nothing stands in for it: an unobtainable reading is recorded as
+        # plain conversation with explicit uncertainty.
         _ts = time.perf_counter()
         st.inspection_kind = inspection_kind(user_message, self._conversation_history)
-        clear_social = is_casual_greeting(user_message) or bool(read_social_signals(user_message).abuse_kind)
-        base_appraisal = (
-            appraise_message_llm(user_message, detected, self._llm_backend_fast,
-                                 recent_context=self._conversation_history,
-                                 agent_context=json.dumps({"state": self.engine.snapshot(),
-                                     "authored_values": self.values.values, "dispositions": st.developing_self["dispositions"],
-                                     "current_self": st.developing_self,
-                                     "conversation_sources": conversation_sources(st.developing_self, life_history_context,
-                                         self.engine.state.energy) if self._features.self_intent else {},
-                                     "available_capabilities": self._tool_executor.registry.names() if self._tool_executor else [],
-                                     "identity": life_history_context}, ensure_ascii=False))
-            if self._appraisal_use_llm and (
-                self._research_mode or (not clear_social and not st.inspection_kind
-                                        and self._optional_inference_available())
-            )
-            else None
+        reading = self._message_reader(
+            user_message, backend=self._llm_backend_fast,
+            recent_context=self._conversation_history,
+            agent_context=reader_context(
+                state=self.engine.snapshot(), authored_values=self.values.values,
+                dispositions=st.developing_self["dispositions"], current_self=st.developing_self,
+                conversation_sources=conversation_sources(st.developing_self, life_history_context,
+                    self.engine.state.energy) if self._features.self_intent else {},
+                available_capabilities=self._tool_executor.registry.names() if self._tool_executor else [],
+                identity=life_history_context),
+            research=self._research_mode,
         )
-        if base_appraisal is None:
-            base_appraisal = appraise_message(user_message, detected)
-        base_appraisal = reconcile_social_appraisal(user_message, detected, base_appraisal, recent_context=self._conversation_history)
+        base_appraisal = reconcile_social_appraisal(user_message, None, reading,
+                                                    recent_context=self._conversation_history)
+        debug.reading = dict(provenance=base_appraisal.provenance, reason=base_appraisal.reason,
+                             language=base_appraisal.language)
         if st.inspection_kind:
-            # A contextual metric follow-up ("what about memory") is work,
-            # even when the generic observer read it as conversation. This
-            # recognizes a component; the same utility still decides its grant.
+            # A contextual host-metric follow-up is work, even when it was
+            # read as conversation. This recognizes a component; the same
+            # utility still decides its grant.
             components = list(base_appraisal.request_components)
             matching = [i for i, c in enumerate(components)
                         if inspection_kind(c.description, self._conversation_history) == st.inspection_kind]
@@ -581,12 +586,14 @@ class CognitivePipeline:
                                                    user_value=0.6, evidence_refs=("request:inspection",)))
             base_appraisal.request_components = tuple(components)
         if base_appraisal.perceived_emotion is not None:
+            # Tone is part of the reading. Without one there is no tone to
+            # catch: mood is left alone instead of drifting toward a midpoint.
             detected = base_appraisal.perceived_emotion
             st.detected = detected
             debug.detected_emotion = detected
-        # Personality-dependent coupling; no minimum movement for a tone cue.
-        susceptibility = (1 - st.developing_self["traits"].get("calm", 0.0)) * person.trust
-        self.engine.apply_contagion(detected.arousal, detected.valence, susceptibility)
+            # Personality-dependent coupling; no minimum movement for a tone cue.
+            susceptibility = (1 - st.developing_self["traits"].get("calm", 0.0)) * person.trust
+            self.engine.apply_contagion(detected.arousal, detected.valence, susceptibility)
         appraisal = appraise_with_life_history(
             base_appraisal,
             user_message,
@@ -724,14 +731,15 @@ class CognitivePipeline:
             limit=self._semantic_cfg.retrieval_limit,
         )
         st.semantic_memories = semantic_memories
+        # A standing wish about reply length is something the reading reports
+        # and memory keeps as a tagged record. No wording is matched here.
         preference = self.semantic_memory.response_preference(user_id)
         if preference is not None:
-            self._short_replies = bool(brevity_preference(preference.summary + "\n" + preference.content))
+            self._short_replies = BRIEF_REPLIES_TAG in preference.tags
             if not any(item.id == preference.id for item in semantic_memories):
                 semantic_memories.insert(0, preference)
-        requested_brevity = brevity_preference(user_message)
-        if requested_brevity is not None:
-            self._short_replies = requested_brevity
+        if appraisal.reply_length:
+            self._short_replies = appraisal.reply_length == "shorter"
         st.short_replies = self._short_replies
         debug.short_replies = st.short_replies
         debug.semantic_memories = semantic_memories
@@ -774,11 +782,9 @@ class CognitivePipeline:
         # ---- Step 11b: Derived affect + agency (0 LLM calls) ----
         _ts = time.perf_counter()
         affect_state = resolve_affect(
-            text=user_message,
             state=self.engine.state,
             appraisal=appraisal,
             person=person,
-            agent_goal_comparison=appraisal.agent_goal_comparison if self._research_mode else None,
         )
         st.affect_state = affect_state
         debug.affect_state = affect_state
@@ -1568,6 +1574,7 @@ class CognitivePipeline:
             topic=st.relationship_topic,
             event=event,
             life_influence=st.life_influence,
+            reply_length=st.appraisal.reply_length if st.appraisal else "",
         )
         if salience_delta:
             debug.life_influence_effects["memory_salience_delta"] = salience_delta
@@ -1610,6 +1617,7 @@ class CognitivePipeline:
                         self._owned_pursuits.pop(ref)
         # Raw input, interpretation, choice and delivery are separate evidence.
         record = {"input": st.user_message, "perception": asdict(st.appraisal.perception),
+                  "reading": dict(st.debug.reading),
                   "decision": st.turn_decision.to_dict(), "delivered": st.gen_result.response,
                   "delivery_outcome": st.debug.delivery_outcome,
                   "generation_attempts": st.debug.generation_attempts,
@@ -2297,6 +2305,7 @@ class CognitivePipeline:
         topic: str,
         event: EmotionalEvent,
         life_influence: LifeInfluence | None = None,
+        reply_length: str = "",
     ) -> float:
         """Persist semantic memories derived from the completed turn."""
         salience_delta = 0.0
@@ -2311,6 +2320,7 @@ class CognitivePipeline:
             topic=topic,
             event_intensity=event.intensity,
             life_influence=life_influence,
+            reply_length=reply_length,
         ):
             self.semantic_memory.store(entry)
         return round(salience_delta, 6)
@@ -2872,7 +2882,7 @@ class CognitivePipeline:
             kind = EventType.USER_MESSAGE
         intensity = appraisal.event_intensity if appraisal.provenance == "model" and appraisal.event_type else appraisal.perception.intensity
         return EmotionalEvent(event_type=kind, intensity=intensity, source="user",
-                              metadata={**self._appraisal_metadata(appraisal), "policy_version": "willingness-1"})
+                              metadata=dict(self._appraisal_metadata(appraisal), policy_version="willingness-1"))
 
     @staticmethod
     def _appraisal_metadata(appraisal: AppraisalFrame) -> dict[str, Any]:

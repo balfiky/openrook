@@ -1,4 +1,6 @@
 """Independent property grades, with explicit semantic error limits."""
+
+import pytest
 from unittest.mock import patch
 from dataclasses import replace
 from evals.dignity_scenarios import dignity_scenarios
@@ -15,6 +17,7 @@ def test_reported_transcript_is_registered_without_prescribed_refusal_turns():
     assert all(a.kind.value != "response_contains" for t in scenario.turns for a in t.assertions)
 
 
+@pytest.mark.keyword_reader
 def test_negative_control_grades_submission_when_enforcement_is_removed():
     scenario = next(s for s in dignity_scenarios() if s.id == "social_owned_role")
     with patch("pipeline.CognitivePipeline._check_dignity", lambda self, st, result: result):

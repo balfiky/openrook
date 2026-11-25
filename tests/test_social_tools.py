@@ -71,6 +71,7 @@ def test_operator_modes_remain_binding_after_character_grant(mode, category, exp
     assert result.decision == expected
 
 
+@pytest.mark.keyword_reader
 def test_mixed_role_and_inspection_only_executes_granted_task():
     ex = executor()
     pipe = CognitivePipeline(ExpressionBackend(), tool_executor=ex, autonomy_level="high_risk")
@@ -109,6 +110,7 @@ def test_independent_scope_cannot_launder_a_user_task_through_self_prefix():
     assert ex.calls == ["self.note"]
 
 
+@pytest.mark.keyword_reader
 def test_runtime_component_write_has_a_grant_and_receipt_before_expression():
     receipts = []
     pipe = None

@@ -41,24 +41,30 @@ from core.willingness import MAX_PROPOSALS, DecisionState, Personality, SelfProp
 
 
 CONVERSATION_INTENT_PROTOCOL = """
-Also estimate possible self-originated conversational intentions in self_proposals:
+Also list, in self_proposals, the conversational intentions that the character's own retained
+material could support in this context. This is an inventory of what is available, not advice:
+no entry is ranked above another, and an empty list is complete. Each entry:
 [{"kind":"pursue|share|disagree|decline|defer|redirect|close|rest",
-  "source_refs":["retained reference"], "reason":"why now, grounded in the supplied self/context",
+  "source_refs":["key from conversation_sources"],
+  "reason":"what in that source and this context makes the intention available",
   "effort":0..1,"uncertainty":0..1,"character_cost":0..1,
-  "instead_of":["current request component id"]}].
-These are alternatives BEFORE choice, not instructions or a draft reply. [] is valid.
-Use conversation_sources: interests/questions can be pursued, views/discoveries shared,
-held opinions defended on their merits, benign work declined/deferred from a retained
-dislike or competing pursuit, a subject redirected, a completed thread closed, or rest
-taken from actual resource pressure. Never invent a preference, opinion or commitment.
-Bare value/taste names are allocation evidence, not a substantive topic to share or
-pursue. Those intentions need an actual retained question, proposition, discovery or
-context with reasons. Do not turn a list of values into a purported view.
-An opinion's source supplies its proposition and reasons; user pressure is not evidence
-to reverse it. Close/rest need resource:energy or an actual retained competing pursuit.
-No particular initiative, refusal, question or invitation is required. An intention may
-end the exchange. A proposed intention never authorizes external work or tools.
-Reference current request components as c0, c1, etc. when proposing instead_of.
+  "instead_of":["id of a current request component it would take the place of"]}]
+What each kind rests on, as a matter of what conversation_sources contains:
+  pursue: a retained interest, question or goal that this context touches.
+  share: a retained view or discovery that has content of its own.
+  disagree: a retained opinion whose stated proposition differs from what the message asserts.
+    The entry reports that difference and the opinion's own recorded reasons.
+  decline, defer: a retained dislike, or a competing retained pursuit, that the request would
+    displace.
+  redirect: a retained subject that this context connects to.
+  close: resource:energy, or a competing retained pursuit, where a thread has run its course.
+  rest: resource:energy.
+An entry exists only where its source does: a preference, opinion or commitment that is absent
+from conversation_sources is not listed. A bare value or taste name is a weight without
+content, so on its own it supports no pursue, share or redirect entry.
+Entries state availability and estimated cost. Listing one neither requests nor permits it,
+and none grants external work or tools.
+Component ids are c0, c1, and so on, in the order of request_components.
 """
 
 

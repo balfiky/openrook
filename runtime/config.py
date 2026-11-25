@@ -119,9 +119,9 @@ class RuntimeConfig:
     research_episode_idle_seconds: float = 300.0
     research_episode_max_turns: int = 50
     research_reflection_interval: float = 3600.0
-    # Social appraisal: when True the backend LLM reads the interpersonal
-    # meaning of each user message (no regex); the deterministic appraisal is
-    # the fallback when no LLM is available or its output won't parse.
+    # Deprecated and without effect. The model reads every user message; the
+    # reading is required work of a turn and has no local substitute. The field
+    # stays so existing configuration files keep loading.
     appraisal_use_llm: bool = True
     # Ordinary conversations can develop the self at consolidation. Grounded
     # evidence accumulation and bounded rates protect continuity. Explicit False

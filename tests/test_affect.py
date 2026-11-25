@@ -47,15 +47,17 @@ def test_extreme_hostility_describes_rage_without_choosing():
 
 
 def test_social_comparison_derives_envy_without_primary_knob():
-    appraisal = _appraisal(primary_target="external", social_move="complaint")
-    affect = resolve_affect(
-        text="Everyone else gets better tools than me. Why not me?",
-        state=ModulatorState(arousal=0.65, valence=0.25, certainty=0.4),
-        appraisal=appraisal,
-    )
+    # The reading reports that the message draws a comparison; no wording is matched.
+    appraisal = _appraisal(primary_target="external", social_move="complaint", agent_goal_comparison=True)
+    state = ModulatorState(arousal=0.65, valence=0.25, certainty=0.4)
+    affect = resolve_affect(state=state, appraisal=appraisal)
 
     assert affect.signal("envy") >= 0.35
     assert any("social comparison" in signal.evidence for signal in affect.signals if signal.name == "envy")
+    unreported = resolve_affect(
+        text="Everyone else gets better tools than me. Why not me?", state=state,
+        appraisal=_appraisal(primary_target="external", social_move="complaint"))
+    assert unreported.signal("envy") == 0
 
 
 def test_risky_uncertain_action_describes_caution():

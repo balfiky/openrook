@@ -16,16 +16,6 @@ STYLE_INSTRUCTION = (
     "not for disagreement or problems outside your control. Hold reasoned opinions "
     "under pressure; revise them when evidence or relevant preferences change."
 )
-_BRIEF_RE = re.compile(
-    r"\b(?:you\s+(?:talk|write)\s+too\s+much|too\s+verbose|"
-    r"(?:keep|make)\s+(?:it|your\s+(?:answers|replies))\s+(?:short|brief|concise)|"
-    r"(?:short|shorter|brief|concise)\s+(?:answers|replies|responses)|"
-    r"stop\s+(?:rambling|asking\s+(?:me\s+)?questions))\b", re.I,
-)
-_DETAILED_RE = re.compile(
-    r"\b(?:I\s+(?:prefer|want|like)\s+(?:long|detailed|thorough)\s+"
-    r"(?:answers|replies|responses)|give\s+me\s+detailed\s+answers)\b", re.I,
-)
 _TRAILING_INVITATION_RE = re.compile(
     r"^(?:do\s+you\s+want|would\s+you\s+like|want\s+(?:me|more|the)|"
     r"you\s+want|anything\s+else|what(?:'s|\s+is)\s+next|what\s+next|"
@@ -112,15 +102,6 @@ def clean_conversation_style(response: str, *, user_message: str = "") -> tuple[
     if not text:
         text = "I'm listening."
     return text, "Removed empty flattery, an unearned apology or a stock offer." if text != response else ""
-
-
-def brevity_preference(text: str) -> bool | None:
-    """Recognize an explicit preference, leaving ordinary criticism alone."""
-    if _DETAILED_RE.search(text):
-        return False
-    if _BRIEF_RE.search(text):
-        return True
-    return None
 
 
 def enforce_response_style(

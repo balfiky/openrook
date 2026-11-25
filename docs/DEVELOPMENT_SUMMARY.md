@@ -118,8 +118,10 @@ The four initial review defects are addressed:
 2. **SQLite lock duration:** belief-revision inference runs before the write
    transaction. Resulting experience, revision, and evolution changes commit
    together, without holding a database write lock through model latency.
-3. **Optional appraisal failure:** backend inference errors and malformed output
-   fall back to deterministic appraisal rather than aborting the whole turn.
+3. **Reading failure:** backend inference errors and malformed output are
+   recorded as an unavailable reading and treated as plain conversation rather
+   than aborting the whole turn. There is no keyword appraisal to fall back to
+   (see [the reading contract](development/reading-contract.md)).
 4. **Persisted theme continuity:** legacy sign-sensitive signatures reconcile
    with the current representation, preserving reinforcement and references.
 

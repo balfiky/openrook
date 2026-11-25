@@ -179,6 +179,7 @@ def test_selected_substantive_intention_is_not_silence_at_zero_relational_engage
     assert not choice.chosen_silence
 
 
+@pytest.mark.keyword_reader
 def test_actual_rest_skips_expression_cost_and_defers_optional_learning(tmp_path, soul):
     cfg = RuntimeConfig(data_dir=str(tmp_path), appraisal_use_llm=False)
     with configuration_scope(OpenRookConfig(soul=soul)), closing(CognitivePipeline(EpisodeBackend(), runtime_config=cfg)) as pipeline:

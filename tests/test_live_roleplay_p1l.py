@@ -119,6 +119,7 @@ def test_optional_work_reserves_a_fresh_attempt_after_semantic_ineligibility():
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_required_retry_backend_failure_keeps_its_exception_and_diagnostics():
     failure = requests.ReadTimeout("offline transport failure")
     pipe = CognitivePipeline(ExpressionBackend(drafts=["Fuck u.", failure]),

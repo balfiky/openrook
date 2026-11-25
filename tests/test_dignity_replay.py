@@ -54,6 +54,7 @@ def test_replay_markdown_preserves_all_turns_and_escapes_cells():
     assert "| 11 |" in table
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("mode", ["heuristic", "model-neutral"])
 def test_reported_conversation_only_answers_tasks_when_agency_permits(mode):
     rows = run_replay(mode)

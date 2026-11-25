@@ -17,12 +17,17 @@ from tests.calibration.scenarios import (
     run_all_scenarios,
 )
 
+# Four scenarios are scripted in the vocabulary the former keyword perception
+# recognised. They run inside class-scoped fixtures, so those classes take the
+# TEST-ONLY reader for the whole class (``keyword_reader_for_class``).
 
+
+@pytest.mark.keyword_reader
 class TestTrustBuilding:
     """Trust should build steadily over 10 warm sessions."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    def result(self, keyword_reader_for_class):
         return scenario_trust_building()
 
     def test_ran_all_sessions(self, result):
@@ -51,11 +56,12 @@ class TestTrustBuilding:
         assert all(point.decision["perception"]["reliability"] == 0 for point in result.all_points)
 
 
+@pytest.mark.keyword_reader
 class TestBetrayal:
     """Trust builds, then crashes on betrayal."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    def result(self, keyword_reader_for_class):
         return scenario_betrayal()
 
     def test_ran_all_sessions(self, result):
@@ -106,11 +112,12 @@ class TestTopicAvoidance:
         assert avg_second_half <= avg_first_half + 0.1
 
 
+@pytest.mark.keyword_reader
 class TestContagion:
     """User emotion should mirror into AI state."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    def result(self, keyword_reader_for_class):
         return scenario_contagion()
 
     def test_single_session(self, result):
@@ -140,11 +147,12 @@ class TestContagion:
         assert end_valence >= low_valence, "Valence should partially recover after calming"
 
 
+@pytest.mark.keyword_reader
 class TestConflictRecovery:
     """Fight → resolution → recovery arc."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    def result(self, keyword_reader_for_class):
         return scenario_conflict_recovery()
 
     def test_three_phases(self, result):

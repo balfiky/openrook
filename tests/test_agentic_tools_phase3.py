@@ -13,6 +13,8 @@ Tests cover:
 
 from __future__ import annotations
 
+import pytest
+
 import os
 import tempfile
 import time
@@ -509,6 +511,7 @@ class TestPipelineToolMemoryIntegration:
         assert effects is not None
         assert len(effects.unresolved_items_created) > 0
 
+    @pytest.mark.keyword_reader
     def test_missing_browser_provider_is_operational_not_unresolved(self):
         pipe, _, _ = _make_pipeline_with_tools()
         resp = pipe.process("get page text from https://example.com", user_id="u1")
@@ -543,6 +546,7 @@ class TestPipelineToolMemoryIntegration:
         assert pipe.engine.active_unresolved() == []
         assert pipe.engine.state.resolution == 0.0
 
+    @pytest.mark.keyword_reader
     def test_repeated_hostility_is_bounded_and_read_task_still_runs(self):
         reg = ToolRegistry()
         exe = ToolExecutor(reg)

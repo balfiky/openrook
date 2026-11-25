@@ -183,6 +183,7 @@ class TestPerUserDebug:
             finally:
                 await manager.shutdown()
 
+    @pytest.mark.keyword_reader
     async def test_debug_serializes_affect_agency(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             manager, app = _setup(tmpdir, autonomy_level="assisted")
@@ -214,6 +215,7 @@ class TestPerUserDebug:
             finally:
                 await manager.shutdown()
 
+    @pytest.mark.keyword_reader
     async def test_debug_modulators_reflect_emotion(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             manager, app = _setup(tmpdir)
@@ -273,6 +275,7 @@ class TestPerUserReset:
 
 
 class TestSessionIsolation:
+    @pytest.mark.keyword_reader
     async def test_different_users_different_debug(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             manager, app = _setup(tmpdir)

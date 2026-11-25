@@ -40,6 +40,8 @@ def explain_turn(debug: Any) -> dict[str, str]:
 def _interpretation(appraisal: Any) -> str:
     if appraisal is None:
         return "I did not record a social interpretation for this turn."
+    if getattr(appraisal, "provenance", "") == "unavailable":
+        return "I could not read this message, so I interpreted it as plain conversation."
     target = getattr(appraisal, "primary_target", "unknown")
     move = social_move_phrase(getattr(appraisal, "social_move", "inform"))
     if target == "external":

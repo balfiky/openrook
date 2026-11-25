@@ -361,7 +361,7 @@ class AppraisalFrame:
     mixed_affect: bool = False
     targets_assistant: bool = False
     reason: str = ""
-    provenance: str = "heuristic"
+    provenance: str = "heuristic"         # model | unavailable; the default marks a hand-built frame
     perceived_emotion: DetectedEmotion | None = None
     event_type: str = ""
     event_intensity: float = 0.0
@@ -369,6 +369,8 @@ class AppraisalFrame:
     request_components: tuple[RequestComponent, ...] = ()
     self_proposals: tuple[dict[str, Any], ...] = ()
     agent_goal_comparison: bool = False
+    language: str = ""                    # language of the message, as reported by the reading
+    reply_length: str = ""                # shorter | longer: a standing wish the reading reports
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -398,6 +400,8 @@ class AppraisalFrame:
             "perception": asdict(self.perception),
             "request_components": [asdict(c) for c in self.request_components],
             "provenance": self.provenance,
+            "language": self.language,
+            "reply_length": self.reply_length,
         }
 
 

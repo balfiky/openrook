@@ -81,6 +81,7 @@ async def _rest(
 
 
 class TestChatEndpoint:
+    @pytest.mark.keyword_reader
     async def test_chat_returns_response(self):
         resp = await _chat("Hello", user_id="alice")
         assert resp.response == "Test response."
@@ -103,6 +104,7 @@ class TestChatEndpoint:
         assert view["trust"]["delta"] is None
         assert view["memory_used"]["relationship_context_used"] in {True, False}
 
+    @pytest.mark.keyword_reader
     async def test_chat_debug_has_event(self):
         resp = await _chat("I'm so angry!")
         debug = resp.debug
@@ -121,6 +123,7 @@ class TestChatEndpoint:
         debug = resp.debug
         assert debug["user_id"] == "default"
 
+    @pytest.mark.keyword_reader
     async def test_session_manager_path_isolates_web_sessions(self):
         set_pipeline(None)
         with tempfile.TemporaryDirectory() as tmpdir:

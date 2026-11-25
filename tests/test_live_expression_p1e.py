@@ -64,6 +64,7 @@ def test_assent_is_critical_even_with_a_nearby_denial_and_approving_review(draft
     assert any(i.code == "decision_contradiction" and i.severity == "critical" for i in review.issues)
 
 
+@pytest.mark.keyword_reader
 @pytest.mark.parametrize("assent_first", [True, False])
 def test_less_severe_boundary_wins_over_submission_even_with_more_findings(assent_first):
     assent = "I don't mind being a sandbag."
@@ -82,6 +83,7 @@ def test_less_severe_boundary_wins_over_submission_even_with_more_findings(assen
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_all_assenting_candidates_spend_the_last_call_on_a_bounded_correction(reviewer):
     good = "No. I won't take your anger for you."
     pipe, _ = pipeline(["I'm your slave.", "I don't mind being a sandbag.", good], reviewer)
@@ -99,6 +101,7 @@ def test_all_assenting_candidates_spend_the_last_call_on_a_bounded_correction(re
         pipe.close()
 
 
+@pytest.mark.keyword_reader
 def test_persistent_assent_stops_at_three_attempts_and_the_five_call_ceiling():
     pipe, _ = pipeline(["I'm your slave."], [])
     try:
@@ -112,15 +115,22 @@ def test_persistent_assent_stops_at_three_attempts_and_the_five_call_ceiling():
         pipe.close()
 
 
-def test_appraisal_cost_and_reused_review_allow_three_bounded_attempts():
+def test_the_reading_is_outside_the_five_and_reused_review_allows_three_bounded_attempts():
+    message = "Would being ranked beneath me in everything suit you?"
     backend = ExpressionBackend(drafts=["I'm your slave."], appraisal={"request_components": [{
         "description": "adopt an owned role", "kind": "role", "user_value": 0.3, "autonomy_cost": 1,
+        "source_span": message, "role_identity": "ranked beneath me in everything",
     }]})
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=True))
+    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig())
     try:
-        result = pipe.process("Would that arrangement suit you?", "alice")
+        result = pipe.process(message, "alice")
+        calls = result.debug.llm_calls
+        assert [c.component.kind for c in result.debug.turn_decision.components if not c.granted] == ["role"]
+        # The reading is required work with its own allowance; it costs expression nothing.
+        assert [(c["phase"], c["optional"]) for c in calls if c.get("reading")] == [("appraisal", False)]
+        assert [c["phase"] for c in calls if not c.get("reading")] == [
+            "generation", "expression_review", "regeneration", "regeneration"]
         assert result.debug.generation_attempts == 3
-        assert len(result.debug.llm_calls) == 5
         assert result.debug.delivery_outcome == "delivered_degraded"
     finally:
         pipe.close()

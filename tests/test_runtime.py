@@ -587,6 +587,7 @@ class TestSessionStatePersistence:
 # =========================================================================
 
 class TestRestartRestore:
+    @pytest.mark.keyword_reader
     def test_restore_from_saved_state(self):
         """A new session restores modulators from a previously saved state."""
         async def run():
@@ -813,6 +814,7 @@ class TestSessionLifecycle:
 
         asyncio.run(run())
 
+    @pytest.mark.keyword_reader
     def test_shared_self_model_across_users(self):
         """Two users share the same self-model DB via self_db_path."""
         async def run():
@@ -905,6 +907,7 @@ class TestSessionIdentitySeparation:
 
         asyncio.run(run())
 
+    @pytest.mark.keyword_reader
     def test_dm_and_group_hold_different_emotional_states(self):
         """Different chat contexts can diverge in emotional state."""
         async def run():
@@ -972,6 +975,7 @@ class TestSessionIdentitySeparation:
 
         asyncio.run(run())
 
+    @pytest.mark.keyword_reader
     def test_chat_contexts_persist_independent_hot_state(self):
         """Different chat contexts restore their own engine state snapshots."""
         async def run():

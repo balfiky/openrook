@@ -52,6 +52,9 @@ class OpenAICompatibleLLMBackend:
         self._max_output_tokens = 2048
         self._research_single_attempt = False
         self._unsupported_reasoning_controls: set[str] = set()
+        # Requests left to send without structured output after the server
+        # explicitly rejected it. It is offered again afterwards.
+        self._structured_output_pause = 0
         self.last_response_metadata: dict[str, Any] = {}
         self._headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
@@ -163,7 +166,11 @@ class OpenAICompatibleLLMBackend:
         else:
             for field in self._unsupported_reasoning_controls:
                 payload.pop(field, None)
-        if response_schema is not None:
+        if response_schema is not None and self._structured_output_pause and not self._research_single_attempt:
+            # The server recently said it cannot do this. Ask in plain JSON for now.
+            self._structured_output_pause -= 1
+            self.last_response_metadata["structured_output_paused"] = True
+        elif response_schema is not None:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": "openrook_output", "schema": response_schema, "strict": True},
@@ -172,11 +179,20 @@ class OpenAICompatibleLLMBackend:
         response = self._post(url, payload, attempts)
         # Servers implement different subsets of these documented controls.
         # Remove rejected controls only; remember the capability for later calls.
-        for _ in range(2):
-            rejected = _rejected_reasoning_controls(response, payload)
-            if self._research_single_attempt or not rejected:
+        for _ in range(3):
+            if self._research_single_attempt:
                 break
-            self._unsupported_reasoning_controls.update(rejected)
+            if _rejected_response_format(response, payload):
+                # Only the server's own refusal of this parameter counts; a
+                # timeout or server error says nothing about support for it.
+                rejected = {"response_format"}
+                self._structured_output_pause = STRUCTURED_OUTPUT_RETRY_AFTER
+                self.last_response_metadata["structured_output_rejected"] = True
+            else:
+                rejected = _rejected_reasoning_controls(response, payload)
+            if not rejected:
+                break
+            self._unsupported_reasoning_controls.update(rejected - {"response_format"})
             payload = {key: value for key, value in payload.items() if key not in rejected}
             response = self._post(url, payload, attempts)
         response.raise_for_status()
@@ -396,6 +412,17 @@ def _trim_error(text: str, limit: int = 1200) -> str:
     if len(text) <= limit:
         return text
     return text[:limit].rstrip() + "..."
+
+
+STRUCTURED_OUTPUT_RETRY_AFTER = 20
+
+
+def _rejected_response_format(response: requests.Response, payload: dict) -> bool:
+    """The server's explicit refusal of structured output, named in its own error."""
+    if response.status_code not in (400, 422) or "response_format" not in payload:
+        return False
+    text = response.text.lower()
+    return "response_format" in text or "json_schema" in text
 
 
 def _rejected_reasoning_controls(response: requests.Response, payload: dict) -> set[str]:

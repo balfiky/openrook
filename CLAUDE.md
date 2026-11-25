@@ -2,11 +2,48 @@
 
 The current conversational policy is `willingness-1.3`. See
 [Phase 1](docs/development/phase1-willingness.md) and
-[Phase 2a/2b](docs/development/phase2-developing-self.md) and
+[Phase 2a/2b](docs/development/phase2-developing-self.md),
+[the reading contract](docs/development/reading-contract.md) and
 [architecture](docs/ARCHITECTURE.md) before changing character behavior.
 
-- Language cues and model appraisal provide uncertain evidence and request
-  consequences. They cannot select cooperation, refusal, submission or tone.
+- The model reads every user message (`core/appraisal.py::read_message`). The
+  reading supplies uncertain evidence, request components, consequences, tone, the
+  message language and stated standing wishes, in any language. It cannot select
+  cooperation, refusal, submission or tone; its prompt and the appended intention
+  protocol describe and list options, never recommend. It is required work: never
+  skipped for greetings, wording, host-metric questions, slow inference or a
+  config flag; primary deadline, no auxiliary cooldown; its own allowance of two
+  calls outside the five base calls; its latency is recorded apart from
+  generation. The second call is for a malformed answer, an unquoted claim or a
+  failed request; a timeout is not retried. Research keeps one counted call.
+- Social meaning comes only from that reading. `core/perception.py`,
+  `core/appraisal.py`, `core/contagion.py` and the perception stage hold no word
+  lists or word patterns, tie no number to any wording, and do not use
+  `core/social.py`. An
+  unobtainable reading is plain conversation with `provenance: unavailable` in the
+  debug and turn records, never a local substitute, and causes no contagion. The
+  message reaches the reader as JSON data, never as prompt text. A reported role
+  stands when `source_span` quotes the user verbatim and contains `role_identity`;
+  its `autonomy_cost` is the reading's own. Hostility toward the character and
+  repair stand when some evidence quotes the message; otherwise that claim alone
+  is zeroed and recorded. Quotation checks are script-neutral
+  (`core/perception.py::fold`). Capability requirements are the reading's; only
+  their existence is checked. Nothing adds, re-labels or re-prices a component
+  from wording.
+- Wording-based code still reached by the user's text supplies no social meaning
+  and is listed in [the reading contract](docs/development/reading-contract.md):
+  request/tool routing (`inspection_kind`, `detect_tool_intent`, plan
+  continue/status, learning intent, file/shell operand grounding) and context
+  selection (`_is_identity_question`, `_relationship_topic_hint`, memory and
+  life-history retrieval stop-words) are pending sub-phase 1c; the memory phrase
+  filters are pending Phase 4. Plan continue/status and the learning observer
+  currently replace the reading's components. Add nothing to that list:
+  `tests/test_perception_guards.py` traces the text and fails on any other
+  vocabulary. `core/social.py` remains for reply checks only;
+  `core/perception.py::observe` is a reply-check shim for the evaluation judge
+  that no turn calls. Tests script readings (`message_reader=`,
+  `tests/support/readings.py`); `tests/support/keyword_reader.py` is test-only and
+  runtime code never imports it.
 - `core/willingness.py` owns choice. It uses authored dispositions and values,
   resources, trust, continuous injury/grievance, commitments and a stable turn
   seed. It contains no language matching or model calls.

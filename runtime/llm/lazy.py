@@ -29,6 +29,12 @@ class LazyLLMBackend:
     def generate(self, system_prompt: str, user_message: str, **kwargs: Any) -> str:
         return self.initialize().generate(system_prompt, user_message, **kwargs)
 
+    def accepts_response_schema(self) -> bool:
+        """Structured output is a property of the configured backend, not this wrapper."""
+        from core.inference import accepts_response_schema
+
+        return accepts_response_schema(self.initialize())
+
     def close(self) -> None:
         with self._lock:
             if self._closed:

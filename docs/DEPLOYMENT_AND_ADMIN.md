@@ -133,12 +133,12 @@ technical detail in a disclosure and run off the web event loop.
 ### Chat timing and session actions
 
 After eight seconds the chat shows which backend is still working. Codex and
-other slow backends can take a minute or more. Ordinary chat defaults to
-`appraisal_use_llm: true`: appraisal and the final reply normally make two
-serial calls to the same backend. Deliberation, tools, and retries can add more.
-To remove the appraisal call, set `appraisal_use_llm: false` in your instance
-configuration; this uses deterministic appraisal and changes how events are
-interpreted. It does not speed up the underlying provider.
+other slow backends can take a minute or more. Ordinary chat makes at least two
+serial calls to the same backend: one to read the message and one for the final
+reply. Deliberation, tools, and retries can add more. The reading cannot be
+turned off: `appraisal_use_llm` is still accepted in configuration files and no
+longer changes anything. If the reading fails, the message is treated as plain
+conversation and the debug record says the reading was unavailable.
 
 **End Session** consolidates the conversation and clears short-term context.
 The confirmation says whether summary memories were written; stored memories

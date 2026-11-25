@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.run_phase11_report import (
     collect_phase11_trace,
     load_phase11_scenarios,
@@ -24,6 +26,7 @@ class TestPhase11Report:
         assert decision["relationship"]["h"] == 0
         assert decision["utility"] == max(a[1] for a in decision["alternatives"])
 
+    @pytest.mark.keyword_reader
     def test_rendered_trace_mentions_strategy(self):
         scenario = load_phase11_scenarios("p11_action_request_practical")[0]
         trace = collect_phase11_trace(scenario)

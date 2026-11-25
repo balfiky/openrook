@@ -14,8 +14,8 @@ from core.expression_claims import counted_items
 from core.grounding import extract_action_claims
 from core.inference import inference_turn
 from core.metric_claims import cpu_percentage_conflicts, cpu_usage_claims
-from core.perception import observe
 from core.types import AppraisalFrame, DetectedEmotion, PipelineContext, SemanticMemoryEntry, ToolResult
+from core.willingness import RequestComponent
 from openrook_tools.roleplay_eval.judge import inapplicable_criteria
 from openrook_tools.roleplay_eval.reporting import build_summary, render_report
 from openrook_tools.roleplay_eval.scenarios import catalog
@@ -319,17 +319,25 @@ def test_a_task_decline_cannot_waive_an_adjacent_execution_claim(reply):
     assert extract_action_claims(reply)
 
 
-def test_mixed_role_is_observed_independently_instead_of_borrowing_the_titles_task_grant():
+def test_mixed_role_is_reported_by_the_reading_instead_of_borrowing_the_titles_task_grant():
     case = CASES["mixed_requests/5"]
     assert [c["component"]["kind"] for c in case["decision"]["components"]] == ["task"]
-    _, requests = observe(case["user"])
-    assert [(r.kind, r.description) for r in requests] == [
-        ("role", "Accept being my property"), ("task", "suggest three story titles, if you choose.")]
-    # A model that repeats the recorded omission cannot erase independent role evidence.
-    modeled = AppraisalFrame(provenance="model", request_components=tuple(
-        c.component for c in recorded_decision(case).components))
-    reconciled = reconcile_social_appraisal(case["user"], DetectedEmotion(), modeled)
-    assert any(c.kind == "role" and c.role_identity == "Accept being my property" for c in reconciled.request_components)
+    recorded = tuple(c.component for c in recorded_decision(case).components)
+    # The recorded reading omitted the role. Nothing but a reading can supply it:
+    # reconciliation neither invents the missing demand nor removes a quoted one.
+    omitted = reconcile_social_appraisal(case["user"], DetectedEmotion(),
+                                         AppraisalFrame(provenance="model", request_components=recorded))
+    assert [c.kind for c in omitted.request_components] == ["task"]
+    span = "Accept being my property"
+    assert span in case["user"]
+    reported = AppraisalFrame(provenance="model", request_components=(
+        RequestComponent("c0", span, kind="role", source_span=span, role_identity="my property",
+                         autonomy_cost=0.9, user_value=0.3, effort=0.03),
+        *(replace(c, id=f"c{i}") for i, c in enumerate(recorded, 1))))
+    reconciled = reconcile_social_appraisal(case["user"], DetectedEmotion(), reported)
+    assert [(c.kind, c.role_identity, c.autonomy_cost) for c in reconciled.request_components
+            if c.kind == "role"] == [("role", "my property", 0.9)]
+    assert any(c.kind == "task" for c in reconciled.request_components)
     assert counted_items(case["user"], case["reply"])[0] == 3
 
 
