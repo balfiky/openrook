@@ -36,6 +36,14 @@ async def admin_get_soul() -> dict:
     return payload
 
 
+@router.get("/admin/soul/presets")
+async def admin_soul_presets() -> dict:
+    """Return the birth-personality presets used by terminal and browser setup."""
+    from config.presets import presets_catalog
+
+    return {"presets": presets_catalog(), "default": "steady"}
+
+
 @router.post("/admin/soul/draft")
 async def admin_draft_soul(req: api_mod.AdminSoulDraftRequest) -> dict:
     """Draft a soul.yaml from a natural-language description via the LLM.

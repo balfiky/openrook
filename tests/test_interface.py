@@ -318,7 +318,7 @@ class TestIndexPage:
         assert "/admin/codex/models" in picker
         assert "/admin/llm/models" in picker
         assert "loadSettings({ loadSoul: false })" in js
-        assert "Character Mode" in html
+        assert "wiz-soul-archetype" in html and "Show identity file" in html
         assert 'id="wiz-soul-name" type="text" value="OpenRook"' in html
         assert "First Experience" in html
         assert "wizardBuildSoulPayload" in js

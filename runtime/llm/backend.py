@@ -15,7 +15,7 @@ from typing import Any
 import requests
 
 from core.provider_client import FastChatCompletionsClient
-from core.inference import output_token_limit, request_timeout, sampling_parameters
+from core.inference import call_with_deadline, output_token_limit, request_timeout, sampling_parameters
 from core.llm_content import reply_text
 from core.dual_process.generator import LLMBackend
 from runtime.security import validate_http_url
@@ -83,15 +83,27 @@ class OpenAICompatibleLLMBackend:
         self._session.close()
         self._session = self._new_session()
 
+    def _abandon_session(self) -> None:
+        """Drop the pool after a deadline so the stuck connection is never reused."""
+        session, self._session = self._session, self._new_session()
+        session.close()
+
     def _post(
         self, url: str, payload: dict[str, Any], attempts: list[dict[str, Any]]
     ) -> requests.Response:
         while True:
             started = time.monotonic()
+            session = self._session
+            limit = self._timeout if self._research_single_attempt else request_timeout(self._timeout)
+            extra = {"allow_redirects": False} if self._research_single_attempt else {}
             try:
-                response = self._session.post(url, json=payload, timeout=(
-                    self._timeout if self._research_single_attempt else request_timeout(self._timeout)
-                ), **({"allow_redirects": False} if self._research_single_attempt else {}))
+                # ``timeout`` alone is per-socket-read; the deadline bounds the whole call.
+                response = call_with_deadline(
+                    lambda: session.post(url, json=payload, timeout=limit, **extra),
+                    limit,
+                    on_expire=self._abandon_session,
+                    timeout_error=requests.ReadTimeout,
+                )
             except requests.RequestException as error:
                 attempts.append(
                     {

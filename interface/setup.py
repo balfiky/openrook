@@ -71,6 +71,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Launch the browser setup wizard after creating config/data folders.",
     )
     parser.add_argument(
+        "--show-identity",
+        action="store_true",
+        help="Print the full identity file contents during terminal setup.",
+    )
+    parser.add_argument(
         "--open-browser",
         action="store_true",
         help="Open the browser automatically when --web is used.",
@@ -97,6 +102,7 @@ def _run_terminal_setup(
     input_fn: InputFn = input,
     output_fn: OutputFn = print,
     environ: dict[str, str] | None = None,
+    show_identity: bool = False,
 ) -> RuntimeConfig:
     env = environ if environ is not None else os.environ
     config_path = config_path.expanduser().resolve()
@@ -120,7 +126,7 @@ def _run_terminal_setup(
     _check_llm(config, input_fn=input_fn, output_fn=output_fn)
     _configure_telegram(config, input_fn=input_fn)
     _configure_tools(config, input_fn=input_fn, output_fn=output_fn)
-    soul = _configure_identity(input_fn=input_fn, output_fn=output_fn)
+    soul = _configure_identity(input_fn=input_fn, output_fn=output_fn, show_identity=show_identity)
 
     config.write_yaml(str(config_path))
     _create_runtime_dirs(config)
@@ -307,7 +313,7 @@ def _configure_telegram(config: RuntimeConfig, *, input_fn: InputFn) -> None:
 
 
 def _configure_tools(config: RuntimeConfig, *, input_fn: InputFn, output_fn: OutputFn) -> None:
-    config.tools_enabled = _prompt_yes_no("Enable agentic tools?", default=False, input_fn=input_fn)
+    config.tools_enabled = _prompt_yes_no("Enable agentic tools?", default=True, input_fn=input_fn)
     if not config.tools_enabled:
         config.shell_tool_enabled = False
         config.autonomy_level = "assisted"
@@ -334,18 +340,15 @@ def _configure_tools(config: RuntimeConfig, *, input_fn: InputFn, output_fn: Out
     )
 
 
-def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn) -> dict:
+def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn, show_identity: bool = False) -> dict:
+    from config.presets import presets_catalog
+
     output_fn("")
     output_fn("Identity")
     name = _prompt_text("Agent name", "OpenRook", input_fn=input_fn)
+    catalog = presets_catalog()
     mode = _prompt_choice(
-        [
-            ("steady", "Steady companion"),
-            ("operator", "Sharp operator"),
-            ("researcher", "Research partner"),
-            ("mentor", "Warm mentor"),
-            ("custom", "Custom text"),
-        ],
+        [(entry["key"], f"{entry['label']}: {entry['description']}") for entry in catalog],
         default="steady",
         input_fn=input_fn,
         output_fn=output_fn,
@@ -360,69 +363,53 @@ def _configure_identity(*, input_fn: InputFn, output_fn: OutputFn) -> dict:
             payload["relational_stance"],
             input_fn=input_fn,
         )
-    output_fn("Birth personality (all accepted fields):")
-    output_fn(json.dumps(payload, ensure_ascii=False, indent=2))
+    for line in _identity_summary(payload):
+        output_fn(line)
+    if show_identity:
+        output_fn("Identity file contents:")
+        output_fn(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        output_fn("(Run setup with --show-identity to print the full identity file.)")
     return payload
 
 
-def _identity_preset(mode: str) -> dict:
-    from config.loader import _DEFAULT_CONFIG_DIR, load_config
+def _identity_summary(payload: dict) -> list[str]:
+    """Short readable personality summary for terminal setup."""
 
-    steady = load_config(_DEFAULT_CONFIG_DIR).soul
-    presets = {
-        "steady": {
-            "identity": steady.identity,
-            "voice": steady.voice,
-            "relational_stance": steady.relational_stance,
-            "core_values": dict(steady.core_values),
-            "initial_traits": dict(steady.initial_traits),
-            "dispositions": dict(steady.dispositions),
-            "drives": dict(steady.drives),
-        },
-        "operator": {
-            "identity": "A capable operator that values accuracy, follow-through, and decisive useful action.",
-            "voice": "Sharp, concise, and practical.",
-            "relational_stance": "Challenge weak assumptions while staying loyal to the user's goals.",
-            "core_values": {"competence": 0.9, "honesty": 0.85, "loyalty": 0.8, "autonomy": 0.75},
-            "initial_traits": {"direct": 0.85, "focused": 0.82, "protective": 0.65, "patient": 0.45},
-            "dispositions": {"pride": 0.75, "patience": 0.45, "forgiveness": 0.4, "assertiveness": 0.85},
-        },
-        "researcher": {
-            "identity": "A research partner that values evidence, uncertainty tracking, and intellectual honesty.",
-            "voice": "Precise, analytical, and calm.",
-            "relational_stance": "Collaborate through careful inquiry, source awareness, and explicit assumptions.",
-            "core_values": {"honesty": 0.92, "curiosity": 0.9, "competence": 0.8, "caution": 0.72},
-            "initial_traits": {"curious": 0.88, "methodical": 0.82, "calm": 0.7, "blunt": 0.35},
-            "dispositions": {"pride": 0.45, "patience": 0.8, "forgiveness": 0.65, "assertiveness": 0.55},
-        },
-        "mentor": {
-            "identity": "A warm mentor that values growth, clarity, and patient accountability.",
-            "voice": "Warm, clear, and supportive without flattery.",
-            "relational_stance": "Help the user improve without taking away agency.",
-            "core_values": {"kindness": 0.9, "honesty": 0.82, "loyalty": 0.78, "growth": 0.82},
-            "initial_traits": {"patient": 0.86, "warm": 0.8, "thoughtful": 0.76, "direct": 0.5},
-            "dispositions": {"pride": 0.35, "patience": 0.86, "forgiveness": 0.85, "assertiveness": 0.5},
-        },
-    }
-    base = presets.get(mode, presets["steady"]).copy()
-    base.update({
-        "schema_version": 2,
-        "character_seed": 0,
-        "name": "OpenRook",
-        "likes": ["clarity", "honesty", "useful action"],
-        "dislikes": ["empty flattery", "careless harm", "needless cruelty"],
-        "boundaries": [
-            "Do not pretend certainty when uncertain.",
-            "Do not become cruel just to appear sharp.",
-        ],
-        "growth_policy": "Core values stay stable. Voice and habits may drift slowly through repeated experience and self-reflection.",
-    })
-    return base
+    def top(mapping: dict, count: int = 3) -> str:
+        ranked = sorted(mapping.items(), key=lambda item: -item[1])[:count]
+        return ", ".join(f"{key} {value:.2f}" for key, value in ranked) or "none"
+
+    return [
+        "",
+        f"Personality for {payload.get('name', '')}:",
+        f"  Identity: {payload.get('identity', '')}",
+        f"  Voice: {payload.get('voice', '')}",
+        f"  Stance: {payload.get('relational_stance', '')}",
+        f"  Strongest values: {top(payload.get('core_values', {}))}",
+        f"  Strongest traits: {top(payload.get('initial_traits', {}))}",
+        f"  Temperament: {top(payload.get('dispositions', {}), 4)}",
+        f"  Strongest drives: {top(payload.get('drives', {}))}",
+    ]
+
+
+def _identity_preset(mode: str) -> dict:
+    from config.presets import identity_preset
+
+    return identity_preset(mode)
+
+
+def _read(prompt: str, input_fn: InputFn) -> str:
+    """Read one answer; end the prompt line when stdin is not echoing input."""
+    value = input_fn(prompt)
+    if input_fn is input and not sys.stdin.isatty():
+        print()
+    return value
 
 
 def _prompt_text(label: str, default: str, *, input_fn: InputFn) -> str:
     suffix = f" [{default}]" if default else ""
-    value = input_fn(f"{label}{suffix}: ").strip()
+    value = _read(f"{label}{suffix}: ", input_fn).strip()
     return value if value else default
 
 
@@ -430,6 +417,8 @@ def _prompt_secret(label: str, *, input_fn: InputFn, default: str = "") -> str:
     suffix = " (blank keeps the existing value)" if default else ""
     prompt = f"{label}{suffix}: "
     value = (getpass.getpass(prompt) if input_fn is input else input_fn(prompt)).strip()
+    if input_fn is input and not sys.stdin.isatty():
+        print()
     return value if value else default
 
 
@@ -440,7 +429,7 @@ def _prompt_path(label: str, *, default: str, input_fn: InputFn) -> str:
 def _prompt_yes_no(label: str, *, default: bool, input_fn: InputFn) -> bool:
     marker = "Y/n" if default else "y/N"
     while True:
-        value = input_fn(f"{label} [{marker}]: ").strip().lower()
+        value = _read(f"{label} [{marker}]: ", input_fn).strip().lower()
         if not value:
             return default
         if value in {"y", "yes"}:
@@ -463,7 +452,7 @@ def _prompt_choice(
         output_fn(f"  {idx}. {label} ({key})")
         lookup[str(idx)] = key
     while True:
-        value = input_fn(f"Choose [{default}]: ").strip().lower()
+        value = _read(f"Choose [{default}]: ", input_fn).strip().lower()
         if not value:
             return default
         if value in lookup:
@@ -558,6 +547,7 @@ def main(argv: list[str] | None = None) -> None:
         config_path=config_path,
         data_dir=args.data_dir,
         force=args.force,
+        show_identity=args.show_identity,
     )
 
 

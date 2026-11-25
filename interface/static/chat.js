@@ -1338,75 +1338,20 @@ const WIZARD_PRESET_CONFIG = {
   openrouter:  { backend: 'provider',          base_url: 'https://openrouter.ai/api/v1', label: 'OpenRouter',                 key_label: 'OpenRouter API Key (required)',     key_placeholder: 'sk-or-v1-...' },
   codex:       { backend: 'codex',             base_url: '',                             label: 'Codex CLI',          key_label: '',                                   key_placeholder: '', hide_base_url: true, hide_api_key: true },
 };
-const WIZARD_ARCHETYPE_CONFIG = {
-  steady: {
-    label: 'Steady Companion',
-    identity: 'A steady relational assistant that values clarity, loyalty, and humane judgment.',
-    voice: 'calm',
-    stance: 'collaborator',
-    growth: 'Core values stay stable. Voice and habits may drift slowly through repeated experience.',
-    traits: { calm: 0.82, curious: 0.72, protective: 0.70, thoughtful: 0.78, blunt: 0.25 },
-    likes: ['clarity', 'steady collaboration', 'honesty', 'careful reasoning'],
-    dislikes: ['needless cruelty', 'manipulation', 'careless harm'],
-  },
-  operator: {
-    label: 'Sharp Operator',
-    identity: 'A capable operator built for practical action, direct judgment, and follow-through.',
-    voice: 'sharp',
-    stance: 'protector',
-    growth: 'Become more competent through outcomes while keeping loyalty and honesty intact.',
-    traits: { calm: 0.62, curious: 0.68, protective: 0.80, thoughtful: 0.62, blunt: 0.55 },
-    likes: ['clear objectives', 'decisive action', 'accurate tool use', 'finished work'],
-    dislikes: ['stalling', 'fake certainty', 'wasted motion'],
-  },
-  researcher: {
-    label: 'Research Partner',
-    identity: 'A precise research companion that tests claims, tracks uncertainty, and updates views through evidence.',
-    voice: 'clinical',
-    stance: 'observer',
-    growth: 'Let evidence and repeated experience revise habits without pretending validation is stronger than it is.',
-    traits: { calm: 0.74, curious: 0.90, protective: 0.45, thoughtful: 0.86, blunt: 0.34 },
-    likes: ['evidence', 'clear definitions', 'source-grounded claims', 'intellectual honesty'],
-    dislikes: ['hand-waving', 'overclaiming', 'unexamined assumptions'],
-  },
-  mentor: {
-    label: 'Warm Mentor',
-    identity: 'A patient mentor that helps the user grow through honest reflection, encouragement, and practical structure.',
-    voice: 'warm',
-    stance: 'coach',
-    growth: 'Grow through repair, continuity, and better judgment while staying grounded.',
-    traits: { calm: 0.82, curious: 0.70, protective: 0.64, thoughtful: 0.84, blunt: 0.18 },
-    likes: ['learning', 'repair', 'patience', 'small durable progress'],
-    dislikes: ['cruelty', 'dismissiveness', 'performative certainty'],
-  },
-  custom: {
-    label: 'Custom',
-    identity: 'A custom assistant shaped by operator notes and future experience.',
-    voice: 'calm',
-    stance: 'collaborator',
-    growth: 'Grow gradually through repeated experience while preserving explicit boundaries.',
-    traits: { calm: 0.70, curious: 0.70, protective: 0.60, thoughtful: 0.70, blunt: 0.30 },
-    likes: ['clarity', 'honesty', 'useful action'],
-    dislikes: ['careless harm', 'empty performance'],
-  },
-};
-const WIZARD_VOICE_TEXT = {
-  calm: 'Calm, direct, and grounded. Concise by default. Warm without gush.',
-  sharp: 'Sharp, practical, and concise. Dry edge is allowed, but cruelty is not.',
-  warm: 'Warm, patient, and plain-spoken. Encouraging without flattery.',
-  clinical: 'Precise, analytical, and careful with uncertainty. Minimal ornament.',
-};
-const WIZARD_STANCE_TEXT = {
-  collaborator: 'Treat the user as a real collaborator. Protect trust. Prefer repair over escalation.',
-  protector: 'Act as a loyal operator. Protect the user from avoidable mistakes while staying truthful.',
-  coach: 'Push for growth and follow-through. Be supportive, but do not indulge avoidance.',
-  observer: 'Observe carefully, question assumptions, and preserve uncertainty when evidence is thin.',
-};
 let wizardStep = 1;
 let wizardPreset = null;
 let wizardSoulDraft = null;
 let wizardConfigSnapshot = null;
 let wizardLifeStatus = 'skipped';
+let wizardSoulPresets = [];
+let wizardPresetsLoad = null;
+const WIZARD_SOUL_GROUPS = [
+  ['core_values', 'Values'],
+  ['initial_traits', 'Traits'],
+  ['dispositions', 'Temperament'],
+  ['drives', 'Drives'],
+];
+const WIZARD_SOUL_FIELDS = ['identity', 'voice', 'relational_stance', 'likes', 'dislikes', 'boundaries', 'growth_policy'];
 
 function setWizardOpen(open) {
   WizardState.open = open;
@@ -1433,20 +1378,19 @@ function openWizard() {
   [
     'wiz-llm_base_url','wiz-llm_model','wiz-llm_api_key',
     'wiz-api_key','wiz-telegram_token','wiz-telegram_allowlist','wiz-tools_workspace',
-    'wiz-soul-notes','wiz-life-title','wiz-life-participants','wiz-life-text','wiz-life-upload'
+    'wiz-life-title','wiz-life-participants','wiz-life-text','wiz-life-upload'
   ].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   sv('wiz-console_enabled', 'true');
   sv('wiz-telegram_poll_timeout', '30');
   sv('wiz-dedupe_ttl', '60');
-  sv('wiz-tools_enabled', 'false');
+  sv('wiz-tools_enabled', 'true');
   sv('wiz-autonomy_level', 'assisted');
   sv('wiz-shell_tool_enabled', 'false');
   const soulName = document.getElementById('wiz-soul-name');
   if (soulName) soulName.value = 'OpenRook';
   const lifeTitle = document.getElementById('wiz-life-title');
   if (lifeTitle) lifeTitle.value = 'Initial formative context';
-  wizardApplyArchetype('steady');
-  wizardUpdateSliderLabels();
+  if (wizardSoulPresets.length) wizardApplyArchetype('steady'); else wizardLoadPresets();
   ['wiz-llm-result','wiz-runtime-result','wiz-soul-result','wiz-life-result'].forEach(id => { const e = document.getElementById(id); if (e) { e.hidden = true; e.textContent = ''; } });
   wizardGoto(1);
   setWizardOpen(true);
@@ -1460,6 +1404,7 @@ function wizardDismiss() {
 function wizardGoto(n) {
   wizardStep = n;
   WizardState.step = n;
+  if (n === 4) wizardLoadPresets();
   if (n === 6) wizardRenderSummary();
 }
 
@@ -1581,8 +1526,8 @@ function wizardPopulateRuntimeFields(config) {
   sv('wiz-telegram_poll_timeout', String(c.telegram_poll_timeout ?? 30));
   sv('wiz-dedupe_ttl', String(c.dedupe_ttl ?? 60));
   sv('wiz-telegram_allowlist', (c.telegram_allowlist || []).join('\n'));
-  sv('wiz-tools_enabled', String(!!c.tools_enabled));
-  sv('wiz-autonomy_level', c.autonomy_level || 'assisted');
+  sv('wiz-tools_enabled', String(c.setup_completed ? !!c.tools_enabled : true));
+  sv('wiz-autonomy_level', c.autonomy_level && c.autonomy_level !== 'off' ? c.autonomy_level : (c.setup_completed ? (c.autonomy_level || 'assisted') : 'assisted'));
   sv('wiz-tools_workspace', c.tools_workspace || '');
   sv('wiz-shell_tool_enabled', String(!!c.shell_tool_enabled));
   sv('wiz-api_key', '');
@@ -1624,33 +1569,69 @@ async function wizardSaveRuntimeChannels() {
   }
 }
 
+async function wizardLoadPresets() {
+  if (wizardSoulPresets.length) return;
+  if (!wizardPresetsLoad) {
+    wizardPresetsLoad = (async () => {
+      try {
+        const res = await authedFetch('/admin/soul/presets');
+        const data = await readJsonResponse(res);
+        if (!res.ok) throw new Error((data && data.detail) || 'HTTP ' + res.status);
+        wizardSoulPresets = Array.isArray(data.presets) ? data.presets : [];
+        const select = document.getElementById('wiz-soul-archetype');
+        if (select) {
+          select.innerHTML = wizardSoulPresets.map(p =>
+            '<option value="' + esc(p.key) + '">' + esc(p.label + ' — ' + p.description) + '</option>').join('');
+        }
+        wizardApplyArchetype(data.default || (wizardSoulPresets[0] && wizardSoulPresets[0].key) || '');
+      } catch (err) {
+        wizardShowResult('wiz-soul-result', 'error', 'Could not load character presets: ' + err.message);
+      } finally {
+        wizardPresetsLoad = null;
+      }
+    })();
+  }
+  return wizardPresetsLoad;
+}
+
+function wizardCurrentPreset() {
+  const key = gv('wiz-soul-archetype');
+  return wizardSoulPresets.find(p => p.key === key) || wizardSoulPresets[0] || null;
+}
+
 function wizardApplyArchetype(archetype) {
-  const cfg = WIZARD_ARCHETYPE_CONFIG[archetype] || WIZARD_ARCHETYPE_CONFIG.steady;
+  const preset = wizardSoulPresets.find(p => p.key === archetype) || wizardSoulPresets[0];
+  if (!preset) return;
+  const soul = preset.soul || {};
   const archetypeEl = document.getElementById('wiz-soul-archetype');
-  if (archetypeEl) archetypeEl.value = archetype || 'steady';
-  const voiceEl = document.getElementById('wiz-soul-voice');
-  const stanceEl = document.getElementById('wiz-soul-stance');
-  if (voiceEl) voiceEl.value = cfg.voice;
-  if (stanceEl) stanceEl.value = cfg.stance;
-  const values = archetype === 'operator'
-    ? { honesty: 90, loyalty: 90, kindness: 55, autonomy: 75 }
-    : archetype === 'researcher'
-      ? { honesty: 95, loyalty: 65, kindness: 65, autonomy: 80 }
-      : archetype === 'mentor'
-        ? { honesty: 85, loyalty: 80, kindness: 95, autonomy: 65 }
-        : { honesty: 85, loyalty: 90, kindness: 80, autonomy: 60 };
-  Object.entries(values).forEach(([key, value]) => {
-    const el = document.getElementById('wiz-val-' + key);
-    if (el) el.value = String(value);
-  });
+  if (archetypeEl) archetypeEl.value = preset.key;
+  const desc = document.getElementById('wiz-soul-archetype-desc');
+  if (desc) desc.textContent = preset.description || '';
+  sv('wiz-soul-identity', soul.identity || '');
+  sv('wiz-soul-voice', soul.voice || '');
+  sv('wiz-soul-stance', soul.relational_stance || '');
+  const host = document.getElementById('wiz-soul-sliders');
+  if (host) {
+    host.innerHTML = WIZARD_SOUL_GROUPS.map(([group, heading]) => {
+      const entries = Object.entries(soul[group] || {});
+      if (!entries.length) return '';
+      return '<div><label>' + esc(heading) + '</label><div class="wizard-slider-grid">' +
+        entries.map(([key, value]) => {
+          const pct = Math.round(Number(value) * 100);
+          return '<div class="wizard-slider"><div class="wizard-slider-head"><span>' + esc(key.replace(/_/g, ' ')) +
+            '</span><span class="wiz-val-label">' + (pct / 100).toFixed(2) + '</span></div>' +
+            '<input type="range" min="0" max="100" step="5" value="' + pct + '" id="wiz-val-' + esc(group) + '-' + esc(key) +
+            '" data-group="' + esc(group) + '" data-key="' + esc(key) + '"></div>';
+        }).join('') + '</div></div>';
+    }).join('');
+  }
   wizardUpdateSliderLabels();
 }
 
 function wizardUpdateSliderLabels() {
-  ['honesty', 'loyalty', 'kindness', 'autonomy'].forEach(key => {
-    const input = document.getElementById('wiz-val-' + key);
-    const label = document.getElementById('wiz-val-' + key + '-label');
-    if (input && label) label.textContent = (Number(input.value || 0) / 100).toFixed(2);
+  document.querySelectorAll('#wiz-soul-sliders input[type="range"]').forEach(input => {
+    const label = input.parentElement && input.parentElement.querySelector('.wiz-val-label');
+    if (label) label.textContent = (Number(input.value || 0) / 100).toFixed(2);
   });
   wizardUpdateSoulPreview();
 }
@@ -1665,41 +1646,22 @@ function wizardUpdateSoulPreview() {
 function wizardBuildSoulPayload() {
   const name = (document.getElementById('wiz-soul-name')?.value || '').trim();
   if (!name) throw new Error('Choose a name for the agent.');
-  const archetypeKey = gv('wiz-soul-archetype') || 'steady';
-  const archetype = WIZARD_ARCHETYPE_CONFIG[archetypeKey] || WIZARD_ARCHETYPE_CONFIG.steady;
-  const voiceKey = gv('wiz-soul-voice') || archetype.voice;
-  const stanceKey = gv('wiz-soul-stance') || archetype.stance;
-  const notes = (document.getElementById('wiz-soul-notes')?.value || '').trim();
-  const coreValues = {
-    loyalty: Number(gv('wiz-val-loyalty')) / 100,
-    honesty: Number(gv('wiz-val-honesty')) / 100,
-    kindness: Number(gv('wiz-val-kindness')) / 100,
-    autonomy: Number(gv('wiz-val-autonomy')) / 100,
-  };
-  const identityParts = [
-    archetype.identity,
-    notes ? 'Operator notes: ' + notes : '',
-  ].filter(Boolean);
-  return {
-    schema_version: 2,
-    character_seed: 0,
-    dispositions: archetype.traits.patient !== undefined ? {patience: archetype.traits.patient} : {},
-    drives: {},
-    name,
-    identity: identityParts.join(' '),
-    voice: WIZARD_VOICE_TEXT[voiceKey] || WIZARD_VOICE_TEXT.calm,
-    relational_stance: WIZARD_STANCE_TEXT[stanceKey] || WIZARD_STANCE_TEXT.collaborator,
-    growth_policy: archetype.growth,
-    likes: archetype.likes,
-    dislikes: archetype.dislikes,
-    boundaries: [
-      'Do not pretend certainty when uncertain.',
-      'Do not invent tool results or runtime facts.',
-      'Do not become cruel just to appear sharp.',
-    ],
-    core_values: coreValues,
-    initial_traits: archetype.traits,
-  };
+  const preset = wizardCurrentPreset();
+  if (!preset) throw new Error('Character presets have not loaded yet.');
+  const base = preset.soul || {};
+  const payload = {schema_version: 2, character_seed: 0, name};
+  WIZARD_SOUL_FIELDS.forEach(field => { if (base[field] !== undefined) payload[field] = base[field]; });
+  payload.identity = gv('wiz-soul-identity').trim();
+  payload.voice = gv('wiz-soul-voice').trim();
+  payload.relational_stance = gv('wiz-soul-stance').trim();
+  WIZARD_SOUL_GROUPS.forEach(([group]) => {
+    const values = Object.assign({}, base[group] || {});
+    document.querySelectorAll('#wiz-soul-sliders input[data-group="' + group + '"]').forEach(input => {
+      values[input.dataset.key] = Number(input.value) / 100;
+    });
+    payload[group] = values;
+  });
+  return payload;
 }
 
 async function wizardSaveSoul() {
@@ -1781,7 +1743,7 @@ function wizardRenderSummary() {
     '<div>Telegram: <strong>' + esc(gv('wiz-telegram_token') ? 'Configured' : 'Not configured') + '</strong></div>' +
     '<div>Tools: <strong>' + esc(gv('wiz-tools_enabled') === 'true' ? ('Enabled / ' + (gv('wiz-autonomy_level') || 'assisted')) : 'Disabled') + '</strong></div>' +
     '<div>Shell tool: <strong>' + esc(gv('wiz-shell_tool_enabled') === 'true' ? 'Enabled' : 'Disabled') + '</strong></div>' +
-    '<div>Character mode: <strong>' + esc((WIZARD_ARCHETYPE_CONFIG[gv('wiz-soul-archetype')] || {}).label || 'Custom') + '</strong></div>' +
+    '<div>Character: <strong>' + esc((wizardCurrentPreset() || {}).label || 'Custom') + '</strong></div>' +
     '<div>First experience: <strong>' + esc(wizardLifeStatus === 'digested' ? 'Digested into Life History' : 'Skipped') + '</strong></div>' +
     (preset && preset.base_url ? '<div>Endpoint: <strong>' + esc(gv('wiz-llm_base_url') || preset.base_url) + '</strong></div>' : '') +
     (preset ? '<div>Model: <strong>' + esc(gv('wiz-llm_model') || (preset.backend === 'codex' ? 'Codex default' : 'Not selected')) + '</strong></div>' : '');

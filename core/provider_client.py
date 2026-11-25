@@ -6,7 +6,7 @@ be chosen explicitly by the caller.
 
 from __future__ import annotations
 
-from core.inference import output_token_limit, request_timeout, reviewing_expression, sampling_parameters
+from core.inference import call_with_deadline, output_token_limit, request_timeout, reviewing_expression, sampling_parameters
 from core.llm_content import reply_text
 
 import os
@@ -43,11 +43,19 @@ class ChatCompletionsClient:
         self._model = model.strip()
         self._thinking = thinking
         self._timeout = timeout
-        self._session = requests.Session()
-        self._session.headers.update({
+        self._session = self._new_session()
+
+    def _abandon_session(self) -> None:
+        session, self._session = self._session, self._new_session()
+        session.close()
+
+    def _new_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update({
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         })
+        return session
 
     def generate(self, system_prompt: str, user_message: str) -> str:
         """Send a chat completion request and return the response text."""
@@ -68,12 +76,22 @@ class ChatCompletionsClient:
             payload["max_tokens"] = output_token_limit(512)
 
         # Retry once on connection error (server closes idle keep-alive connections)
+        def post():
+            limit = request_timeout(self._timeout)
+            session = self._session
+            return call_with_deadline(
+                lambda: session.post(url, json=payload, timeout=limit),
+                limit,
+                on_expire=self._abandon_session,
+                timeout_error=requests.ReadTimeout,
+            )
+
         try:
-            resp = self._session.post(url, json=payload, timeout=request_timeout(self._timeout))
+            resp = post()
         except requests.ConnectionError as error:
             if isinstance(error, requests.Timeout):
                 raise
-            resp = self._session.post(url, json=payload, timeout=request_timeout(self._timeout))
+            resp = post()
         if resp.status_code != 200:
             import logging
 

@@ -93,16 +93,16 @@
         <div class="wizard-grid">
           <div><label for="wiz-console_enabled">Console Channel</label><select id="wiz-console_enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
           <div><label for="wiz-api_key">Web/API Bearer Token</label><input id="wiz-api_key" type="password" placeholder="Optional token for HTTP/API access"></div>
+          <div><label for="wiz-tools_enabled">Agentic Tools</label><select id="wiz-tools_enabled"><option value="true" selected>Enabled</option><option value="false">Disabled</option></select><small>Enabled: the character may use file and workspace tools when it decides to and you permit it. Disabled: chat only.</small></div>
+          <div><label for="wiz-autonomy_level">Tool Autonomy</label><select id="wiz-autonomy_level"><option value="off">Off</option><option value="assisted" selected>Assisted</option><option value="autonomous">Autonomous</option><option value="high_risk">High-risk local</option></select><small>Off: no tool actions. Assisted: confirms before acting. Autonomous: acts inside enabled tools. High-risk local: fewest confirmations; trusted local use only.</small></div>
         </div>
         <details class="wizard-advanced">
-          <summary>Advanced: Telegram, tools, and runtime options</summary>
+          <summary>Advanced: Telegram, shell, and runtime options</summary>
           <div class="wizard-grid">
           <div class="full"><label for="wiz-telegram_token">Telegram Bot Token</label><input id="wiz-telegram_token" type="password" placeholder="Optional; leave blank to skip Telegram"></div>
           <div class="full"><label for="wiz-telegram_allowlist">Telegram Allowlist</label><textarea id="wiz-telegram_allowlist" rows="3" placeholder="One Telegram user ID per line. Blank allows any Telegram user if token is configured."></textarea></div>
           <div><label for="wiz-telegram_poll_timeout">Telegram Poll Timeout (s)</label><input id="wiz-telegram_poll_timeout" type="number" min="1" value="30"></div>
           <div><label for="wiz-dedupe_ttl">Message Dedupe TTL (s)</label><input id="wiz-dedupe_ttl" type="number" min="0" step="1" value="60"></div>
-          <div><label for="wiz-tools_enabled">Agentic Tools</label><select id="wiz-tools_enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
-          <div><label for="wiz-autonomy_level">Tool Autonomy</label><select id="wiz-autonomy_level"><option value="off">Off</option><option value="assisted">Assisted</option><option value="autonomous">Autonomous</option><option value="high_risk">High-risk local</option></select></div>
           <div><label for="wiz-shell_tool_enabled">Shell Tool</label><select id="wiz-shell_tool_enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
           <div class="full"><label for="wiz-tools_workspace">Tools Workspace</label><input id="wiz-tools_workspace" type="text" placeholder="Blank uses data/workspace"></div>
           </div>
@@ -121,38 +121,14 @@
       <div class="wizard-fields">
         <div class="wizard-grid">
           <div><label for="wiz-soul-name">Name</label><input id="wiz-soul-name" type="text" value="OpenRook" placeholder="Jarvis"></div>
-          <div><label for="wiz-soul-archetype">Character Mode</label><select id="wiz-soul-archetype">
-            <option value="steady">Steady Companion</option>
-            <option value="operator">Sharp Operator</option>
-            <option value="researcher">Research Partner</option>
-            <option value="mentor">Warm Mentor</option>
-            <option value="custom">Custom</option>
-          </select></div>
-          <div><label for="wiz-soul-voice">Voice</label><select id="wiz-soul-voice">
-            <option value="calm">Calm and direct</option>
-            <option value="sharp">Sharp and concise</option>
-            <option value="warm">Warm and patient</option>
-            <option value="clinical">Precise and analytical</option>
-          </select></div>
-          <div><label for="wiz-soul-stance">Relational Stance</label><select id="wiz-soul-stance">
-            <option value="collaborator">Collaborator</option>
-            <option value="protector">Protective ally</option>
-            <option value="coach">Demanding coach</option>
-            <option value="observer">Reflective observer</option>
-          </select></div>
-          <div class="full"><label for="wiz-soul-notes">Extra Identity Notes</label><textarea id="wiz-soul-notes" rows="5" placeholder="Optional: boundaries, habits, or character details."></textarea><small>Review the complete birth personality below. Experience can develop it.</small></div>
+          <div><label for="wiz-soul-archetype">Character</label><select id="wiz-soul-archetype"></select><small id="wiz-soul-archetype-desc"></small></div>
+          <div class="full"><label for="wiz-soul-identity">Identity</label><textarea id="wiz-soul-identity" rows="3"></textarea></div>
+          <div class="full"><label for="wiz-soul-voice">Voice</label><textarea id="wiz-soul-voice" rows="2"></textarea></div>
+          <div class="full"><label for="wiz-soul-stance">Relational Stance</label><textarea id="wiz-soul-stance" rows="3"></textarea><small>How the character relates to people. Experience can develop all of this over time.</small></div>
         </div>
-        <div>
-          <label>Core Values</label>
-          <div class="wizard-slider-grid">
-            <div class="wizard-slider"><div class="wizard-slider-head"><span>Honesty</span><span id="wiz-val-honesty-label">0.85</span></div><input id="wiz-val-honesty" type="range" min="0" max="100" step="5" value="85" ></div>
-            <div class="wizard-slider"><div class="wizard-slider-head"><span>Loyalty</span><span id="wiz-val-loyalty-label">0.90</span></div><input id="wiz-val-loyalty" type="range" min="0" max="100" step="5" value="90" ></div>
-            <div class="wizard-slider"><div class="wizard-slider-head"><span>Kindness</span><span id="wiz-val-kindness-label">0.80</span></div><input id="wiz-val-kindness" type="range" min="0" max="100" step="5" value="80" ></div>
-            <div class="wizard-slider"><div class="wizard-slider-head"><span>Autonomy</span><span id="wiz-val-autonomy-label">0.60</span></div><input id="wiz-val-autonomy" type="range" min="0" max="100" step="5" value="60" ></div>
-          </div>
-        </div>
+        <div id="wiz-soul-sliders"></div>
       </div>
-      <details open><summary>Complete birth personality</summary><pre id="wiz-soul-preview" style="white-space:pre-wrap"></pre></details>
+      <details><summary>Show identity file</summary><pre id="wiz-soul-preview" style="white-space:pre-wrap"></pre></details>
       <div class="admin-test-result" id="wiz-soul-result" hidden></div>
       <div class="wizard-actions">
         <button class="secondary" data-action="wizard-goto" data-step="3">← Back</button>

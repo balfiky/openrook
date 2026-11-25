@@ -79,6 +79,7 @@ from interface.routes_admin_identity import (  # noqa: F401
     _write_soul_yaml,
     admin_draft_soul,
     admin_get_soul,
+    admin_soul_presets,
     admin_import_soul,
     admin_update_soul,
 )

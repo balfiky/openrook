@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 import logging
+import threading
 import time
 from weakref import WeakKeyDictionary
 
@@ -138,6 +139,39 @@ def reserve_expression_calls(count: int = 3):
 def request_timeout(default: float) -> float:
     limit = _timeout.get()
     return min(default, limit) if limit is not None else default
+
+
+def call_with_deadline(call, seconds: float, *, on_expire=None, timeout_error=TimeoutError):
+    """Run a blocking transport call with a hard wall-clock limit.
+
+    Library read timeouts reset on every received byte, so a peer that trickles
+    data (or a proxy that keeps the socket alive) can hold a request open
+    indefinitely. The call runs on a daemon worker; if it has not finished when
+    the monotonic deadline passes, ``on_expire`` closes the transport and
+    ``timeout_error`` is raised. The worker's late result is discarded.
+    """
+    outcome: dict = {}
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            outcome["value"] = call()
+        except BaseException as error:  # re-raised on the caller's thread
+            outcome["error"] = error
+        finally:
+            done.set()
+
+    threading.Thread(target=run, name="llm-call", daemon=True).start()
+    if not done.wait(seconds):
+        if on_expire is not None:
+            try:
+                on_expire()
+            except Exception:
+                log.debug("transport cleanup after deadline failed", exc_info=True)
+        raise timeout_error(f"LLM request exceeded its {seconds:g}s wall-clock deadline")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
 
 
 def reviewing_expression() -> bool:

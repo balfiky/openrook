@@ -8,7 +8,7 @@ policy check, execution, appraisal, and a generator-ready summary.
 
 from __future__ import annotations
 
-from core.inference import model_call, request_timeout, tool_selection_available
+from core.inference import call_with_deadline, model_call, request_timeout, tool_selection_available
 
 import json
 import re
@@ -598,10 +598,16 @@ class NativeToolCallRunner:
             })
         try:
             with model_call("tool_selection", optional=observer is None, backend=self, primary_tool=True):
-                response = self._client.chat.completions.create(
-                    model=self._model, messages=messages, tools=tools,
-                    tool_choice="required", temperature=0,
-                    **({"timeout": request_timeout(self._timeout)} if observer is None else {}),
+                limit = request_timeout(self._timeout) if observer is None else self._timeout
+                client = self._client
+                response = call_with_deadline(
+                    lambda: client.chat.completions.create(
+                        model=self._model, messages=messages, tools=tools,
+                        tool_choice="required", temperature=0,
+                        **({"timeout": limit} if observer is None else {}),
+                    ),
+                    limit,
+                    timeout_error=TimeoutError,
                 )
         except Exception as error:
             if observer is not None:
