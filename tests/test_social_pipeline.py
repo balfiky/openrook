@@ -200,14 +200,38 @@ def test_interleaved_chats_share_relationship_history_without_reusing_turn_ids(t
 
 
 def test_actual_missing_capability_cannot_receive_an_execution_grant():
+    # The requirement here is the runtime's own: request recognition bound a
+    # literal shell command, and this pipeline has no shell capability at all.
+    command = "Run this shell command: echo done"
     backend = ExpressionBackend(appraisal={"primary_target":"shared_problem", "social_move":"request",
-        "request_components":[{"description":"Perform the task", "user_value":1, "effort":0,
+        "request_components":[{"description":command, "kind":"task", "source_span":command,
+                               "user_value":1, "effort":0}]})
+    pipe = CognitivePipeline(backend, runtime_config=SimpleNamespace(appraisal_use_llm=True))
+    try:
+        result = pipe.process(command)
+        component = result.debug.turn_decision.components[0]
+        assert component.component.capability_requirements == ("shell.run_command",)
+        assert not component.component.feasible
+        assert component.best_grant is None
+        assert not result.debug.turn_decision.grants
+        assert not (result.debug.tool_trace and result.debug.tool_trace.executed_results)
+    finally:
+        pipe.close()
+
+
+def test_a_capability_the_reading_invented_does_not_make_plain_work_impossible():
+    # A name the reader was never given is the reading's mistake, not a missing
+    # capability: it is dropped and the request stands as ordinary work.
+    backend = ExpressionBackend(appraisal={"primary_target":"shared_problem", "social_move":"request",
+        "request_components":[{"description":"Perform the task", "kind":"task", "user_value":1, "effort":0,
                                "capability_requirements":["unavailable.tool"]}]})
     pipe = CognitivePipeline(backend, runtime_config=SimpleNamespace(appraisal_use_llm=True))
     try:
         result = pipe.process("Perform the task")
-        assert result.debug.turn_decision.components[0].best_grant is None
-        assert not result.debug.turn_decision.grants
-        assert not (result.debug.tool_trace and result.debug.tool_trace.executed_results)
+        component = result.debug.turn_decision.components[0]
+        assert component.component.capability_requirements == () and component.component.feasible
+        assert component.best_grant is not None and result.debug.turn_decision.grants
+        assert any(e.ref == "reading:capability_unknown:c0"
+                   for e in result.debug.appraisal_frame.perception.evidence)
     finally:
         pipe.close()

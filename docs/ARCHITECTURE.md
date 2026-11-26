@@ -118,7 +118,8 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 Every user message is read by the model before choice
 ([reading contract](development/reading-contract.md)). The reading is required,
 uses the primary deadline and has its own allowance of two calls, recorded with
-`reading: true`. Social meaning comes only from it and has no local substitute;
+`reading: true`; the two calls share one wall-clock budget, the request timeout
+in force. Social meaning comes only from it and has no local substitute;
 the wording-based request routing and context selection that remain are listed
 in the contract.
 The conversational base budget is five further inference calls, including optional work.

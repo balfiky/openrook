@@ -555,6 +555,7 @@ class CognitivePipeline:
         # plain conversation with explicit uncertainty.
         _ts = time.perf_counter()
         st.inspection_kind = inspection_kind(user_message, self._conversation_history)
+        capabilities = self._tool_executor.registry.names() if self._tool_executor else []
         reading = self._message_reader(
             user_message, backend=self._llm_backend_fast,
             recent_context=self._conversation_history,
@@ -563,12 +564,12 @@ class CognitivePipeline:
                 dispositions=st.developing_self["dispositions"], current_self=st.developing_self,
                 conversation_sources=conversation_sources(st.developing_self, life_history_context,
                     self.engine.state.energy) if self._features.self_intent else {},
-                available_capabilities=self._tool_executor.registry.names() if self._tool_executor else [],
-                identity=life_history_context),
+                available_capabilities=capabilities, identity=life_history_context),
             research=self._research_mode,
         )
         base_appraisal = reconcile_social_appraisal(user_message, None, reading,
-                                                    recent_context=self._conversation_history)
+                                                    recent_context=self._conversation_history,
+                                                    available_capabilities=capabilities)
         debug.reading = dict(provenance=base_appraisal.provenance, reason=base_appraisal.reason,
                              language=base_appraisal.language)
         if st.inspection_kind:
@@ -591,9 +592,10 @@ class CognitivePipeline:
             detected = base_appraisal.perceived_emotion
             st.detected = detected
             debug.detected_emotion = detected
-            # Personality-dependent coupling; no minimum movement for a tone cue.
+            # Personality-dependent coupling, in proportion to how strongly the
+            # speaker expresses the tone: a flat message transmits nothing.
             susceptibility = (1 - st.developing_self["traits"].get("calm", 0.0)) * person.trust
-            self.engine.apply_contagion(detected.arousal, detected.valence, susceptibility)
+            self.engine.apply_contagion(detected.arousal, detected.valence, susceptibility * detected.intensity)
         appraisal = appraise_with_life_history(
             base_appraisal,
             user_message,

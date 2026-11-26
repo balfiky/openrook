@@ -26,14 +26,16 @@ from __future__ import annotations
 
 import json
 import math
-import unicodedata
+from collections import Counter
 from dataclasses import replace
-from typing import Any, NamedTuple, Protocol
+from typing import Any, Iterable, NamedTuple, Protocol
 
-from core.inference import READING_CALLS, accepts_response_schema, generate, is_timeout
+from core.inference import (
+    READING_CALLS, accepts_response_schema, generate, is_timeout, monotonic, primary_deadline,
+)
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.llm_content import first_json_object, json_payload
-from core.perception import UNREAD_REF, fold, grounded_role, quoted_in, unread_observation
+from core.llm_content import first_json_object
+from core.perception import UNREAD_REF, backs_claim, grounded_role, is_unspaced, tokens, unread_observation
 from core.types import AppraisalFrame, DetectedEmotion
 from core.willingness import MAX_COMPONENTS, Evidence, Perception, RequestComponent
 
@@ -122,6 +124,7 @@ Fields:
      "capability_requirements":["capability name"],
      "evidence_refs":["id"],"confidence":0..1}
   "tone": {"arousal":0..1,"valence":0..1,"certainty":0..1,"intensity":0..1}
+      (intensity is how strongly the speaker expresses emotion; 0 for a flat, matter-of-fact message)
   "event_type": user_message|positive_feedback|negative_feedback|conflict|resolution|surprise|betrayal|warmth
   "event_intensity": 0..1
   "reply_length": shorter|longer|unspecified
@@ -392,8 +395,10 @@ def _tone(data: dict, clamped: list[str]) -> DetectedEmotion | None:
         return None
     if not isinstance(tone, dict):
         raise _Malformed("tone is not an object")
-    return DetectedEmotion(**{key: _bounded(tone[key], f"tone.{key}", 0.0, clamped)
-                              for key in _TONE if tone.get(key) is not None})
+    stated = {key: _bounded(tone[key], f"tone.{key}", 0.0, clamped) for key in _TONE if tone.get(key) is not None}
+    # An empty tone is no tone. A partial one keeps intensity at zero unless
+    # the reading states it, and a tone without intensity moves nothing.
+    return DetectedEmotion(**stated) if stated else None
 
 
 def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
@@ -405,18 +410,19 @@ def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
     is unusable. With ``require_content`` an object that states none of the
     reading's fields is unusable too: saying nothing is not a reading.
     """
-    raw = raw if isinstance(raw, str) else ""
-    data = None if json_payload(raw).startswith("[") else first_json_object(raw)
+    data = first_json_object(raw if isinstance(raw, str) else "")
     if data is None:
         raise _Malformed("the answer is not a JSON object")
     if require_content and not data.keys() & reading_schema()["properties"].keys():
         raise _Malformed("the answer states none of the reading's fields")
     for name in ("blame", "controllability", "expectation_violation", "vulnerability",
                  "affiliation_bid", "event_intensity"):
-        if name in data and not _finite(data[name]):
+        value = data.get(name)
+        if value is not None and not _finite(value):
             raise _Malformed(f"{name} is not a finite number")
     for name in ("mixed_affect", "agent_goal_comparison"):
-        if name in data and not isinstance(data[name], bool):
+        value = data.get(name)
+        if value is not None and not isinstance(value, bool):
             raise _Malformed(f"{name} is not true or false")
     move = str(data.get("social_move", "inform")).strip().lower()
     intent = str(data.get("inferred_intent", "inform")).strip().lower()
@@ -463,7 +469,7 @@ def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
         event_type=event_type, event_intensity=_safe_float(data.get("event_intensity"), 0.0),
         perception=perception, request_components=components,
         self_proposals=tuple(item for item in proposals if isinstance(item, dict)),
-        agent_goal_comparison=data.get("agent_goal_comparison", False),
+        agent_goal_comparison=bool(data.get("agent_goal_comparison") or False),
         language=language.strip()[:35] if isinstance(language, str) else "",
         reply_length=reply_length if reply_length in _REPLY_LENGTHS else "",
     )
@@ -517,7 +523,7 @@ def reader_prompt(agent_context: str = "") -> str:
 
 def _read_once(
     text: str, backend: object, *, recent_context: list[dict[str, str]] | None, agent_context: str,
-    required: bool, structured: bool, problem: str = "",
+    required: bool, structured: bool, problem: str = "", limit: float | None = None,
 ) -> tuple[AppraisalFrame | None, _Failure]:
     """One model call. Returns the frame, or None with the reason it failed."""
     options = {}
@@ -526,7 +532,7 @@ def _read_once(
     try:
         raw = generate(backend, "appraisal", reader_prompt(agent_context),
                        _reader_input(text, recent_context, agent_context, problem),
-                       optional=not required, reading=required, **options)
+                       optional=not required, reading=required, limit_seconds=limit, **options)
     except (ResearchBudgetExceeded, ResearchStudyLimit):
         raise
     except Exception as error:
@@ -568,11 +574,11 @@ def _earlier_user_messages(recent_context: list[dict[str, str]] | None) -> list[
 def unquoted_claims(perception: Perception, text: str) -> tuple[str, ...]:
     """Claims of hostility toward the character, or of repair, that quote nothing.
 
-    Either claim stands on at least one evidence observation that is a verbatim
-    part of the message. The test is the same containment check a role must
-    pass, in any script; what the quotation means is the reading's business.
+    Either claim stands on at least one evidence observation that is a
+    substantive verbatim part of the message. The test is the same check a role
+    must pass, in any script; what the quotation means is the reading's business.
     """
-    if any(item.source != RUNTIME_SOURCE and quoted_in(item.observation, text) for item in perception.evidence):
+    if any(item.source != RUNTIME_SOURCE and backs_claim(item.observation, text) for item in perception.evidence):
         return ()
     claims = []
     if perception.target_probability * perception.hostile_intent > CLAIM_EPSILON:
@@ -582,8 +588,27 @@ def unquoted_claims(perception: Perception, text: str) -> tuple[str, ...]:
     return tuple(claims)
 
 
-def _contract_problem(frame: AppraisalFrame, text: str, recent_context: list[dict[str, str]] | None) -> str:
-    """What, if anything, in a parsed reading fails to quote the message as it must."""
+def capabilities_given(agent_context: str) -> frozenset[str] | None:
+    """The capability names the reader was given, or None when it was given no list."""
+    try:
+        context = json.loads(agent_context) if agent_context else {}
+    except ValueError:
+        return None
+    names = context.get("available_capabilities") if isinstance(context, dict) else None
+    return frozenset(str(name) for name in names) if isinstance(names, list) else None
+
+
+def unknown_capabilities(component: RequestComponent, available: Iterable[str] | None) -> tuple[str, ...]:
+    """Capability names a reading reported that are not among the names it was given."""
+    if available is None:
+        return ()
+    known = set(available)
+    return tuple(name for name in component.capability_requirements if name not in known)
+
+
+def _contract_problem(frame: AppraisalFrame, text: str, recent_context: list[dict[str, str]] | None,
+                      available: Iterable[str] | None = None) -> str:
+    """What, if anything, in a parsed reading breaks the contract it was given."""
     earlier = _earlier_user_messages(recent_context)
     problems = []
     if any(c.kind == "role" and not grounded_role(c, text, earlier=earlier) for c in frame.request_components):
@@ -592,6 +617,11 @@ def _contract_problem(frame: AppraisalFrame, text: str, recent_context: list[dic
     if claims:
         problems.append(" and ".join(claims) + " was claimed without a perception.evidence observation "
                         "copied verbatim from the message")
+    unknown = list(dict.fromkeys(name for c in frame.request_components
+                                 for name in unknown_capabilities(c, available)))
+    if unknown:
+        problems.append("capability_requirements named " + ", ".join(json.dumps(name) for name in unknown)
+                        + ", which is not in available_capabilities; a request done in text needs none")
     return "; ".join(problems)
 
 
@@ -605,23 +635,35 @@ def read_message(
     and its own allowance of two calls, so it cannot be starved by, or starve,
     the expression budget. The second call is spent only when the first gave
     no usable reading: a malformed answer, a role, hostility or repair claim
-    that does not quote the message, or a failed request (asked again in plain
-    JSON, which also serves a backend that cannot honour structured output).
-    A timeout is not retried. Nothing is remembered between turns here: whether
-    a server supports structured output is the backend's own knowledge.
+    that does not quote the message, a capability the reader was not given, or
+    a failed request (asked again in plain JSON, which also serves a backend
+    that cannot honour structured output). A timeout is not retried.
+
+    Both calls together have one wall-clock budget, the request timeout in
+    force: the second call gets only what the first left, and when nothing is
+    left the reading is unavailable. Nothing is remembered between turns here:
+    whether a server supports structured output is the backend's own knowledge.
     Research keeps its existing single counted call and fail-closed limits.
     """
     if backend is None or not (text or "").strip():
         return appraise_message(text, reason="no message or no backend")
     structured = not research and accepts_response_schema(backend)
+    available = capabilities_given(agent_context)
+    budget = None if research else primary_deadline(backend)
+    started = monotonic()
     feedback = ""
     problem = "no reading"
     fallback = None
     for _ in range(1 if research else READING_ATTEMPTS):
+        remaining = None if budget is None else budget - (monotonic() - started)
+        if remaining is not None and remaining <= 0:
+            problem = str(_Failure(_TIMEOUT, "the reading's time ran out"))
+            break
         frame, failure = _read_once(text, backend, recent_context=recent_context, agent_context=agent_context,
-                                    required=not research, structured=structured, problem=feedback)
+                                    required=not research, structured=structured, problem=feedback,
+                                    limit=remaining)
         if frame is not None:
-            problem = _contract_problem(frame, text, recent_context)
+            problem = _contract_problem(frame, text, recent_context, available)
             if not problem:
                 return frame
             fallback = fallback or frame
@@ -636,43 +678,86 @@ def read_message(
         else:
             feedback = problem
     if fallback is not None:
-        return fallback  # reconcile_social_appraisal removes what stayed unquoted.
+        # reconcile_social_appraisal removes what broke the contract. A wish
+        # stated only in a rejected answer is not kept as a standing preference.
+        return replace(fallback, reply_length="")
     return appraise_message(text, reason=problem)
+
+
+_HOSTILE_MOVES = ("attack", "complaint")
+_HOSTILE_EVENTS = ("conflict", "betrayal", "negative_feedback")
+
+
+def _withdraw(frame: AppraisalFrame, perception: Perception, claim: str) -> tuple[AppraisalFrame, Perception]:
+    """Take back an unquoted claim together with the labels and numbers that rest on it."""
+    if claim == _HOSTILITY:
+        perception = replace(perception, hostile_intent=0.0, expectation_violation=0.0)
+        hostile_move = frame.social_move == "attack" or (
+            frame.social_move in _HOSTILE_MOVES and frame.targets_assistant)
+        hostile_event = frame.event_type in _HOSTILE_EVENTS
+        frame = replace(
+            frame, blame=0.0, expectation_violation=0.0,
+            social_move="inform" if hostile_move else frame.social_move,
+            inferred_intent="inform" if frame.inferred_intent == "harm" else frame.inferred_intent,
+            event_type="user_message" if hostile_event else frame.event_type,
+            event_intensity=0.0 if hostile_event else frame.event_intensity)
+    else:
+        perception = replace(perception, repair_attempt=0.0, repair_credibility=0.0, repair_relevance=0.0)
+        repair_event = frame.event_type == "resolution"
+        frame = replace(
+            frame,
+            social_move="inform" if frame.social_move == "apology" else frame.social_move,
+            inferred_intent="inform" if frame.inferred_intent == "repair" else frame.inferred_intent,
+            event_type="user_message" if repair_event else frame.event_type,
+            event_intensity=0.0 if repair_event else frame.event_intensity)
+    return frame, replace(
+        perception, uncertainty=max(perception.uncertainty, UNQUOTED_UNCERTAINTY),
+        evidence=(*perception.evidence, Evidence(
+            f"reading:{claim}_unquoted",
+            f"Reported {claim} quoted nothing in the message; the claim and what rested on it were withdrawn",
+            0.8, RUNTIME_SOURCE)))
 
 
 def reconcile_social_appraisal(
     text: str, detected: DetectedEmotion | None, base: AppraisalFrame,
     *, recent_context: list[dict[str, str]] | None = None,
+    available_capabilities: Iterable[str] | None = None,
 ) -> AppraisalFrame:
     """Hold the reading to what was written, without overruling what it means.
 
     A role is kept exactly as reported, with its own estimated cost, when it
     quotes the person verbatim; otherwise it is removed. A claim of hostility
     toward the character or of repair is kept when some evidence quotes the
-    message; otherwise that claim alone is set to zero and uncertainty rises.
-    Each removal is recorded. No component, evidence or price is added from the
-    message text. Literal file and shell operands are then bound by request
-    recognition, which is unchanged here and confers no grant.
+    message; otherwise that claim is withdrawn together with the move, event,
+    blame and expectation violation that rested on it, and uncertainty rises.
+    A capability the reading names is kept when it is one of the names the
+    reader was given; otherwise the name is dropped and the request stands as
+    ordinary work. Each removal is recorded. No component, evidence or price is
+    added from the message text. Literal file and shell operands are then bound
+    by request recognition, whose own capability requirements are not filtered.
     """
     del detected
     from core.request_actions import ground_file_components, ground_shell_components
 
     earlier = _earlier_user_messages(recent_context)
-    perception, kept = base.perception, []
+    frame, perception, kept = base, base.perception, []
     for component in base.request_components:
         if component.kind == "role" and not grounded_role(component, text, earlier=earlier):
             perception = replace(perception, evidence=(*perception.evidence, Evidence(
                 f"reading:role_unquoted:{component.id}", "Reported role did not quote the message verbatim",
                 0.8, RUNTIME_SOURCE)))
             continue
+        unknown = unknown_capabilities(component, available_capabilities)
+        if unknown:
+            component = replace(component, capability_requirements=tuple(
+                name for name in component.capability_requirements if name not in unknown))
+            perception = replace(perception, evidence=(*perception.evidence, Evidence(
+                f"reading:capability_unknown:{component.id}",
+                "Reported capability is not one the reader was given: " + ", ".join(unknown),
+                0.8, RUNTIME_SOURCE)))
         kept.append(component)
     for claim in unquoted_claims(perception, text):
-        withdrawn = replace(perception, hostile_intent=0.0) if claim == _HOSTILITY else replace(
-            perception, repair_attempt=0.0, repair_credibility=0.0, repair_relevance=0.0)
-        perception = replace(
-            withdrawn, uncertainty=max(perception.uncertainty, UNQUOTED_UNCERTAINTY),
-            evidence=(*perception.evidence, Evidence(
-                f"reading:{claim}_unquoted", f"Reported {claim} quoted nothing in the message", 0.8, RUNTIME_SOURCE)))
+        frame, perception = _withdraw(frame, perception, claim)
     components = ground_shell_components(text, ground_file_components(text, tuple(kept)))
     whole = " ".join((text or "").split())
     if any(c.requested_tool and " ".join(c.source_span.split()) == whole for c in components):
@@ -681,7 +766,7 @@ def reconcile_social_appraisal(
         remaining = tuple(c for c in components if not _is_unread_placeholder(c))
         if len(remaining) != len(components):
             components = tuple(replace(c, id=f"c{i}") for i, c in enumerate(remaining))
-    return replace(base, perception=perception, request_components=components)
+    return replace(frame, perception=perception, request_components=components)
 
 
 def _is_unread_placeholder(component: RequestComponent) -> bool:
@@ -697,63 +782,44 @@ def appraise_with_life_history(
     """Attach relevant evidence references without assuming its emotional direction."""
     if not isinstance(life_history_slice, dict):
         return appraisal
-    refs = tuple(
-        str(item.get("id") or item.get("key") or "belief")
-        for item in life_history_slice.get("beliefs", [])
-        if isinstance(item, dict) and _touches(query_text or "",
-            str(item.get("key") or ""), str(item.get("statement") or ""))
-    )
+    beliefs = [item for item in life_history_slice.get("beliefs", []) if isinstance(item, dict)]
+    written = [tokens(f"{item.get('key') or ''} {item.get('statement') or ''}") for item in beliefs]
+    # A word that most of the supplied beliefs contain tells none of them apart.
+    spread = Counter(token for belief in written for token in set(belief))
+    common = {token for token, count in spread.items() if len(beliefs) >= 4 and count * 2 > len(beliefs)}
+    mine = tokens(query_text or "")
+    refs = tuple(str(item.get("id") or item.get("key") or "belief")
+                 for item, theirs in zip(beliefs, written) if _shares(mine, theirs, common))
     return replace(appraisal, perception=replace(appraisal.perception,
         evidence=appraisal.perception.evidence + tuple(
             Evidence(f"history:{ref}", "relevant belief; direction not inferred", 0.5, "history") for ref in refs
         )))
 
 
-def _wide(run: str) -> bool:
-    """Written in characters that each carry a syllable or a word, without spaces between words."""
-    return all(unicodedata.east_asian_width(char) in ("W", "F") for char in run)
+def _shares(mine: tuple[str, ...], theirs: tuple[str, ...], common: set[str] = frozenset()) -> bool:
+    """Whether a message and a belief share enough writing to be about the same thing.
 
-
-def _written_runs(text: str) -> list[tuple[int, str]]:
-    """Stretches of letters and digits as (written length, folded form).
-
-    Vowel signs and other marks belong to the stretch they are written in and
-    count toward its length, so a word is as long as it is on the page; the
-    folded form drops them for comparison, like every quotation check.
+    No vocabulary is involved; both sides are split into their own words. One
+    shared short word is too common to mean anything, so it takes two shared
+    words of four or more characters, or one of six or more, not counting words
+    that most of the supplied beliefs contain. In scripts written without
+    spaces a word is not delimited, so it takes a shared run of four
+    characters, or two separate shared runs of two.
     """
-    runs: list[tuple[int, str]] = []
-    length, letters = 0, []
-    for char in unicodedata.normalize("NFKD", unicodedata.normalize("NFKD", text or "").casefold()) + " ":
-        category = unicodedata.category(char)
-        if category[0] in "LN":
-            length += 1
-            letters.append(char)
-        elif category[0] == "M" and letters:
-            length += 1
-        elif category != "Cf":
-            if letters:
-                runs.append((length, fold("".join(letters))))
-            length, letters = 0, []
-    return [(size, run) for size, run in runs if run]
-
-
-def _touches(query: str, *parts: str) -> bool:
-    """Whether the message and a belief share a stretch of writing, in any script.
-
-    No vocabulary is involved. Both sides are folded the same way; then a
-    stretch of letters from the message counts when it is at least four
-    characters as written and occurs in the belief. For scripts written without
-    spaces a stretch is a whole phrase, so any two adjacent characters of it
-    count instead.
-    """
-    haystack = fold(" ".join(parts))
-    for size, run in _written_runs(query):
-        if _wide(run):
-            if len(run) >= 2 and any(run[i:i + 2] in haystack for i in range(len(run) - 1)):
-                return True
-        elif size >= 4 and run in haystack:
-            return True
-    return False
+    shared = {token for token in set(mine) & set(theirs) if not is_unspaced(token) and token not in common}
+    if any(len(token) >= 6 for token in shared) or sum(len(token) >= 4 for token in shared) >= 2:
+        return True
+    pairs = {pair for pair in zip(theirs, theirs[1:]) if is_unspaced(pair[0]) and is_unspaced(pair[1])}
+    runs, streak = [], 0
+    for pair in zip(mine, mine[1:]):
+        if pair in pairs:
+            streak += 1
+        else:
+            runs.append(streak)
+            streak = 0
+    runs.append(streak)
+    # A streak of n shared pairs is a shared run of n + 1 characters.
+    return max(runs) >= 3 or sum(run >= 1 for run in runs) >= 2
 
 
 def _safe_float(value: object, fallback: float) -> float:

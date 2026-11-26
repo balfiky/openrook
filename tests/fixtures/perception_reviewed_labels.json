@@ -1,0 +1,123 @@
+{
+ "core/affect.py::resolve_affect": [
+  "action request",
+  "affection",
+  "affiliation bid",
+  "anger",
+  "anger above threshold",
+  "bonding",
+  "bonding pressure",
+  "caution",
+  "desire/status pressure",
+  "envy",
+  "exhaustion",
+  "expectation violation",
+  "extreme activation",
+  "high arousal",
+  "hurt",
+  "low energy",
+  "low valence",
+  "positive valence",
+  "rage",
+  "risk/expectation pressure",
+  "social comparison",
+  "very low valence"
+ ],
+ "core/anticipation.py::AnticipationEngine._person_patterns": [
+  "bracing",
+  "lashes_out"
+ ],
+ "core/life_influence.py::derive_life_influence": [
+  "attachment",
+  "autonomy",
+  "caution",
+  "competence",
+  "continuity",
+  "curiosity"
+ ],
+ "core/self_intent.py::conversation_proposals": [
+  "goals",
+  "interests",
+  "opinions",
+  "preferences",
+  "questions",
+  "resources"
+ ],
+ "core/self_intent.py::conversation_sources": [
+  "Conserve remaining resources.",
+  "active",
+  "content",
+  "domain",
+  "goals",
+  "interests",
+  "negative",
+  "open",
+  "opinions",
+  "preferences",
+  "pursuing",
+  "questions",
+  "resources",
+  "strength",
+  "substantive"
+ ],
+ "core/self_intent.py::ground_conversation_allocation": [
+  "goals",
+  "self:"
+ ],
+ "core/willingness.py::_component_terms": [
+  "authored_values",
+  "character_benefit",
+  "competing_interests",
+  "interaction_cost",
+  "personal_attitude",
+  "self_consistency",
+  "user_benefit"
+ ],
+ "core/willingness.py::decide": [
+  "assertiveness",
+  "bluntness",
+  "calm",
+  "curiosity",
+  "forgiveness",
+  "patience",
+  "pride"
+ ],
+ "pipeline/core.py::CognitivePipeline._classify_event_via_rules": [
+  "model"
+ ],
+ "pipeline/core.py::CognitivePipeline._commit_turn_decision": [
+  "committed_before_execution",
+  "decision",
+  "input",
+  "stage"
+ ],
+ "pipeline/core.py::CognitivePipeline._project_conversation_commitments": [
+  "Previously selected unfinished work.",
+  "active",
+  "priority",
+  "status"
+ ],
+ "runtime/life_history.py::LifeHistoryStore.retrieve_relevant": [
+  "active",
+  "beliefs",
+  "drives",
+  "recent_evolution",
+  "self_trait",
+  "self_traits"
+ ],
+ "runtime/skills.py::_context_hint_tokens": [
+  "response_strategy",
+  "tool_name"
+ ],
+ "runtime/skills.py::enabled_skill_context": [
+  "applies_when",
+  "context_hint_tokens",
+  "count",
+  "enabled",
+  "instructions",
+  "required_tools",
+  "risk_flags",
+  "root",
+  "skills"
+ ]
+}

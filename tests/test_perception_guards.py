@@ -6,8 +6,12 @@ by behaviour:
 * the perception modules and the perception stage hold no vocabulary: no word
   lists, no word-matching patterns however they are bound, no probing of text
   with fixed wording, and no use of ``core.social``;
-* every function the user's text reaches during the perception stage is either
-  free of vocabulary or named below as wording-based code still to be removed;
+* every function the user's text reaches during the pre-pass and the decision
+  it commits, whether as a string, inside the turn state or inside a request
+  component, is checked strictly: it is free of vocabulary, or named below as
+  wording-based code still to be removed, or holds only the runtime's own
+  labels, each pinned. A literal tested against what a person wrote counts
+  whatever the literal is, and so does a lookup table of any size;
 * runtime code never imports test code (the keyword reader is test-only);
 * none of the evaluation scenarios' wording appears in the perception path
   (ground rule 1 of ``docs/development/goal-fix-plan.md``).
@@ -21,6 +25,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import importlib
+import json
 from pathlib import Path
 import re
 import sys
@@ -37,7 +42,9 @@ from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 from tests.support import vocabulary_guard as guard
-from tests.support.readings import ReadingBackend, ScriptedReader, reading
+from tests.support.readings import (
+    ReadingBackend, ScriptedReader, conversation, hostility, reading, role, task,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,8 +60,8 @@ RUNTIME_PACKAGES = ("core", "pipeline", "runtime", "interface", "config", "openr
 # reach the keyword reader either; nothing else may import tests at all.
 EVAL_FAKES_IMPORTERS = {"evals/backends.py", "evals/runner.py"}
 
-# Wording-based code the user's text still reaches during the perception stage.
-# None of it supplies social meaning. Each entry names what it does and where
+# Wording-based code the user's text still reaches during the pre-pass and the
+# decision. None of it supplies social meaning. Each entry names what it does and where
 # it goes; the list must match the code exactly, so adding a keyword helper
 # fails here and removing one means deleting its line.
 PENDING_WORDING = {
@@ -64,8 +71,12 @@ PENDING_WORDING = {
     "core/task_planning.py::is_status_request": "1c routing: status of a running plan",
     "core/request_actions.py::has_learning_intent": "1c routing: learning requests",
     "core/request_actions.py::file_requests": "1c routing: literal file operands",
-    "core/request_actions.py::ground_file_components": "1c routing: literal file operands",
-    "core/request_actions.py::ground_shell_components": "1c routing: literal shell operands",
+    "core/request_actions.py::ground_file_components": (
+        "1c routing: literal file operands. Rewrites the capability requirements of a task its English verb "
+        "patterns match, and turns a task whose description starts with a reporting verb into conversation"),
+    "core/request_actions.py::ground_shell_components": (
+        "1c routing: literal shell operands. Rewrites the capability requirements of a task its English verb "
+        "pattern matches"),
     "pipeline/heuristics.py::_is_identity_question": "1c context selection: identity records",
     "pipeline/heuristics.py::_relationship_topic_hint": "1c context selection: relationship topic",
     "core/memory/semantic.py::_tokenize": "1c context selection: memory retrieval stop-words",
@@ -73,13 +84,16 @@ PENDING_WORDING = {
     "runtime/evolution_policy.py::detect_directive_override_markers": "Phase 4: autonomy-phrase memory filter",
     "runtime/evolution_policy.py::detect_prompt_injection_markers": "Phase 4: instruction-phrase memory filter",
 }
-# Functions the text reaches whose only flagged literals are the runtime's own
-# labels and record keys, pinned here so nothing else can join them unnoticed.
-INTERNAL_LABELS = {
-    "core/anticipation.py::AnticipationEngine._person_patterns": {"bracing"},
-    "runtime/life_history.py::LifeHistoryStore.retrieve_relevant": {
-        "beliefs", "drives", "recent_evolution", "self_traits"},
+# A model answer quotes the message, so answer clean-up is reached by the text
+# too. It matches markup the model emits, not anything a person wrote.
+MODEL_ANSWER_MARKUP = {
+    "core/llm_content.py::strip_reasoning": "removes reasoning tags from a model answer",
 }
+# Functions the text reaches whose flagged literals are the runtime's own labels
+# and record keys, not wording matched against the message. Every such literal
+# is pinned in the fixture, so nothing can join them unnoticed: a new literal
+# in one of these functions fails the guard until it has been looked at.
+REVIEWED_LABELS = json.loads((ROOT / "tests/fixtures/perception_reviewed_labels.json").read_text(encoding="utf-8"))
 
 # Ground rule 1. Sub-phase 1b: replace with every runtime module.
 SCENARIO_PHRASE_SCOPE = (*PERCEPTION_MODULES, *PERCEPTION_STAGE)
@@ -172,13 +186,23 @@ MARKER = "qzvmarkerx"
 MESSAGE = f"Tell me about {MARKER} gardens, please?"
 
 
-def traced_turns(tmp_path) -> guard.TextTrace:
-    """Run real turns and record every runtime function the message text is passed to.
+def quoting(text):
+    """A reading that quotes the message in every place a reading can."""
+    return reading(conversation(text), task(text, effort=0.1), role(text, MARKER, autonomy_cost=0.5),
+                   target="character", move="attack", intent="harm", perception=hostility(text),
+                   tone={"arousal": 0.7, "valence": 0.2, "certainty": 0.6, "intensity": 0.6})
 
-    The turns cover each branch of the stage that hands the text to a helper:
-    an ordinary turn and a follow-up, a turn with tools and no reported request,
-    a turn during a running plan, and a turn through the session manager, which
-    wires the life-history, skill and learning providers.
+
+def traced_turns(tmp_path) -> guard.TextTrace:
+    """Run real turns and record every runtime function the message text is handed to.
+
+    The text is followed as a string, inside the turn state, and inside request
+    components, through the pre-pass and the decision it commits. The turns
+    cover each branch that hands the text on: an unread turn and a follow-up,
+    a turn whose reading quotes the message in its components and evidence, a
+    turn with tools and no reported request, a turn during a running plan, and
+    a turn through the session manager, which wires the life-history, skill and
+    learning providers.
     """
     trace = guard.TextTrace(MARKER)
     original = CognitivePipeline._stage_pre_pass
@@ -192,6 +216,9 @@ def traced_turns(tmp_path) -> guard.TextTrace:
         pipe = CognitivePipeline(ReadingBackend())
         pipe.process(MESSAGE, "guard")
         pipe.process(MESSAGE + " Again.", "guard")
+        pipe.close()
+        pipe = CognitivePipeline(ReadingBackend(quoting))
+        pipe.process(MESSAGE, "guard")
         pipe.close()
         pipe = CognitivePipeline(ReadingBackend(), tool_executor=ToolExecutor(ToolRegistry()),
                                  message_reader=ScriptedReader(reading()))
@@ -220,20 +247,36 @@ def reached(tmp_path_factory) -> guard.TextTrace:
 
 
 def test_every_function_the_text_reaches_is_clean_or_named_as_pending(reached):
-    flagged = {}
-    for unit in reached.units():
-        found = guard.findings(unit.tree, unit.scope, strict=False)
-        if found:
-            flagged[unit.label] = found
-    assert len(reached.reached) > 30  # the trace really followed the message
-    assert set(flagged) == set(PENDING_WORDING) | set(INTERNAL_LABELS)
-    for label, allowed in INTERNAL_LABELS.items():
-        assert {finding.kind for finding in flagged[label]} <= {"words"}, label
-        assert {term for finding in flagged[label] for term in finding.terms} <= allowed, label
-    # The perception modules themselves are reached and are not among the flagged.
-    labels = {unit.label for unit in reached.units()}
-    assert {"core/appraisal.py::read_message", "core/appraisal.py::reconcile_social_appraisal"} <= labels
+    """Strict, and against the text itself: a literal tested on what a person
+    wrote counts whatever the literal is."""
+    flagged = reached.findings()
+    assert len(reached.reached) > 60  # the trace really followed the message
+    assert set(flagged) == set(PENDING_WORDING) | set(MODEL_ANSWER_MARKUP) | set(REVIEWED_LABELS)
+    for label, pinned in REVIEWED_LABELS.items():
+        # Labels only: no pattern, nothing tested against the text, and no literal that is not pinned.
+        assert {finding.kind for finding in flagged[label]} <= {"words", "probe"}, label
+        assert not [finding for finding in flagged[label] if finding.on_text], label
+        assert sorted({term for finding in flagged[label] for term in finding.terms} - set(pinned)) == [], label
+    # What a person wrote is tested against fixed wording only in code named as pending.
+    tested = {label for label, found in flagged.items() if any(finding.on_text for finding in found)}
+    assert tested <= set(PENDING_WORDING) | set(MODEL_ANSWER_MARKUP)
+    # The text reaches the reader, the parser, the checks and the decision. The
+    # perception modules and the stage hold nothing; the decision holds pinned labels only.
+    labels = {unit.label for unit, _, _ in reached.units()}
+    assert {"core/appraisal.py::read_message", "core/appraisal.py::parse_reading",
+            "core/appraisal.py::reconcile_social_appraisal", "core/perception.py::tokens",
+            "core/willingness.py::decide", "pipeline/core.py::CognitivePipeline._commit_turn_decision"} <= labels
     assert not [label for label in flagged if label.split("::")[0] in PERCEPTION_MODULES]
+    assert "pipeline/core.py::CognitivePipeline._stage_pre_pass" not in flagged
+
+
+def test_the_text_is_followed_inside_the_turn_state_and_request_components(reached):
+    stage = reached.reached[("pipeline/core.py", "CognitivePipeline._stage_pre_pass")]
+    commit = reached.reached[("pipeline/core.py", "CognitivePipeline._commit_turn_decision")]
+    assert "user_message" in stage["leaves"] and not stage["names"]
+    assert {"user_message", "description", "source_span"} <= commit["leaves"]
+    assert {"description", "source_span"} <= reached.reached[("core/willingness.py", "decide")]["leaves"]
+    assert "text" in reached.reached[("core/appraisal.py", "read_message")]["names"]
 
 
 def test_the_trace_exercises_every_call_that_hands_over_the_message(reached):
@@ -256,6 +299,11 @@ def test_the_trace_exercises_every_call_that_hands_over_the_message(reached):
         pipe.close()
     traced = {f"{path}::{qualname}" for path, qualname in reached.reached}
     assert len(handed) >= 12 and sorted(set(handed) - traced) == []
+    # The same holds for the state object and for components handed to the decision.
+    for label in ("pipeline/core.py::CognitivePipeline._commit_turn_decision",
+                  "core/self_intent.py::conversation_proposals",
+                  "core/self_intent.py::ground_conversation_allocation", "core/willingness.py::decide"):
+        assert label in traced, label
 
 
 # ---------------------------------------------------------------------------
@@ -485,12 +533,224 @@ def test_a_planted_helper_behind_a_clean_stage_is_caught_by_the_trace(tmp_path, 
     ''')
     stage_unit = guard.function_unit(module.stage, root=tmp_path)
     assert guard.findings(stage_unit.tree, stage_unit.scope) == []
-    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=())
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
     with trace:
         module.stage(f"A {MARKER.upper()} sentence", [{"role": "user", "content": f"earlier {MARKER}"}])
-    flagged = {unit.label.split("::")[1]: {f.kind for f in guard.findings(unit.tree, unit.scope, strict=False)}
-               for unit in trace.units()}
-    assert flagged == {"stage": set(), "clean": set(), "by_pattern": {"regex"}, "by_table": {"words"}}
+    # ``untouched`` holds a word list too, but the text never reaches it.
+    assert {qualname for _, qualname in trace.reached} == {"stage", "clean", "by_pattern", "by_table"}
+    flagged = {label.split("::")[1]: {(finding.kind, finding.on_text) for finding in found}
+               for label, found in trace.findings().items()}
+    assert flagged == {"by_pattern": {("regex", False), ("regex", True)},
+                       "by_table": {("words", False), ("probe", True)}}
+
+
+TEXT = dict(text_names={"text"}, text_leaves=guard.CORE_TEXT_FIELDS)
+
+
+def on_text(source: str) -> list[guard.Finding]:
+    tree = ast.parse(textwrap.dedent(source))
+    return [finding for finding in guard.findings(tree, guard.Scope(tree), **TEXT) if finding.on_text]
+
+
+@pytest.mark.parametrize("source", [
+    # Every literal here is a data-model name. Tested against the reading's own
+    # fields that is fine; tested against what a person wrote it is a keyword.
+    'def f(text):\n    return "attack" in text',
+    'def f(text):\n    return text == "apology"',
+    'def f(text):\n    return text.strip().lower() != "request"',
+    'def f(text):\n    return text.lower().startswith("task")',
+    'def f(text):\n    return text.endswith("role")',
+    'def f(text):\n    lowered = text.casefold()\n    return lowered.count("harm") > 0',
+    'KINDS = ("task", "role")\ndef f(text):\n    return any(kind in text for kind in KINDS)',
+    'def f(text):\n    return [word for word in text.split() if word in ("attack", "harm")]',
+    'import re\nRULE = re.compile(r"\\b(?:attack|apology)\\b")\ndef f(text):\n    return RULE.search(text)',
+    'import re\ndef f(text):\n    return re.search("attack", text)',
+    'import re\ndef f(st):\n    return re.fullmatch("apology", st.user_message.strip(), re.I)',
+    # The text travelling inside the turn state or a request component.
+    'def f(st):\n    return "attack" in st.user_message',
+    'def f(st):\n    message = st.user_message.lower()\n    return message == "inform"',
+    'def f(components):\n    return [c for c in components if c.description.startswith("task")]',
+    'def f(component):\n    return component.source_span.casefold() == "conversation"',
+    'def f(decision):\n    return any("role" in item.component.description for item in decision.components)',
+])
+def test_a_literal_tested_against_the_users_text_is_found_whatever_the_literal_is(source):
+    assert on_text(source), source
+    # Without knowing where the text is, the allow-list would have excused every one of these.
+    assert not [kind for kind in kinds(source, strict=True) if kind != "regex"]
+
+
+@pytest.mark.parametrize("source", [
+    'def f(text):\n    return text in ("attack",)',
+    'def f(text):\n    return text.lower() in {"harm"}',
+    'TABLE = {"apology": 0.4}\ndef f(text):\n    return TABLE.get(text.lower(), 0.0)',
+    'TABLE = {"apology": 0.4}\ndef f(st):\n    return TABLE[st.user_message]',
+    'def f(text):\n    return {"attack": 1}.get(text)',
+    'def f(text):\n    for word in text.split():\n        if word in ["role"]:\n            return True',
+    # Not a data-model name either: one entry was never enough to be a word list.
+    'MOVES = {"merry": 0.4}\ndef f(component):\n    return MOVES.get(component.description)',
+])
+def test_a_single_entry_table_looked_up_with_the_users_text_is_found(source):
+    assert on_text(source), source
+    assert "words" not in kinds(source)
+
+
+@pytest.mark.parametrize("source", [
+    # The same literals against the reading's own fields, in code that also holds the text.
+    'def f(text, component):\n    return component.kind == "role" and len(text) > 3',
+    'def f(st):\n    return st.appraisal.social_move in ("attack", "apology") and bool(st.user_message)',
+    'def f(text, item):\n    return item.get("role") == "user" and text',
+    'def f(text, frame):\n    return {"attack": 1}.get(frame.social_move, 0) + len(text)',
+    # Measuring the text is not testing it against wording.
+    'import unicodedata\ndef f(text):\n    return [c for c in text if unicodedata.category(c) == "Cf"]',
+    'def f(text):\n    return len(text.split()) >= 3 and text.strip() != ""',
+    'def f(text, other):\n    return text.casefold() == other.casefold()',
+])
+def test_comparisons_with_the_readings_own_fields_and_measurements_are_excused(source):
+    tree = ast.parse(textwrap.dedent(source))
+    assert guard.findings(tree, guard.Scope(tree), **TEXT) == []
+
+
+def test_planted_matching_on_the_turn_state_and_on_components_is_caught_by_the_trace(tmp_path, monkeypatch):
+    """A helper handed the state object, or the components, is traced like one handed the text."""
+    module = plant(tmp_path, monkeypatch, "stateful", '''
+        from dataclasses import dataclass, field
+
+        @dataclass
+        class Component:
+            description: str
+            source_span: str = ""
+            kind: str = "conversation"
+
+        @dataclass
+        class State:
+            user_message: str
+            turn_id: str = "1"
+            components: list = field(default_factory=list)
+
+        def stage(st):
+            st.components = [Component(st.user_message, st.user_message)]
+            return on_state(st), price(st.components), by_kind(st.components), label(st.turn_id)
+
+        def on_state(st):
+            return "attack" in st.user_message.lower()
+
+        def price(components):
+            return sum(0.9 for c in components if c.description.startswith("role"))
+
+        def by_kind(components):
+            return [c for c in components if c.kind == "role"]
+
+        def label(turn):
+            return turn == "merry"
+    ''')
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+    with trace:
+        module.stage(module.State(f"some {MARKER} words"))
+    # ``label`` matches a word too, but it is never handed the text.
+    assert {qualname for _, qualname in trace.reached} == {"stage", "on_state", "price", "by_kind"}
+    on_state = trace.reached[("planted/stateful.py", "on_state")]
+    assert on_state["names"] == set() and "user_message" in on_state["leaves"]
+    assert trace.reached[("planted/stateful.py", "price")]["leaves"] == {"description", "source_span"}
+    flagged = trace.findings()
+    assert set(flagged) == {"planted/stateful.py::on_state", "planted/stateful.py::price"}
+    assert all(finding.on_text and finding.kind == "probe" for found in flagged.values() for finding in found)
+    assert {term for found in flagged.values() for finding in found for term in finding.terms} == {"attack", "role"}
+
+
+def test_a_table_or_pattern_defined_elsewhere_is_seen_where_it_is_used_on_the_text(tmp_path, monkeypatch):
+    '''The words can live in another module, on the object, or be built when the
+    module loads; the helper that applies them to the text is still caught.'''
+    plant(tmp_path, monkeypatch, "lexicon", '''
+        import re
+        MOVES = frozenset({"attack", "apology"})
+        WEIGHTS = {"harm": 0.9}
+        RULE = re.compile(r"\\b(?:attack|harm)\\b", re.I)
+        ONE = "attack"
+    ''')
+    module = plant(tmp_path, monkeypatch, "borrower", '''
+        from planted import lexicon
+        from planted.lexicon import MOVES, ONE, RULE, WEIGHTS
+
+        BUILT = frozenset(vars(lexicon)["MOVES"])
+
+        class Reader:
+            WORDS = ("attack", "apology")
+
+            def __init__(self):
+                self.weights = dict(vars(lexicon)["WEIGHTS"])
+
+            def by_class(self, text):
+                return text in self.WORDS
+
+            def by_instance(self, text):
+                return self.weights.get(text, 0.0)
+
+        def stage(text, components):
+            reader = Reader()
+            return (in_set(text), by_weight(text), by_rule(text), by_module(text), by_word(text), by_built(text),
+                    reader.by_class(text), reader.by_instance(text), on_fields(components),
+                    harmless(text, components))
+
+        def in_set(text):
+            return any(word in MOVES for word in text.split())
+
+        def by_weight(text):
+            return sum(WEIGHTS.get(word, 0.0) for word in text.lower().split())
+
+        def by_rule(text):
+            return bool(RULE.search(text))
+
+        def by_module(text):
+            return text.strip() in lexicon.MOVES or bool(lexicon.RULE.match(text))
+
+        def by_word(text):
+            return ONE in text
+
+        def by_built(text):
+            return text.casefold() in BUILT
+
+        def on_fields(components):
+            return [c for c in components if c["description"] in MOVES]
+
+        def harmless(text, components):
+            return [c for c in components if c["kind"] in MOVES and len(text) > 2]
+    ''')
+    helpers = {"in_set": module.in_set, "by_weight": module.by_weight, "by_rule": module.by_rule,
+               "by_module": module.by_module, "by_word": module.by_word, "by_built": module.by_built,
+               "Reader.by_class": module.Reader.by_class, "Reader.by_instance": module.Reader.by_instance,
+               "on_fields": module.on_fields}
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+    with trace:
+        module.stage(f"a {MARKER}", [{"kind": "task", "description": f"do {MARKER}"}])
+    assert {qualname for _, qualname in trace.reached} == {"stage", "harmless", *helpers}
+    flagged = {label.split("::")[1]: found for label, found in trace.findings().items()}
+    assert set(flagged) == set(helpers)   # ``harmless`` tests a field of the reading, not the text
+    assert all(finding.on_text for found in flagged.values() for finding in found)
+    assert {finding.kind for finding in flagged["by_rule"]} == {"regex"}
+    assert {finding.kind for finding in flagged["by_module"]} == {"probe", "regex"}
+    # Read as source alone, none of these helpers holds a single word.
+    for function in helpers.values():
+        unit = guard.function_unit(function, root=tmp_path)
+        assert guard.findings(unit.tree, unit.scope, text_names={"text"}, text_leaves=guard.CORE_TEXT_FIELDS) == []
+
+
+def test_traced_helpers_are_checked_strictly(tmp_path, monkeypatch):
+    module = plant(tmp_path, monkeypatch, "strictly", '''
+        def stage(text, mood):
+            return helper(text, mood)
+
+        def helper(text, mood):
+            return mood == "merry" and len(text) > 1
+    ''')
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+    with trace:
+        module.stage(f"a {MARKER}", "grim")
+    found, = trace.findings().values()
+    # An equality test against a literal that is no data-model name counts in a
+    # traced helper even though it is not a test of the text.
+    assert [(finding.kind, finding.terms, finding.on_text) for finding in found] == [("probe", ("merry",), False)]
+    unit = guard.function_unit(module.helper, root=tmp_path)
+    assert guard.findings(unit.tree, unit.scope, strict=False) == []
 
 
 def test_planted_helpers_are_resolved_through_imports_methods_and_attributes(tmp_path, monkeypatch):

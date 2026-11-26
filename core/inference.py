@@ -103,6 +103,28 @@ def remaining_calls() -> int:
     return max(0, limit - spent - _reserved_calls.get()) if limit is not None else 1000000
 
 
+def monotonic() -> float:
+    """The clock every inference deadline in a turn is measured on."""
+    return time.monotonic()
+
+
+def primary_deadline(backend) -> float | None:
+    """The request timeout in force for required calls, when one is known."""
+    seconds = _auxiliary_policy.get().request_seconds
+    if seconds is None:
+        inner = backend
+        initialize = getattr(backend, "initialize", None)
+        if callable(initialize):
+            try:
+                inner = initialize()
+            except Exception:
+                return None
+        seconds = getattr(inner, "_timeout", None)
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds <= 0:
+        return None
+    return float(seconds)
+
+
 def remaining_reading_calls() -> int:
     if _limit.get() is None:
         return READING_CALLS
@@ -266,7 +288,8 @@ def final_expression_attempt():
 
 
 @contextmanager
-def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, reading=False):
+def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, reading=False,
+               limit_seconds=None):
     phase = _phase.get() or phase
     primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
     if primary_tool:
@@ -295,6 +318,9 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
         # No request was made: don't count or log each skipped attempt.
         raise OptionalInferenceCooldown("Optional inference is cooling down")
     deadline = _optional_timeout(backend, latency) if optional and not _research.get() else None
+    if limit_seconds is not None and not _research.get():
+        # A caller's own wall-clock budget, such as what is left of the reading's.
+        deadline = limit_seconds if deadline is None else min(deadline, limit_seconds)
     token = _timeout.set(deadline)
     phase_token = _active_phase.set(phase)
     started = time.monotonic()
@@ -346,7 +372,8 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
         _active_phase.reset(phase_token)
 
 
-def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False, **kwargs):
-    with model_call(phase, optional=optional, backend=backend, reading=reading):
+def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False,
+             limit_seconds=None, **kwargs):
+    with model_call(phase, optional=optional, backend=backend, reading=reading, limit_seconds=limit_seconds):
         result = backend.generate(system_prompt, user_message, **kwargs)
         return strip_reasoning(result) if isinstance(result, str) else result

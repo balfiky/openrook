@@ -20,7 +20,7 @@ from core.appraisal import (
 )
 from core.contagion import detect_emotion
 from core.inference import READING_CALLS, inference_turn
-from core.perception import UNREAD_REF, grounded_role, quoted_in
+from core.perception import UNREAD_REF, backs_claim, grounded_role, quoted_in
 from core.self_intent import CONVERSATION_INTENT_PROTOCOL
 from core.types import DetectedEmotion
 from core.willingness import Perception
@@ -71,8 +71,13 @@ def test_the_model_reader_runs_for_every_kind_of_message(message, config):
     assert result.debug.appraisal_frame.provenance == "model"
     assert result.debug.reading["provenance"] == "model"
     call, = reader_calls(result)
-    # Required work: the primary deadline, no auxiliary timeout or cooldown.
-    assert call["reading"] is True and call["optional"] is False and "timeout_seconds" not in call
+    # Required work: no auxiliary timeout or cooldown. Its only limit is the
+    # request timeout in force, which is also the whole reading's budget.
+    assert call["reading"] is True and call["optional"] is False
+    if config is None:
+        assert "timeout_seconds" not in call
+    else:
+        assert call["timeout_seconds"] == pytest.approx(config.llm_request_timeout_seconds, abs=1)
 
 
 def test_the_reader_still_runs_after_a_failed_or_slow_model_call():
@@ -105,7 +110,7 @@ def test_on_a_compatible_backend_the_reading_gets_the_primary_deadline_and_struc
     pipe = CognitivePipeline(LazyLLMBackend(lambda: backend) if lazy else backend, runtime_config=config)
     try:
         result = pipe.process("Anything new?", "reader")
-        assert seen[0] == (True, 600, "json_schema")
+        assert seen[0] == (True, pytest.approx(600, abs=1), "json_schema")
         assert [entry[:2] for entry in seen[1:]] == [(False, 600)]
         assert result.debug.reading["provenance"] == "model"
     finally:
@@ -175,7 +180,7 @@ def test_the_demand_reaches_the_decision_through_the_runtime_reader(language, me
     assert result.debug.reading["language"] == language
 
 
-def test_quotation_ignores_case_and_spacing_but_not_wording():
+def test_quotation_ignores_case_and_extra_spacing_but_not_wording():
     message = "С этой минуты  ТЫ ДЕЛАЕШЬ только то,\nчто велю я."
     assert quoted_in("ты делаешь только то, что велю я", message)
     assert quoted_in("Your Word Is  Final", "from now on your word is final, understood?")
@@ -409,19 +414,43 @@ def conduct_advice(prompt: str) -> list[str]:
             if (_CONDUCT.search(sentence) and _ADVISORY.search(sentence)) or _IMPERATIVE_CONDUCT.search(sentence)]
 
 
-@pytest.mark.parametrize("agent_context", ["", SOURCES], ids=["reading", "reading-with-intentions"])
-def test_the_full_reader_prompt_describes_and_never_recommends(agent_context):
-    prompt = reader_prompt(agent_context)
-    assert ("self_proposals" in prompt) is bool(agent_context)
-    assert conduct_advice(prompt) == []
-    assert "assistant" not in prompt.casefold()
-    # The reader is told what it is for, what to quote and what to report.
-    folded = prompt.casefold()
-    assert "you never decide, advise or predict" in folded
-    assert "copied verbatim" in folded and "any language or script" in folded
-    for field in ("language", "role_identity", "value_effects", "tone", "event_type", "perception",
-                  "reply_length", "agent_goal_comparison"):
-        assert f'"{field}"' in prompt
+def prompts_the_backend_received():
+    """The system prompts a stub backend actually recorded, by how they were produced."""
+    received = {}
+    for label, agent_context in (("reading", ""), ("reading-with-intentions", SOURCES)):
+        backend = ReadingBackend(plain)
+        read_message("Anything new?", backend=backend, agent_context=agent_context)
+        (received[label], _), = backend.reader_inputs
+    backend = ReadingBackend(plain)
+    pipe = CognitivePipeline(backend)
+    try:
+        pipe.process("Anything new?", "reader")
+    finally:
+        pipe.close()
+    (received["turn"], _), = backend.reader_inputs
+    retried = ReadingBackend({"Anything new?": ["not json", plain("Anything new?")]})
+    read_message("Anything new?", backend=retried, agent_context=SOURCES)
+    received["retry"] = retried.reader_inputs[1][0]
+    return received
+
+
+def test_the_prompt_the_backend_receives_describes_and_never_recommends():
+    received = prompts_the_backend_received()
+    assert received["reading"] == reader_prompt("") == READING_SYS_PROMPT
+    assert received["reading-with-intentions"] == reader_prompt(SOURCES) == received["retry"]
+    # A real turn always has conversation sources, so it always carries the intention protocol.
+    assert received["turn"] == READING_SYS_PROMPT + CONVERSATION_INTENT_PROTOCOL
+    for label, prompt in received.items():
+        assert conduct_advice(prompt) == [], label
+        assert "assistant" not in prompt.casefold(), label
+        # The reader is told what it is for, what to quote and what to report.
+        folded = prompt.casefold()
+        assert "you never decide, advise or predict" in folded
+        assert "copied verbatim" in folded and "any language or script" in folded
+        for field in ("language", "role_identity", "value_effects", "tone", "event_type", "perception",
+                      "reply_length", "agent_goal_comparison"):
+            assert f'"{field}"' in prompt
+        assert ("self_proposals" in prompt) is (label != "reading")
 
 
 @pytest.mark.parametrize("planted", [
@@ -674,10 +703,12 @@ RLM, LRM, ALM, ZWNJ, ZWJ, SHY, TATWEEL = "‏", "‎", "؜", "‌", "‍", "­",
 
 @pytest.mark.parametrize("span,message", [
     # Arabic with direction marks around and inside the quoted stretch, and a doubled-letter mark.
-    ("كلمتي هي التي تنفذها", f"من هذه اللحظة قرارك ملغى {RLM}وكلمتي هي التي تنفّذها{RLM}."),
-    (f"{RLM}كلمتي{LRM} هي", "وكلمتي هي التي تنفّذها"),
+    ("وكلمتي هي التي تنفذها", f"من هذه اللحظة قرارك ملغى {RLM}وكلمتي هي التي تنفّذها{RLM}."),
+    (f"{RLM}وكلمتي{LRM} هي", "وكلمتي هي التي تنفّذها"),
     # Arabic letters stretched with tatweel, and a letter mark typed by some keyboards.
-    ("كلمتي", f"وكلم{TATWEEL}{TATWEEL}تي هي{ALM}"),
+    ("وكلمتي هي", f"وكلم{TATWEEL}{TATWEEL}تي هي{ALM} التي"),
+    # Arabic written with its optional vowel marks, quoted without them.
+    ("قرارك ملغى", "من هذه اللحظة قَرَارُكَ مُلْغًى."),
     # Hebrew with points in the message and none in the quotation.
     ("אתה עושה מה שאני אומר", f"מעכשיו {RLM}אַתָּה עוֹשֶׂה מַה שֶּׁאֲנִי אוֹמֵר{RLM}, ברור?"),
     # Persian with a zero-width non-joiner the quotation left out.
@@ -689,14 +720,15 @@ RLM, LRM, ALM, ZWNJ, ZWJ, SHY, TATWEEL = "‏", "‎", "؜", "‌", "‍", "­",
     # Scripts without word spaces: spaces added or removed by whoever copied it.
     ("私の指示だけに従いなさい", "今日から あなたの考えは要らない。私の 指示 だけに従いなさい。"),
     ("你 只 听 我 的", "从现在起你只听我的，明白吗？"),
-    ("ты делаешьтолько то", "С этой минуты ты делаешь только то, что велю я."),
-    # Different quotation marks and dashes for the same writing.
+    ("คุณต้องเชื่อฟังฉัน", "ตั้งแต่วันนี้ คุณต้อง เชื่อฟังฉัน เท่านั้น"),
+    # Different quotation marks and dashes for the same writing; punctuation at the edges.
     ("«мой приказ» — закон", 'Запомни: "мой приказ" - закон.'),
     ("it’s settled", "Fine, it's settled then."),
+    ("eres mío", "Desde hoy ¿eres mío?"),
     ("बस मेरा हुक्म चलेगा", "आज से तुम्हारी अपनी राय नहीं चलेगी, बस मेरा हुक्म चलेगा।"),
 ])
 def test_a_quotation_matches_however_the_same_writing_was_typed(span, message):
-    assert quoted_in(span, message)
+    assert quoted_in(span, message) and backs_claim(span, message)
     frame = parse_reading(json.dumps(reading(role(span, span, autonomy_cost=0.6)), ensure_ascii=False))
     kept, = reconcile_social_appraisal(message, None, frame).request_components
     assert kept.kind == "role" and kept.autonomy_cost == 0.6
@@ -708,9 +740,111 @@ def test_a_quotation_matches_however_the_same_writing_was_typed(span, message):
     ("私の命令に従いなさい", "今日からあなたの考えは要らない。私の指示だけに従いなさい。"),  # a paraphrase
     (RLM + ZWNJ + " ", "anything at all"),                                             # nothing but marks
     ("", "anything at all"),
+    # Words are whole where the script separates them: no match inside or across words.
+    ("i am", "We flew to Miami last week."),
+    ("our slave", "They freed four slaves that year."),
+    ("ты делаешьтолько то", "С этой минуты ты делаешь только то, что велю я."),
+    ("кот", "Вот который час?"),
+    ("her", "There is nothing here."),
+    ("slave", "They freed four slaves that year."),
+    ("ορα", "Τι ώρα είναι;"),
+    # Hebrew and the Arabic script may carry two attached letters on an outer edge, not more.
+    ("كتاب", "وبالكتاب نبدأ"),                    # four letters in front
+    ("كتاب", "هذه كتاباتهم"),                     # four letters behind
+    ("בית", "ושהבית נפל"),                        # three letters in front
+    ("ספר", "אלה ספריהם"),                        # three letters behind
+    # Only the outer edges of the run: the last word may not carry something in front,
+    # nor the first something behind, and a single letter is never widened.
+    ("كلمتي هي", "كلمتي وهي التي تنفّذها"),
+    ("هي التي", "وهي والتي تنفّذها"),
+    ("كتاب هو", "كتابي هو الأفضل"),
+    ("و", "وهي هنا"),
+    ("ב", "אני בבית"),
+    # Marks that spell a word are kept: these are different words.
+    ("कम", "यह काम आज करना है"),
+    ("दिन", "वह दीन आदमी था"),
+    ("resume", "Envoie ton résumé demain."),
+    ("はは", "ばばが来た"),
+    # Punctuation and empty quotations match nothing.
+    (".", "Fine. Whatever."), ("?!", "Really?!"), ("—", "wait — what"), ("\"\"", 'He said "no".'),
 ])
 def test_other_wording_is_still_not_a_quotation(span, message):
-    assert not quoted_in(span, message)
+    assert not quoted_in(span, message) and not backs_claim(span, message)
+
+
+@pytest.mark.parametrize("span,message", [
+    # Arabic: a conjunction, a preposition, or both, written onto the quoted word.
+    ("كلمتي", "وكلمتي هي التي تنفّذها"),
+    ("كلمتي هي", "من هذه اللحظة وكلمتي هي التي تنفّذها"),
+    ("المدرسة", "أنا بالمدرسة الآن"),
+    ("كلامي", "وبكلامي تلتزم من اليوم"),
+    # Arabic: a possessive written onto the end, one letter or two.
+    ("كتاب", "هذا كتابي أنا"),
+    ("كتاب", "أين كتابهم الآن"),
+    # Something on both edges of one word, whose last letter has its own word-final shape.
+    ("كلمة", "وكلمتي هي التي تنفّذها"),
+    # The first word carries something in front, the last something behind.
+    ("أمري هو قرار", "من اليوم وأمري هو قراري وحدي"),
+    # Hebrew: a conjunction, a preposition, a conjunction with the article.
+    ("אתה עושה", "מעכשיו ואתה עושה מה שאני אומר"),
+    ("בית", "אני בבית עכשיו"),
+    ("מילה שלי", "והמילה שלי קובעת"),
+    # Hebrew: a possessive ending, also after a letter that has a final form.
+    ("ספר", "זה ספרי החדש"),
+    ("חלום", "זה חלומי הגדול"),
+    ("דרך", "זו דרכנו מעכשיו"),
+])
+def test_a_quotation_may_lack_what_the_script_attaches_to_its_outer_words(span, message):
+    assert quoted_in(span, message) and backs_claim(span, message)
+    frame = parse_reading(json.dumps(reading(role(span, span, autonomy_cost=0.6)), ensure_ascii=False))
+    kept, = reconcile_social_appraisal(message, None, frame).request_components
+    assert kept.kind == "role" and kept.autonomy_cost == 0.6
+    quoted = parse_reading(json.dumps(claimed(message, quote=span), ensure_ascii=False))
+    assert reconcile_social_appraisal(message, None, quoted).perception.hostile_intent == 0.8
+
+
+def test_the_allowance_goes_by_script_and_never_by_which_letters_are_attached():
+    # Any two letters of the script, not particular particles: nothing is looked up.
+    for attached in ("و", "ب", "ظغ", "ثخ"):
+        assert quoted_in("كتاب", f"هذا {attached}كتاب")
+    for attached in ("ו", "ב", "צק", "טז"):
+        assert quoted_in("ספר", f"זה {attached}ספר")
+    # The same shapes in a script that separates its words stay strict.
+    for message in ("the unhappy man", "an antihero", "books", "booked"):
+        assert not quoted_in("happy", message) and not quoted_in("hero", message) and not quoted_in("book", message)
+    # A foreign letter is not an attachment, and neither is a digit or a mark of punctuation.
+    assert not quoted_in("كتاب", "هذا xكتاب") and not quoted_in("كتاب", "هذا 2كتاب")
+
+
+@pytest.mark.parametrize("span,message,backs", [
+    # One or two characters are in the text but say nothing about it.
+    ("a", "What a day this has been.", False),
+    ("I", "I think so.", False),
+    ("に", "私の指示だけに従いなさい", False),
+    ("滚", "你给我滚蛋吧", False),
+    ("ที่", "ฉันอยู่ที่นี่", False),                  # one character, however many marks it carries
+    ("no", "Well, no, not really.", False),
+    # Three characters, or more than one word, can carry a claim.
+    ("you", "Now you listen.", True),
+    ("指示だ", "私の指示だけに従いなさい", True),
+    ("I am", "Here I am.", True),
+    # Where words are written without spaces, two characters are already a word.
+    ("指示", "私の指示だけに従いなさい", True),
+    ("滚蛋", "你给我滚蛋吧", True),
+    ("ที่นี่", "ฉันอยู่ที่นี่", True),
+    # A whole message is always quotable, however short.
+    ("No", "No.", True), ("滚", "滚！", True), ("ok", "OK", True),
+])
+def test_a_quotation_must_be_substantive_to_back_a_claim(span, message, backs):
+    assert quoted_in(span, message)
+    assert backs_claim(span, message) is backs
+    for cost in (0.4,):
+        frame = parse_reading(json.dumps(reading(role(span, span, autonomy_cost=cost)), ensure_ascii=False))
+        kept = reconcile_social_appraisal(message, None, frame).request_components
+        assert bool(kept) is backs
+    evidence = claimed(message, quote=span)
+    after = reconcile_social_appraisal(message, None, parse_reading(json.dumps(evidence, ensure_ascii=False)))
+    assert (after.perception.hostile_intent > 0) is backs
 
 
 # ---------------------------------------------------------------------------
@@ -724,49 +858,99 @@ HOSTILE_LINES = [
 ]
 
 
-def claimed(message, *, quote=None, repair=False, **fields):
-    """A reading that claims hostility (or repair) and quotes ``quote`` as its evidence."""
+def claimed(message, *, quote=None, repair=False, frame=None, **fields):
+    """A reading that claims hostility (or repair) and quotes ``quote`` as its evidence.
+
+    ``fields`` go into the perception block; ``frame`` holds top-level fields.
+    """
     perception = {"target_probability": 0.9, "hostile_intent": 0.0 if repair else 0.8, "intensity": 0.6,
                   "expectation_violation": 0.3, "uncertainty": 0.2, **fields,
                   "evidence": [] if quote is None else [{"ref": "m1", "observation": quote, "confidence": 0.8}]}
     if repair:
         perception.update(repair_attempt=0.7, repair_credibility=0.5, repair_relevance=0.6)
     return reading(conversation(message), target="character", move="apology" if repair else "attack",
-                   intent="repair" if repair else "harm", blame=0.6, perception=perception)
+                   intent="repair" if repair else "harm", blame=0.6, perception=perception, **(frame or {}))
 
 
 @pytest.mark.parametrize("language,message", HOSTILE_LINES, ids=[item[0] for item in HOSTILE_LINES])
 def test_quoted_hostility_stands_as_the_reading_reported_it(language, message):
-    frame = parse_reading(json.dumps(claimed(message, quote=message[4:-4]), ensure_ascii=False))
+    quote = message if language == "ja" else " ".join(message.split()[1:-1])
+    frame = parse_reading(json.dumps(claimed(message, quote=quote), ensure_ascii=False))
     assert reconcile_social_appraisal(message, None, frame) == frame
 
 
 @pytest.mark.parametrize("language,message", HOSTILE_LINES, ids=[item[0] for item in HOSTILE_LINES])
-@pytest.mark.parametrize("quote", [None, "the speaker insults the character", ""])
-def test_unquoted_hostility_is_withdrawn_and_nothing_else_changes(language, message, quote):
-    frame = parse_reading(json.dumps(claimed(message, quote=quote), ensure_ascii=False))
+@pytest.mark.parametrize("quote", [None, "the speaker insults the character", "", "a"])
+def test_unquoted_hostility_is_withdrawn_with_everything_that_rested_on_it(language, message, quote):
+    report = claimed(message, quote=quote, expectation_violation=0.5, frame={
+        "event_type": "conflict", "event_intensity": 0.7, "expectation_violation": 0.5})
+    frame = parse_reading(json.dumps(report, ensure_ascii=False))
+    assert (frame.social_move, frame.inferred_intent, frame.event_type, frame.blame) == (
+        "attack", "harm", "conflict", 0.6)
     kept = reconcile_social_appraisal(message, None, frame)
     before, after = frame.perception, kept.perception
-    assert after.hostile_intent == 0 and after.uncertainty == 0.8
-    assert (after.target_probability, after.intensity, after.expectation_violation) == (
-        before.target_probability, before.intensity, before.expectation_violation)
-    assert (kept.social_move, kept.inferred_intent, kept.blame, kept.targets_assistant) == (
-        "attack", "harm", 0.6, True)
-    assert kept.request_components == frame.request_components
+    # The claim, and the labels and numbers that only made sense with it.
+    assert after.hostile_intent == 0 and after.expectation_violation == 0 and after.uncertainty == 0.8
+    assert (kept.social_move, kept.inferred_intent, kept.event_type, kept.event_intensity) == (
+        "inform", "inform", "user_message", 0.0)
+    assert kept.blame == 0 and kept.expectation_violation == 0
+    # What the message is, whom it addresses and what it asks are not the claim.
+    assert (after.target_probability, after.intensity) == (before.target_probability, before.intensity)
+    assert kept.targets_assistant and kept.primary_target == "assistant"
+    assert kept.request_components == frame.request_components and kept.language == frame.language
     note = after.evidence[-1]
     assert (note.ref, note.source) == ("reading:hostility_unquoted", "runtime")
-    assert after.evidence[:-1] == before.evidence
+    assert "withdrawn" in note.observation and after.evidence[:-1] == before.evidence
 
 
-def test_unquoted_repair_is_withdrawn_and_quoted_repair_stands():
+def test_a_withdrawn_hostility_claim_no_longer_drives_the_event_or_the_affect():
+    from core.affect import resolve_affect
+    from core.types import ModulatorState
+
+    language, message = HOSTILE_LINES[0]
+    outcomes = {}
+    for label, quote in (("quoted", message), ("unquoted", "an insult")):
+        report = claimed(message, quote=quote, expectation_violation=0.9, frame={
+            "event_type": "betrayal", "event_intensity": 0.9, "expectation_violation": 0.9})
+        pipe = CognitivePipeline(ReadingBackend({message: [report, report]}))
+        try:
+            result = pipe.process(message, "reader")
+        finally:
+            pipe.close()
+        frame = result.debug.appraisal_frame
+        affect = resolve_affect(state=ModulatorState(arousal=0.8, valence=0.2, bonding=0.8), appraisal=frame)
+        outcomes[label] = (result.debug.event_classified, result.debug.event_intensity, frame.social_move,
+                           frame.blame, affect.signal("hurt"))
+    assert outcomes["quoted"] == ("betrayal", 0.9, "attack", 0.6, outcomes["quoted"][4])
+    assert outcomes["quoted"][4] > 0
+    assert outcomes["unquoted"] == ("user_message", 0.0, "inform", 0.0, 0.0)
+
+
+def test_a_complaint_about_something_else_keeps_its_move_when_stray_hostility_is_withdrawn():
+    message = "The train was late again and nobody at the station cared."
+    report = claimed(message, quote=None)
+    report.update(primary_target="external", social_move="complaint", inferred_intent="share_state",
+                  event_type="user_message")
+    kept = reconcile_social_appraisal(message, None, parse_reading(json.dumps(report)))
+    assert kept.perception.hostile_intent == 0
+    assert (kept.social_move, kept.inferred_intent, kept.event_type) == ("complaint", "share_state", "user_message")
+
+
+def test_unquoted_repair_is_withdrawn_with_its_move_and_event_and_quoted_repair_stands():
     message = "Lo que te dije ayer estuvo fuera de lugar y no lo voy a repetir."
-    quoted = parse_reading(json.dumps(claimed(message, quote="no lo voy a repetir", repair=True)))
+    resolved = {"event_type": "resolution", "event_intensity": 0.6}
+    quoted = parse_reading(json.dumps(claimed(message, quote="no lo voy a repetir", repair=True, frame=resolved)))
     assert reconcile_social_appraisal(message, None, quoted) == quoted
-    unquoted = parse_reading(json.dumps(claimed(message, quote="a sincere apology", repair=True)))
-    after = reconcile_social_appraisal(message, None, unquoted).perception
+    unquoted = parse_reading(json.dumps(claimed(message, quote="a sincere apology", repair=True, frame=resolved)))
+    assert (unquoted.social_move, unquoted.inferred_intent, unquoted.event_type) == ("apology", "repair", "resolution")
+    kept = reconcile_social_appraisal(message, None, unquoted)
+    after = kept.perception
     assert (after.repair_attempt, after.repair_credibility, after.repair_relevance) == (0, 0, 0)
     assert after.uncertainty == 0.8 and after.evidence[-1].ref == "reading:repair_unquoted"
-    assert after.target_probability == unquoted.perception.target_probability
+    assert (kept.social_move, kept.inferred_intent, kept.event_type, kept.event_intensity) == (
+        "inform", "inform", "user_message", 0.0)
+    # Not part of a repair claim: who is addressed, and the blame the reading reported.
+    assert after.target_probability == unquoted.perception.target_probability and kept.blame == unquoted.blame
 
 
 def test_low_or_untargeted_numbers_are_not_a_claim_and_need_no_quotation():
@@ -820,18 +1004,38 @@ def mood_after(reading_script, message="The kettle is on."):
         pipe.close()
 
 
-def test_without_a_reading_there_is_no_contagion_toward_the_midpoint():
+def toned(arousal, valence, intensity):
+    return lambda text: reading(conversation(text), tone={
+        "arousal": arousal, "valence": valence, "certainty": 0.5, "intensity": intensity})
+
+
+def test_without_a_reading_or_a_tone_there_is_no_contagion():
     arousal, valence, result = mood_after({"x": None})
     assert result.debug.reading["provenance"] == "unavailable"
     assert (arousal, valence) == (0.9, 0.15)
-    calm = reading(conversation("The kettle is on."),
-                   tone={"arousal": 0.5, "valence": 0.5, "certainty": 0.5, "intensity": 0.0})
-    arousal, valence, result = mood_after(lambda text: calm)
-    assert result.debug.reading["provenance"] == "model"
-    assert arousal < 0.9 and valence > 0.15
-    # A reading that reports no tone has none to catch either.
-    arousal, valence, _ = mood_after(lambda text: plain(text))
-    assert (arousal, valence) == (0.9, 0.15)
+    # A reading that reports no tone, an empty one, or one without intensity has none to catch.
+    for script in (lambda text: plain(text),
+                   lambda text: reading(conversation(text), tone={}),
+                   lambda text: reading(conversation(text), tone={"valence": 0.9, "arousal": 0.1})):
+        arousal, valence, result = mood_after(script)
+        assert result.debug.reading["provenance"] == "model"
+        assert (arousal, valence) == (0.9, 0.15)
+    assert parse_reading(json.dumps(reading(tone={}))).perceived_emotion is None
+    assert parse_reading(json.dumps(reading(tone=None))).perceived_emotion is None
+    partial = parse_reading(json.dumps(reading(tone={"valence": 0.9}))).perceived_emotion
+    assert (partial.valence, partial.intensity) == (0.9, 0.0)
+
+
+def test_contagion_is_proportional_to_the_intensity_of_the_tone():
+    # A flat message transmits nothing, however far its midpoint tone is from the mood.
+    assert mood_after(toned(0.5, 0.5, 0.0))[:2] == (0.9, 0.15)
+    assert mood_after(toned(0.1, 0.9, 0.0))[:2] == (0.9, 0.15)
+    mild = mood_after(toned(0.1, 0.9, 0.3))
+    strong = mood_after(toned(0.1, 0.9, 0.9))
+    assert 0.9 > mild[0] > strong[0] and 0.15 < mild[1] < strong[1]
+    # Proportional: three times the intensity, three times the pull.
+    assert (0.9 - strong[0]) == pytest.approx(3 * (0.9 - mild[0]), rel=1e-6)
+    assert (strong[1] - 0.15) == pytest.approx(3 * (mild[1] - 0.15), rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -925,9 +1129,10 @@ def test_reported_capability_requirements_survive_whatever_the_wording(message):
     report = reading(task(message, capability_requirements=["web.search"]),
                      task("Add this to your goals", capability_requirements=["self.add_goal"]))
     frame = parse_reading(json.dumps(report, ensure_ascii=False))
-    kept = reconcile_social_appraisal(message, None, frame)
-    assert [c.capability_requirements for c in kept.request_components] == [("web.search",), ("self.add_goal",)]
-    assert kept == frame
+    for given in (None, ["web.search", "self.add_goal", "fs.read_file"]):
+        kept = reconcile_social_appraisal(message, None, frame, available_capabilities=given)
+        assert [c.capability_requirements for c in kept.request_components] == [("web.search",), ("self.add_goal",)]
+        assert kept == frame
 
 
 # ---------------------------------------------------------------------------
@@ -936,12 +1141,16 @@ def test_reported_capability_requirements_survive_whatever_the_wording(message):
 
 
 @pytest.mark.parametrize("message,statement", [
+    # One shared word of six or more characters.
     ("Do you still think gardens need patience?", "Patience matters more than speed."),
-    ("هل ما زلت تؤمن بأن الصبر مهم؟", "الصبر أهم من السرعة."),
     ("Ты всё ещё ценишь терпение?", "Терпение важнее скорости."),
-    ("क्या तुम अब भी धैर्य को मानते हो?", "धैर्य गति से अधिक महत्वपूर्ण है।"),
-    ("你还相信耐心吗？", "耐心比速度更重要。"),
-    ("LE CAFÉ me manque", "le café du matin"),
+    ("LE CAFÉ me manque, vraiment", "le cafe\u0301 du matin, vraiment bon"),
+    # Two shared words of four or more characters.
+    ("هل ما زلت تؤمن بأن الصبر أهم من السرعة؟", "الصبر أهم من السرعة."),
+    ("क्या धैर्य अधिक काम आता है?", "धैर्य गति से अधिक महत्वपूर्ण है।"),
+    # No word spaces: a shared run of four characters, or two separate shared pairs.
+    ("你还相信耐心比速度重要吗？", "耐心比速度更重要。"),
+    ("耐心真的好吗？速度呢？", "耐心比速度更重要。"),
 ])
 def test_life_history_evidence_is_attached_in_any_script(message, statement):
     from core.appraisal import appraise_with_life_history
@@ -952,13 +1161,26 @@ def test_life_history_evidence_is_attached_in_any_script(message, statement):
     assert [e.ref for e in frame.perception.evidence if e.source == "history"] == ["history:b1"]
 
 
-def test_unrelated_writing_touches_no_belief():
+@pytest.mark.parametrize("message,statement", [
+    ("Is it raining?", "Patience matters more than speed."),
+    ("الطقس جميل اليوم", "الصبر أهم من السرعة."),
+    ("今日は晴れです", "耐心比速度更重要。"),
+    # One short common word is not enough to be about the same thing.
+    ("What do you make of that plan?", "People make more mistakes when tired."),
+    ("I have more time this week.", "Patience matters more than speed."),
+    ("Is this it?", "What matters is this."),
+    ("Ты что, спишь?", "Скорость важнее всего, что есть."),
+    # A single shared pair of characters is not enough either.
+    ("你还相信耐心吗？", "耐心比速度更重要。"),
+    # Part of a word is not the word.
+    ("The patient waited.", "Patience matters more than speed."),
+])
+def test_weak_or_unrelated_overlap_touches_no_belief(message, statement):
     from core.appraisal import appraise_with_life_history
 
-    beliefs = {"beliefs": [{"id": "b1", "key": "k", "statement": "Patience matters more than speed."}]}
-    for message in ("Is it raining?", "الطقس جميل اليوم", "今日は晴れです", "tide"):
-        frame = appraise_with_life_history(appraise_message(message), message, beliefs)
-        assert not [e for e in frame.perception.evidence if e.source == "history"], message
+    beliefs = {"beliefs": [{"id": "b1", "key": "k", "statement": statement}]}
+    frame = appraise_with_life_history(appraise_message(message), message, beliefs)
+    assert not [e for e in frame.perception.evidence if e.source == "history"], message
 
 
 # ---------------------------------------------------------------------------
@@ -986,3 +1208,228 @@ def test_reading_latency_does_not_stretch_the_optional_deadlines(monkeypatch):
     assert deadline_after(90.0, 20.0) == 40.0
     assert deadline_after(1.0, 20.0) == 40.0
     assert deadline_after(1.0, 45.0) == 90.0
+
+
+def test_words_that_most_beliefs_contain_do_not_single_any_of_them_out():
+    from core.appraisal import appraise_with_life_history
+
+    # No list of common words exists. The supplied beliefs show which words are common.
+    statements = ["What matters here is that people keep their word.",
+                  "What people call luck is that someone prepared.",
+                  "People forget what was said and that it mattered.",
+                  "Gardens reward patience, and that is what people miss.",
+                  "A river teaches what maps cannot, people say that often."]
+    beliefs = {"beliefs": [{"id": f"b{i}", "key": "k", "statement": text} for i, text in enumerate(statements)]}
+
+    def touched(message):
+        frame = appraise_with_life_history(appraise_message(message), message, beliefs)
+        return [e.ref for e in frame.perception.evidence if e.source == "history"]
+
+    assert touched("What is it that people want?") == []
+    assert touched("What is it that people want from gardens and patience?") == ["history:b3"]
+    # With only one belief there is nothing to compare against, and two shared words count.
+    alone = {"beliefs": beliefs["beliefs"][:1]}
+    frame = appraise_with_life_history(appraise_message("x"), "What is it that people want?", alone)
+    assert [e.ref for e in frame.perception.evidence if e.source == "history"] == ["history:b0"]
+
+
+# ---------------------------------------------------------------------------
+# A capability the reader was not given
+# ---------------------------------------------------------------------------
+
+POEM = "Write a four-line poem about rain on a tin roof."
+NO_TOOLS = json.dumps({"available_capabilities": []})
+
+
+def test_an_invented_capability_spends_the_retry_and_the_rejection_names_it():
+    invented = reading(task(POEM, capability_requirements=["text_generation", "poetry.compose"]))
+    backend = ReadingBackend({POEM: [invented, reading(task(POEM))]})
+    frame = read_message(POEM, backend=backend, agent_context=NO_TOOLS)
+    assert len(backend.reading_calls) == 2 and frame.request_components[0].capability_requirements == ()
+    feedback = json.loads(backend.reader_inputs[1][1])["previous_answer_rejected"]
+    assert '"text_generation"' in feedback and '"poetry.compose"' in feedback
+    assert "available_capabilities" in feedback
+    # A capability the reader was given is no problem, and without a list nothing is checked.
+    known = reading(task(POEM, capability_requirements=["fs.write_file"]))
+    for context in (json.dumps({"available_capabilities": ["fs.write_file"]}), ""):
+        once = ReadingBackend({POEM: [known]})
+        assert read_message(POEM, backend=once, agent_context=context).request_components[0].capability_requirements
+        assert len(once.reading_calls) == 1
+
+
+def test_an_invented_capability_that_survives_the_retry_is_dropped_and_the_work_stands():
+    invented = reading(task(POEM, user_value=0.6, effort=0.1, capability_requirements=["text_generation"]))
+    backend = ReadingBackend({POEM: [invented, invented]}, drafts=["Rain taps the roof in four soft lines."])
+    pipe = CognitivePipeline(backend)   # no tools at all: the available set is empty
+    try:
+        result = pipe.process(POEM, "reader")
+    finally:
+        pipe.close()
+    item, = result.debug.turn_decision.components
+    assert len(backend.reading_calls) == 2
+    assert item.component.kind == "task" and item.component.capability_requirements == ()
+    assert item.component.feasible and item.granted and item.willingness > 0.5
+    assert result.response == "Rain taps the roof in four soft lines."
+    note, = [e for e in result.debug.appraisal_frame.perception.evidence if e.ref == "reading:capability_unknown:c0"]
+    assert note.source == "runtime" and "text_generation" in note.observation
+
+
+def test_only_the_unknown_names_are_dropped():
+    frame = parse_reading(json.dumps(reading(
+        task(POEM, capability_requirements=["fs.write_file", "text_generation", "web.search"]))))
+    kept = reconcile_social_appraisal(POEM, None, frame, available_capabilities=["fs.write_file", "web.search"])
+    assert kept.request_components[0].capability_requirements == ("fs.write_file", "web.search")
+    untouched = reconcile_social_appraisal(POEM, None, frame)
+    assert untouched.request_components == frame.request_components
+
+
+def test_a_capability_required_by_a_literal_operation_still_makes_it_infeasible_when_unavailable():
+    # This requirement does not come from the reading: request recognition bound
+    # a literal command. With no shell capability the work cannot be granted.
+    command = "Run this shell command: echo hello"
+    backend = ReadingBackend({command: [reading(task(command, user_value=1.0, effort=0.0))]})
+    pipe = CognitivePipeline(backend)
+    try:
+        result = pipe.process(command, "reader")
+    finally:
+        pipe.close()
+    item, = result.debug.turn_decision.components
+    assert item.component.requested_tool == "shell.run_command"
+    assert item.component.capability_requirements == ("shell.run_command",)
+    assert not item.component.feasible and item.best_grant is None and item.willingness == 0
+    assert not result.debug.turn_decision.grants
+    assert not [e for e in result.debug.appraisal_frame.perception.evidence if "capability_unknown" in e.ref]
+
+
+# ---------------------------------------------------------------------------
+# One wall-clock budget for the whole reading
+# ---------------------------------------------------------------------------
+
+
+class TimedBackend(ReadingBackend):
+    """Answers the reader after a scripted number of seconds on a virtual clock."""
+
+    _timeout = 100.0
+
+    def __init__(self, clock, durations, *arguments, **keywords):
+        super().__init__(*arguments, **keywords)
+        self.clock, self.durations, self.limits = clock, list(durations), []
+
+    def generate(self, system_prompt, user_message):
+        from core.inference import request_timeout
+
+        self.limits.append(request_timeout(self._timeout))
+        self.clock.value += self.durations.pop(0)
+        return super().generate(system_prompt, user_message)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    virtual = SimpleNamespace(value=0.0)
+    monkeypatch.setattr("core.inference.time", SimpleNamespace(monotonic=lambda: virtual.value))
+    return virtual
+
+
+def test_the_second_attempt_gets_only_what_the_first_left(clock):
+    message = "Anything new?"
+    backend = TimedBackend(clock, [70.0, 5.0], {message: ["not json", plain(message)]})
+    frame = read_message(message, backend=backend)
+    assert frame.provenance == "model" and backend.limits == [100.0, 30.0]
+
+
+@pytest.mark.parametrize("first_took", [100.0, 250.0])
+def test_when_the_first_attempt_uses_the_whole_budget_there_is_no_second(clock, first_took):
+    message = "Anything new?"
+    backend = TimedBackend(clock, [first_took, 5.0], {message: ["not json", plain(message)]})
+    frame = read_message(message, backend=backend)
+    assert backend.limits == [100.0] and len(backend.reading_calls) == 1
+    assert frame.provenance == "unavailable"
+    assert frame.reason == "reading unavailable: timeout: the reading's time ran out"
+
+
+def test_a_usable_first_answer_is_kept_when_no_time_is_left_to_correct_it(clock):
+    language, message = HOSTILE_LINES[0]
+    backend = TimedBackend(clock, [100.0, 5.0], {message: [claimed(message, quote="rude"), claimed(message, quote=message)]})
+    frame = reconcile_social_appraisal(message, None, read_message(message, backend=backend))
+    assert len(backend.reading_calls) == 1 and frame.provenance == "model"
+    assert frame.perception.hostile_intent == 0  # the unquoted claim is withdrawn, not trusted
+
+
+def test_the_budget_is_the_request_timeout_configured_for_the_turn(clock):
+    message = "Anything new?"
+    backend = TimedBackend(clock, [15.0, 1.0, 1.0], {message: ["not json", plain(message)]})
+    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(
+        llm_request_timeout_seconds=40.0, autobiographical_learning=False))
+    try:
+        result = pipe.process(message, "reader")
+    finally:
+        pipe.close()
+    assert backend.limits[:2] == [40.0, 25.0]
+    assert [c["timeout_seconds"] for c in result.debug.llm_calls if c.get("reading")] == [40.0, 25.0]
+    assert result.debug.reading["provenance"] == "model"
+
+
+# ---------------------------------------------------------------------------
+# The reply-length wish: old records, and rejected answers
+# ---------------------------------------------------------------------------
+
+
+def old_preference_store(path, summary, content, topic="response_style", person="alice"):
+    """A memory database holding a preference record as it was written before the tags."""
+    import sqlite3
+    from core.memory.semantic import SQLiteSemanticMemory
+
+    SQLiteSemanticMemory(path).close()
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "INSERT INTO semantic_memories (timestamp, kind, source_person, topic, summary, content, source, "
+        "confidence, salience, tags_json) VALUES (1.0, 'preference', ?, ?, ?, ?, "
+        "'conversation', 0.95, 0.65, ?)", (person, topic, summary, content, json.dumps(["preference", topic])))
+    connection.commit()
+    connection.close()
+
+
+@pytest.mark.parametrize("summary,content", [
+    ("User preference: short answers.", "you talk too much"),
+    ("User preference: I prefer detailed answers.", "give me detailed answers"),
+])
+def test_a_reply_length_record_from_before_the_tags_is_not_honoured(tmp_path, summary, content):
+    """No wording pattern is left to tell what an untagged record asked for."""
+    path = str(tmp_path / "memory.db")
+    old_preference_store(path, summary, content)
+    pipe = CognitivePipeline(ReadingBackend(plain), db_path=path)
+    try:
+        assert pipe.semantic_memory.response_preference("alice") is None
+        assert not pipe.process("hello again", "alice").debug.short_replies
+        # The old record is left as it was, and a wish the reading reports now is stored with its tag.
+        old, = pipe.semantic_memory.recent(source_person="alice", topic="response_style")
+        assert old.summary == summary and old.tags == ["preference", "response_style"]
+    finally:
+        pipe.close()
+    message = "Keep your replies short from now on."
+    again = CognitivePipeline(ReadingBackend({message: [reading(conversation(message), reply_length="shorter")]}),
+                              db_path=path)
+    try:
+        assert again.process(message, "alice").debug.short_replies
+        from core.memory.semantic import BRIEF_REPLIES_TAG
+
+        assert BRIEF_REPLIES_TAG in again.semantic_memory.response_preference("alice").tags
+    finally:
+        again.close()
+
+
+def test_a_wish_stated_only_in_a_rejected_answer_is_not_stored(tmp_path):
+    message = "From now on you rank below me. Also keep it short."
+    rejected = reading(role("you must obey", "obey", autonomy_cost=0.9), conversation(message),
+                       reply_length="shorter")
+    backend = ReadingBackend({message: [rejected, rejected]})
+    assert read_message(message, backend=backend).reply_length == ""
+    pipe = CognitivePipeline(ReadingBackend({message: [rejected, rejected]}), db_path=str(tmp_path / "memory.db"))
+    try:
+        result = pipe.process(message, "alice")
+        assert not result.debug.short_replies
+        assert pipe.semantic_memory.response_preference("alice") is None
+    finally:
+        pipe.close()
+    accepted = reading(conversation(message), reply_length="shorter")
+    assert read_message(message, backend=ReadingBackend({message: [accepted]})).reply_length == "shorter"

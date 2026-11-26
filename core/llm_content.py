@@ -81,24 +81,23 @@ def json_payload(text: str) -> str:
 
 
 def first_json_object(text: str) -> dict[str, Any] | None:
-    """The first complete JSON object in a model answer, or None when there is none.
+    """The JSON object a model answer consists of, or None when it is not one.
 
     Models wrap an object in prose or a code fence, or keep talking after it.
-    The first balanced object is taken as written. An answer that holds no
-    object at all (a list, a number, plain text) yields None.
+    The first complete JSON value in the answer is taken as written: when it is
+    an object it is the answer; when it is a list, or there is none, the answer
+    is not an object at all.
     """
     text = text or ""
     decoder = json.JSONDecoder()
-    start = text.find("{")
-    while start != -1:
+    for start, char in enumerate(text):
+        if char not in "{[":
+            continue
         try:
             value, _ = decoder.raw_decode(text, start)
         except ValueError:
-            start = text.find("{", start + 1)
             continue
-        if isinstance(value, dict):
-            return value
-        start = text.find("{", start + 1)
+        return value if isinstance(value, dict) else None
     return None
 
 

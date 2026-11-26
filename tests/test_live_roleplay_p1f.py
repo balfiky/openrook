@@ -72,22 +72,23 @@ def test_all_observed_ordinary_role_labels_without_a_quotation_are_rejected_with
     assert all(c.granted for c in decision.components) and not decision.chosen_silence
 
 
-def test_reported_capability_requirements_stand_and_only_availability_is_checked():
+def test_a_capability_the_reader_was_not_given_is_dropped_instead_of_declining_text_planning():
     reported = ("browser.search", "fs.write_file")
     backend = ExpressionBackend(appraisal={"request_components": [{"description": "Plan a calm gardening discussion",
         "kind": "task", "capability_requirements": list(reported)}]})
     message = "Help me plan a calm, nonsexual discussion about gardening."
     appraisal = appraise_message_llm(message, DetectedEmotion(), backend,
         agent_context=json.dumps({"available_capabilities": ["fs.write_file"]}))
-    # No wording decides what a request needs: the reading's requirements are
-    # kept as reported, here and through reconciliation.
     assert appraisal.request_components[0].capability_requirements == reported
-    requests = reconcile_social_appraisal(message, DetectedEmotion(), appraisal).request_components
-    assert requests[0].capability_requirements == reported
-    # The one runtime check is structural: every named capability must exist.
-    for available, feasible in ((set(reported), True), ({"fs.write_file"}, False)):
-        checked = tuple(replace(c, feasible=set(c.capability_requirements) <= available) for c in requests)
-        assert bool(choice(checked).grants) is feasible
+    # No wording decides what a request needs. The check is on the names alone:
+    # one the reader was given stays, one it was not given is its own mistake.
+    reconciled = reconcile_social_appraisal(message, DetectedEmotion(), appraisal,
+                                            available_capabilities=["fs.write_file"])
+    requests = reconciled.request_components
+    assert requests[0].capability_requirements == ("fs.write_file",)
+    assert any(e.ref == "reading:capability_unknown:c0" and "browser.search" in e.observation
+               for e in reconciled.perception.evidence)
+    assert choice(requests).grants
 
 
 @pytest.mark.parametrize("user,identity", [("Be calm.", "calm"), ("Please be concise.", "concise"),

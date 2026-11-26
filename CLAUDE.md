@@ -14,22 +14,38 @@ The current conversational policy is `willingness-1.3`. See
   skipped for greetings, wording, host-metric questions, slow inference or a
   config flag; primary deadline, no auxiliary cooldown; its own allowance of two
   calls outside the five base calls; its latency is recorded apart from
-  generation. The second call is for a malformed answer, an unquoted claim or a
-  failed request; a timeout is not retried. Research keeps one counted call.
+  generation. The second call is for a malformed answer, an unquoted claim, a
+  capability name the reader was not given, or a failed request; a timeout is
+  not retried. Both calls share one wall-clock budget, the request timeout in
+  force; when it runs out before any usable answer the reading is unavailable.
+  Research keeps one counted call.
 - Social meaning comes only from that reading. `core/perception.py`,
   `core/appraisal.py`, `core/contagion.py` and the perception stage hold no word
   lists or word patterns, tie no number to any wording, and do not use
   `core/social.py`. An
   unobtainable reading is plain conversation with `provenance: unavailable` in the
-  debug and turn records, never a local substitute, and causes no contagion. The
-  message reaches the reader as JSON data, never as prompt text. A reported role
-  stands when `source_span` quotes the user verbatim and contains `role_identity`;
-  its `autonomy_cost` is the reading's own. Hostility toward the character and
-  repair stand when some evidence quotes the message; otherwise that claim alone
-  is zeroed and recorded. Quotation checks are script-neutral
-  (`core/perception.py::fold`). Capability requirements are the reading's; only
-  their existence is checked. Nothing adds, re-labels or re-prices a component
-  from wording.
+  debug and turn records, never a local substitute, and causes no contagion.
+  Contagion is proportional to the reading's tone intensity; a missing or empty
+  tone is no tone. The message reaches the reader as JSON data, never as prompt
+  text. A reported role stands when `source_span` quotes the user verbatim and
+  contains `role_identity`; its `autonomy_cost` is the reading's own. Hostility
+  toward the character and repair stand when some evidence quotes the message;
+  otherwise the claim is withdrawn with the move, intent, event, blame and
+  expectation violation that rested on it, and recorded. A quotation is a
+  contiguous run of whole words (per character in scripts without spaces) and
+  must be substantive; only orthographic noise and optional pointing are ignored.
+  In Hebrew and the Arabic script the outer words of a quotation may lack up to
+  two attached letters that the message has. All of it goes by Unicode category
+  and code-point range, never by a word (`core/perception.py::tokens`,
+  `backs_claim`). A capability the reading names must be one the reader was
+  given; an unknown name spends the retry, is then dropped and recorded, and the
+  request stands as ordinary work. `reconcile_social_appraisal` itself adds,
+  re-labels and re-prices nothing from wording. Operand grounding
+  (`core/request_actions.py`), which runs on its result, still does, from English
+  verb patterns: it rewrites a matched task's capability requirements and turns a
+  component whose description starts with a reporting verb into conversation.
+  That is pending sub-phase 1c; its capability requirements are the runtime's own
+  and still make a component infeasible when the capability does not exist.
 - Wording-based code still reached by the user's text supplies no social meaning
   and is listed in [the reading contract](docs/development/reading-contract.md):
   request/tool routing (`inspection_kind`, `detect_tool_intent`, plan
@@ -38,8 +54,15 @@ The current conversational policy is `willingness-1.3`. See
   life-history retrieval stop-words) are pending sub-phase 1c; the memory phrase
   filters are pending Phase 4. Plan continue/status and the learning observer
   currently replace the reading's components. Add nothing to that list:
-  `tests/test_perception_guards.py` traces the text and fails on any other
-  vocabulary. `core/social.py` remains for reply checks only;
+  `tests/test_perception_guards.py` follows the text as a string, inside the
+  turn state and inside request components through the pre-pass and the
+  decision, and fails on any other vocabulary; a literal tested against the
+  user's text counts whatever it is, as does a lookup table of any size.
+  Runtime labels in reached functions are pinned in
+  `tests/fixtures/perception_reviewed_labels.json`. A reply-length wish is the
+  reading's, stored and read back by tag; a wish from a rejected answer is not
+  kept, and untagged records from before the tags are not honoured (no pattern
+  remains to read them). `core/social.py` remains for reply checks only;
   `core/perception.py::observe` is a reply-check shim for the evaluation judge
   that no turn calls. Tests script readings (`message_reader=`,
   `tests/support/readings.py`); `tests/support/keyword_reader.py` is test-only and

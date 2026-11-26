@@ -316,3 +316,12 @@ The owner can change any of these.
 - The character's name does not change. Its self-description and boundaries can shift slowly.
 - Which language it replies in is its own choice.
 - The life loop's default pace is modest, and capped by the owner's calls-per-hour setting.
+
+## After the eight phases: extensive testing
+
+Deferred by the owner on 2026-11-26 until development and fixes are complete.
+
+A framework for long-run testing of how the character develops: a simulated life over weeks with
+recurring people, checkpoints that interview it in fresh wording and read its inner state, a
+control copy with learning switched off, and a blind maturity comparison. Until then, each phase
+keeps its own short live check.
