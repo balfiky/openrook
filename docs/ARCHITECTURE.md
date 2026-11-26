@@ -119,7 +119,10 @@ Every user message is read by the model before choice
 ([reading contract](development/reading-contract.md)). The reading is required,
 uses the primary deadline and has its own allowance of two calls, recorded with
 `reading: true`; the two calls share one wall-clock budget, the request timeout
-in force. Social meaning comes only from it and has no local substitute;
+in force. It has its own output-token limit (default 4096, doubled for the
+retry after a cut-off answer; `llm_reading_max_output_tokens` overrides it), and
+only a whole answer is used: a cut-off one is never read in part.
+Social meaning comes only from it and has no local substitute;
 the wording-based request routing and context selection that remain are listed
 in the contract.
 The conversational base budget is five further inference calls, including optional work.

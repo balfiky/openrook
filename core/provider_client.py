@@ -6,7 +6,10 @@ be chosen explicitly by the caller.
 
 from __future__ import annotations
 
-from core.inference import call_with_deadline, output_token_limit, request_timeout, reviewing_expression, sampling_parameters
+from core.inference import (
+    call_with_deadline, output_token_limit, request_timeout, requested_output_tokens, reviewing_expression,
+    sampling_parameters,
+)
 from core.llm_content import reply_text
 
 import os
@@ -43,6 +46,7 @@ class ChatCompletionsClient:
         self._model = model.strip()
         self._thinking = thinking
         self._timeout = timeout
+        self.last_response_metadata: dict = {}
         self._session = self._new_session()
 
     def _abandon_session(self) -> None:
@@ -59,6 +63,7 @@ class ChatCompletionsClient:
 
     def generate(self, system_prompt: str, user_message: str) -> str:
         """Send a chat completion request and return the response text."""
+        self.last_response_metadata = {}
         url = f"{self._base_url}/chat/completions"
         payload = {
             "model": self._model,
@@ -74,6 +79,9 @@ class ChatCompletionsClient:
             payload["thinking"] = {"type": "disabled"}
         if reviewing_expression():
             payload["max_tokens"] = output_token_limit(512)
+        elif requested_output_tokens() is not None:
+            # A call that asked for its own output limit, such as the reading.
+            payload["max_tokens"] = requested_output_tokens()
 
         # Retry once on connection error (server closes idle keep-alive connections)
         def post():
@@ -101,7 +109,19 @@ class ChatCompletionsClient:
         resp.raise_for_status()
 
         data = resp.json()
-        return reply_text(data["choices"][0]["message"])
+        choice = data["choices"][0]
+        usage = data.get("usage")
+        finish = choice.get("finish_reason")
+        tokens = usage.get("completion_tokens") if isinstance(usage, dict) else None
+        # How the answer ended; "length" means it stopped at the output limit.
+        self.last_response_metadata = {
+            key: value for key, value in (
+                ("usage", usage if isinstance(usage, dict) else None),
+                ("finish_reason", finish if isinstance(finish, str) and finish else None),
+                ("completion_tokens", tokens if type(tokens) is int else None),
+                ("max_tokens", payload.get("max_tokens")),
+            ) if value is not None}
+        return reply_text(choice["message"])
 
     def close(self) -> None:
         """Release the underlying HTTP connection pool."""

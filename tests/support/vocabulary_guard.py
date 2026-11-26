@@ -158,6 +158,11 @@ class Scope:
                 for target in node.targets:
                     if isinstance(target, ast.Name):
                         self.bindings.setdefault(target.id, []).append(node.value)
+                    elif isinstance(target, (ast.Tuple, ast.List)):
+                        # Unpacking: each name may hold any of the values.
+                        for name in ast.walk(target):
+                            if isinstance(name, ast.Name):
+                                self.bindings.setdefault(name.id, []).append(node.value)
             elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and isinstance(node.target, ast.Name) and node.value:
                 self.bindings.setdefault(node.target.id, []).append(node.value)
             elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
@@ -560,8 +565,10 @@ def _referenced(node: ast.AST, tree: ast.Module) -> list[ast.AST]:
         targets = item.targets if isinstance(item, ast.Assign) else [item.target] if isinstance(
             item, (ast.AnnAssign, ast.AugAssign)) else []
         for target in targets:
-            if isinstance(target, ast.Name):
-                assignments.setdefault(target.id, []).append(item)
+            # ``A, B = "x", "y"`` assigns both names: the statement belongs to each.
+            for name in ast.walk(target):
+                if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store):
+                    assignments.setdefault(name.id, []).append(item)
     pending, seen, result = [node], set(), []
     while pending:
         current = pending.pop()

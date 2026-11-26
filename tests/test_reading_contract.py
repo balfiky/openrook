@@ -682,10 +682,15 @@ def test_an_answer_that_states_nothing_is_not_a_reading():
     frame = read_message("Anything new?", backend=backend)
     assert len(backend.reading_calls) == 2 and frame.provenance == "unavailable"
     assert [c.kind for c in frame.request_components] == ["conversation"]
-    # Stating that nothing was asked is a reading.
-    stated = ReadingBackend({"Anything new?": [json.dumps({"request_components": [], "language": "en"})]})
+    # Every message says something. An answer with no component is not a reading of it,
+    # however tidy: accepted, it would leave the decision with nothing to decide on.
+    empty = json.dumps({"language": "en", "perception": {}, "request_components": []})
+    stated = ReadingBackend({"Anything new?": [empty, empty]})
     frame = read_message("Anything new?", backend=stated)
-    assert frame.provenance == "model" and frame.request_components == () and len(stated.reading_calls) == 1
+    assert frame.provenance == "unavailable" and len(stated.reading_calls) == 2
+    assert frame.reason == ("reading unavailable: malformed reading: "
+                            "the answer lacks a perception object or has no request component")
+    assert [c.kind for c in frame.request_components] == ["conversation"]
 
 
 def test_the_optional_single_attempt_reader_keeps_its_contract():
@@ -1079,22 +1084,28 @@ def test_evidence_without_a_ref_is_kept_under_a_generated_one():
     frame = parse_reading(json.dumps({"request_components": [], "perception": {"evidence": [
         {"observation": "first words"}, {"ref": "", "observation": "second words", "confidence": 3},
         {"ref": "given", "observation": "third words", "confidence": "sure", "source": "runtime"},
-        "not an entry", {"ref": 7}]}}))
+        "a quotation on its own", {"ref": 7}, 12]}}))
     assert [(e.ref, e.observation, e.confidence, e.source) for e in frame.perception.evidence] == [
         ("m0", "first words", 0.5, "model"), ("m1", "second words", 1.0, "model"),
-        ("given", "third words", 0.5, "model"), ("m4", "", 0.5, "model")]
+        ("given", "third words", 0.5, "model"), ("m3", "a quotation on its own", 0.5, "model"),
+        ("m4", "", 0.5, "model")]
+
+
+SMALL = json.dumps({"language": "en", "perception": {},
+                    "request_components": [{"description": "a greeting", "kind": "conversation"}]})
 
 
 @pytest.mark.parametrize("answer", [
-    'Here is my reading:\n```json\n{"language": "en", "request_components": []}\n```\nLet me know!',
-    'Sure. {"language": "en", "request_components": []} I hope that helps {really}.',
-    '{"language": "en", "request_components": []}\n\nNote: the message was short.',
-    '```\n{"language": "en", "request_components": []}\n```',
-    'Thinking {about it}... {"language": "en", "request_components": []}',
+    f"Here is my reading:\n```json\n{SMALL}\n```\nLet me know!",
+    f"Sure. {SMALL} I hope that helps {{really}}.",
+    f"{SMALL}\n\nNote: the message was short.",
+    f"```\n{SMALL}\n```",
+    f"Thinking {{about it}}... {SMALL}",
+    f"[note to self] {SMALL}",
 ])
-def test_the_first_json_object_is_read_through_prose_and_fences(answer):
+def test_the_outermost_json_object_is_read_through_prose_and_fences(answer):
     frame = parse_reading(answer, require_content=True)
-    assert frame.provenance == "model" and frame.language == "en"
+    assert frame.provenance == "model" and frame.language == "en" and len(frame.request_components) == 1
 
 
 @pytest.mark.parametrize("answer", [

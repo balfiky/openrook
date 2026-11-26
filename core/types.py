@@ -371,6 +371,10 @@ class AppraisalFrame:
     agent_goal_comparison: bool = False
     language: str = ""                    # language of the message, as reported by the reading
     reply_length: str = ""                # shorter | longer: a standing wish the reading reports
+    # One record per model call the reader made for this frame: how the answer
+    # ended (finish reason, completion tokens, whether it was cut off) and what
+    # became of it. Empty for a frame no model call produced.
+    reading_attempts: tuple[dict[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in (

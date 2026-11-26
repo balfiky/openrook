@@ -200,11 +200,29 @@ class OpenAICompatibleLLMBackend:
         self.last_response_metadata.update(
             {key: data.get(key) for key in ("model", "usage", "id", "created")}
         )
-        return reply_text(data["choices"][0]["message"])
+        choice = data["choices"][0]
+        # How the answer ended. "length" means the server stopped at the output
+        # limit, so the text is incomplete however well-formed it looks.
+        self.last_response_metadata.update(finish_facts(choice, data.get("usage"), payload.get("max_tokens")))
+        return reply_text(choice["message"])
 
     def close(self) -> None:
         """Release the underlying HTTP connection pool."""
         self._session.close()
+
+
+def finish_facts(choice: Any, usage: Any, max_tokens: Any = None) -> dict[str, Any]:
+    """The finish reason, completion-token count and output limit of one chat completion."""
+    facts: dict[str, Any] = {}
+    finish = choice.get("finish_reason") if isinstance(choice, dict) else None
+    if isinstance(finish, str) and finish:
+        facts["finish_reason"] = finish
+    tokens = usage.get("completion_tokens") if isinstance(usage, dict) else None
+    if type(tokens) is int:
+        facts["completion_tokens"] = tokens
+    if type(max_tokens) is int:
+        facts["max_tokens"] = max_tokens
+    return facts
 
 
 class CodexCLIBackend:

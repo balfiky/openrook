@@ -80,25 +80,66 @@ def json_payload(text: str) -> str:
     return fenced[1].strip() if fenced else text
 
 
-def first_json_object(text: str) -> dict[str, Any] | None:
-    """The JSON object a model answer consists of, or None when it is not one.
+# Why an answer holds no JSON object, one reason at a time.
+ABSENT = "absent"
+NOT_OBJECT = "not an object"
+CUT_OFF = "cut off"
+INVALID = "invalid"
 
-    Models wrap an object in prose or a code fence, or keep talking after it.
-    The first complete JSON value in the answer is taken as written: when it is
-    an object it is the answer; when it is a list, or there is none, the answer
-    is not an object at all.
+
+def _closing(text: str, start: int) -> int:
+    """Where the bracketed group opening at ``start`` ends, or -1 when it is still open at the end."""
+    depth, quoted, escaped = 0, False, False
+    for index in range(start, len(text)):
+        char = text[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth <= 0:
+                return index + 1
+    return -1
+
+
+def outermost_json_object(text: str) -> tuple[dict[str, Any] | None, str]:
+    """The JSON object a model answer consists of, and otherwise why there is none.
+
+    Only an outermost value counts. Prose or a code fence around the object, or
+    talk after it, does no harm, and a bracketed aside in that prose is stepped
+    over as a whole. Nothing is ever looked for *inside* a bracketed group:
+
+    * when a group never closes, the answer was cut off there, and an object
+      nested in it is a part of the answer, never the answer;
+    * when the first group that is JSON is a list, the answer is a list.
+
+    The second result is one of :data:`ABSENT`, :data:`NOT_OBJECT`,
+    :data:`CUT_OFF` and :data:`INVALID`, or empty for an object.
     """
     text = text or ""
     decoder = json.JSONDecoder()
-    for start, char in enumerate(text):
-        if char not in "{[":
-            continue
+    position, stepped_over = 0, False
+    while True:
+        start = next((index for index in range(position, len(text)) if text[index] in "{["), -1)
+        if start < 0:
+            return None, INVALID if stepped_over else ABSENT
+        end = _closing(text, start)
+        if end < 0:
+            return None, CUT_OFF
         try:
             value, _ = decoder.raw_decode(text, start)
         except ValueError:
+            position, stepped_over = end, True
             continue
-        return value if isinstance(value, dict) else None
-    return None
+        return (value, "") if isinstance(value, dict) else (None, NOT_OBJECT)
 
 
 def strip_reasoning(text: str) -> str:

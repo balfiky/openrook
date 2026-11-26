@@ -14,7 +14,10 @@ class ExpressionBackend:
     def generate(self, system_prompt, user_message):
         self.calls.append((system_prompt, user_message))
         if system_prompt.startswith("You read one user message"):
-            return json.dumps(self.appraisal) if self.appraisal else "malformed appraisal"
+            # A scripted reading states what the test cares about. Nothing is
+            # claimed about the rest, which a whole reading says with an empty
+            # perception object; its components are the test's to state.
+            return json.dumps({"perception": {}, **self.appraisal}) if self.appraisal else "malformed appraisal"
         if system_prompt.startswith("Review expression against"):
             result = self.reviews.pop(0) if self.reviews else {"status": "pass", "violations": [], "confidence": 0.8}
             if isinstance(result, Exception):

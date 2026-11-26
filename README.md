@@ -66,12 +66,16 @@ deadline. Set `llm_auxiliary_timeout_seconds` to a finite deadline of at least
 one second to override adaptation (`null` restores automatic timing). Two
 consecutive timeouts pause that phase for `llm_auxiliary_cooldown_seconds`
 (default 30; zero disables the pause). Primary generation and research limits
-remain independent. Ordinary conversation uses one expression call,
-or two calls with semantic appraisal. Constrained expression adds a review;
+remain independent. The call that reads each message has its own output-token
+limit, 4096 by default; set `llm_reading_max_output_tokens` (256 to 32768) if a
+model that reasons at length has its readings cut off (`null` restores the
+default). Ordinary conversation uses two calls: one that reads the message
+(two if its first answer cannot be used) and one expression call. Constrained
+expression adds a review;
 ordinary correction adds generation and review. Critical assent or uniformly stale drafts can use the last
 call for a second rewrite with local review and explicit semantic uncertainty.
-Conversational turns have a five-call base budget, including supplemental tool
-inference, with calls reserved for expression. Each granted atomic task also has
+Apart from the reading, conversational turns have a five-call base budget,
+including supplemental tool inference, with calls reserved for expression. Each granted atomic task also has
 one protected primary tool selection (at most eight per turn), recorded separately.
 If no safe text remains after ineligible-span removal, one protected final
 expression attempt is recorded as `delivery_recovery`; research limits still apply.

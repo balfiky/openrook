@@ -359,6 +359,7 @@ class ConfigUpdateRequest(BaseModel):
     llm_request_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
     llm_auxiliary_timeout_seconds: float | None = Field(default=None, ge=1, allow_inf_nan=False)
     llm_auxiliary_cooldown_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    llm_reading_max_output_tokens: int | None = Field(default=None, ge=256, le=32768)
     debug_host: str | None = None
     debug_port: int | None = Field(default=None, ge=1, le=65535)
     proactive_enabled: bool | None = None
@@ -675,6 +676,9 @@ async def update_config(req: ConfigUpdateRequest) -> dict:
         llm_auxiliary_timeout_seconds=(req.llm_auxiliary_timeout_seconds
             if "llm_auxiliary_timeout_seconds" in req.model_fields_set else existing.llm_auxiliary_timeout_seconds),
         llm_auxiliary_cooldown_seconds=_keep(req.llm_auxiliary_cooldown_seconds, existing.llm_auxiliary_cooldown_seconds),
+        # An explicit null returns to the built-in default; leaving it out keeps the saved value.
+        llm_reading_max_output_tokens=(req.llm_reading_max_output_tokens
+            if "llm_reading_max_output_tokens" in req.model_fields_set else existing.llm_reading_max_output_tokens),
         debug_host=_keep_str(req.debug_host, existing.debug_host, fallback="127.0.0.1"),
         debug_port=_keep(req.debug_port, existing.debug_port),
         proactive_enabled=_keep(req.proactive_enabled, existing.proactive_enabled),

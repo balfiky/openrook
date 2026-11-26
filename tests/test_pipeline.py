@@ -814,7 +814,9 @@ class TestPipelineLLMClassification:
         return CognitivePipeline(llm_backend=backend)
 
     def test_llm_classify_event_valid_json(self):
-        backend = _ClassifyMockBackend('{"event_type": "warmth", "intensity": 0.7}')
+        backend = _ClassifyMockBackend(json.dumps({
+            "event_type": "warmth", "perception": {"intensity": 0.7},
+            "request_components": [{"description": "you're so kind", "kind": "conversation"}]}))
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("you're so kind", user_id="alice")
         assert result.debug.event_classified == "warmth"

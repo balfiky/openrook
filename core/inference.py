@@ -26,6 +26,7 @@ _expression_sampling = ContextVar("expression_sampling", default=None)
 _required_expression = ContextVar("required_expression", default=False)
 _delivery_recovery = ContextVar("delivery_recovery", default=False)
 _delivery_recovery_used = ContextVar("delivery_recovery_used", default=False)
+_output_tokens = ContextVar("call_output_tokens", default=None)
 OPTIONAL_TIMEOUT_SECONDS = 8.0
 AUXILIARY_TIMEOUT_THRESHOLD = 2
 AUXILIARY_COOLDOWN_SECONDS = 30.0
@@ -33,6 +34,13 @@ AUXILIARY_COOLDOWN_SECONDS = 30.0
 # one retry when the answer is unusable. It is accounted in the same telemetry
 # and is not charged against the calls that fund expression, review and tools.
 READING_CALLS = 2
+# The reading has its own output limit, apart from expression's. A model that
+# reasons before it answers spends that reasoning out of the same limit, so the
+# default leaves room for both; a cut-off first answer is asked again with more.
+READING_OUTPUT_TOKENS = 4096
+READING_OUTPUT_TOKENS_RANGE = (256, 32768)
+# Finish reasons with which a server says it stopped at the output limit.
+_STOPPED_AT_LIMIT = frozenset({"length", "max_tokens"})
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,7 @@ class _AuxiliaryPolicy:
     request_seconds: float | None = None
     timeout_seconds: float | None = None
     cooldown_seconds: float = AUXILIARY_COOLDOWN_SECONDS
+    reading_output_tokens: int | None = None
 
 
 _auxiliary_policy = ContextVar("auxiliary_inference_policy", default=_AuxiliaryPolicy())
@@ -79,13 +88,15 @@ def _health_for(backend, phase: str) -> _AuxiliaryHealth | None:
 
 @contextmanager
 def inference_turn(calls, *, research=False, max_calls=None, request_timeout_seconds=None,
-                   auxiliary_timeout_seconds=None, auxiliary_cooldown_seconds=AUXILIARY_COOLDOWN_SECONDS):
+                   auxiliary_timeout_seconds=None, auxiliary_cooldown_seconds=AUXILIARY_COOLDOWN_SECONDS,
+                   reading_output_tokens=None):
     call_token = _calls.set(calls)
     research_token = _research.set(research)
     limit_token = _limit.set(max_calls)
     recovery_token = _delivery_recovery_used.set(False)
     policy_token = _auxiliary_policy.set(_AuxiliaryPolicy(
-        request_timeout_seconds, auxiliary_timeout_seconds, auxiliary_cooldown_seconds))
+        request_timeout_seconds, auxiliary_timeout_seconds, auxiliary_cooldown_seconds,
+        reading_output_tokens if valid_reading_output_tokens(reading_output_tokens) else None))
     try:
         yield
     finally:
@@ -123,6 +134,46 @@ def primary_deadline(backend) -> float | None:
     if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds <= 0:
         return None
     return float(seconds)
+
+
+def valid_reading_output_tokens(value) -> bool:
+    low, high = READING_OUTPUT_TOKENS_RANGE
+    return type(value) is int and low <= value <= high
+
+
+def reading_output_tokens(*, after_cut_off: bool = False) -> int:
+    """The output limit of a reading call: the configured one, else the default.
+
+    After an answer that was cut off the next attempt gets twice as much, up
+    to the ceiling, so asking again can succeed where the first could not.
+    """
+    limit = _auxiliary_policy.get().reading_output_tokens or READING_OUTPUT_TOKENS
+    return min(READING_OUTPUT_TOKENS_RANGE[1], 2 * limit) if after_cut_off else limit
+
+
+def response_facts(backend) -> dict:
+    """How the backend's last answer ended, when the backend says.
+
+    ``finish_reason`` and ``completion_tokens`` are reported as the server gave
+    them; ``truncated`` is true when the server stopped at the output limit. A
+    backend that reports nothing yields an empty mapping.
+    """
+    try:
+        metadata = getattr(backend, "last_response_metadata", None)
+    except Exception:
+        return {}
+    if not isinstance(metadata, dict):
+        return {}
+    facts = {}
+    finish = metadata.get("finish_reason")
+    if isinstance(finish, str) and finish:
+        facts["finish_reason"] = finish
+        facts["truncated"] = finish.strip().lower() in _STOPPED_AT_LIMIT
+    usage = metadata.get("usage")
+    tokens = metadata.get("completion_tokens", usage.get("completion_tokens") if isinstance(usage, dict) else None)
+    if type(tokens) is int and tokens >= 0:
+        facts["completion_tokens"] = tokens
+    return facts
 
 
 def remaining_reading_calls() -> int:
@@ -229,8 +280,16 @@ def reviewing_expression() -> bool:
     return _active_phase.get() == "expression_review"
 
 
+def requested_output_tokens() -> int | None:
+    """The output limit this call asked for itself, if it asked for one."""
+    return _output_tokens.get()
+
+
 def output_token_limit(default: int) -> int:
-    return min(default, 512) if reviewing_expression() else default
+    if reviewing_expression():
+        return min(default, 512)
+    requested = _output_tokens.get()
+    return requested if requested is not None else default
 
 
 def _optional_timeout(backend, latency: _AuxiliaryHealth | None) -> float:
@@ -289,7 +348,7 @@ def final_expression_attempt():
 
 @contextmanager
 def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, reading=False,
-               limit_seconds=None):
+               limit_seconds=None, output_tokens=None):
     phase = _phase.get() or phase
     primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
     if primary_tool:
@@ -321,7 +380,10 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
     if limit_seconds is not None and not _research.get():
         # A caller's own wall-clock budget, such as what is left of the reading's.
         deadline = limit_seconds if deadline is None else min(deadline, limit_seconds)
+    if _research.get():
+        output_tokens = None  # a study's own bounded limits stand
     token = _timeout.set(deadline)
+    tokens_token = _output_tokens.set(output_tokens)
     phase_token = _active_phase.set(phase)
     started = time.monotonic()
     status = "ok"
@@ -359,6 +421,11 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
             item["delivery_recovery"] = True
         if deadline is not None:
             item["timeout_seconds"] = deadline
+        if output_tokens is not None:
+            item["max_output_tokens"] = output_tokens
+        if status == "ok" and backend is not None:
+            # How the answer ended: an answer stopped at the output limit is incomplete.
+            item.update(response_facts(backend))
         calls = _calls.get()
         if calls is not None:
             calls.append(item)
@@ -369,11 +436,13 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
         logger("LLM call purpose=%s phase=%s duration_ms=%.1f status=%s timeout=%s",
                purpose, phase, elapsed, status, timed_out)
         _timeout.reset(token)
+        _output_tokens.reset(tokens_token)
         _active_phase.reset(phase_token)
 
 
 def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False,
-             limit_seconds=None, **kwargs):
-    with model_call(phase, optional=optional, backend=backend, reading=reading, limit_seconds=limit_seconds):
+             limit_seconds=None, output_tokens=None, **kwargs):
+    with model_call(phase, optional=optional, backend=backend, reading=reading, limit_seconds=limit_seconds,
+                    output_tokens=output_tokens):
         result = backend.generate(system_prompt, user_message, **kwargs)
         return strip_reasoning(result) if isinstance(result, str) else result

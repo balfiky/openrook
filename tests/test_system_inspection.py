@@ -9,7 +9,7 @@ from core.system_inspection import inspection_kind, inspection_reply
 from core.grounding import verify_response_grounding
 from core.types import AgencyDecision, ToolResult, ToolTrace
 from tests.policy_fakes import ExpressionBackend
-from tests.support.readings import hostility, is_reading_prompt, message_of, reading, task
+from tests.support.readings import conversation, hostility, is_reading_prompt, message_of, reading, task
 from core.willingness import RelationshipDynamics
 from openrook_tools.builtin import shell
 from pipeline import CognitivePipeline
@@ -63,7 +63,8 @@ def test_cpu_typo_and_ram_followup_are_read_and_execute_without_model_routing(tm
 
     def readings(text):
         if text == "You are boring like hell":
-            return reading(target="character", move="attack", intent="harm", perception=hostility(text))
+            return reading(conversation(text), target="character", move="attack", intent="harm",
+                           perception=hostility(text))
         return reading(task(text, user_value=0.6, effort=0.12))
 
     monkeypatch.setattr(shell.subprocess, "run", run)

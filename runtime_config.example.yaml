@@ -37,6 +37,11 @@ llm_request_timeout_seconds: 600.0
 # null adapts auxiliary review/rewrites to the request limit and generation latency.
 llm_auxiliary_timeout_seconds: null
 llm_auxiliary_cooldown_seconds: 30.0
+# Output-token limit for reading each message (separate from the reply's limit).
+# null uses the default of 4096, sized for a model that reasons before answering;
+# a cut-off reading is retried once with twice the limit. Raise it if readings
+# are reported as truncated.
+llm_reading_max_output_tokens: null
 
 debug_host: 127.0.0.1
 debug_port: 8077

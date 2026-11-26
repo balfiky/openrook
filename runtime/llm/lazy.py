@@ -29,6 +29,12 @@ class LazyLLMBackend:
     def generate(self, system_prompt: str, user_message: str, **kwargs: Any) -> str:
         return self.initialize().generate(system_prompt, user_message, **kwargs)
 
+    @property
+    def last_response_metadata(self) -> dict[str, Any]:
+        """How the configured backend's last answer ended, when it reports that."""
+        metadata = getattr(self._backend, "last_response_metadata", None)
+        return metadata if isinstance(metadata, dict) else {}
+
     def accepts_response_schema(self) -> bool:
         """Structured output is a property of the configured backend, not this wrapper."""
         from core.inference import accepts_response_schema

@@ -19,6 +19,21 @@ The current conversational policy is `willingness-1.3`. See
   not retried. Both calls share one wall-clock budget, the request timeout in
   force; when it runs out before any usable answer the reading is unavailable.
   Research keeps one counted call.
+- Only a whole answer is a reading. The answer's outermost JSON object is the
+  reading; nothing is ever searched for inside a bracketed group, and an object
+  that never closes was cut off. An accepted reading carries a `perception`
+  object and at least one request component; anything else is malformed. Both
+  chat clients surface each answer's finish reason and completion tokens, and an
+  answer stopped at the output limit is cut off even when its text parses. A
+  cut-off answer spends the retry, which is told so and gets twice the output
+  limit. The reading has its own output limit (default 4096, optional
+  `llm_reading_max_output_tokens`), apart from expression's, which is unchanged;
+  research keeps its bounded limits and records truncation. Every attempt's
+  finish reason, tokens, truncation and outcome are in the debug and turn
+  records. The reading's schema stays valid for strict structured output (every
+  property required), so it asks only for fields something consumes, and numbers
+  that are rarely off their default are listed by name in `nondefault`; do not
+  add a field without a consumer. The parser still reads the older, larger shape.
 - Social meaning comes only from that reading. `core/perception.py`,
   `core/appraisal.py`, `core/contagion.py` and the perception stage hold no word
   lists or word patterns, tie no number to any wording, and do not use

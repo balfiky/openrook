@@ -24,7 +24,7 @@ from core.types import (
     PipelineContext,
 )
 from pipeline import CognitivePipeline
-from tests.support.readings import ReadingBackend, hostility, plain, reading
+from tests.support.readings import ReadingBackend, conversation, hostility, plain, reading
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +491,7 @@ class TestStickyDialogueAndTimings:
     @staticmethod
     def _reading_backend():
         """Readings stated explicitly: one hostile message, everything else plain talk."""
-        hostile = reading(target="character", move="attack", intent="harm",
+        hostile = reading(conversation("I hate you"), target="character", move="attack", intent="harm",
                           perception=hostility("I hate you"))
         return ReadingBackend(lambda text: hostile if text == "I hate you" else plain(text),
                               drafts=[f"I understand expression {i}." for i in range(1, 9)])

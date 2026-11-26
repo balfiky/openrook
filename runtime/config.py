@@ -87,6 +87,11 @@ class RuntimeConfig:
     # An explicit auxiliary deadline is still capped by the primary deadline.
     llm_auxiliary_timeout_seconds: float | None = None
     llm_auxiliary_cooldown_seconds: float = 30.0
+    # Output-token limit of the call that reads each message, apart from the
+    # limit for replies. None uses the built-in default, which leaves room for a
+    # model that reasons before it answers. A cut-off reading is asked again
+    # once with twice this limit.
+    llm_reading_max_output_tokens: int | None = None
 
     # Debug API
     debug_host: str = "127.0.0.1"
@@ -199,6 +204,12 @@ class RuntimeConfig:
                 continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < minimum:
                 raise ValueError(f"{name} must be a finite number of at least {minimum} seconds")
+        if self.llm_reading_max_output_tokens is not None:
+            from core.inference import READING_OUTPUT_TOKENS_RANGE, valid_reading_output_tokens
+
+            if not valid_reading_output_tokens(self.llm_reading_max_output_tokens):
+                low, high = READING_OUTPUT_TOKENS_RANGE
+                raise ValueError(f"llm_reading_max_output_tokens must be an integer from {low} to {high}, or null")
         if not isinstance(self.research_json_schema, bool):
             raise ValueError("Research JSON schema mode must be boolean")
         if type(self.research_inference_retries) is not int or not 0 <= self.research_inference_retries <= 2:

@@ -691,6 +691,8 @@ class TestConfigEndpoint:
             # (default "auto").
             "llm_backend": "mock",
             "llm_auxiliary_timeout_seconds": 120,
+            # None by default; an integer within core.inference.READING_OUTPUT_TOKENS_RANGE.
+            "llm_reading_max_output_tokens": 6000,
             # runtime.learning_budget.from_config: local|cloud
             # (default "local").
             "learning_budget_kind": "cloud",

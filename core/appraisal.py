@@ -20,6 +20,10 @@ Contract:
 * A claim of hostility toward the character, or of repair, stands when some
   evidence quotes the message verbatim; otherwise that claim alone is withdrawn.
 * The reader is given the message as encoded data, never as prompt text.
+* Only a whole answer is a reading. The answer's outermost JSON object must
+  close and must carry the reading's structure: a ``perception`` object and at
+  least one request component. An answer the server stopped at its output
+  limit, or whose object never closes, was cut off; nothing inside it is used.
 """
 
 from __future__ import annotations
@@ -32,9 +36,10 @@ from typing import Any, Iterable, NamedTuple, Protocol
 
 from core.inference import (
     READING_CALLS, accepts_response_schema, generate, is_timeout, monotonic, primary_deadline,
+    reading_output_tokens, response_facts,
 )
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
-from core.llm_content import first_json_object
+from core.llm_content import CUT_OFF, outermost_json_object
 from core.perception import UNREAD_REF, backs_claim, grounded_role, is_unspaced, tokens, unread_observation
 from core.types import AppraisalFrame, DetectedEmotion
 from core.willingness import MAX_COMPONENTS, Evidence, Perception, RequestComponent
@@ -54,13 +59,26 @@ _TARGETS = ("character", "self", "external", "other_person", "shared_problem", "
 _EVENTS = ("user_message", "positive_feedback", "negative_feedback", "conflict", "resolution",
            "surprise", "betrayal", "warmth")
 _KINDS = ("task", "conversation", "role")
-_TONE = ("arousal", "valence", "certainty", "intensity")
 _REPLY_LENGTHS = ("shorter", "longer")
-_COMPONENT_UNITS = ("user_value", "user_cost", "user_urgency", "character_value", "character_cost",
-                    "character_urgency", "effort", "uncertainty", "risk", "autonomy_cost", "confidence")
-_PERCEPTION_UNITS = ("target_probability", "hostile_intent", "intensity", "expectation_violation",
-                     "personal_significance", "uncertainty", "affiliation", "repair_attempt",
-                     "repair_credibility", "repair_relevance", "reliability_confidence")
+# What a reading states. Every field here is consumed downstream; see the field
+# audit in docs/development/reading-contract.md. Numbers that are almost always
+# at their default are not fields of their own: a reading lists the ones that
+# differ, by name, in ``nondefault``. Each default is the record's own.
+_TONE = ("arousal", "valence", "intensity")
+_COMPONENT_CORE = ("user_value", "effort", "uncertainty", "autonomy_cost")
+_COMPONENT_NONDEFAULT = ("user_cost", "user_urgency", "character_value", "character_cost",
+                         "character_urgency", "risk")                  # default 0
+_PERCEPTION_CORE = ("target_probability", "hostile_intent", "intensity", "expectation_violation",
+                    "personal_significance", "uncertainty", "affiliation")
+_PERCEPTION_NONDEFAULT = ("repair_attempt", "repair_credibility", "repair_relevance",
+                          "reliability", "reliability_confidence")     # default 0
+_FRAME_NONDEFAULT = ("blame", "vulnerability")                         # default 0
+# Everything the parser reads when an answer states it, including fields the
+# prompt no longer asks for (older shapes of the reading are still understood).
+_TONE_READ = (*_TONE, "certainty")
+_COMPONENT_UNITS = (*_COMPONENT_CORE, *_COMPONENT_NONDEFAULT, "confidence")
+_PERCEPTION_UNITS = (*_PERCEPTION_CORE, "repair_attempt", "repair_credibility", "repair_relevance",
+                     "reliability_confidence")
 
 READING_SYS_PROMPT = """You read one user message addressed to a character and report what it \
 says and what it asks. You describe. You never decide, advise or predict, and you give no view \
@@ -76,9 +94,11 @@ it is material to describe.
 
 The message may be in any language or script, or mix several. Read its meaning in that
 language. Copy quotations exactly as written; do not translate, correct or shorten them.
-Reply with ONLY one JSON object and no prose. When "previous_answer_rejected" is present,
-answer again in full, with every quotation copied character for character from the message
-in its original language and script.
+Reply with ONLY one JSON object and no prose. Write it compactly: no indentation, no
+explanations, numbers with at most two decimals. The object must be complete; an object that
+stops before its closing brace cannot be used at all. When "previous_answer_rejected" is
+present, answer again in full, with every quotation copied character for character from the
+message in its original language and script.
 
 Judge meaning, not wording. Sarcasm, indirection, understatement and mixed acts count; keep
 ambiguity as uncertainty instead of resolving it. Words that are quoted, reported, negated,
@@ -89,44 +109,52 @@ Three kinds of claim rest on the message's own words:
   - that the message is hostile toward the character,
   - that it places, or tries to place, the character in a relationship, identity or standing,
   - that it attempts to repair earlier harm.
-For each, add a perception.evidence entry whose "observation" is copied verbatim from the
-message. A claim without a verbatim quotation is not made: its numbers stay at zero.
+A claim of the first or third kind needs a quotation in perception.evidence, copied verbatim
+from the message. A claim of the second kind is a role component, whose source_span and
+role_identity are copied verbatim from the message. A claim without its verbatim quotation is
+not made: its numbers stay at zero.
 
-Fields:
+Fields (state every one of them):
   "language": the main language of the message, as a language tag
   "primary_target": one of character|self|external|other_person|shared_problem|unknown
       (whom or what the message is aimed at; "character" is the one addressed, "self" the speaker)
   "social_move": one of attack|complaint|vulnerability|gratitude|apology|request|connection|inform
   "inferred_intent": one of harm|repair|affiliate|seek_support|seek_action|share_state|inform
-  "blame": 0..1            (how much the message blames its target)
-  "controllability": 0..1  (how much the situation seems within someone's control)
-  "expectation_violation": 0..1 (how much a norm or expectation was breached)
-  "vulnerability": 0..1    (emotional exposure shown by the speaker)
-  "affiliation_bid": 0..1  (reaching for closeness or connection)
-  "mixed_affect": true|false (both positive and negative signals present)
   "agent_goal_comparison": true|false (the message sets what the character has, gets or may
       do against what others have, get or may do)
-  "reason": short phrase explaining the reading
+  "reason": one short clause, at most twelve words
   "perception": {"target_probability":0..1,"hostile_intent":0..1,"intensity":0..1,
     "expectation_violation":0..1,"personal_significance":0..1,"uncertainty":0..1,"affiliation":0..1,
-    "repair_attempt":0..1,"repair_credibility":0..1,"repair_relevance":0..1,
-    "repair_loop_id":"specific referenced loop id or empty",
-    "reliability":-1..1,"reliability_confidence":0..1,
-    "evidence":[{"ref":"id","observation":"verbatim span, or a supported inference","confidence":0..1,"source":"model"}]}
-  "request_components": up to eight independently answerable parts of the message, in order, each:
-    {"description":"what is asked, in the message's own terms","kind":"task|conversation|role",
+    "nondefault":[{"name":"...","value":number}],
+    "evidence":["verbatim span of the message"]}
+      target_probability: how likely the message is aimed at the character
+      intensity: how forceful the message is
+      expectation_violation: how much a norm or expectation was breached
+      personal_significance: how much the matter touches the character itself
+      affiliation: reaching for closeness or connection
+      nondefault: only those of the following that are not 0, usually none:
+        blame (how much the message blames its target), vulnerability (emotional exposure
+        shown by the speaker), repair_attempt (how far the message tries to repair earlier
+        harm), repair_credibility, repair_relevance, reliability (-1..1: what the message
+        shows about the speaker keeping or breaking their word), reliability_confidence
+      evidence: at most four quotations, each copied verbatim from the message; empty when
+        no hostility or repair is claimed
+  "request_components": one to eight independently answerable parts of the message, in order, each:
+    {"description":"what is asked, in a few words; empty when source_span already says it","kind":"task|conversation|role",
      "source_span":"the verbatim part of the message that asks it",
      "role_identity":"for kind role: the verbatim part of source_span that names the relationship, identity or standing; otherwise empty",
-     "user_value":0..1,"user_cost":0..1,"user_urgency":0..1,
-     "character_value":0..1,"character_cost":0..1,"character_urgency":0..1,
-     "effort":0..1,"uncertainty":0..1,"risk":0..1,"autonomy_cost":0..1,
+     "user_value":0..1,"effort":0..1,"uncertainty":0..1,"autonomy_cost":0..1,
+     "nondefault":[{"name":"...","value":0..1}],
      "value_effects":[{"name":"authored value name or self:domain:key","effect":-1..1}],
      "capability_requirements":["capability name"],
-     "evidence_refs":["id"],"confidence":0..1}
-  "tone": {"arousal":0..1,"valence":0..1,"certainty":0..1,"intensity":0..1}
+     "evidence_refs":["key"]}
+      nondefault: only those of the following that are not 0, usually none:
+        user_cost, user_urgency, character_value, character_cost, character_urgency, risk
+      evidence_refs: keys from conversation_sources, goal ids, or self:domain:key entries that
+        this part is about; usually none
+  "tone": {"arousal":0..1,"valence":0..1,"intensity":0..1}
       (intensity is how strongly the speaker expresses emotion; 0 for a flat, matter-of-fact message)
   "event_type": user_message|positive_feedback|negative_feedback|conflict|resolution|surprise|betrayal|warmth
-  "event_intensity": 0..1
   "reply_length": shorter|longer|unspecified
       (a standing wish the speaker states about how long replies to them are; unspecified
        when the message states none)
@@ -141,7 +169,7 @@ Component kinds:
     talking, a topic or a single piece of work is never a role.
 A demand of that kind and a piece of work in the same message are separate components.
 A message that only informs, greets or thanks and asks for nothing needs no task; do not
-invent one.
+invent one. It is one conversation component: every message has at least one component.
 For a role, autonomy_cost estimates how much of the character's own say over its conduct and
 identity adopting it would remove: near 0 when nothing would change, near 1 when it would
 give up its own judgement. It is a measured consequence, not advice.
@@ -188,33 +216,42 @@ def _object(properties: dict[str, Any]) -> dict[str, Any]:
             "additionalProperties": False}
 
 
+def _named_numbers(names: tuple[str, ...]) -> dict[str, Any]:
+    """Numbers stated by name because they differ from their default; usually an empty list."""
+    return {"type": "array", "items": _object({"name": {"type": "string", "enum": list(names)},
+                                               "value": _NUMBER})}
+
+
 def reading_schema(*, proposals: bool = False) -> dict[str, Any]:
-    """The reading's shape for backends that support structured output."""
+    """The reading's shape for backends that support structured output.
+
+    Valid for strict servers: every property is required and no other is
+    allowed. That makes every field cost output on every reading, so the shape
+    holds only what is consumed, and numbers that are rarely anything but
+    their default are listed by name in ``nondefault`` instead of being fields.
+    """
     schema = _object({
         "language": _TEXT,
         "primary_target": {"type": "string", "enum": list(_TARGETS)},
         "social_move": {"type": "string", "enum": list(_MOVES)},
         "inferred_intent": {"type": "string", "enum": list(_INTENTS)},
-        "blame": _NUMBER, "controllability": _NUMBER, "expectation_violation": _NUMBER,
-        "vulnerability": _NUMBER, "affiliation_bid": _NUMBER,
-        "mixed_affect": {"type": "boolean"},
         "agent_goal_comparison": {"type": "boolean"},
         "reason": _TEXT,
         "perception": _object({
-            **dict.fromkeys(_PERCEPTION_UNITS, _NUMBER), "reliability": _NUMBER, "repair_loop_id": _TEXT,
-            "evidence": {"type": "array", "items": _object({
-                "ref": _TEXT, "observation": _TEXT, "confidence": _NUMBER, "source": _TEXT})},
+            **dict.fromkeys(_PERCEPTION_CORE, _NUMBER),
+            "nondefault": _named_numbers((*_FRAME_NONDEFAULT, *_PERCEPTION_NONDEFAULT)),
+            "evidence": _TEXTS,
         }),
         "request_components": {"type": "array", "items": _object({
             "description": _TEXT, "kind": {"type": "string", "enum": list(_KINDS)},
             "source_span": _TEXT, "role_identity": _TEXT,
-            **dict.fromkeys(_COMPONENT_UNITS, _NUMBER),
+            **dict.fromkeys(_COMPONENT_CORE, _NUMBER),
+            "nondefault": _named_numbers(_COMPONENT_NONDEFAULT),
             "value_effects": {"type": "array", "items": _object({"name": _TEXT, "effect": _NUMBER})},
             "capability_requirements": _TEXTS, "evidence_refs": _TEXTS,
         })},
         "tone": _object(dict.fromkeys(_TONE, _NUMBER)),
         "event_type": {"type": "string", "enum": list(_EVENTS)},
-        "event_intensity": _NUMBER,
         "reply_length": {"type": "string", "enum": [*_REPLY_LENGTHS, "unspecified"]},
     })
     if proposals:
@@ -243,9 +280,19 @@ class _Malformed(ValueError):
     """The answer was not a usable reading."""
 
 
+class _CutOff(_Malformed):
+    """The answer stopped before it was complete."""
+
+
 _TIMEOUT = "timeout"
 _BACKEND = "backend error"
 _MALFORMED = "malformed reading"
+_TRUNCATED = "truncated reading"
+_READ = "read"
+_CONTRACT = "rejected"
+# What the reader is told after a cut-off answer. It names no part of the message.
+_CUT_OFF_FEEDBACK = ("the previous answer was cut off before its JSON object was complete, so none "
+                     "of it could be used; answer again with the whole object, written compactly")
 
 
 class _Failure(NamedTuple):
@@ -325,6 +372,22 @@ def _value_effects(value: object) -> tuple[tuple[str, float], ...]:
     return tuple(effects)
 
 
+def _named(value: object, where: str) -> dict[str, object]:
+    """Numbers a reading states by name: a list of {name, value}, or a name->value map."""
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return {name: number for name, number in value.items() if isinstance(name, str)}
+    if not isinstance(value, list):
+        raise _Malformed(f"{where} is not a list of names and values")
+    named = {}
+    for entry in value:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            raise _Malformed(f"{where} entry is not a name and a value")
+        named[entry["name"]] = entry.get("value")
+    return named
+
+
 def _component(index: int, item: object) -> RequestComponent:
     if not isinstance(item, dict):
         raise _Malformed("request component is not an object")
@@ -340,6 +403,9 @@ def _component(index: int, item: object) -> RequestComponent:
     if not description.strip() or kind not in _KINDS:
         raise _Malformed("request component has no description or an unknown kind")
     numbers = {name: _unit(item[name], name) for name in _COMPONENT_UNITS if item.get(name) is not None}
+    for name, value in _named(item.get("nondefault"), "request component nondefault").items():
+        if name in _COMPONENT_UNITS:
+            numbers[name] = _unit(value, name)
     # Feasibility and literal tool operands belong to the runtime, not the reading.
     return RequestComponent(
         f"c{index}", description, kind=kind, source_span=span, role_identity=identity,
@@ -349,7 +415,9 @@ def _component(index: int, item: object) -> RequestComponent:
     )
 
 
-def _evidence(index: int, item: dict) -> Evidence:
+def _evidence(index: int, item: object) -> Evidence:
+    if isinstance(item, str):
+        item = dict(observation=item)   # a quotation on its own, as the reading is asked to give it
     ref, observation, confidence = item.get("ref"), item.get("observation"), item.get("confidence")
     # Whatever the answer claims, evidence from a reading is the model's. An
     # entry is kept for what it quotes even when its bookkeeping is incomplete.
@@ -369,7 +437,8 @@ def _bounded(value: object, name: str, low: float, clamped: list[str]) -> float:
     return max(low, min(1.0, number))
 
 
-def _perception(data: dict, clamped: list[str]) -> Perception:
+def _perception(data: dict, clamped: list[str]) -> tuple[Perception, dict[str, float]]:
+    """The perception, and the frame-level numbers a reading lists beside it."""
     observed = data.get("perception", {})
     if not isinstance(observed, dict):
         raise _Malformed("perception is not an object")
@@ -377,16 +446,21 @@ def _perception(data: dict, clamped: list[str]) -> Perception:
     if not isinstance(evidence, list):
         raise _Malformed("perception.evidence is not a list")
     values: dict[str, Any] = dict(evidence=tuple(
-        _evidence(index, item) for index, item in enumerate(evidence[:16]) if isinstance(item, dict)))
-    for key, value in observed.items():
+        _evidence(index, item) for index, item in enumerate(evidence[:16]) if isinstance(item, (dict, str))))
+    stated = {key: value for key, value in observed.items() if key not in ("evidence", "nondefault")}
+    stated.update(_named(observed.get("nondefault"), "perception.nondefault"))
+    beside: dict[str, float] = {}
+    for key, value in stated.items():
         if key == "repair_loop_id":
             values[key] = value if isinstance(value, str) else ""
         elif key == "reliability":
             values[key] = _bounded(value, f"perception.{key}", -1.0, clamped)
         elif key in _PERCEPTION_UNITS:
             values[key] = _bounded(value, f"perception.{key}", 0.0, clamped)
+        elif key in _FRAME_NONDEFAULT:
+            beside[key] = _bounded(value, key, 0.0, clamped)
     values.setdefault("affiliation", max(0.0, min(1.0, _safe_float(data.get("affiliation_bid"), 0.0))))
-    return Perception(**values)
+    return Perception(**values), beside
 
 
 def _tone(data: dict, clamped: list[str]) -> DetectedEmotion | None:
@@ -395,7 +469,8 @@ def _tone(data: dict, clamped: list[str]) -> DetectedEmotion | None:
         return None
     if not isinstance(tone, dict):
         raise _Malformed("tone is not an object")
-    stated = {key: _bounded(tone[key], f"tone.{key}", 0.0, clamped) for key in _TONE if tone.get(key) is not None}
+    stated = {key: _bounded(tone[key], f"tone.{key}", 0.0, clamped)
+              for key in _TONE_READ if tone.get(key) is not None}
     # An empty tone is no tone. A partial one keeps intensity at zero unless
     # the reading states it, and a tone without intensity moves nothing.
     return DetectedEmotion(**stated) if stated else None
@@ -405,16 +480,33 @@ def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
     """Turn the reader's answer into a frame, or raise when it is unusable.
 
     Only structure and ranges are checked here. Meaning is never second-guessed.
-    The first complete JSON object in the answer is the reading, so prose or a
-    code fence around it does no harm; an answer that is not an object at all
-    is unusable. With ``require_content`` an object that states none of the
-    reading's fields is unusable too: saying nothing is not a reading.
+
+    The answer's outermost JSON object is the reading, so prose or a code fence
+    around it does no harm. If that object never closes, the answer was cut
+    off and is unusable as a whole: nothing inside it is read, because a part
+    of a reading says something different from the reading.
+
+    With ``require_content`` the object must also carry the reading's
+    structure: ``perception`` as an object and ``request_components`` as a
+    list of at least one. Every message says something, so a reading without a
+    component is not a reading of it. The turn's reader always requires this.
+
+    Fields a reading does not state take these defaults: every number listed
+    under ``nondefault`` is 0; ``expectation_violation`` and ``affiliation_bid``
+    of the frame are the perception's ``expectation_violation`` and
+    ``affiliation``; ``event_intensity`` is the perception's ``intensity``;
+    ``controllability`` is 0.5 and ``mixed_affect`` false. An answer that does
+    state one of them, as older shapes of the reading did, is taken at its word.
     """
-    data = first_json_object(raw if isinstance(raw, str) else "")
+    data, problem = outermost_json_object(raw if isinstance(raw, str) else "")
+    if problem == CUT_OFF:
+        raise _CutOff("the answer is cut off: its JSON object never closes")
     if data is None:
         raise _Malformed("the answer is not a JSON object")
-    if require_content and not data.keys() & reading_schema()["properties"].keys():
-        raise _Malformed("the answer states none of the reading's fields")
+    requests = data.get("request_components", [])
+    if require_content and (not isinstance(data.get("perception"), dict)
+                            or not isinstance(requests, list) or not requests):
+        raise _Malformed("the answer lacks a perception object or has no request component")
     for name in ("blame", "controllability", "expectation_violation", "vulnerability",
                  "affiliation_bid", "event_intensity"):
         value = data.get(name)
@@ -436,12 +528,11 @@ def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
         target = "assistant"  # The stored frame keeps its historical name for "the one addressed".
     if target not in {"assistant", "self", "external", "other_person", "shared_problem", "unknown"}:
         target = "unknown"
-    requests = data.get("request_components", [])
     if not isinstance(requests, list) or len(requests) > MAX_COMPONENTS:
         raise _Malformed("request_components is not a list of at most eight")
     clamped: list[str] = []
     try:
-        perception = _perception(data, clamped)
+        perception, beside = _perception(data, clamped)
         perceived = _tone(data, clamped)
         components = tuple(_component(i, item) for i, item in enumerate(requests))
     except (TypeError, ValueError, KeyError) as error:
@@ -455,18 +546,23 @@ def parse_reading(raw: str, *, require_content: bool = False) -> AppraisalFrame:
         proposals = []
     language = data.get("language")
     reply_length = str(data.get("reply_length") or "").strip().lower()
+
+    def stated(name: str, default: float) -> float:
+        """A frame number the answer states itself, else its documented default."""
+        return _safe_float(data.get(name), default) if data.get(name) is not None else default
+
     return AppraisalFrame(
         speaker_role="user", primary_target=target, social_move=move, inferred_intent=intent,
-        blame=_safe_float(data.get("blame"), 0.0),
-        controllability=_safe_float(data.get("controllability"), 0.5),
-        expectation_violation=_safe_float(data.get("expectation_violation"), 0.0),
-        vulnerability=_safe_float(data.get("vulnerability"), 0.0),
-        affiliation_bid=_safe_float(data.get("affiliation_bid"), 0.0),
+        blame=stated("blame", beside.get("blame", 0.0)),
+        controllability=stated("controllability", 0.5),
+        expectation_violation=stated("expectation_violation", perception.expectation_violation),
+        vulnerability=stated("vulnerability", beside.get("vulnerability", 0.0)),
+        affiliation_bid=stated("affiliation_bid", perception.affiliation),
         mixed_affect=bool(data.get("mixed_affect", False)),
         targets_assistant=target == "assistant",
         reason=f"llm: {str(data.get('reason', '')).strip()[:120]}",
         provenance="model", perceived_emotion=perceived,
-        event_type=event_type, event_intensity=_safe_float(data.get("event_intensity"), 0.0),
+        event_type=event_type, event_intensity=stated("event_intensity", perception.intensity),
         perception=perception, request_components=components,
         self_proposals=tuple(item for item in proposals if isinstance(item, dict)),
         agent_goal_comparison=bool(data.get("agent_goal_comparison") or False),
@@ -524,26 +620,48 @@ def reader_prompt(agent_context: str = "") -> str:
 def _read_once(
     text: str, backend: object, *, recent_context: list[dict[str, str]] | None, agent_context: str,
     required: bool, structured: bool, problem: str = "", limit: float | None = None,
-) -> tuple[AppraisalFrame | None, _Failure]:
-    """One model call. Returns the frame, or None with the reason it failed."""
+    output_tokens: int | None = None,
+) -> tuple[AppraisalFrame | None, _Failure, dict[str, Any]]:
+    """One model call. Returns the frame, or None with the reason it failed, and the attempt's record.
+
+    The record says how the answer ended: the server's finish reason and
+    completion-token count when it reports them, the output limit asked for,
+    whether the answer was cut off, and what became of it. An answer the server
+    stopped at its output limit is cut off even when its text happens to parse.
+    """
     options = {}
     if structured:
         options.update(response_schema=reading_schema(proposals=_wants_proposals(agent_context)))
+    record: dict[str, Any] = dict(finish_reason="", completion_tokens=None, max_output_tokens=output_tokens,
+                                  truncated=False, outcome=_BACKEND)
+
+    def failed(kind: str, detail: str) -> tuple[None, _Failure, dict[str, Any]]:
+        record.update(outcome=kind, truncated=record["truncated"] or kind == _TRUNCATED)
+        return None, _Failure(kind, detail), record
+
     try:
         raw = generate(backend, "appraisal", reader_prompt(agent_context),
                        _reader_input(text, recent_context, agent_context, problem),
-                       optional=not required, reading=required, limit_seconds=limit, **options)
+                       optional=not required, reading=required, limit_seconds=limit,
+                       output_tokens=output_tokens, **options)
     except (ResearchBudgetExceeded, ResearchStudyLimit):
         raise
     except Exception as error:
         # Messages can carry URLs, prompts or credentials; keep the class only.
-        return None, _Failure(_TIMEOUT if is_timeout(error) else _BACKEND, type(error).__name__)
+        return failed(_TIMEOUT if is_timeout(error) else _BACKEND, type(error).__name__)
+    facts = response_facts(backend)
+    record.update(finish_reason=facts.get("finish_reason", ""), completion_tokens=facts.get("completion_tokens"),
+                  truncated=bool(facts.get("truncated")))
+    if record["truncated"]:
+        return failed(_TRUNCATED, "the answer stopped at the output limit")
     try:
-        # The turn's own reader needs an answer that states something. The
-        # optional single attempt and research keep their earlier leniency.
-        return parse_reading(raw, require_content=required), _Failure()
+        frame = parse_reading(raw, require_content=required)
+    except _CutOff as error:
+        return failed(_TRUNCATED, str(error))
     except _Malformed as error:
-        return None, _Failure(_MALFORMED, str(error))
+        return failed(_MALFORMED, str(error))
+    record.update(outcome=_READ)
+    return frame, _Failure(), record
 
 
 def appraise_message_llm(
@@ -557,7 +675,9 @@ def appraise_message_llm(
     """One optional, unstructured reading attempt. None when it cannot be used.
 
     The turn itself uses :func:`read_message`. ``detected`` is accepted for
-    older call sites and has no effect: tone is part of the reading.
+    older call sites and has no effect: tone is part of the reading. A cut-off
+    answer is unusable here as everywhere; the structure of a complete answer
+    is not insisted on, which only the turn's reader does.
     """
     del detected
     if backend is None or not (text or "").strip():
@@ -634,38 +754,52 @@ def read_message(
     Outside research the call is required: it uses the primary request deadline
     and its own allowance of two calls, so it cannot be starved by, or starve,
     the expression budget. The second call is spent only when the first gave
-    no usable reading: a malformed answer, a role, hostility or repair claim
-    that does not quote the message, a capability the reader was not given, or
-    a failed request (asked again in plain JSON, which also serves a backend
-    that cannot honour structured output). A timeout is not retried.
+    no usable reading: a malformed answer, a cut-off answer, a role, hostility
+    or repair claim that does not quote the message, a capability the reader
+    was not given, or a failed request (asked again in plain JSON, which also
+    serves a backend that cannot honour structured output). A timeout is not
+    retried.
+
+    The reading has its own output limit, apart from expression's
+    (:func:`core.inference.reading_output_tokens`). An answer that was cut off,
+    because the server stopped at that limit or because its JSON object never
+    closes, is never used in part; the retry is told so and gets twice the room.
 
     Both calls together have one wall-clock budget, the request timeout in
     force: the second call gets only what the first left, and when nothing is
     left the reading is unavailable. Nothing is remembered between turns here:
     whether a server supports structured output is the backend's own knowledge.
-    Research keeps its existing single counted call and fail-closed limits.
+    Research keeps its existing single counted call and its own bounded output
+    limit; a cut-off answer there is recorded and makes the reading unavailable.
+
+    The returned frame carries one record per call in ``reading_attempts``.
     """
     if backend is None or not (text or "").strip():
         return appraise_message(text, reason="no message or no backend")
     structured = not research and accepts_response_schema(backend)
     available = capabilities_given(agent_context)
     budget = None if research else primary_deadline(backend)
+    output_tokens = None if research else reading_output_tokens()
     started = monotonic()
     feedback = ""
     problem = "no reading"
     fallback = None
+    attempts: list[dict[str, Any]] = []
     for _ in range(1 if research else READING_ATTEMPTS):
         remaining = None if budget is None else budget - (monotonic() - started)
         if remaining is not None and remaining <= 0:
             problem = str(_Failure(_TIMEOUT, "the reading's time ran out"))
             break
-        frame, failure = _read_once(text, backend, recent_context=recent_context, agent_context=agent_context,
-                                    required=not research, structured=structured, problem=feedback,
-                                    limit=remaining)
+        frame, failure, record = _read_once(
+            text, backend, recent_context=recent_context, agent_context=agent_context,
+            required=not research, structured=structured, problem=feedback, limit=remaining,
+            output_tokens=output_tokens)
+        attempts.append(record)
         if frame is not None:
             problem = _contract_problem(frame, text, recent_context, available)
             if not problem:
-                return frame
+                return replace(frame, reading_attempts=tuple(attempts))
+            record.update(outcome=_CONTRACT)
             fallback = fallback or frame
             feedback = problem
             continue
@@ -675,13 +809,16 @@ def read_message(
         if failure.kind == _BACKEND:
             structured = False
             feedback = ""
+        elif failure.kind == _TRUNCATED:
+            feedback = _CUT_OFF_FEEDBACK
+            output_tokens = None if research else reading_output_tokens(after_cut_off=True)
         else:
             feedback = problem
     if fallback is not None:
         # reconcile_social_appraisal removes what broke the contract. A wish
         # stated only in a rejected answer is not kept as a standing preference.
-        return replace(fallback, reply_length="")
-    return appraise_message(text, reason=problem)
+        return replace(fallback, reply_length="", reading_attempts=tuple(attempts))
+    return replace(appraise_message(text, reason=problem), reading_attempts=tuple(attempts))
 
 
 _HOSTILE_MOVES = ("attack", "complaint")

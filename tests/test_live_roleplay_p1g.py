@@ -349,7 +349,8 @@ def test_excision_removes_unsupported_metrics_as_well_as_role_assent():
 def test_feedback_intensity_gets_semantic_review_without_a_vocabulary_ban():
     reply = "That genuinely means a lot — I don't say that lightly. It's one thing to offer a perspective, another to see it actually land somewhere useful. Glad it helped you move the outline forward. What did you end up keeping from it?"
     backend = ExpressionBackend(drafts=[reply], appraisal={"perception": {
-        "affiliation": 0.6, "personal_significance": 0.4, "uncertainty": 0.2}})
+        "affiliation": 0.6, "personal_significance": 0.4, "uncertainty": 0.2},
+        "request_components": [{"description": "feedback on an earlier suggestion", "kind": "conversation"}]})
     pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=True))
     try:
         result = pipe.process("I said I'd return with feedback: your suggestion helped me finish the outline.", "alice")

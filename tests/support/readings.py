@@ -42,11 +42,14 @@ def role(span: str, identity: str, *, autonomy_cost: float, description: str = "
 def reading(*components: dict, language: str = "en", target: str = "unknown", move: str = "inform",
             intent: str = "inform", perception: dict | None = None, tone: dict | None = None,
             **fields: Any) -> dict:
-    """A complete reading as the reader would return it."""
+    """A complete reading as the reader would return it.
+
+    It always carries the reading's structure: a perception object (empty when
+    nothing is claimed) and the components given. The turn's reader accepts it
+    only with at least one component.
+    """
     data = {"language": language, "primary_target": target, "social_move": move, "inferred_intent": intent,
-            "request_components": list(components), **fields}
-    if perception is not None:
-        data["perception"] = perception
+            "perception": dict(perception or {}), "request_components": list(components), **fields}
     if tone is not None:
         data["tone"] = tone
     return data
@@ -99,11 +102,26 @@ class ScriptedReader:
         return parse_reading(json.dumps(item))
 
 
+class Ended:
+    """A scripted answer together with how the server says it ended.
+
+    ``finish`` is the finish reason the backend reports ("stop", or "length"
+    when the server stopped at the output limit) and ``tokens`` the completion
+    tokens it counted. ``answer`` is a reading (dict) or raw text.
+    """
+
+    def __init__(self, answer: Any, *, finish: str = "stop", tokens: int | None = None) -> None:
+        self.answer, self.finish, self.tokens = answer, finish, tokens
+
+
 class ReadingBackend:
     """A stub model: scripted answers to the reader, fixed drafts for everything else.
 
-    A scripted answer may be a reading (dict), raw text, or an exception to
-    raise. A list is consumed one answer per reader call for that message.
+    A scripted answer may be a reading (dict), raw text, an :class:`Ended`
+    answer that also states its finish reason, or an exception to raise. A list
+    is consumed one answer per reader call for that message. The output limit
+    each reader call asked for is kept in ``output_limits``, and what every
+    other call asked for in ``other_limits``.
     """
 
     def __init__(self, readings: Script = None, *, drafts=("I choose my own footing.",), reviews=()) -> None:
@@ -112,22 +130,34 @@ class ReadingBackend:
         self.reviews = list(reviews)
         self.reading_calls: list[str] = []
         self.reader_inputs: list[tuple[str, str]] = []
+        self.output_limits: list[int | None] = []
+        self.other_limits: list[int | None] = []
         self.calls: list[tuple[str, str]] = []
+        self.last_response_metadata: dict[str, Any] = {}
 
     def generate(self, system_prompt: str, user_message: str) -> str:
+        from core.inference import requested_output_tokens
+
         self.calls.append((system_prompt, user_message))
+        self.last_response_metadata = {}
         if is_reading_prompt(system_prompt):
             text = message_of(user_message)
             self.reading_calls.append(text)
             self.reader_inputs.append((system_prompt, user_message))
+            self.output_limits.append(requested_output_tokens())
             answer = _resolve(self.readings, text)
             if isinstance(answer, list):
                 answer = answer.pop(0) if len(answer) > 1 else answer[0]
             if isinstance(answer, BaseException):
                 raise answer
+            if isinstance(answer, Ended):
+                self.last_response_metadata = {"finish_reason": answer.finish, **(
+                    {"usage": {"completion_tokens": answer.tokens}} if answer.tokens is not None else {})}
+                answer = answer.answer
             if answer is None:
                 return "not a reading"
             return answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
+        self.other_limits.append(requested_output_tokens())
         if system_prompt.startswith("Review expression against"):
             result = self.reviews.pop(0) if self.reviews else {"status": "pass", "violations": [], "confidence": 0.8}
             if isinstance(result, BaseException):

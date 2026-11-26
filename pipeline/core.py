@@ -427,7 +427,8 @@ class CognitivePipeline:
         with inference_turn(calls, research=self._research_mode, max_calls=5,
                             request_timeout_seconds=getattr(self._runtime_config, "llm_request_timeout_seconds", None),
                             auxiliary_timeout_seconds=getattr(self._runtime_config, "llm_auxiliary_timeout_seconds", None),
-                            auxiliary_cooldown_seconds=getattr(self._runtime_config, "llm_auxiliary_cooldown_seconds", 30.0)):
+                            auxiliary_cooldown_seconds=getattr(self._runtime_config, "llm_auxiliary_cooldown_seconds", 30.0),
+                            reading_output_tokens=getattr(self._runtime_config, "llm_reading_max_output_tokens", None)):
             result = self._process_turn(user_message, user_id)
             result.debug.llm_calls = calls
             return result
@@ -570,8 +571,10 @@ class CognitivePipeline:
         base_appraisal = reconcile_social_appraisal(user_message, None, reading,
                                                     recent_context=self._conversation_history,
                                                     available_capabilities=capabilities)
+        attempts = [dict(item) for item in base_appraisal.reading_attempts]
         debug.reading = dict(provenance=base_appraisal.provenance, reason=base_appraisal.reason,
-                             language=base_appraisal.language)
+                             language=base_appraisal.language, attempts_used=len(attempts),
+                             truncated=any(item.get("truncated") for item in attempts), attempts=attempts)
         if st.inspection_kind:
             # A contextual host-metric follow-up is work, even when it was
             # read as conversation. This recognizes a component; the same

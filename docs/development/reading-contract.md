@@ -38,7 +38,8 @@ listed under [Still keyword-based](#still-keyword-based).
    - Categories are described abstractly. The prompt holds no example insults, role nouns or
      test phrases.
    - When the backend declares `response_schema`, the reading is requested as structured
-     output (`reading_schema`).
+     output (`reading_schema`). The schema is valid for strict servers; see
+     [The reading's shape](#the-readings-shape).
 
 3. **The message reaches the reader as data.** The reader's input is one JSON object:
    `message`, `recent_context`, `observation_context`, and `previous_answer_rejected` on a
@@ -109,8 +110,8 @@ listed under [Still keyword-based](#still-keyword-based).
 
 6. **A reading that cannot be obtained is recorded as such.**
    - Causes: a timeout, the reading's time running out, two failed requests, or two unusable
-     answers. An answer that states none of the reading's fields is unusable: saying nothing is
-     not a reading.
+     answers. An answer is unusable when it is malformed, was cut off, or lacks the reading's
+     structure (point 9): saying nothing is not a reading.
    - Result (`appraise_message`): one `conversation` component for the whole message, neutral
      perception, high uncertainty, low confidence.
    - `provenance` is `"unavailable"` and `reason` names the cause by error class. Both appear
@@ -140,6 +141,29 @@ listed under [Still keyword-based](#still-keyword-based).
    characters, or two separate shared runs of two. The direction of the evidence is never
    inferred.
 
+9. **Only a whole answer is a reading.** A model that reasons before it answers can run into
+   its output limit and return the first part of its JSON. A part of a reading says something
+   different from the reading: cut before the components, it says nothing was asked.
+   - **The outermost object or nothing** (`core/llm_content.py::outermost_json_object`). The
+     reading is the answer's outermost JSON object. Prose or a code fence around it does no
+     harm, and a bracketed aside in that prose is stepped over as a whole. Nothing is ever
+     looked for *inside* a bracketed group: when the object never closes, the answer was cut
+     off, and an object nested in it is not the answer.
+   - **The structure a reading must carry** (`parse_reading(..., require_content=True)`, which
+     the turn's reader always uses, in research too): `perception` as an object and
+     `request_components` as a list of **at least one** component. Every message says
+     something, so an answer with no component is not a reading of it; accepted, it would
+     leave the decision with nothing to decide on. A perception object returned on its own, a
+     single component, or a reading without one of the two is malformed.
+   - **The server's word.** Both chat clients report how each answer ended
+     (`last_response_metadata`: `finish_reason`, `completion_tokens`, `max_tokens`). An answer
+     the server stopped at its output limit (finish reason `length` or `max_tokens`) is cut
+     off **even when its text happens to parse**.
+   - A cut-off answer is a `truncated reading`. It spends the one retry, which is told that the
+     answer was cut off and must be whole and compact, and gets more room (see
+     [Calls and deadlines](#calls-and-deadlines)). Cut off twice, the reading is unavailable
+     and says so; the message is then one conversation component, as for any unread message.
+
 ## Calls and deadlines
 
 | | Before | Now |
@@ -149,6 +173,7 @@ listed under [Still keyword-based](#still-keyword-based).
 | Budget | Counted inside the five base calls when it ran | Its own allowance of two (`core/inference.py::READING_CALLS`), outside the five |
 | Retry | None | One, when the first call gave no usable reading |
 | Time | Per call | One wall-clock budget for both calls together: the request timeout in force |
+| Output limit | The reply's limit (2048 on the OpenAI-compatible backend) | Its own: 4096 tokens by default, 8192 for the retry after a cut-off answer |
 
 - The five base calls still fund expression, review, rewrites, tools and learning exactly as
   before, plus the one protected `delivery_recovery` attempt.
@@ -156,6 +181,7 @@ listed under [Still keyword-based](#still-keyword-based).
   `reading: true` and `optional: false`.
 - The second call is spent when the first gave no usable reading:
   - a malformed answer;
+  - a cut-off answer (point 9), asked again with twice the output limit;
   - a role, hostility or repair claim that does not quote the message;
   - a capability name the reader was not given;
   - a failed request, which is asked again in plain JSON.
@@ -170,6 +196,26 @@ listed under [Still keyword-based](#still-keyword-based).
     `reconcile_social_appraisal` removes what broke it, exactly as after a failed retry.
   Reading calls therefore carry `timeout_seconds` in the telemetry. A backend with no known
   timeout has no budget to share.
+- **Room to answer.** Reading calls have their own output-token limit, apart from the
+  reply's, which is unchanged.
+  - The default is 4096 (`core/inference.py::READING_OUTPUT_TOKENS`). A model that reasons
+    first spends that reasoning out of the same limit; the reading observed live took about
+    1,800 completion tokens against a limit of 2048.
+  - `llm_reading_max_output_tokens` in the runtime configuration overrides it (an integer from
+    256 to 32768; `null` is the default). The config API accepts and preserves it.
+  - After a cut-off answer the retry asks for twice the limit, up to 32768.
+  - The limit travels with the call (`model_call(..., output_tokens=)`), so the
+    OpenAI-compatible backend sends it as `max_tokens` and the provider client, which sends no
+    limit for replies, sends one for the reading only.
+  - Research keeps its own bounded limits: no reading limit is applied and there is no larger
+    retry. A cut-off answer there is recorded and makes the reading unavailable.
+- **Each attempt is recorded.** The frame carries one record per model call
+  (`AppraisalFrame.reading_attempts`): `finish_reason`, `completion_tokens`,
+  `max_output_tokens`, `truncated`, and `outcome` (`read`, `rejected`, `malformed reading`,
+  `truncated reading`, `backend error` or `timeout`). The debug record's `reading` entry and
+  the stored turn record hold them as `attempts`, with `attempts_used` and `truncated`. The
+  per-turn call telemetry carries the same finish facts for every call whose backend reports
+  them.
 - **Structured output.** The reader keeps no memory of failures. Only the OpenAI-compatible
   backend knows whether its server supports it: when the server explicitly rejects the
   `response_format` parameter, the backend repeats that request without it, sends the next 20
@@ -183,15 +229,94 @@ listed under [Still keyword-based](#still-keyword-based).
 
 Real models are untidy. `parse_reading` accepts:
 
-- the first complete JSON object in the answer, with prose or code fences around it;
+- the answer's outermost JSON object, with prose or code fences around it, and bracketed
+  asides in that prose;
 - `kind` in any letter case or with spaces; a missing `kind` is `conversation`;
+- an empty `description`, which is then the component's `source_span`;
 - out-of-range perception and tone numbers, which are clamped and noted as evidence
   (`reading:clamped`);
-- an evidence entry without a `ref`, which gets a generated one;
-- `value_effects` as a map or as a list of `{name, effect}`.
+- evidence as plain quotations or as `{ref, observation, confidence}` entries; an entry
+  without a `ref` gets a generated one, and more than the four asked for are still read;
+- `nondefault` as a list of `{name, value}` or as a map, with unknown names ignored;
+- `value_effects` as a map or as a list of `{name, effect}`;
+- the older, larger shape of a reading: any field listed as removed below is still taken at
+  its word when an answer states it.
 
-It still rejects an answer that is not an object at all, an unknown `kind`, and numbers that
-are not finite.
+It rejects an answer that is not an object, an answer whose object never closes, an object
+without the reading's structure (point 9), an unknown `kind`, and numbers that are not finite.
+
+## The reading's shape
+
+Every field costs output on every reading: the schema is valid for strict structured-output
+servers, which means every property is required and no other is allowed
+(`reading_schema`). So the shape holds only what something consumes.
+
+- **Numbers that are almost always 0 are not fields.** A reading lists the ones that differ,
+  by name, in `nondefault`: `[{"name": "risk", "value": 0.2}]`, usually `[]`. This is the
+  one way to make a number optional that a strict schema allows.
+- **Duplicates are merged.** One `expectation_violation`, one `affiliation` and one
+  `intensity`, in `perception`; the frame's own fields follow them.
+- **Evidence is a list of quotations**, at most four. A role needs none: its `source_span`
+  and `role_identity` are its quotation.
+- `description` may be empty when `source_span` says it; `reason` is one short clause.
+
+**Size.** The same reading of a two-sentence message (one demand for standing, one task, three
+numbers off their default), written compactly:
+
+| | Characters |
+|---|---|
+| Before | 1,841 |
+| Now | 1,237 |
+| Now, with no number off its default | 1,137 |
+
+### Field audit
+
+**Asked for, and who consumes it**
+
+| Field | Consumed by |
+|---|---|
+| `language` | The debug and turn records only, today. Kept for the reply-language check of sub-phase 1b |
+| `primary_target` | `targets_assistant`: affect (`core/affect.py`), event classification, memory digestion, self-observation; the explanation and persona views |
+| `social_move` | Affect; event classification when no `event_type`; digestion (apology); withdrawal of unquoted claims; the explanation |
+| `inferred_intent` | Affect (`seek_action`); withdrawal; the explanation and persona views |
+| `agent_goal_comparison` | Affect (the comparison signal) |
+| `reason` | The debug and turn records |
+| `perception.target_probability`, `hostile_intent`, `intensity` | `core/willingness.py::decide` (exposure), `update_relationship` (injury), reply checks, the expression prompt. `intensity` is also the event's intensity |
+| `perception.expectation_violation` | `update_relationship`; affect, through the frame |
+| `perception.personal_significance` | `update_relationship` |
+| `perception.uncertainty` | `update_relationship` (repair, goodwill), bonding, the expression prompt |
+| `perception.affiliation` | `update_relationship` (goodwill), bonding; affect, through the frame |
+| `perception.nondefault`: `blame` | Affect |
+| … `vulnerability` | The persona and channel debug views, the explanation (display only) |
+| … `repair_attempt`, `repair_credibility`, `repair_relevance` | `update_relationship`; `decide` (the forgiveness term) |
+| … `reliability`, `reliability_confidence` | `update_relationship` (trust) |
+| `perception.evidence` | The quotation check for hostility and repair; the relationship's evidence references |
+| Component `description`, `kind`, `source_span`, `role_identity` | The decision, the role quotation check, expression, operand grounding |
+| Component `user_value`, `effort`, `uncertainty`, `autonomy_cost` | `core/willingness.py::_component_terms` |
+| Component `nondefault`: `user_cost`, `user_urgency`, `character_value`, `character_cost`, `character_urgency`, `risk` | `_component_terms` |
+| Component `value_effects` | `_component_terms` (authored values); `core/self_intent.py` |
+| Component `capability_requirements` | Feasibility; the capability check of point 4 |
+| Component `evidence_refs` | `_component_terms` (competing interests and commitments); `core/self_intent.py` |
+| `tone.arousal`, `valence`, `intensity` | Contagion; self-observation (`valence`) |
+| `event_type` | Event classification |
+| `reply_length` | The standing reply-length wish and its memory record |
+| `self_proposals` (only when requested): all seven fields | `core/self_intent.py::conversation_proposals` |
+
+**No longer asked for**
+
+| Field | Why | Value now |
+|---|---|---|
+| `controllability` | Copied into event metadata; nothing reads it | 0.5 |
+| `mixed_affect` | Copied into event metadata; nothing reads it | false |
+| Top-level `expectation_violation` | A second copy of the perception's | The perception's |
+| `affiliation_bid` | A second copy of `perception.affiliation` | The perception's |
+| `event_intensity` | A third intensity | `perception.intensity` |
+| Top-level `blame`, `vulnerability` | Rarely anything but 0 | Listed in `perception.nondefault`, else 0 |
+| `perception.repair_loop_id` | Stored with the repair record; nothing reads it | empty |
+| Evidence `ref`, `confidence`, `source` | The reference is generated, the confidence is read by nothing, the source was always overwritten | generated, 0.5, `model` |
+| Component `confidence` | Validated and read by nothing | 0.5 |
+| `tone.certainty` | Read only by a classification helper no turn calls | 0.5 |
+| The six rare component numbers, the three repair numbers, `reliability`, `reliability_confidence` | Rarely anything but 0 | Listed in `nondefault`, else 0 |
 
 ## Still keyword-based
 
@@ -279,6 +404,10 @@ about the current runtime. `evals/` is not edited in this sub-phase.
   `ScriptedReader` (injected as `message_reader=`) and `ReadingBackend` (a stub model for the
   runtime reader), with small builders for roles, tasks and hostile perception.
 - `tests/test_reading_contract.py` covers the contract.
+- `tests/test_reading_truncation.py` covers point 9 and the reading's shape: a full reading cut
+  at every 5% of its length and around every closing brace is never accepted; a stub that
+  reports finish `length`, and one that returns a cut-off body with finish `stop`; the output
+  limits sent by both chat clients; the per-attempt records; the strict schema and its fields.
 - `tests/test_perception_guards.py` holds the structural guards, built on
   `tests/support/vocabulary_guard.py`:
   - no vocabulary in the perception modules or the perception stage, however it is bound;

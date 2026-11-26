@@ -30,6 +30,7 @@ from pathlib import Path
 import re
 import sys
 import textwrap
+import warnings
 
 import pytest
 
@@ -381,7 +382,9 @@ def scenario_wording(units: list[guard.Unit]) -> list[tuple[str, str, str]]:
             if not guard.has_vocabulary(pattern):
                 continue
             try:
-                compiled = re.compile(pattern, re.I)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)   # a literal that only resembles a pattern
+                    compiled = re.compile(pattern, re.I)
             except re.error:
                 continue
             matched = next((turn for turn in sorted(turns) if compiled.search(turn)), None)
@@ -732,6 +735,24 @@ def test_a_table_or_pattern_defined_elsewhere_is_seen_where_it_is_used_on_the_te
     for function in helpers.values():
         unit = guard.function_unit(function, root=tmp_path)
         assert guard.findings(unit.tree, unit.scope, text_names={"text"}, text_leaves=guard.CORE_TEXT_FIELDS) == []
+
+
+def test_words_assigned_by_unpacking_are_seen_in_a_traced_helper(tmp_path, monkeypatch):
+    module = plant(tmp_path, monkeypatch, "unpacked", '''
+        WARM, COLD = "thankful", "resentful"
+
+        def stage(text):
+            return helper(text)
+
+        def helper(text):
+            return WARM in text or text.endswith(COLD)
+    ''')
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+    with trace:
+        module.stage(f"a {MARKER}")
+    found, = trace.findings().values()
+    assert {finding.kind for finding in found} == {"words", "probe"}
+    assert any(finding.on_text and "thankful" in finding.terms for finding in found)
 
 
 def test_traced_helpers_are_checked_strictly(tmp_path, monkeypatch):
