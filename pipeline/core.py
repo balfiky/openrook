@@ -56,9 +56,8 @@ from core.appraisal import (
 )
 from core.affect import resolve_affect
 from core.strategy import agency_summary, decision_trace, summarize_decision
-from core.dignity import (
-    dignity_correction_instruction, needs_semantic_review, excisable_choice_issues,
-)
+from core.dignity import STALE, correction_instruction, excisable_choice_issues
+from core.review import ExpressionReviewer, review_draft
 from core.system_inspection import inspection_intent, inspection_kind
 from core.action_variables import derive_action_variables
 from core.task_planning import is_continue_request, is_status_request, summarize_plan_status
@@ -146,6 +145,16 @@ def default_message_reader(pipeline: "CognitivePipeline") -> MessageReader:
     return read_message
 
 
+def default_expression_reviewer(pipeline: "CognitivePipeline") -> ExpressionReviewer:
+    """The reviewer a pipeline uses when none is injected: the model's review.
+
+    This is the single place a pipeline's reviewer is chosen. There is no
+    alternative reviewer in the runtime.
+    """
+    del pipeline
+    return review_draft
+
+
 # ---------------------------------------------------------------------------
 # CognitivePipeline
 # ---------------------------------------------------------------------------
@@ -171,6 +180,7 @@ class CognitivePipeline:
         component_executor: Callable[..., ToolResult | None] | None = None,
         component_observer: Callable[[str], tuple[RequestComponent, ...] | None] | None = None,
         message_reader: MessageReader | None = None,
+        expression_reviewer: ExpressionReviewer | None = None,
     ) -> None:
         """Create a cognitive pipeline.
 
@@ -198,6 +208,10 @@ class CognitivePipeline:
             message_reader: Optional reader of each user message
                             (``core.appraisal.MessageReader``). Defaults to
                             the model reader; every turn is read by it.
+            expression_reviewer: Optional reviewer of each draft reply
+                                 (``core.review.ExpressionReviewer``). Defaults
+                                 to the model reviewer; every draft that could
+                                 be delivered is reviewed by it.
         """
         self._features = features or PipelineFeatures()
         if llm_backend is None:
@@ -297,6 +311,10 @@ class CognitivePipeline:
         # work of the turn and has no local substitute; ``appraisal_use_llm``
         # in older configuration files no longer switches anything.
         self._message_reader: MessageReader = message_reader or default_message_reader(self)
+        # Every draft that could be delivered is reviewed against the frozen
+        # decision by the model. That review is required work too, and nothing
+        # about a draft's wording decides whether it happens.
+        self._expression_reviewer: ExpressionReviewer = expression_reviewer or default_expression_reviewer(self)
         # Consolidate ordinary episodes; the store bounds identity development.
         self._autobiographical_learning = bool(
             getattr(runtime_config, "autobiographical_learning", False)
@@ -1393,8 +1411,11 @@ class CognitivePipeline:
     def _check_dignity(self, st: _TurnState, gen_result):
         """Review and spend bounded correction effort in proportion to severity.
 
-        Failed expression is not chosen silence. Retain the best nonempty
-        reviewed draft, with honest degradation telemetry if correction fails.
+        Every draft goes through the same gate: the structural checks, and the
+        model's review against the frozen decision, which is required work
+        with its own allowance. Failed expression is not chosen silence.
+        Retain the best nonempty reviewed draft, with honest degradation
+        telemetry if correction fails.
         """
         debug = st.debug
         if gen_result.deliberate_silence and st.turn_decision and st.turn_decision.chosen_silence:
@@ -1403,47 +1424,45 @@ class CognitivePipeline:
         if not gen_result.response and st.backend_error is not None:
             debug.delivery_outcome = "backend_failure"
             return gen_result
-        constrained = bool(st.turn_decision and (st.turn_decision.declined or
-                            st.turn_decision.selected_intention is not None or
-                            st.turn_decision.relationship.h or st.turn_decision.relationship.r
-                            or st.turn_decision.perception.affiliation))
         review_context = dict(user_message=st.user_message, decision=st.turn_decision,
-            backend=self._llm_backend_fast, recent_context=self._conversation_history,
-            prior_assistant_replies=tuple(self._assistant_replies), tool_trace=debug.tool_trace, prior_tool_receipts=self._receipt_history,
-            prior_action_decisions=st.ctx.prior_action_decisions if st.ctx else (),
-            authored_style=(self.soul.voice, self.soul.relational_stance),
-            authored_identity=(self.soul.identity, self.soul.relational_stance,
-                               *self.soul.boundaries, self.soul.growth_policy),
-            requested_inspection=st.inspection_kind,
-            recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else (),
-            grounded_context=st.life_history_context,
-            developing_self=st.developing_self)
-        def needs_review(response):
-            return (bool(debug.expression_reviews) or constrained
-                or _is_identity_question(st.user_message)
-                or needs_semantic_review(response, recent_context=self._conversation_history,
-                                         user_message=st.user_message)
-                or bool(debug.tool_trace and (debug.tool_trace.executed_results or debug.tool_trace.final_decision)))
+            backend=self._llm_backend_fast, reviewer=self._expression_reviewer, research=self._research_mode,
+            recent_context=self._conversation_history,
+            prior_assistant_replies=tuple(self._assistant_replies), tool_trace=debug.tool_trace,
+            prior_tool_receipts=self._receipt_history,
+            recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else ())
 
-        gate = DeliveryGate(review_context, debug, needs_review)
+        def research_review_due():
+            """Research keeps its bounded call contract: a review is one counted call, and it is
+            made where the decision constrains the reply, a tool ran or was refused, or an
+            earlier draft of the turn was reviewed. Nothing about a draft's wording decides it."""
+            decision = st.turn_decision
+            constrained = bool(decision and (decision.declined or decision.selected_intention is not None
+                                             or decision.relationship.h or decision.relationship.r
+                                             or decision.perception.affiliation))
+            return remaining_calls() > 0 and (bool(debug.expression_reviews) or constrained or bool(
+                debug.tool_trace and (debug.tool_trace.executed_results or debug.tool_trace.final_decision)))
+
+        gate = DeliveryGate(review_context, debug, research_review_due if self._research_mode else None)
         gate.add(gen_result)
         while True:
             best = gate.best()
             severe = best.review.severity >= 4
-            all_stale = all(any(i.code == "stale_response" for i in c.review.issues) for c in gate.candidates)
+            all_stale = all(any(i.code == STALE for i in c.review.issues) for c in gate.candidates)
             required = not gate.eligible
-            final_local = severe or all_stale or required or any(
-                i.code in {"decision_contradiction", "internal_contradiction"} for i in best.review.issues)
+            # Research counts a rewrite and its review as two calls. A rewrite that
+            # could not be reviewed is not started: it would go out unexamined in
+            # place of the draft that was. Fresh expression that is required is.
+            affordable = remaining_calls() >= (2 if self._research_mode and not required else 1)
             if (best.review.status != "violation"
                     or debug.generation_attempts >= (5 if required else 3 if severe or all_stale else 2)
-                    or remaining_calls() < (1 if final_local else 2)):
+                    or not affordable):
                 break
             latest = gate.candidates[-1]
-            correction = dignity_correction_instruction(
+            correction = correction_instruction(
                 list(dict.fromkeys((*best.review.issues, *latest.review.issues))),
                 previous_reply=latest.result.response, reviewer_reason=latest.review.reason,
                 forbidden_drafts=[c.result.response for c in gate.candidates
-                    if c.review.unusable or any(i.code == "stale_response" for i in c.review.issues)])
+                    if c.review.unusable or any(i.code == STALE for i in c.review.issues)])
             debug.correction_note = correction
             try:
                 debug.generation_attempts += 1
@@ -1462,11 +1481,11 @@ class CognitivePipeline:
         # reviewed remainder alongside the drafts; none can return directly.
         eligible = gate.eligible
         if eligible and all(excisable_choice_issues(c.review) for c in eligible):
-            for candidate in sorted(eligible, key=lambda c: c.review.rank):
-                gate.repair(candidate, choice=True, local_only=True)
+            for candidate in sorted(eligible, key=gate.rank):
+                gate.repair(candidate, choice=True)
         if not gate.eligible:
             failed = gate.best()
-            correction = dignity_correction_instruction(list(failed.review.issues),
+            correction = correction_instruction(list(failed.review.issues),
                 previous_reply=gate.candidates[-1].result.response, reviewer_reason=failed.review.reason,
                 forbidden_drafts=[c.result.response for c in gate.candidates])
             debug.correction_note = correction
@@ -1476,12 +1495,16 @@ class CognitivePipeline:
                         debug.generation_attempts - 1, required=True), inference_phase("regeneration"):
                     final = self.generator.generate(replace(st.ctx, response_strategy=correction),
                                                     st.user_message, self._conversation_history)
-                gate.add(final, local_only=True, path="delivery_recovery")
+                gate.add(final, path="delivery_recovery")
             except (ResearchBudgetExceeded, ResearchStudyLimit):
                 raise
             except Exception as error:
                 st.backend_error = error
                 debug.self_check_issues.append(f"delivery recovery: {type(error).__name__}")
+        if not gate.eligible and st.backend_error is None:
+            # Nothing can be delivered. If that is only because the reviewer reported a
+            # fixed limit, one independent review of the best such candidate decides.
+            gate.confirm()
         selected = gate.select()
         verdict = selected.review if selected else gate.best().review
         debug.dignity_issues = list(dict.fromkeys(i.code for c in gate.candidates for i in c.review.issues))

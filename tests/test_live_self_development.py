@@ -40,7 +40,7 @@ class EpisodeBackend:
                  "questions": [f"Which structures persist in {self.subject} when representation changes?"]},
                 {**common, "domain": "opinions", "key": self.subject,
                  "proposition": f"Comparing {self.subject} can expose omitted structure."}]})
-        if system_prompt.startswith("Review expression against"):
+        if system_prompt.startswith("You check one draft reply"):
             return '{"status":"pass","violations":[],"confidence":0.9}'
         self.expressions += 1
         return f"A distinct observation at position {self.expressions} changes which structures remain visible."

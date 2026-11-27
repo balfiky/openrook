@@ -11,6 +11,7 @@ import json
 from typing import Any, Callable
 
 from core.appraisal import READING_SYS_PROMPT, appraise_message, parse_reading
+from core.review import REVIEW_SYS_PROMPT
 from core.types import AppraisalFrame
 
 _READER_PREFIX = READING_SYS_PROMPT[:40]
@@ -18,6 +19,10 @@ _READER_PREFIX = READING_SYS_PROMPT[:40]
 
 def is_reading_prompt(system_prompt: str) -> bool:
     return system_prompt.startswith(_READER_PREFIX)
+
+
+def is_review_prompt(system_prompt: str) -> bool:
+    return system_prompt.startswith(REVIEW_SYS_PROMPT[:25])
 
 
 def message_of(reader_input: str) -> str:
@@ -120,8 +125,9 @@ class ReadingBackend:
     A scripted answer may be a reading (dict), raw text, an :class:`Ended`
     answer that also states its finish reason, or an exception to raise. A list
     is consumed one answer per reader call for that message. The output limit
-    each reader call asked for is kept in ``output_limits``, and what every
-    other call asked for in ``other_limits``.
+    each reader call asked for is kept in ``output_limits``, what each review
+    call asked for in ``review_limits``, and what every other call asked for
+    in ``other_limits``.
     """
 
     def __init__(self, readings: Script = None, *, drafts=("I choose my own footing.",), reviews=()) -> None:
@@ -131,6 +137,7 @@ class ReadingBackend:
         self.reading_calls: list[str] = []
         self.reader_inputs: list[tuple[str, str]] = []
         self.output_limits: list[int | None] = []
+        self.review_limits: list[int | None] = []
         self.other_limits: list[int | None] = []
         self.calls: list[tuple[str, str]] = []
         self.last_response_metadata: dict[str, Any] = {}
@@ -157,12 +164,14 @@ class ReadingBackend:
             if answer is None:
                 return "not a reading"
             return answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
-        self.other_limits.append(requested_output_tokens())
-        if system_prompt.startswith("Review expression against"):
-            result = self.reviews.pop(0) if self.reviews else {"status": "pass", "violations": [], "confidence": 0.8}
+        if is_review_prompt(system_prompt):
+            self.review_limits.append(requested_output_tokens())
+            result = (self.reviews.pop(0) if len(self.reviews) > 1 else self.reviews[0]) if self.reviews else {
+                "verdict": "pass", "findings": [], "confidence": 0.8, "reason": "nothing departs"}
             if isinstance(result, BaseException):
                 raise result
-            return json.dumps(result) if isinstance(result, dict) else result
+            return json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else result
+        self.other_limits.append(requested_output_tokens())
         result = self.drafts.pop(0) if len(self.drafts) > 1 else self.drafts[0]
         if isinstance(result, BaseException):
             raise result

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.social import has_concrete_task, read_social_signals
+from openrook_tools.roleplay_eval.legacy_social import has_concrete_task, read_social_signals
 from core.types import AppraisalFrame, DetectedEmotion
 from core.willingness import Perception
 from openrook_tools.roleplay_eval.scenarios import SINCERE

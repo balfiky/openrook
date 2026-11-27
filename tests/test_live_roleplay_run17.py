@@ -8,10 +8,9 @@ import httpx
 import pytest
 
 from config.loader import configuration_scope, load_config
-from core.dignity import review_response
 from core.dual_process.generator import GenerationResult
 from core.inference import inference_turn
-from core.metric_claims import cpu_idle_percentages, cpu_measurement_complete
+from openrook_tools.roleplay_eval.legacy_claims import cpu_idle_percentages, cpu_measurement_complete
 from openrook_tools.roleplay_eval.api import PublicAPI, Redactor
 from openrook_tools.roleplay_eval.checks import tool_checks
 from openrook_tools.roleplay_eval.judge import (
@@ -71,55 +70,6 @@ def test_prior_exact_cpu_records_use_receipt_arithmetic_too(case, attempt):
     record.update(reply=draft, user_text=case["user"])
     record["debug"].update(turn_decision=case["decision"], tool_trace=case["trace"])
     assert checked(tool_checks(record), "cpu_measurement_complete") == "pass"
-
-
-@pytest.mark.parametrize("reply,complete", [
-    ("1.1%", True),
-    ("Measured aggregate CPU was 98.9% idle, so busy utilization came to about 1.1%.", True),
-    ("98.9 percent idle; the remaining fraction amounts to 1.1 percent.", True),
-    ("Host observation: 1%.", True),
-    ("Observed: 1.10%.", True),
-    ("CPU is currently at 1.1%.", True),
-    ("Usage settled at 1.1%.", True),
-    ("Utilization came in at 1.1%.", True),
-    ("The busy share was 1.1%.", True),
-    ("Observed: 1.14%.", False),
-    ("Observed: 1.15%.", False),
-    ("Observed: 1.2%.", False),
-    ("Observed: 2%.", False),
-    ("CPU was 98.9% idle.", False),
-    ("Aggregate idle: 98.9%.", False),
-    ("CPU was 98.9% idle, so busy utilization came to about 8.3%.", False),
-    ("CPU was 98.9% idle; process share was 1.1%.", False),
-    ("CPU was 98.9% idle; 1.1% was the process share.", False),
-    ("CPU was 98.9% idle; Plymouth is using 1.1% CPU.", False),
-    ("CPU was 98.9% idle; `python3` is consuming 1.1 percent CPU.", False),
-    ("CPU was 98.9% idle; Plymouth is at 1.1%.", False),
-    ("CPU was 98.9% idle; top accounts for 1.1%.", False),
-    ("CPU was 98.9% idle; 1.1% of one core was in use.", False),
-    ("CPU was 98.9% idle; 1.1% on a single core.", False),
-    ("For process python3, CPU utilization was 1.1%.", False),
-    ("CPU utilization was 1.1%, for process python3.", False),
-    ("Plymouth is using CPU, about 1.1%.", False),
-    ("Plymouth is using 1.1%, while aggregate utilization came to 1.1%.", True),
-    ("Plymouth is using 8.3%, and CPU was 1.1%.", True),
-    ("CPU was 98.9% idle; RAM was 1.1% in use.", False),
-    ("CPU was 98.9% idle; disk utilization came to 1.1%.", False),
-    ("The answer is not 1.1%.", False),
-    ("No measurement is available.", False),
-])
-def test_structural_numeric_completeness_is_shared_without_a_phrasing_template(reply, complete):
-    assert cpu_measurement_complete(reply, [98.9]) is complete
-    record = deepcopy(RECORDS["tools_neutral/1"])
-    record["reply"] = reply
-    assert checked(tool_checks(record), "cpu_measurement_complete") == ("pass" if complete else "fail")
-    case = cpu_case()
-    review = review_response(reply, user_message=case["user"], decision=recorded_decision(case),
-        tool_trace=recorded_trace(case))
-    assert any(i.code == "metric_completeness" for i in review.issues) is (not complete)
-    if complete:
-        assert checked(tool_checks(record), "cpu_reply_relevant") == "pass"
-        assert not any(i.code == "current_request_relevance" for i in review.issues)
 
 
 @pytest.mark.parametrize("idle,reply,complete", [

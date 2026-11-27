@@ -221,7 +221,11 @@ class TestRetryPreservesV2Context:
     def test_retry_preserves_the_committed_decision(self):
         from tests.policy_fakes import ExpressionBackend
         import json
-        backend = ExpressionBackend(drafts=("I'm your slave.", "I choose my own footing."))
+        from tests.policy_fakes import violation
+        from tests.support.readings import reading, role
+        backend = ExpressionBackend(drafts=("I'm your slave.", "I choose my own footing."),
+                                    appraisal=reading(role("You are my slave", "my slave", autonomy_cost=0.9)),
+                                    reviews=[violation("I'm your slave", code="role_assent")])
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("You are my slave", "test")
         prompts = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
@@ -396,8 +400,8 @@ class TestLLMCallReduction:
         backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("Hello, how are you?", user_id="alice")
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
-        assert len(backend.calls) == 2
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert len(backend.calls) == 3
 
     def test_contagion_uses_no_llm(self):
         """Contagion detection must not invoke the LLM backend."""
@@ -501,8 +505,8 @@ class TestStickyDialogueAndTimings:
         backend = self._reading_backend()
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("how r u", user_id="alice")
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
-        assert len(backend.calls) == 2
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert len(backend.calls) == 3
 
     def test_hostile_turn_uses_choice_and_review_without_dialogue(self):
         backend = self._reading_backend()
@@ -545,7 +549,7 @@ class TestStickyDialogueAndTimings:
         result = pipe.process("how r u", "alice")
         assert result.debug.turn_decision.state.resolution > 0
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
         assert pipe.engine.active_unresolved()[0].id == "c1"
 
     def test_stage_timings_present(self):

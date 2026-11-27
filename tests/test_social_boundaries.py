@@ -7,7 +7,7 @@ import json
 
 import pytest
 from core.appraisal import appraise_message_llm, parse_reading, reconcile_social_appraisal
-from core.social import read_social_signals
+from openrook_tools.roleplay_eval.legacy_social import read_social_signals
 from core.types import AppraisalFrame, DetectedEmotion
 from core.willingness import Perception
 from tests.policy_fakes import ExpressionBackend

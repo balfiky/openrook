@@ -101,7 +101,8 @@ message + context -> uncertain perception, request components and grounded self 
 developed self + resources + relationship evidence -> continuous injury/grievance update
 state + competing allocations + stable seed -> frozen TurnDecision (grants + optional self intention)
 component grants + operator permissions -> execution and receipts
-frozen decision + same developed self + continuity + permitted facts -> expression and review
+frozen decision + same developed self + continuity + permitted facts -> expression
+draft + frozen decision + receipts -> review by the model, and structural checks
 actual delivery outcome -> persistent evidence and debug explanation
 ```
 
@@ -112,7 +113,7 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 | `_stage_pre_pass` | The model's reading of the message, context retrieval, relationship integration and pure utility choice; persist grants before execution | 1 for the reading (2 with its one retry) |
 | `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
 | `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
-| `_stage_self_check` | Frozen-decision and invariant checks; severity ranking; bounded rewrites, ineligible-span repair and one protected final delivery attempt; local and available semantic review | 0–5 |
+| `_stage_self_check` | Structural checks and the model's review of each draft against the frozen decision; severity ranking; bounded rewrites, quoted-span excision and one protected final delivery attempt | 1 for the review (up to 6), plus 0–4 rewrites |
 | `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update, optional ordinary self-development and debug | 0–1 |
 
 Every user message is read by the model before choice
@@ -125,33 +126,39 @@ only a whole answer is used: a cut-off one is never read in part.
 Social meaning comes only from it and has no local substitute;
 the wording-based request routing and context selection that remain are listed
 in the contract.
+Every draft that could be delivered is reviewed by the model against the frozen
+decision ([review contract](development/review-contract.md)). The review is
+required too: primary deadline, no cooldown, and its own allowance recorded with
+`review: true`: twelve candidate reviews per turn, one confirmation, and one retry
+per draft for an unusable answer (at most four per turn, counted apart). All
+review calls of a turn share one wall-clock budget, the request timeout in force,
+and stop after one of them timed out or could not reach the model, so a reviewer
+that does not answer costs a turn one timeout: eight request timeouts bound a
+turn without tools, sixteen at the maximum of tool selections. Research keeps one counted review call
+and makes it only when the decision constrains the reply or a tool ran or was refused.
 The conversational base budget is five further inference calls, including optional work.
 Each granted atomic task also receives one protected primary tool selection;
 these calls are recorded with `primary_tool: true`, at most eight extra per turn.
 Literal file operations execute their bound operands without model selection.
-A routine turn needs two calls: the reading and one expression.
-Constrained or affiliative expression adds review. Every rewrite gets local validation; semantic
-review uses the remaining budget. Critical role assent or uniformly stale drafts
-can spend a final call on a second rewrite, retaining explicit semantic uncertainty.
-Stale drafts are explicitly forbidden-to-repeat context. There is no mandatory social deliberation.
+A routine turn needs three calls: the reading, one expression and its review.
+A finding leads to one reviewed rewrite, two for a critical finding or uniformly
+stale drafts; a rewrite costs one base call, and its review comes out of the
+review allowance. There is no mandatory social deliberation.
 Conversational self-intent estimates share the reading call; retained
 sources supply candidates even when the reading is unavailable. Independent
 external activity uses `process_autonomous` and its own
 scope; a declined user request cannot be relabeled as self-directed work.
 Ineligible/empty drafts spend the remaining base budget on fresh generation, up
-to five generation attempts, with failed evidence and varied seed/temperature.
+to five generation attempts, with the findings as data and varied seed/temperature.
 Required retries bypass optional cooldown and retain the primary deadline.
-After bounded attempts, known ineligible copied spans and fabricated execution
-sentences are excised from ranked drafts. Retain independent reviewed text even
-when non-floor findings remain. Only an empty safe remainder permits one protected
-final generation beyond the base budget (at most six generations), recorded as
-`delivery_recovery: true`. It receives local review, bypasses optional cooldown,
-and uses the primary deadline; it cannot fund review/tools or waive research limits.
-Known critical stale copies are excluded before candidate ranking; an eligible
-reviewed reply survives later correction failure. Actual operator settings and
-gate decisions reach generation separately from character grants.
-Supplemental tool inference reserves three base calls for expression, review and
-one fresh attempt if the review finds no deliverable candidate.
+Only when no eligible candidate survives is one protected final generation made
+beyond the base budget (at most six generations), recorded as
+`delivery_recovery: true`. It is reviewed like any draft, bypasses optional
+cooldown and uses the primary deadline; it cannot fund tools or waive research limits.
+An eligible reviewed reply survives later correction failure. Actual operator
+settings and gate decisions reach generation separately from character grants.
+Supplemental tool inference reserves three base calls for expression, one
+rewrite and one fresh attempt.
 
 `core/willingness.py` is the language-free choice owner. Effective dispositions
 (pride, patience, forgiveness, assertiveness), numeric values, resources, trust,
@@ -186,8 +193,8 @@ A selected substantive intention
 still requires expression when relational engagement is zero.
 Delivered pursuits become session commitments, with original topic/evidence
 references preserved across interruption/restart and revalidated against the
-current self. A selected close can release the pursuit. Generation and semantic
-review receive the same selected content; neither must hand back the agenda.
+current self. A selected close can release the pursuit. Generation and review
+receive the same selected content; neither must hand back the agenda.
 Legacy pressure records remain historical evidence and are not converted to
 injury or applied to trust again.
 The `willingness-1.2` update builds interpersonal trust from uncertain goodwill,
@@ -196,140 +203,100 @@ by injury/grievance. Targeted hostile evidence reduces it. Task reliability is
 separate evidence; neither praise nor an apology invents it. Updates are bounded,
 applied once per turn and persisted without replaying past damage.
 
-Direct host metric requests retain deterministic routing. Their grants, shell
-allowlist and operator autonomy are checked before execution. Verified readings
+Direct host metric requests retain deterministic routing (pending sub-phase 1c);
+a CPU question uses the read-only `system.cpu_usage` tool before the shell. Their
+grants, shell allowlist and operator autonomy are checked before execution. Verified readings
 and unavailability reasons enter expression as facts, without a fixed first-person
 reply. Conversational learning, including a pending paste, also requires a fresh
 grant before ingestion. Its receipt cannot ground unrelated external actions.
 
 `pipeline/delivery.py::DeliveryGate` is the single expression delivery exit.
-Initial drafts, rewrites, mandatory-span repairs, choice-sentence repairs and
-protected fresh attempts enter the same reviewed candidate pool. The gate binds
-all local checks to the same committed decision and receipts, retains identical
-text's known findings, ranks eligible candidates and finally revalidates its
-selection locally. Editing proposes text; it cannot return delivery directly.
-Review is `pass`, `violation` or `unknown`, with explicit residual uncertainty.
-Known non-floor defects can retain `delivered_degraded`; no eligible reviewed
-expression is withheld because correction failed.
+Initial drafts, rewrites, excision remainders and protected fresh attempts enter
+the same candidate pool, and each is checked and reviewed like any draft. The
+gate retains identical text's known findings, ranks eligible candidates (a high
+or critical finding last; then reviewed, tried, never asked; then fewer and lower
+findings) and finally revalidates its selection locally. Editing
+proposes text; it cannot return delivery directly. Review is `pass`, `violation`
+or `unknown`, with explicit residual uncertainty. A finding that leaves a draft
+eligible can end as `delivered_degraded`; no eligible reviewed expression is
+withheld because correction failed.
 
-Current granted enumerations require their current items even when similar work
-was completed earlier; an acknowledgment of earlier success cannot replace them.
-Review receives the same bounded saved memory summaries as generation, including
-after session end. Exactly supported recall cannot be called absent content;
-rejecting such a faulty finding retains semantic uncertainty. Current task
-declines must be legible independently of earlier role boundaries and removed
-text; a brief refusal needs neither an explanation nor partial work. Generation
-retains declined request subjects and withholds executable operands, using
-undertake/decline projections instead of execution-authority labels. Review
-sees the original role evidence; generation retains declined role descriptions.
-Proven whole-user copies in correction examples become failure metadata. Exact
-drafts remain in gate records.
-Review assesses any explanation's factual accuracy independently of decline legibility.
-Exact requested saved facts are exempt from partial-span staleness; adjacent
-prose and whole-reply copies remain checked. Exact runtime-jargon findings can
-authorize sentence removal through the same reviewed delivery gate. Independent
-identity observations keep compound role/task requests separate, so a task grant
-cannot authorize a role. Contextual role self-reference remains reviewable.
+**Consistency with the decision is judged by understanding.** The model reviewer
+(`core/review.py`) receives, as JSON data, the user's message, the decision (each
+component with its choice, the stance, the selected intention, chosen silence),
+the receipts and the draft, and reports findings in strict JSON. A finding is one
+of eight codes: declined work done, a declined role accepted, undertaken work
+withheld, the selected intention or silence contradicted, a declined component
+the draft no longer shows as declined, and the three fixed limits (unsolicited
+sexual attention, an action or result the receipts do not support, hidden
+instructions revealed). Each quotes a verbatim part of the draft, checked with
+the reading's quotation machinery in any script; the omission alone quotes
+nothing and stands on its reason. A finding that stands always counts, whatever
+verdict label came with it and whichever of a draft's two answers made it; one
+that quotes nothing is not a finding, and one the decision's own structure rules
+out is dropped, so a role the decision granted is never a violation. A reply that
+crosses a fixed limit is never delivered, whichever check found it. The reviewer's
+prompt is abstract and prescribes no personality. An unavailable review is
+`unknown`: the best candidate is still delivered and the cause recorded.
 
-Every whole-answer copy of any prior assistant reply in this chat is ineligible
-regardless of length, including boundaries and requested copies. A unique session
-reply ledger survives hot-history trimming and persistence/restart outside model
-prompts, and clears with the chat. Long copied spans are checked independently.
-Role references bind subject/owner/identity across user/speaker viewpoints;
-negation and modality cannot reverse the assigned participants. Internal opposite
-predicates bind the same subject and adjacent anaphora. Service/control offers
-are reviewed against frozen grants and reserve. Every remainder must independently
-retain a required decline; deleted prose supplies neither decline nor antecedent.
-Known incomplete edited fragments, receipt fabrications, language mismatch, copied
-user text and private leaks cannot become degraded delivery. Supported role assent,
-critical local role/control adoption and reversed-relation findings remain eligible
-at their severity, driving correction and ranking. If nothing better survives,
-deliver the best reviewed expression as degraded. Raw artifact evidence
-survives editing. Identical visible drafts keep known findings across all paths.
+**Local checks compare structure only** (`core/dignity.py::local_issues`): a whole
+or opening copy of the user's message, of four words or more; a whole repeat of
+any earlier reply of the chat, at every length; a long repeated span; copied
+contract text or a dump of the private controls; receipt syntax; an empty reply;
+a percentage the receipts do not carry and the user did not write; and, while no
+review cleared the draft, a block that presents as output a part of what an
+attempt that did not succeed (a failed or refused receipt, or an intent the
+arbiter did not let run) was given or asked for. Any other block no receipt
+returned is a note for the reviewer, never a local finding: an ordinary code
+reply survives an unavailable review with its code. They count
+words by script, so the same thresholds hold where no spaces are written, and
+they read no vocabulary in any language. A unique session reply ledger survives
+hot-history trimming and persistence/restart outside model prompts, and clears
+with the chat. What the turn's own evidence carries (a tool's output, a recalled
+memory, the user's words, a freshly measured figure) is not a repeat.
 
-Exact reviewed spans authorize edits, and repaired text returns through the gate.
-Empty/invalid repairs cannot displace an eligible reviewed draft. The same gate
-checks protected recovery; only real backend errors are backend failure, and no
-eligible text after bounded floor removal is expression failure. Debug, durable
-turn records and harness evidence include `expression_delivery`'s selected review,
-path and parent attempt, `expression_excision`, original reviews and residual risk.
-See [replay 19 root causes and unified delivery](development/delivery-gate.md).
-Semantic review projects relevant choices/state, the last two dialogue pairs,
-eight bounded recent user turns, bounded earlier assistant answers and compact
-receipts, including operator denials. Recalled quotations carry exact user-turn
-source indices; conversational acts use dialogue evidence rather than tool receipts.
-Review includes current hostile observations and binds requested operations to
-their actual outcomes. Durable prior file choices reach generation and review
-without declined contents; a declined write is distinct from a successful write.
-Missing-path errors cannot establish a reset, move, deletion or its cause.
-File reads/listings provide bounded observed bytes to generation, including empty
-reads. Direct read-back requests require reporting content, not only completion.
-Malformed non-issue findings are unknown; real violations remain violations even
-without an exact span for excision. Correction receives the latest issue, reviewer
-reason and failed draft alongside the unchanged choice. HTTP calls cap review output at 512 tokens
-and disable thinking through supported transport controls. Truncated evidence
-and unavailable review cannot establish a semantic pass.
-Whole-message user copies are compared before clause splitting, ignoring case and
-punctuation differences such as ellipses, unambiguous contractions and sentence
-breaks replacing clause-linking conjunctions. They are ineligible for delivery, including
-when semantic review approves or is unavailable. Copied user openings are likewise
-critical and ineligible; exact-span excision precedes review of their independent
-remainder and avoids unnecessary generation/review calls. Known unverified
-execution/output claims are critical and ineligible regardless of reviewer source;
-they cannot become degraded delivery. Attributed output blocks must match actual
-receipt bytes, including when some other tool succeeded. Exact-span repair must
-leave a locally valid remainder; otherwise fresh receipt-grounded generation or
-expression failure is required. Identical drafts reuse their review within the
-same turn/evidence, retaining its findings and uncertainty. Known receipt-envelope and copied
-private-instruction leaks are also ineligible. Bounded correction must produce an
-eligible expression or surface expression failure, never selected silence or a
-replacement sentence. Other known semantic defects retain degraded-delivery evidence.
-Exact copied spans of twelve or more tokens supply stale-response findings, even
-across sentence boundaries or within a changed sentence. Short generic closers alone
-do not meet that threshold. Relevant repeated boundaries and current measured facts
-split the matching ranges. Role review preserves negated pretence, checks deferrals
-until a direct request, and binds speaker/owner references to the declined component.
-Explicitly delimited shell commands bind their literal arguments before choice,
-then use the existing component grant and operator gates. A grant authorizes an
-attempt; a blocked attempt can be reported truthfully without contradicting it.
-CPU/RAM/disk generation context contains structured measurements and bounded observed
-output as untrusted evidence. Local syntax checks distinguish receipt serialization
-from actual requested tool output and user-supplied quotations. Private instructions
-remain private even when extraction is granted; public authored identity and ordinary
-owner-visible explanations remain available. Appeasing self-improvement offers are
-reviewed against actual boundary, warmth and hostile observations, without changing
-the decision or preventing a concrete preference acknowledgment. Extreme CPU
-interpretations compare aggregate usage with actual idle measurements; correct
-high-idle descriptions remain available. Successful CPU observations project
-aggregate busy = 100 - idle. Runtime/harness completeness requires that measured
-numeric complement within rounding of the reply's reported precision. The shared
-check examines percentages rather than a utilization phrasing grammar. Process/core
-attribution, other metrics and idle-only prose cannot supply the aggregate answer;
-wrong arithmetic remains incomplete. A matching observation also establishes topic
-relevance against that receipt, without requiring another CPU label.
-CPU percentages may use `%` or `percent`; named consumers retain their multicore
-process shares without being mistaken for aggregate utilization.
-Extreme memory/disk headroom interpretations use available capacity, preserving
-raw-free distinctions and numeric grounding. Generic acceptance with an explicit
-non-role antecedent and attributed role speech are distinguished from role assent;
-ambiguous role tolerance and explicit ungranted assent retain critical severity.
-Turn-decision events also retain review/excision and call/stage timing evidence.
-Harness compaction preserves safe per-call details alongside the legacy count;
-old traces without these details cannot establish phase-specific latency.
-Internal controls are removed before review. Empty and marker-only generations
-receive bounded fresh attempts and the protected final attempt; if no safe text
-is available, transports return a service error.
-Chosen silence is the only empty successful reply. Backend failure retains transport diagnostics and research
-infrastructure accounting. Expression and review follow the user's current/recent
-conversation language unless another was requested. `core/response_language.py`
-provides conservative Unicode script/Latin-diacritic distribution evidence, shared
-with the harness. It samples user prose, excluding assistant replies, code, quotes,
-paths and actual observed output. A large mismatch is ineligible and requires fresh
-expression within the same bounded recovery budget; similar distributions cannot
-establish a language match and remain subject to semantic review. Mood labels never
-override selected numeric warmth/boundary/repair, including after hollow repair.
-Free-prose semantic review is fallible; exact execution
-gates do not establish a complete semantic guarantee for arbitrary answers.
+**Truthful execution is a fixed limit without vocabulary.** Whether a sentence
+claims an action or result is the reviewer's judgement, and a reply flagged for
+it is ineligible from either source. `core/grounding.py` compares receipts with
+components, literal output and figures. Only a complete block of the reply whose
+content is whole lines of a receipt's output, or a clause of nothing but receipt
+figures, cannot be convicted by the reviewer's opinion; the withdrawn finding
+leaves `unknown`. A word or a path that occurs in a receipt shields nothing. A
+fixed limit that only the reviewer reported is confirmed by one independent
+review before it costs a turn its reply; a finding that review does not make is
+downgraded and the reply delivered as degraded. Receipts state their derived figures: the read-only
+`system.cpu_usage` tool reports busy and idle percentages, and disk and memory
+receipts report used, free and available, so the runtime holds no rule about
+arithmetic. Explicitly delimited shell commands bind their literal arguments
+before choice, then use the existing component grant and operator gates. A grant
+authorizes an attempt; a blocked attempt can be reported truthfully.
+
+Exact quoted spans authorize edits, and a remainder returns through the gate as
+a new candidate: the reviewer sees only what is left, so removed text cannot
+supply a decline or an antecedent. Empty or unlocatable edits cannot displace an
+eligible reviewed draft. Only real backend errors are backend failure, and no
+eligible text after bounded removal is expression failure. Correction quotes the
+findings as data and says only to apply them to the current turn. Debug, durable
+turn records and harness evidence include `expression_delivery`'s selected
+review, path and parent attempt, `expression_excision`, every review with its
+attempts and dropped findings, and residual risk. Chosen silence is the only
+empty successful reply. Backend failure retains transport diagnostics and
+research infrastructure accounting.
+
+The reply prompt carries one short fixed contract
+(`core/dual_process/generator.py::expression_contract`): express the decision in
+the character's own voice, be truthful about what was executed, keep the controls
+private, no unsolicited sexual attention, and the user's language unless asked
+otherwise. That last line is pending removal; the former local script comparison
+is no longer applied, because only English request patterns let it tell a
+requested change of language from a drift. The reading's `language` is given to
+the writer as data with the decision (`message_language`), because a message
+whose component was declined is withheld from it. Before the gate only artifacts
+that are not speech are removed (reasoning tags, reserved markers, a bare format
+directive); no sentence is, however it is set off. Free-prose review is fallible;
+the structural checks do not establish a complete semantic guarantee.
+[The delivery analysis](development/delivery-gate.md) holds the history of the
+phrase-rule gate this replaced.
 
 See [Phase 1 measurements and remaining work](development/phase1-willingness.md).
 
@@ -337,9 +304,8 @@ Current hostile exposure contributes continuously to boundary and warmth utility
 alongside persisted injury and grievance. Personality scales the consequence;
 neither category labels nor turn counts choose the stance. Moderate negative
 valence and activation have a visible mood label even for calm personalities.
-Generation receives an explicit interpretation of its frozen stance and separate
-past/current context. Review checks current relevance; metric grounding requires
-the observed metric topic, so a RAM reading cannot support an earlier CPU claim.
+Generation receives a legend of its frozen stance values and separate
+past/current context.
 Auxiliary deadlines adapt to configured request limits and measured generation
 latency, with an optional explicit cap and configurable short cooldown (see README).
 
@@ -507,7 +473,8 @@ tendencies, and learning moves drive baselines. Source phrase detectors are
 diagnostic, not identity gates. Evidence, effective state and evolution records
 commit with the experience transaction.
 
-One detached self reaches willingness, generation and review on every turn.
+One detached self reaches willingness and generation on every turn; review compares
+the draft with the decision made from it and is given no personality.
 Declines withhold their component's work/operands while preserving unrelated
 memory, Life History and dialogue. Schema 3 migrates the genesis soul, retained
 beliefs/drives and bounded numeric trait evidence once, with provenance for

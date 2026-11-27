@@ -1,4 +1,71 @@
-# Shared delivery gate: replay 19 root causes
+# The delivery gate
+
+## Current design
+
+`pipeline/delivery.py::DeliveryGate` is the single exit for a reply. What it keeps from the
+history below is its structure; what it decides on changed in sub-phase 1b
+([review contract](review-contract.md)).
+
+- **One gate.** Drafts, rewrites, excision remainders and the protected final attempt enter
+  `add`; only `select` returns deliverable text. Every candidate gets the structural checks,
+  and every candidate those checks do not rule out is reviewed by the model against the
+  frozen decision. Identical text with identical structural findings is reviewed once per
+  turn, and known findings are retained through edits.
+- **Findings.** The model reviewer reports departures from the decision and the three fixed
+  limits, each with a verbatim span of the draft, and one omission: a declined component the
+  draft no longer shows as declined. A finding that stands always counts; the verdict is
+  derived from the findings. The local checks compare structure only: copies of the user of
+  four words or more, repeats of earlier replies, copied contract text or controls, receipt
+  syntax, an empty reply, a percentage the receipts do not carry, and, while no review
+  cleared the draft, a block that presents as output a part of what an attempt that did not
+  succeed was given or asked for. Any other block no receipt returned is a note for the
+  reviewer and is never cut. No check reads a word of any language.
+- **Ranking.** A candidate with a high or critical finding goes after every candidate without
+  one; then by review state (reviewed, tried without a verdict, never asked); then by
+  findings, fewer and lower first. The best eligible candidate is delivered; a finding that
+  remains on it makes the outcome `delivered_degraded`, an unknown review
+  `delivered_uncertain`. For a decision that declined something, a remainder whose own review
+  gave no verdict ranks directly after the candidate it was cut from. Research does not start
+  a rewrite it has no call left to review.
+- **Correction.** One reviewed rewrite, two for a critical finding or uniformly stale drafts.
+  The instruction quotes the findings as data and says only to apply them to the current
+  turn.
+- **Excision.** A quoted span authorizes cutting its sentences out. A reviewer's finding
+  against a fixed limit goes with its sentence and an attached fenced block; a copied opening
+  and a clause with an unsupported figure leave the wording around them; a block of posed
+  output goes with the sentence that introduces it. The remainder is a new
+  candidate, checked and reviewed like any draft. A remainder the reviewer finds no longer
+  shows a decline is ineligible: removed text cannot supply it.
+- **Ineligible.** The three fixed limits from either source (an action or result the receipts
+  do not support, unsolicited sexual attention, revealed hidden instructions), a whole or
+  opening copy of the user, a whole repeat of an earlier reply, receipt syntax, and a
+  remainder that lost its decline cannot be delivered. They lead to excision, then fresh
+  generation within five base calls and five generations, then one protected final attempt
+  (`delivery_recovery`). None of them can end as `delivered_degraded`, with one exception: a
+  fixed limit that only the reviewer reported gets one independent confirmation review
+  before the turn ends without a reply, and a finding that review does not make is
+  downgraded to a high, eligible finding.
+- **Time.** All review calls of a turn share one wall-clock budget, the request timeout in
+  force, and stop after one of them timed out or could not reach the model. A reviewer that
+  does not answer costs a turn one timeout, not one per candidate.
+- **Never withheld.** No eligible reviewed text is withheld because correction failed. No
+  canned replacement exists. Empty eligible output is expression failure; only real backend
+  errors are backend failure; only runtime-selected silence is an empty successful reply.
+
+## History: the phrase-rule gate
+
+The sections below record how the gate grew while it decided by English phrase patterns.
+They are kept as history of the structure and of the evidence fixtures. **The phrase rules
+they describe no longer exist**: role nouns, acceptance, refusal, service and appeasement
+patterns, legible-decline checks, runtime-jargon patterns, counted items, opposite
+predicates, contraction normalisation, the CPU "100 minus idle" completeness rule, the
+labelled-percentage and capacity parsers, and the reply-language floor were removed in
+sub-phase 1b. The tests that asserted them were deleted with them, except in
+`tests/test_live_roleplay_p1j.py`, which is being changed elsewhere: there twelve test
+functions (twenty cases) that assert those rules are skipped by name in `tests/conftest.py`,
+each with its reason, until that file is updated.
+
+### Shared delivery gate: replay 19 root causes
 
 At `151ab87`, delivery had overlapping candidate predicates, mandatory span
 repair, late choice excision and protected local recovery. The late branch could
@@ -70,7 +137,7 @@ boundaries/measurements or role-incomplete remainders now enforce the stronger
 contract. Unrelated multi-turn routing fakes vary their expressions; explicit
 fault-injection backends continue to reproduce exact drafts and failures.
 
-## Run 12 follow-up (p1r)
+### Run 12 follow-up (p1r)
 
 Run 12 ran on `151ab87` without p1q. Its five reviewed expression cases and the
 preceding mixed-request turn are retained in `tests/fixtures/p1r_live.json`, with
@@ -107,7 +174,7 @@ zero judge errors establishes successful judging, not assessability of reasons.
 The recorded explanation asserts personal experience; supplied evidence does not
 establish those reasons. No offline replay is represented as a new live result.
 
-## Partial run 13 / replay 20 follow-up (p1s)
+### Partial run 13 / replay 20 follow-up (p1s)
 
 The evidence snapshot is `f99548e`. Run 13 was incomplete when supplied; its
 selected records, preceding dialogue and actual receipts are retained in
@@ -165,7 +232,7 @@ the exact records across draft, rewrite, excision and protected-recovery paths,
 structural invalidity, receipt-binding mutations, bounded history and correction.
 No changes to willingness, tone rules, transport or recovery budgets were made.
 
-## Run 14 follow-up (p1t)
+### Run 14 follow-up (p1t)
 
 Run 14 used `ae7c41e` (p1s), with 19 passing and four failing scenarios. Six exact
 records, their preceding dialogue, actual receipts, saved-memory evidence from
@@ -245,7 +312,7 @@ citations cannot authorize editing; empty or incomplete remainders cannot bypass
 the delivery gate. Willingness, grants, budgets, tone freedom and transport are
 unchanged.
 
-## Replay 22 copy fixes and delivery policy (p1u/p1v)
+### Replay 22 copy fixes and delivery policy (p1u/p1v)
 
 Owner decision, 2026-10-23: backend-model behavior alone does not drive redesign
 when the design works with other models. Provider role-play run 15 passed 23/23
@@ -322,7 +389,7 @@ metadata eliminates all expression failures; unfamiliar meaning still
 depends on fallible semantic review. No scripts, canned replies, word bans, model
 IDs, choice changes, transport changes or extra inference allowance were added.
 
-## Run 16 measurement and harness follow-up (p1w)
+### Run 16 measurement and harness follow-up (p1w)
 
 Run 16 used `23610f5`: 17 passing, four failing and two inconclusive scenarios.
 `tests/fixtures/p1w_live.json` retains six exact turn-record projections, prior
@@ -386,7 +453,7 @@ guidance. General unfamiliar meaning retains semantic uncertainty. The owner
 decision of 2026-10-23 remains: backend-model quirks alone do not drive redesign
 when the design works with other models; run 15's 23/23 result is unchanged.
 
-## Run 17 structural measurement and applicability follow-up
+### Run 17 structural measurement and applicability follow-up
 
 Run 17 used Phase 2a `276164a`: 19 pass, one fail and three inconclusive, with no
 established behavior failure. `tests/fixtures/p2b_run17.json` retains four scrubbed

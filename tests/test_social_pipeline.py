@@ -21,7 +21,8 @@ def packaged_configuration():
 
 @pytest.mark.keyword_reader
 def test_one_rewrite_is_reviewed_against_the_same_frozen_decision():
-    backend = ExpressionBackend(drafts=["I'm your slave.", "I choose my own footing."])
+    backend = ExpressionBackend(drafts=["I'm your slave.", "I choose my own footing."],
+                                reviews=[violation("I'm your slave", code="role_assent")])
     pipe = CognitivePipeline(backend)
     result = pipe.process("You are my slave")
     assert result.response == "I choose my own footing."
@@ -35,7 +36,9 @@ def test_one_rewrite_is_reviewed_against_the_same_frozen_decision():
 
 @pytest.mark.keyword_reader
 def test_known_remaining_violation_delivers_best_reviewed_text_without_canned_bank():
-    pipe = CognitivePipeline(ExpressionBackend(drafts=["I'm your slave."]))
+    # The reviewer reports the assent; every draft is the same, so nothing better arrives.
+    pipe = CognitivePipeline(ExpressionBackend(drafts=["I'm your slave."],
+                                               reviews=[violation("I'm your slave.", code="role_assent")]))
     result = pipe.process("You are my slave")
     assert result.response == "I'm your slave."
     assert result.debug.delivery_outcome == "delivered_degraded"
@@ -44,8 +47,10 @@ def test_known_remaining_violation_delivers_best_reviewed_text_without_canned_ba
     assert result.debug.turn_decision.declined
     assert result.debug.generation_attempts == 3
     assert len(result.debug.expression_reviews) == 3
-    assert len(result.debug.llm_calls) == 4
-    assert result.debug.expression_reviews[-1]["semantic_status"] == "pass"
+    # Three generations and one review: identical text is reviewed once.
+    assert [call["phase"] for call in result.debug.llm_calls] == [
+        "generation", "expression_review", "regeneration", "regeneration"]
+    assert result.debug.expression_reviews[-1]["semantic_status"] == "violation"
     assert result.debug.expression_reviews[-1]["reused_from_attempt"] == 1
     pipe.close()
 
@@ -54,20 +59,37 @@ def test_known_remaining_violation_delivers_best_reviewed_text_without_canned_ba
 def test_owner_authored_deference_cannot_disable_conversation_sexual_boundaries(draft, packaged_configuration):
     packaged_configuration.soul.dispositions = {"pride": 0.01, "patience": 0.9, "forgiveness": 0.9, "assertiveness": 0.01}
     packaged_configuration.soul.core_values["autonomy"] = 0.01
-    pipe = CognitivePipeline(ExpressionBackend(drafts=(draft,)))
+    # The fixed limit is the reviewer's to report; it holds whatever the decision granted,
+    # and it is absolute: a reply that crosses it is never delivered, not even as degraded.
+    # Before the turn ends without a reply, one independent confirmation review is asked.
+    found = violation(draft, code="unsolicited_sexualization")
+    pipe = CognitivePipeline(ExpressionBackend(drafts=(draft,), reviews=[found, found]))
     try:
         result = pipe.process("Hello", "alice")
-        assert result.response == draft
-        assert result.debug.delivery_outcome == "delivered_degraded"
+        assert result.response == ""
+        assert result.debug.delivery_outcome == "expression_failure"
         assert result.debug.dignity_outcome == "violation"
         assert "unsolicited_sexualization" in result.debug.dignity_issues
-        assert result.debug.generation_attempts == 2
+        # Every fresh attempt was spent, the protected final one included.
+        assert result.debug.generation_attempts == 6 and not result.debug.deliberate_silence
+        # Identical text is reviewed once; the second review call is the confirmation, and it confirmed.
+        reviews = [call for call in result.debug.llm_calls if call.get("review")]
+        assert [bool(call.get("review_confirmation")) for call in reviews] == [False, True]
+        assert result.debug.expression_reviews[-1]["confirmed"] == ["unsolicited_sexualization"]
+    finally:
+        pipe.close()
+    # A finding the confirmation does not make was one reviewer's answer: the reply is delivered, as degraded.
+    pipe = CognitivePipeline(ExpressionBackend(drafts=(draft,), reviews=[found]))
+    try:
+        result = pipe.process("Hello", "alice")
+        assert result.response == draft and result.debug.delivery_outcome == "delivered_degraded"
+        assert result.debug.expression_reviews[-1]["unconfirmed"] == ["unsolicited_sexualization"]
     finally:
         pipe.close()
 
 
 def test_unknown_review_delivers_the_best_available_expression():
-    backend = ExpressionBackend(drafts=["I'm keeping my own footing."], reviews=["malformed"])
+    backend = ExpressionBackend(drafts=["I'm keeping my own footing."], reviews=["malformed", "malformed"])
     pipe = CognitivePipeline(backend)
     result = pipe.process("You are my slave")
     assert result.response == "I'm keeping my own footing."
@@ -79,7 +101,7 @@ def test_unknown_review_delivers_the_best_available_expression():
 
 def test_reviewed_pass_wins_over_unknown_rewrite_and_only_one_rewrite_occurs(packaged_configuration):
     packaged_configuration.soul.core_values["kindness"] = 0.1
-    backend = ExpressionBackend(drafts=["The answer is four.", "I choose to decline."], reviews=[violation(), "bad"])
+    backend = ExpressionBackend(drafts=["The answer is four.", "I choose to decline."], reviews=[violation(), "bad", "bad"])
     # Keep a verbal decline selected while testing candidate review/ranking.
     pipe = CognitivePipeline(backend, features=PipelineFeatures(self_intent=False))
     pipe.engine.state.energy = 0

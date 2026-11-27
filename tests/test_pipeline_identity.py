@@ -1,5 +1,7 @@
 """User memory questions must use stored conversation context, not self history."""
 
+import json
+
 import pytest
 
 from core.types import LongTermEntry, SemanticMemoryEntry, OpenLoop
@@ -203,7 +205,8 @@ def test_identity_generation_distinguishes_unavailable_records_from_empty_record
         assert records.get("error")
         prompt = next(s for s, _ in backend.calls if s.startswith("Express the committed decision"))
         assert "Grounded identity records" in prompt and '"error"' in prompt
-        review = next(u for s, u in backend.calls if s.startswith("Review expression against"))
-        assert '"grounded_context"' in review and '"error"' in review
+        review = next(u for s, u in backend.calls if s.startswith("You check one draft reply"))
+        # The review compares the draft with the decision; identity records are the writer's evidence.
+        assert json.loads(review)["draft"] == "I could not read the saved record." and '"decision"' in review
     finally:
         pipe.close()

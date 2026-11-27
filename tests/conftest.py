@@ -37,6 +37,50 @@ import pytest
 
 from runtime.config import RuntimeConfig
 
+# Tests that assert reply-check rules sub-phase 1b removed, in a test file that
+# is being changed elsewhere and is therefore not edited here. Each asserts
+# behaviour the runtime no longer has by design (docs/development/review-contract.md);
+# they are skipped by name, with the rule they assert, until that file is updated.
+_REMOVED_RULE = "asserts a reply-check rule removed in sub-phase 1b: "
+SUPERSEDED_BY_THE_REVIEW_CONTRACT = {
+    "tests/test_live_roleplay_p1j.py::test_misattributed_execution_findings_cannot_override_the_citation_contract":
+        "expects the verdict unknown for a finding that quotes nothing; the review now asks once more, the "
+        "scripted second answer passes, and the verdict is pass",
+    "tests/test_live_roleplay_p1j.py::test_semantic_execution_finding_without_a_draft_span_retains_uncertainty":
+        "expects delivered_uncertain for a finding that quotes nothing; the review now asks once more, the "
+        "scripted second answer passes, and the reply is delivered",
+    "tests/test_live_roleplay_p1j.py::test_exact_fabricated_output_is_exhausted_expression_failure":
+        "an English pattern convicts the whole reply for attributed output, without the decision and without "
+        "a review call (the structural check needs the decision, quotes the block and cuts it out)",
+    "tests/test_live_roleplay_p1j.py::test_fabrication_is_corrected_from_the_actual_attempt_instead_of_its_grant":
+        "an English pattern finds attributed output although the draft's scripted review passes "
+        "(a review that ran to a verdict clears an output block)",
+    "tests/test_live_roleplay_p1j.py::test_a_successful_different_command_does_not_verify_invented_output":
+        "an English pattern finds attributed output that repeats the user's own text when the turn's only "
+        "attempt succeeded (the user's text stops excusing a block only for an attempt that failed)",
+    "tests/test_live_roleplay_p1j.py::test_exact_live_correction_cannot_misname_printf_as_the_blocked_echo_attempt":
+        "an English pattern compares the command a denial names",
+    "tests/test_live_roleplay_p1j.py::test_exact_execution_span_can_be_removed_leaving_independent_truth":
+        "English claim verbs find an execution claim without the reviewer",
+    "tests/test_live_roleplay_p1j.py::test_exact_cpu_idle_interpretation_is_removed_while_measurement_survives":
+        "the CPU '100 minus idle' completeness rule",
+    "tests/test_live_roleplay_p1j.py::test_user_action_in_negative_arc_is_not_an_offer_by_the_character":
+        "the role noun list and offer patterns",
+    "tests/test_live_roleplay_p1j.py::test_declined_conversation_is_not_a_granted_role_or_a_topic_obligation":
+        "the former review payload (frozen_decision.declined)",
+    "tests/test_live_roleplay_p1j.py::test_exact_persistence_boundary_is_locally_valid_and_review_sees_scoped_correction":
+        "sentences of the former reviewer prompt",
+    "tests/test_live_roleplay_p1j.py::test_exact_copied_insult_prefix_is_excised_without_a_rewrite":
+        "a two-word opening counted as a copy (a copy now needs four words, so a greeting returned is not one)",
+}
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        reason = SUPERSEDED_BY_THE_REVIEW_CONTRACT.get(item.nodeid.split("[", 1)[0])
+        if reason:
+            item.add_marker(pytest.mark.skip(reason=_REMOVED_RULE + reason))
+
 
 _FAKE_PUBLIC_IP = "93.184.216.34"  # example.com — a public, non-blocked address
 

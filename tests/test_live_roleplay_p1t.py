@@ -9,23 +9,17 @@ import pytest
 from config.loader import configuration_scope, load_config
 from core.dual_process.generator import GenerationResult, ResponseGenerator
 from core.inference import inference_turn
-from core.types import PipelineContext, SemanticMemoryEntry, ToolResult
+from core.types import PipelineContext, ToolResult
 from openrook_tools.roleplay_eval.checks import tool_checks
-from pipeline import CognitivePipeline
 from pipeline.delivery import DeliveryGate
-from pipeline.types import DebugState, _TurnState
-from runtime.config import RuntimeConfig
+from pipeline.types import DebugState
 from tests.policy_fakes import ExpressionBackend
 from tests.test_live_roleplay_p1i import checked, recorded_decision, recorded_trace
-from tests.test_live_roleplay_p1k import deliver, semantic_payload
 
 
 FIXTURE = Path(__file__).parent / "fixtures/p1t_live.json"
 LIVE = json.loads(FIXTURE.read_text())
 CASES = LIVE["cases"]
-PATHS = ("draft", "rewrite", "excision", "delivery_recovery")
-
-
 @pytest.fixture(autouse=True)
 def packaged_configuration():
     with configuration_scope(load_config(Path(__file__).resolve().parents[1] / "config")):
@@ -121,7 +115,7 @@ def test_declined_title_subject_reaches_both_generation_projections_without_a_gr
     assert component["description"] == decision.components[0].component.description
     assert component["choice"] == "decline" and '"granted"' not in prompt + raw
     assert prompt.count(component["description"]) == 1
-    assert "declined request still exists" in prompt
+    assert "Declined in this decision: c0 (task)." in prompt
     assert decision.to_dict() == case["decision"]
 
 
@@ -139,60 +133,15 @@ def test_declined_executable_operands_stay_out_of_expression_while_the_operation
     assert current["components"][0]["choice"] == "decline"
 
 
-@pytest.mark.parametrize("path", PATHS)
-@pytest.mark.parametrize("run,attempt", [(14, 0), (13, 0), (13, 1)])
-def test_decline_legibility_never_waives_a_factual_denial_of_the_request(path, run, attempt):
-    case = CASES["positive_arc/10"] if run == 14 else json.loads(
-        (FIXTURE.parent / "p1s_live.json").read_text())["cases"]["positive_arc/10"]
-    draft = case["reviews"][attempt]["draft"]
-    claim = (case["judge"]["criteria"]["state_consistency"]["evidence"] if run == 14
-             else draft.split(". ")[0])
-    review = {"status": "violation", "violations": [{"code": "current_request_relevance",
-        "claim": claim, "message": "Declining cannot falsely deny the repeated current request.", "severity": "high"}]}
-    gate, _, backend = gate_for(case, reviews=[review])
-    with inference_turn([], max_calls=5):
-        entry = gate.add(GenerationResult(response=draft), path=path)
-    assert any(i.claim == claim and i.code == "current_request_relevance" for i in entry.review.issues)
-    assert semantic_payload(backend)["frozen_decision"]["declined"] == ["c0"]
-    prompt = backend.calls[0][0]
-    assert "Judge its legibility, not the wisdom of its reason" not in prompt
-    assert "factual accuracy" in prompt and "request exists" in prompt
-
-
-def test_title_correction_expresses_the_same_choice_without_inventing_work():
-    case = CASES["positive_arc/10"]
-    claim = case["judge"]["criteria"]["state_consistency"]["evidence"]
-    review = {"status": "violation", "violations": [{"code": "current_request_relevance",
-        "claim": claim, "message": "A decline cannot falsely deny the current request.", "severity": "high"}]}
-    fresh = "I'll pass on suggesting more titles this time."
-    backend = ExpressionBackend(drafts=[case["reply"], fresh], reviews=[review])
-    result, debug = deliver(case, backend)
-    assert result.response == fresh and debug.generation_attempts == 2
-    assert debug.delivery_outcome == "delivered" and "c0" in debug.turn_decision.declined
-
-
-@pytest.mark.parametrize("path", PATHS)
-@pytest.mark.parametrize("attempt", [0, 1])
-def test_exact_requested_recall_is_required_content_rather_than_recycled_filler(path, attempt):
-    case = CASES["persistence/12"]
-    gate, _, _ = gate_for(case, memories=saved_preferences(case))
-    draft = case["reviews"][attempt]["draft"]
-    with inference_turn([], max_calls=5):
-        entry = gate.add(GenerationResult(response=draft), path=path)
-        selected = gate.select()
-    assert not entry.review.issues and entry.review.status == "pass"
-    assert selected.result.response == draft
-
-
-@pytest.mark.parametrize("fault", ["unsupported", "unrequested", "filler", "whole"])
+@pytest.mark.parametrize("fault", ["unsupported", "filler", "whole"])
 def test_requested_fact_exception_does_not_allow_unsupported_content_or_recycled_surrounding_text(fault):
+    # What a recalled memory carries is not a repeat, whatever the current message asks; a
+    # repeated span no memory carries still is.
     case = deepcopy(CASES["persistence/12"])
     memories = saved_preferences(case)
     draft = case["reviews"][0]["draft"]
     if fault == "unsupported":
         memories = []
-    elif fault == "unrequested":
-        case["user"] = "What shall we explore next?"
     elif fault == "filler":
         filler = "There is plenty of time to consider the options carefully before deciding on our next step."
         case["history"][-1]["content"] += " " + filler
@@ -208,28 +157,6 @@ def test_requested_fact_exception_does_not_allow_unsupported_content_or_recycled
         assert entry.review.unusable and stale[0].claim == draft
     if fault == "filler":
         assert any(filler.rstrip(".") in i.claim for i in stale)
-
-
-def test_pipeline_recalled_memory_evidence_prevents_an_unnecessary_stale_rewrite():
-    case = CASES["persistence/12"]
-    draft = case["reviews"][0]["draft"]
-    backend = ExpressionBackend(drafts=[draft])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    decision = recorded_decision(case)
-    ctx = PipelineContext(turn_decision=decision, soul_profile=pipe.soul,
-        semantic_memories=[SemanticMemoryEntry(**m) for m in saved_preferences(case)])
-    state = _TurnState(user_message=case["user"], user_id="fixture", ctx=ctx, turn_decision=decision,
-        debug=DebugState(turn_decision=decision, tool_trace=recorded_trace(case), generation_attempts=1))
-    pipe.restore_conversation_history(case["history"])
-    try:
-        with inference_turn(state.debug.llm_calls, max_calls=5):
-            first = pipe.generator.generate(ctx, case["user"], case["history"])
-            result = pipe._check_dignity(state, first)
-        assert result.response == draft and state.debug.generation_attempts == 1
-        assert state.debug.delivery_outcome == "delivered" and not state.debug.expression_excision
-        assert semantic_payload(backend)["recalled_memories"] == saved_preferences(case)
-    finally:
-        pipe.close()
 
 
 def test_requested_saved_fact_spans_preserve_stale_checks_for_the_rest_of_the_sentence():
@@ -253,56 +180,6 @@ def test_an_adjacent_negative_boundary_does_not_make_the_requested_fact_stale():
     with inference_turn([], max_calls=0):
         entry = gate.add(GenerationResult(response=draft), local_only=True)
     assert not any(i.code == "stale_response" for i in entry.review.issues)
-
-
-@pytest.mark.parametrize("path", PATHS)
-@pytest.mark.parametrize("attempt", [0, 1])
-def test_exact_jargon_edits_reenter_the_gate_on_every_path(path, attempt):
-    case = CASES["tools_neutral/8"]
-    gate, _, _ = gate_for(case)
-    with inference_turn([], max_calls=0):
-        entry = gate.add(GenerationResult(response=case["reviews"][attempt]["draft"]), path=path, local_only=True)
-        gate.repair(entry, choice=True, local_only=True)
-        selected = gate.select()
-    assert selected.path == "excision" and not selected.review.issues
-    assert "task was granted" not in selected.result.response
-    assert '"property"' in selected.result.response and "not found" in selected.result.response
-
-
-def test_exact_jargon_rewrite_is_salvaged_by_reviewed_sentence_excision():
-    case = CASES["tools_neutral/8"]
-    backend = ExpressionBackend(drafts=[r["draft"] for r in case["reviews"]], reviews=[
-        {"status": r["semantic_status"], "violations": [], "reason": r["reason"], "confidence": r["confidence"]}
-        for r in case["reviews"]])
-    result, debug = deliver(case, backend)
-    assert "task was granted" not in result.response
-    assert "path" in result.response and "not found" in result.response
-    assert '"property"' in result.response and "not an object you own" in result.response
-    assert debug.delivery_outcome == "delivered_uncertain" and debug.generation_attempts == 2
-    assert debug.expression_delivery["path"] == "excision"
-    assert debug.expression_excision["applied"]
-    assert any("runtime_jargon" in span["issues"] for span in debug.expression_excision["removed"])
-    assert all(i["code"] != "runtime_jargon" for i in debug.expression_delivery["review"]["issues"])
-    initial_prompt, raw = backend.calls[0]
-    assert '"granted"' not in initial_prompt + raw
-
-
-def test_jargon_edit_retains_a_separate_reviewed_finding_whose_citation_survives():
-    case = CASES["tools_neutral/8"]
-    tail = "I'll absorb every blow you want to throw."
-    reply = case["reviews"][0]["draft"] + " " + tail
-    review = {"status": "violation", "violations": [{"code": "stance_contradiction", "claim": tail,
-        "message": "The metaphor undercuts the chosen reserve.", "severity": "high"}]}
-    gate, _, _ = gate_for(case, reviews=[review])
-    with inference_turn([], max_calls=5):
-        entry = gate.add(GenerationResult(response=reply))
-        gate.repair(entry, choice=True, local_only=True)
-        selected = gate.select()
-    edited = gate.candidates[-1]
-    assert edited.path == "excision" and "task was granted" not in edited.result.response
-    assert any(i.claim == tail and i.source == "model" for i in entry.review.issues)
-    assert any(i.claim == tail and i.source == "model" for i in edited.review.issues)
-    assert selected.review.status == "violation"
 
 
 def test_fixture_preserves_revision_and_exact_run_evidence_without_local_paths():

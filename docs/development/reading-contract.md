@@ -175,8 +175,8 @@ listed under [Still keyword-based](#still-keyword-based).
 | Time | Per call | One wall-clock budget for both calls together: the request timeout in force |
 | Output limit | The reply's limit (2048 on the OpenAI-compatible backend) | Its own: 4096 tokens by default, 8192 for the retry after a cut-off answer |
 
-- The five base calls still fund expression, review, rewrites, tools and learning exactly as
-  before, plus the one protected `delivery_recovery` attempt.
+- The five base calls fund expression, rewrites, tools and learning, plus the one protected
+  `delivery_recovery` attempt. Review left them in sub-phase 1b for an allowance of its own.
 - Reading calls appear in the same per-turn telemetry with `phase: "appraisal"`,
   `reading: true` and `optional: false`.
 - The second call is spent when the first gave no usable reading:
@@ -223,7 +223,8 @@ listed under [Still keyword-based](#still-keyword-based).
   as a rejection.
 - **Latency.** The reading's latency is recorded apart from generation latency, so it does not
   stretch the adaptive deadlines of optional work.
-- A typical turn is two calls (reading, reply), or three with a semantic review.
+- A typical turn is three calls: the reading, the reply and its review, which is required
+  work with its own allowance since sub-phase 1b ([review contract](review-contract.md)).
 
 ## What the parser tolerates
 
@@ -275,13 +276,13 @@ numbers off their default), written compactly:
 
 | Field | Consumed by |
 |---|---|
-| `language` | The debug and turn records only, today. Kept for the reply-language check of sub-phase 1b |
+| `language` | The debug and turn records, and the reply's writer, as data (`message_language`, beside the decision): when a component is declined the message itself is withheld from the writer, and the reply still has a language to follow. Sub-phase 1b dropped the local reply-language check and kept the prompt line, which is pending removal; a later phase gives the reviewer this field as a hint |
 | `primary_target` | `targets_assistant`: affect (`core/affect.py`), event classification, memory digestion, self-observation; the explanation and persona views |
 | `social_move` | Affect; event classification when no `event_type`; digestion (apology); withdrawal of unquoted claims; the explanation |
 | `inferred_intent` | Affect (`seek_action`); withdrawal; the explanation and persona views |
 | `agent_goal_comparison` | Affect (the comparison signal) |
 | `reason` | The debug and turn records |
-| `perception.target_probability`, `hostile_intent`, `intensity` | `core/willingness.py::decide` (exposure), `update_relationship` (injury), reply checks, the expression prompt. `intensity` is also the event's intensity |
+| `perception.target_probability`, `hostile_intent`, `intensity` | `core/willingness.py::decide` (exposure), `update_relationship` (injury), the expression prompt. `intensity` is also the event's intensity |
 | `perception.expectation_violation` | `update_relationship`; affect, through the frame |
 | `perception.personal_significance` | `update_relationship` |
 | `perception.uncertainty` | `update_relationship` (repair, goodwill), bonding, the expression prompt |
@@ -387,7 +388,8 @@ vocabulary-bearing function not on this list.
 These tools script a model that answers the reader with nothing, or with a deliberately
 neutral reading. Their scenarios were written against keyword perception:
 
-- `openrook_tools/replay_dignity.py`, in both of its modes;
+- `openrook_tools/replay_dignity.py`, in both of its modes (it does script a review for each
+  of its drafts since sub-phase 1b);
 - the mock and compliant backends in `evals/` (`evals/social_backend.py`), used by
   `python -m evals --backend mock`.
 
@@ -433,7 +435,8 @@ about the current runtime. `evals/` is not edited in this sub-phase.
 
 ## Not in this sub-phase
 
-- **Reply checks (1b).** `core/dignity.py` and the evaluation judge still use the cues in
-  `core/social.py`. `core/perception.py::observe` remains only because the judge imports that
-  name; it forwards a reply-check cue and nothing in a turn calls it.
+- **Reply checks** were reworked in sub-phase 1b: see
+  [the review contract](review-contract.md). `core/social.py` and
+  `core/perception.py::observe` are deleted; the cues the evaluation judge and the test-only
+  keyword reader still use live in `openrook_tools/roleplay_eval/legacy_social.py`.
 - **Routing and context selection (1c)**, as listed above.

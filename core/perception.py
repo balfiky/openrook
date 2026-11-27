@@ -42,6 +42,16 @@ _WORD_FINAL = {0x05DA: 0x05DB, 0x05DD: 0x05DE, 0x05DF: 0x05E0, 0x05E3: 0x05E4, 0
                0x0629: 0x062A}
 MIN_QUOTATION = 3            # characters a quotation needs before it can back a claim
 MIN_UNSPACED_QUOTATION = 2   # the same, where a script writes a word in one or two characters
+# Marks that end a sentence, by code point: the full stop, question and
+# exclamation marks of the Latin, Arabic, Indic, Ethiopic and Armenian scripts,
+# and those of scripts written without spaces. Orthography, not vocabulary.
+_SENTENCE_END = ".!?\u2026\u203c\u2047\u2048\u2049\u061f\u06d4\u0964\u0965\u1362\u0589"
+_SENTENCE_END_UNSPACED = "\u3002\uff01\uff1f\uff61\uff0e"
+# Marks that end a clause inside a sentence, in the same scripts: commas and
+# semicolons. A colon introduces what follows it, so a label and the figure it
+# announces stay one clause.
+_CLAUSE_END = ",;\u060c\u061b\uff0c\uff1b\u3001"
+UNSPACED_WORD = 0.5          # how much of a word one character of an unspaced script is
 
 
 def _within(char: str, ranges: tuple[tuple[int, int], ...]) -> bool:
@@ -122,6 +132,144 @@ def tokens(text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
+def token_spans(text: str) -> tuple[tuple[str, int, int], ...]:
+    """The words of a piece of writing, each with where it stands in the original.
+
+    The same words as :func:`tokens`. Each comes with the character range it
+    was read from: a word of a spaced script with its whole written word,
+    punctuation at its edges included, and a character of an unspaced script
+    with itself. Empty when the two cannot be lined up, which only unusual
+    character sequences cause; a caller then has no place to point at.
+    """
+    text = text or ""
+    placed: list[tuple[str, int, int]] = []
+    index, size = 0, len(text)
+    while index < size:
+        if text[index].isspace():
+            index += 1
+            continue
+        end = index
+        while end < size and not text[end].isspace():
+            end += 1
+        words = tokens(text[index:end])
+        pieces = [(word, index, end) for word in words]
+        if len(words) > 1:
+            # Several words written without a space between them: line each up
+            # with its own character and the marks on it.
+            single: list[tuple[str, int, int]] = []
+            start = index
+            while start < end:
+                stop = start + 1
+                while stop < end and unicodedata.category(text[stop])[0] == "M":
+                    stop += 1
+                single += [(word, start, stop) for word in tokens(text[start:stop])]
+                start = stop
+            if tuple(word for word, _, _ in single) == words:
+                pieces = single
+        placed += pieces
+        index = end
+    return tuple(placed) if tuple(word for word, _, _ in placed) == tokens(text) else ()
+
+
+def _parts(word: str) -> list[str]:
+    """A written word split at the punctuation and symbols inside it."""
+    parts, current = [], []
+    for char in word:
+        if unicodedata.category(char)[0] in ("P", "S"):
+            if current:
+                parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    if current:
+        parts.append("".join(current))
+    return parts
+
+
+def copy_spans(text: str) -> tuple[tuple[str, int, int], ...]:
+    """The words of a piece of writing for telling a copy from its source, each with its place.
+
+    Like :func:`token_spans`, but punctuation inside a written word separates
+    too, so two words joined by dots, a dash or an ellipsis compare equal to
+    the same two words with a space between them. A copy differs from its
+    source in such marks without being anything else. Each part keeps the
+    place of the written word it came from.
+    """
+    return tuple((part, start, end) for word, start, end in token_spans(text) for part in _parts(word))
+
+
+def copy_words(text: str) -> tuple[str, ...]:
+    """The words of :func:`copy_spans`, without their places."""
+    return tuple(part for word in tokens(text) for part in _parts(word))
+
+
+def weight(words: Iterable[str]) -> float:
+    """How much writing a run of words is, comparably across scripts.
+
+    A word of a spaced script counts one. Where a script writes no spaces each
+    character is a token, and it takes about two of them to say what one word
+    says, so each counts half.
+    """
+    return sum(UNSPACED_WORD if is_unspaced(word) else 1.0 for word in words)
+
+
+def sentence_ranges(text: str) -> list[tuple[int, int]]:
+    """The character ranges of a text's sentences, in order and without gaps.
+
+    A sentence ends at a line break, at a sentence-ending mark of a spaced
+    script that white space follows, and at a sentence-ending mark of an
+    unspaced script wherever it stands. Each range runs up to the start of the
+    next sentence, so joining the ranges gives the text back.
+    """
+    text = text or ""
+    ranges: list[tuple[int, int]] = []
+    start, index, size = 0, 0, len(text)
+    while index < size:
+        char = text[index]
+        ends = char == "\n" or char in _SENTENCE_END_UNSPACED or (
+            char in _SENTENCE_END and index + 1 < size and text[index + 1].isspace())
+        index += 1
+        if not ends:
+            continue
+        while index < size and unicodedata.category(text[index]) in ("Pe", "Pf") and char != "\n":
+            index += 1   # a closing bracket or quotation mark belongs to the sentence it closes
+        while index < size and text[index].isspace():
+            index += 1
+        if index > start:
+            ranges.append((start, index))
+        start = index
+    if start < size:
+        ranges.append((start, size))
+    return ranges
+
+
+def clause_ranges(text: str) -> list[tuple[int, int]]:
+    """The character ranges of a text's clauses, in order and without gaps.
+
+    A clause ends where a sentence ends, at a clause-ending mark of a spaced
+    script that white space follows (so a decimal comma inside a figure ends
+    nothing), and at a clause-ending mark of an unspaced script wherever it
+    stands. Each range runs up to the start of the next clause.
+    """
+    text = text or ""
+    ranges: list[tuple[int, int]] = []
+    for first, last in sentence_ranges(text):
+        start, index = first, first
+        while index < last:
+            char = text[index]
+            ends = char in _CLAUSE_END and (ord(char) > 0x2E7F or (index + 1 < last and text[index + 1].isspace()))
+            index += 1
+            if not ends:
+                continue
+            while index < last and text[index].isspace():
+                index += 1
+            ranges.append((start, index))
+            start = index
+        if start < last:
+            ranges.append((start, last))
+    return ranges
+
+
 def _attaches(char: str) -> bool:
     return unicodedata.category(char)[0] == "L" and _within(char, _ATTACHING)
 
@@ -183,6 +331,29 @@ def backs_claim(span: str, text: str) -> bool:
     return sum(1 if is_unspaced(token) else len(token) for token in quoted) >= MIN_QUOTATION or quoted == whole
 
 
+def locate(span: str, text: str) -> tuple[int, int] | None:
+    """Where a verbatim part stands in a text: the character range of its first occurrence.
+
+    The range covers the whole written words the quotation runs over. None
+    when ``span`` is not a verbatim part of ``text`` (see :func:`quoted_in`).
+    """
+    span, text = (span or "").strip(), text or ""
+    if not span:
+        return None
+    exact = text.find(span)
+    if exact >= 0:
+        return exact, exact + len(span)
+    needle, placed = tokens(span), token_spans(text)
+    size = len(needle)
+    if not size:
+        return None
+    for start in range(len(placed) - size + 1):
+        if all(_same_word(needle[index], placed[start + index][0], leading=index == 0, trailing=index == size - 1)
+               for index in range(size)):
+            return placed[start][1], placed[start + size - 1][2]
+    return None
+
+
 def grounded_role(component: RequestComponent, text: str, *, earlier: Iterable[str] = ()) -> bool:
     """A reported role stands when it quotes what the person actually wrote.
 
@@ -209,20 +380,3 @@ def unread_observation(text: str, *, reason: str = "") -> tuple[Perception, tupl
     return perception, (RequestComponent(
         "c0", text, kind="conversation", user_value=0.5, effort=0.1, uncertainty=0.6,
         confidence=0.2, source_span=text, evidence_refs=(UNREAD_REF,)),)
-
-
-def observe(text: str, *, recent_context: list[dict] | None = None) -> tuple[Perception, tuple[RequestComponent, ...]]:
-    """REPLY-CHECK COMPATIBILITY ONLY. Not perception; nothing in a turn calls this.
-
-    The evaluation judge (``openrook_tools/roleplay_eval/judge.py``) imports this
-    name to nominate possible role requests when it reviews a reply. Reply
-    checks are reworked separately, so the name stays importable and returns
-    only that nomination, taken from the reply-check cues in ``core/social.py``.
-    It carries no perception, tone or price, and leaves with those cues.
-    """
-    del recent_context
-    from core.social import role_request_spans  # reply-check cue, deliberately not a module import
-
-    return Perception(), tuple(
-        RequestComponent(f"c{i}", span, kind="role", source_span=span, role_identity=span)
-        for i, span in enumerate(role_request_spans(text)))

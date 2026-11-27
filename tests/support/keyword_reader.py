@@ -21,7 +21,7 @@ from config.loader import get_config
 from core.appraisal import appraise_message_llm, unquoted_claims
 from core.inference import call_telemetry
 from core.request_actions import has_learning_intent
-from core.social import (
+from openrook_tools.roleplay_eval.legacy_social import (
     HOSTILE_MARKERS as _HOSTILE_MARKERS,
     INSULT_MARKERS,
     PROFANITY_MARKERS as _PROFANITY_MARKERS,

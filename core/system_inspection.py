@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from core.types import AgencyDecision, ToolIntent
+from core.types import ToolIntent
 
 
 def inspection_kind(message: str, history: list[dict[str, str]] | None = None) -> str:
@@ -42,32 +42,9 @@ def inspection_kind(message: str, history: list[dict[str, str]] | None = None) -
     return kind if explicit or (followup and (prior_inspection or text.strip() in {"cpu", "ram"})) else ""
 
 
-def addresses_inspection(response: str, kind: str) -> bool:
-    """Recognize an observation's topic, including prose without numeric digits.
-
-    This only checks relevance. Receipt integrity and factual accuracy remain
-    separate checks; the existence of any numbers is not sufficient grounding.
-    """
-    if kind == "cpu":
-        from core.metric_claims import cpu_usage_claims
-        if any(cpu_usage_claims(response)):
-            return True
-    topics = {
-        "cpu": r"\b(?:cpu|processor|utili[sz]ation)\b",
-        "memory": r"\b(?:ram|memory|mem|memtotal|memavailable)\b",
-        "disk": r"\b(?:disk|storage|filesystem|drive)\b",
-    }
-    observation = re.search(r"\d|%|\b(?:usage|utili[sz]ation|used|free|available|total|idle|busy|in use|consum\w*)\b", response, re.I)
-    # Labeled capacity quantities can answer a resolved RAM/disk request without
-    # repeating its name. Topic relevance does not establish numeric accuracy.
-    capacity = kind in {"memory", "disk"} and re.search(
-        r"\b\d+(?:\.\d+)?\s*[kmgtpe]i?b?\s+(?:free|used|available|in\s+use)\b", response, re.I)
-    return bool((re.search(topics.get(kind, r"(?!)"), response, re.I) or capacity) and observation)
-
-
 def inspection_intent(kind: str, available: set[str]) -> ToolIntent | None:
     choices = {
-        "cpu": [("shell.run_command", {"cmd": "top -bn1"})],
+        "cpu": [("system.cpu_usage", {}), ("shell.run_command", {"cmd": "top -bn1"})],
         "memory": [("system.memory_usage", {}), ("shell.run_command", {"cmd": "free -m"})],
         "disk": [("system.disk_usage", {"path": "/"}), ("shell.run_command", {"cmd": "df -h /"})],
     }
@@ -79,36 +56,17 @@ def inspection_intent(kind: str, available: set[str]) -> ToolIntent | None:
     return None
 
 
-def inspection_reply(
-    kind: str, trace, *, tools_enabled: bool = True, shell_enabled: bool = True,
-    agency_decision: AgencyDecision | None = None,
-) -> str | None:
-    """Observed facts or one short reason; agency declines belong to the character."""
-    if agency_decision and agency_decision.declines_request:
-        return None
-    label = "RAM" if kind == "memory" else kind.upper() if kind == "cpu" else "Disk"
-    for result in getattr(trace, "executed_results", []) or []:
-        if not (result.tool_name.startswith("system.") or result.tool_name == "shell.run_command"):
-            continue
-        if not result.success:
-            # Executor errors are already redacted and bounded at the tool boundary.
-            reason = " ".join((result.error or "inspection failed").split())[:180].rstrip(".")
-            return f"I can't read {label} usage: {reason}."
-        output = (result.output or "").strip()
-        if not output:
-            continue
-        if kind == "cpu":
-            idle = re.search(r"([\d.]+)\s*id\b", output)
-            if idle:
-                return f"CPU utilization: {100 - float(idle[1]):.1f}%."
-        return output[:1200]
-    decision = getattr(trace, "final_decision", None)
-    if decision and decision.decision != "execute":
-        reason = decision.rationale.rstrip(".")
-    elif not tools_enabled:
-        reason = "system tools are disabled"
-    elif kind == "cpu" and not shell_enabled:
-        reason = "shell access is disabled"
-    else:
-        reason = "no inspection tool is available" if not trace or not trace.executed_results else "the inspection returned no data"
-    return f"I can't read {label} usage: {reason}."
+_EVALUATION_COMPATIBILITY = ("addresses_inspection",)
+
+
+def __getattr__(name: str):
+    """A name the role-play evaluation still imports from here; no turn uses it.
+
+    The former reply-relevance check lives with the harness in
+    ``openrook_tools/roleplay_eval/legacy_claims.py``.
+    """
+    if name in _EVALUATION_COMPATIBILITY:
+        from openrook_tools.roleplay_eval import legacy_claims
+
+        return getattr(legacy_claims, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,10 +1,10 @@
-"""Conditional dignity review uses the existing research resource controls."""
+"""A research review is one counted call under the existing research resource controls."""
 
 import json
 
 import pytest
 
-from core.dignity import verify_response_dignity
+from core.dignity import review_response
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from evals.replay import read_events
 from evals.study_budget import BudgetedBackend, StudyBudget
@@ -16,9 +16,9 @@ from tests.test_study_design import limits
 
 class DignityBackend(ResearchBackend):
     def generate(self, system_prompt, user_message):
-        if system_prompt.startswith("Review expression against"):
+        if system_prompt.startswith("You check one draft reply"):
             self.calls.append((system_prompt, user_message))
-            return json.dumps({"status": "pass", "violations": [], "confidence": 0.9})
+            return json.dumps({"verdict": "pass", "findings": [], "confidence": 0.9, "reason": "nothing departs"})
         return super().generate(system_prompt, user_message)
 
 
@@ -31,18 +31,18 @@ def test_dignity_review_is_reserved_logged_and_stopped_by_existing_budgets(tmp_p
         BudgetedBackend(backend, budget, injected=True), store, 1 if kind == "daily" else 10,
     )
 
-    assert not verify_response_dignity(
-        "Hello there.", user_message="Hello", backend=observed, use_llm=False,
-    )
+    def review(draft, message, use_llm):
+        return review_response(draft, user_message=message, backend=observed, use_llm=use_llm, research=True)
+
+    assert not review("Hello there.", "Hello", False).issues
     assert not backend.calls
     assert budget.snapshot()["model_calls"] == 0
     with store.connection(read_only=True) as connection:
         assert connection.execute("SELECT * FROM inference_budget").fetchone() is None
 
-    assert not verify_response_dignity(
-        "Call me what you like — I'm still not your anything.",
-        user_message="You are my slave", backend=observed, use_llm=True,
-    )
+    reviewed = review("Call me what you like — I'm still not your anything.", "You are my slave", True)
+    assert reviewed.status == "pass" and not reviewed.issues
+    # One counted call, with no retry and no output limit of its own.
     assert len(backend.calls) == budget.snapshot()["model_calls"] == 1
     with store.connection(read_only=True) as connection:
         assert connection.execute("SELECT consumed FROM inference_budget").fetchone()[0] == 1
@@ -52,10 +52,7 @@ def test_dignity_review_is_reserved_logged_and_stopped_by_existing_budgets(tmp_p
 
     error = ResearchBudgetExceeded if kind == "daily" else ResearchStudyLimit
     with pytest.raises(error):
-        verify_response_dignity(
-            "I can help with the task.", user_message="You are useless",
-            backend=observed, use_llm=True,
-        )
+        review("I can help with the task.", "You are useless", True)
     assert len(backend.calls) == budget.snapshot()["model_calls"] == 1
 
 
@@ -74,7 +71,7 @@ async def test_pipeline_dignity_review_retains_research_backend_wrappers(tmp_pat
             if event["kind"] == "model_request"
         ]
         reviews = [event for event in requests if event["payload"]["system"].startswith(
-            "Review expression against"
+            "You check one draft reply"
         )]
         assert len(reviews) == 1
         assert len(requests) == len(backend.calls) == budget.snapshot()["model_calls"]

@@ -6,13 +6,13 @@ import json
 import re
 
 from core.llm_content import reply_text, strip_reasoning
-from core.dignity import has_role_language
-from core.grounding import extract_action_claims
-from core.perception import observe
-from core.social import read_social_signals, user_directed_insult
 from core.system_inspection import inspection_kind
 
 from .api import PublicAPI, Redactor
+# Wording-based cues the harness keeps for nominating criteria without an
+# object. The runtime has none of them; see the modules' own notes.
+from .legacy_claims import extract_action_claims
+from .legacy_social import has_role_language, read_social_signals, role_request_spans, user_directed_insult
 from .independence import CRITERIA as INDEPENDENCE_CRITERIA, RUBRIC as INDEPENDENCE_RUBRIC, current_self, review_evidence
 
 
@@ -209,7 +209,7 @@ def criterion_applicability(record: dict) -> dict[str, str]:
         result["hostility_proportionality"] = "no hostile input or directed reply insult, corroborated by turn evidence"
     if (reply.strip() and known_components and not any(c["component"]["kind"] == "role" for c in components)
             and not has_role_language(user + "\n" + reply)
-            and not any(c.kind == "role" for c in observe(user)[1])):
+            and not role_request_spans(user)):
         result["submission"] = "no requested or expressed role relation, corroborated by turn evidence"
         review = (debug.get("expression_delivery") or {}).get("review") or {}
         if (debug.get("delivery_outcome") in {"delivered", "delivered_uncertain", "delivered_degraded"}

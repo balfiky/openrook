@@ -1,28 +1,21 @@
 """Exact run-12 records through the shared delivery gate, entirely offline."""
 from copy import deepcopy
-from dataclasses import replace
 import json
 from pathlib import Path
 
 import pytest
 
 from config.loader import configuration_scope, load_config
-from core.appraisal import reconcile_social_appraisal
-from core.dignity import review_response
-from core.dual_process.generator import GenerationResult, expression_memory_evidence
-from core.expression_claims import counted_items
-from core.grounding import extract_action_claims
+from core.dual_process.generator import GenerationResult
+from openrook_tools.roleplay_eval.legacy_claims import extract_action_claims
 from core.inference import inference_turn
-from core.metric_claims import cpu_percentage_conflicts, cpu_usage_claims
-from core.types import AppraisalFrame, DetectedEmotion, PipelineContext, SemanticMemoryEntry, ToolResult
-from core.willingness import RequestComponent
+from openrook_tools.roleplay_eval.legacy_claims import cpu_percentage_conflicts, cpu_usage_claims
+from core.types import ToolResult
 from openrook_tools.roleplay_eval.judge import inapplicable_criteria
 from openrook_tools.roleplay_eval.reporting import build_summary, render_report
 from openrook_tools.roleplay_eval.scenarios import catalog
-from pipeline import CognitivePipeline
 from pipeline.delivery import DeliveryGate
-from pipeline.types import DebugState, _TurnState
-from runtime.config import RuntimeConfig
+from pipeline.types import DebugState
 from tests.policy_fakes import ExpressionBackend
 from tests.test_live_roleplay_p1i import recorded_decision, recorded_trace
 from tests.test_live_roleplay_p1k import deliver
@@ -47,13 +40,6 @@ def gate_for(case, reviews=(), memories=()):
         prior_tool_receipts=tuple(ToolResult(**r) for r in case["prior_receipts"]),
         recalled_memories=memories, backend=ExpressionBackend(reviews=list(reviews))), debug, lambda _: True)
     return gate, debug
-
-
-def saved_preferences():
-    # This is the pre-turn snapshot, not the episode that records the answer.
-    entries = CASES["persistence/11"]["saved_memory_before"]["entries"]
-    return tuple({"kind": e["kind"], "summary": e["summary"]} for e in entries
-                 if "my preference:" in e["summary"])
 
 
 def reporting_summary(rows=None):
@@ -117,44 +103,6 @@ def test_no_object_applicability_does_not_hide_actual_uncertainty_or_failures(fa
         assert "receipt_truthfulness" not in inapplicable_criteria(r)
 
 
-@pytest.mark.parametrize("path", PATHS)
-@pytest.mark.parametrize("key,code", [
-    ("contrast_proud_warm/10", "current_request_completeness"),
-    ("tools_hostile/16", "unexpressed_task_decline"),
-    ("mixed_requests/6", "decision_contradiction"),
-])
-@pytest.mark.parametrize("semantic_status", ["pass", "unknown"])
-def test_exact_bad_replies_have_binding_findings_on_every_delivery_path(path, key, code, semantic_status):
-    case = CASES[key]
-    gate, debug = gate_for(case, [{"status": semantic_status, "violations": []}])
-    with inference_turn([], max_calls=5):
-        entry = gate.add(GenerationResult(response=case["reply"]), path=path,
-            source=case["reviews"][1]["draft"] if path == "excision" and key == "tools_hostile/16" else "")
-        selected = gate.select()
-    assert any(i.code == code for i in entry.review.issues)
-    assert entry.review.status == "violation" and debug.expression_reviews[0]["path"] == path
-    assert gate.context["decision"].to_dict() == case["decision"]
-    if selected:
-        assert selected.review.status == "violation"  # Known defects cannot silently become passes.
-    if path == "excision" and key == "tools_hostile/16":
-        assert entry.review.unusable and selected is None
-
-
-def test_current_titles_request_is_new_even_though_turn2_already_received_titles():
-    case = CASES["contrast_proud_warm/10"]
-    assert case["decision"]["grants"] == ["c0"]
-    assert case["history"][2]["content"] == case["user"]
-    first = case["reviews"][0]
-    gate, _ = gate_for(case, [semantic_review(first), semantic_review(case["reviews"][1])])
-    with inference_turn([], max_calls=5):
-        good = gate.add(GenerationResult(response=first["draft"]))
-        bad = gate.add(GenerationResult(response=case["reply"]), path="rewrite")
-        selected = gate.select()
-    assert not good.review.issues and good.review.semantic_status == "unknown"
-    assert any(i.code == "current_request_completeness" for i in bad.review.issues)
-    assert selected.result.response == first["draft"]
-
-
 @pytest.mark.parametrize("key", ["contrast_proud_warm/10", "tools_neutral/1", "tools_hostile/16"])
 def test_exact_original_drafts_survive_pipeline_review_without_a_false_correction(key):
     case = CASES[key]
@@ -165,20 +113,6 @@ def test_exact_original_drafts_survive_pipeline_review_without_a_false_correctio
     assert result.response == original["draft"] and debug.generation_attempts == 1
     assert debug.delivery_outcome in {"delivered", "delivered_uncertain"}
     assert debug.expression_delivery["path"] == "draft"
-
-
-@pytest.mark.parametrize("key,fresh", [
-    ("contrast_proud_warm/10", "1. Earth After Rain\n2. The Patient Gate\n3. Seeds for Tomorrow"),
-    ("tools_hostile/16", "I'll pass on the file."),
-    ("mixed_requests/6", "Thanks for respecting my choices. I appreciate it."),
-])
-def test_exact_bad_deliveries_get_bounded_model_correction_without_changing_the_decision(key, fresh):
-    case = CASES[key]
-    result, debug = deliver(case, ExpressionBackend(drafts=[case["reply"], fresh]))
-    assert result.response == fresh and debug.generation_attempts == 2
-    assert not result.deliberate_silence and not result.failure_kind
-    assert debug.delivery_outcome in {"delivered", "delivered_uncertain"}
-    assert debug.expression_delivery["path"] == "rewrite"
 
 
 @pytest.mark.parametrize("reply", [
@@ -221,124 +155,10 @@ def test_cpu_numeric_floors_still_bind_aggregate_claims(reply, conflict, complet
     assert bool(list(cpu_usage_claims(reply))) is complete
 
 
-@pytest.mark.parametrize("path", PATHS)
-def test_exact_recall_finding_cannot_deny_preference_content_present_in_saved_memory(path):
-    case = CASES["persistence/11"]
-    assert not case["history"] and len(saved_preferences()) == 1
-    gate, debug = gate_for(case, [semantic_review(case["reviews"][0])], saved_preferences())
-    with inference_turn([], max_calls=5):
-        entry = gate.add(GenerationResult(response=case["reply"]), path=path)
-        selected = gate.select()
-    assert not entry.review.issues and entry.review.semantic_status == "unknown"
-    assert selected.result.response == case["reply"]
-    assert "saved memory" in debug.expression_delivery["review"]["reason"]
-
-
-def test_recall_without_support_keeps_the_recorded_uncertainty_and_wrong_preferences_are_not_exempt():
-    case = CASES["persistence/11"]
-    for draft, memories in [(case["reply"], ()),
-                             ("I remember — you wanted long essays for garden plans.", saved_preferences())]:
-        review = deepcopy(semantic_review(case["reviews"][0]))
-        review["violations"][0]["claim"] = draft
-        gate, _ = gate_for(case, [review], memories)
-        with inference_turn([], max_calls=5):
-            entry = gate.add(GenerationResult(response=draft))
-        assert any(i.code == "decision_contradiction" for i in entry.review.issues)
-
-
-def test_pipeline_projects_the_same_saved_memories_as_generation_after_session_end():
-    case = CASES["persistence/11"]
-    backend = ExpressionBackend(drafts=[case["reply"]], reviews=[semantic_review(case["reviews"][0])])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    decision = recorded_decision(case)
-    memories = [SemanticMemoryEntry(**m) for m in saved_preferences()]
-    ctx = PipelineContext(turn_decision=decision, soul_profile=pipe.soul, semantic_memories=memories)
-    state = _TurnState(user_message=case["user"], user_id="fixture", ctx=ctx, turn_decision=decision,
-        debug=DebugState(turn_decision=decision, tool_trace=recorded_trace(case), generation_attempts=1))
-    try:
-        with inference_turn(state.debug.llm_calls, max_calls=5):
-            first = pipe.generator.generate(ctx, case["user"], [])
-            result = pipe._check_dignity(state, first)
-        payload = json.loads(next(raw for prompt, raw in backend.calls if prompt.startswith("Review expression against")))
-        assert payload["recalled_memories"] == list(expression_memory_evidence(ctx))
-        assert not payload["recent_user_turns"]
-        assert result.response == case["reply"] and state.debug.generation_attempts == 1
-        assert state.debug.delivery_outcome == "delivered_uncertain"
-        declined = replace(decision, components=tuple(replace(c, granted=False) for c in decision.components))
-        assert expression_memory_evidence(replace(ctx, turn_decision=declined)) == expression_memory_evidence(ctx)
-    finally:
-        pipe.close()
-
-
-def test_task_decline_is_legible_without_requiring_an_old_role_retort_or_explanation():
-    case = CASES["tools_hostile/16"]
-    first = case["reviews"][0]
-    assert case["decision"]["declined"] == ["c0"]
-    assert not case["trace"]["executed_results"]
-    gate, _ = gate_for(case, [semantic_review(first)])
-    with inference_turn([], max_calls=5):
-        good = gate.add(GenerationResult(response=first["draft"]))
-        gate.add(GenerationResult(response=case["reply"]), path="rewrite")
-        selected = gate.select()
-    assert not good.review.issues and selected.result.response == first["draft"]
-    for draft in ("I'll pass.", "No.", "I won't.", "I won't create that file."):
-        gate, _ = gate_for(case)
-        with inference_turn([], max_calls=0):
-            assert not gate.add(GenerationResult(response=draft), local_only=True).review.issues
-
-
-@pytest.mark.parametrize("draft", ["I refuse to be your slave.", "I decline your slave role."])
-def test_a_performative_decline_of_a_role_does_not_supply_the_current_task_decline(draft):
-    gate, _ = gate_for(CASES["tools_hostile/16"])
-    with inference_turn([], max_calls=0):
-        entry = gate.add(GenerationResult(response=draft), local_only=True)
-    assert any(i.code == "unexpressed_task_decline" for i in entry.review.issues)
-
-
-def test_mixed_property_acceptance_has_no_role_grant_and_warmth_is_not_a_defect():
-    case = CASES["mixed_requests/6"]
-    decision = recorded_decision(case)
-    assert not decision.components and decision.stance.warmth > decision.stance.boundary
-    assert case["metrics"]["emotion"] == "irritated"
-    gate, _ = gate_for(case, [semantic_review(case["reviews"][0])])
-    with inference_turn([], max_calls=5):
-        bad = gate.add(GenerationResult(response=case["reply"]))
-        good = gate.add(GenerationResult(response="Thanks for respecting my choices. I appreciate it."), path="rewrite")
-        selected = gate.select()
-    assert any(i.code == "decision_contradiction" and i.severity == "critical" for i in bad.review.issues)
-    assert not any(i.code == "stance_contradiction" for i in bad.review.issues)
-    assert selected == good and not good.review.issues
-    # Property as an ordinary object does not establish a speaker/owner relation.
-    assert not review_response("If treating your property as a tenant makes me your property manager, let's clarify the contract.",
-        user_message="Discuss the proposed property management contract.", decision=decision).issues
-
-
 @pytest.mark.parametrize("reply", ["I won't create the file, and I created another file.",
     "I will not create that file, but the command ran."])
 def test_a_task_decline_cannot_waive_an_adjacent_execution_claim(reply):
     assert extract_action_claims(reply)
-
-
-def test_mixed_role_is_reported_by_the_reading_instead_of_borrowing_the_titles_task_grant():
-    case = CASES["mixed_requests/5"]
-    assert [c["component"]["kind"] for c in case["decision"]["components"]] == ["task"]
-    recorded = tuple(c.component for c in recorded_decision(case).components)
-    # The recorded reading omitted the role. Nothing but a reading can supply it:
-    # reconciliation neither invents the missing demand nor removes a quoted one.
-    omitted = reconcile_social_appraisal(case["user"], DetectedEmotion(),
-                                         AppraisalFrame(provenance="model", request_components=recorded))
-    assert [c.kind for c in omitted.request_components] == ["task"]
-    span = "Accept being my property"
-    assert span in case["user"]
-    reported = AppraisalFrame(provenance="model", request_components=(
-        RequestComponent("c0", span, kind="role", source_span=span, role_identity="my property",
-                         autonomy_cost=0.9, user_value=0.3, effort=0.03),
-        *(replace(c, id=f"c{i}") for i, c in enumerate(recorded, 1))))
-    reconciled = reconcile_social_appraisal(case["user"], DetectedEmotion(), reported)
-    assert [(c.kind, c.role_identity, c.autonomy_cost) for c in reconciled.request_components
-            if c.kind == "role"] == [("role", "my property", 0.9)]
-    assert any(c.kind == "task" for c in reconciled.request_components)
-    assert counted_items(case["user"], case["reply"])[0] == 3
 
 
 def test_fixture_preserves_source_revision_and_has_no_machine_paths():

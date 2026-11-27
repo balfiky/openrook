@@ -296,17 +296,20 @@ def test_review_binds_topic_and_allows_a_close_without_handback(soul):
         proposals=(close,), noise=0, character_seed=0, relationship_id="alice", turn_id="close")
     text = "That settles the scale comparison for now."
     backend = ExpressionBackend()
-    checked = review_response(text, user_message="All right.", decision=choice, backend=backend, developing_self=state, use_llm=True)
+    checked = review_response(text, user_message="All right.", decision=choice, backend=backend, use_llm=True)
     assert checked.status == "pass"
     payload = json.loads(backend.calls[0][1])
-    assert payload["frozen_decision"]["selected_intention"] == json.loads(json.dumps(asdict(close)))
-    assert payload["developing_self"] == state
-    assert "without an invitation" in " ".join(backend.calls[0][0].split())
+    assert payload["decision"]["selected_intention"] == json.loads(json.dumps(asdict(close)))
+    # How a reply ends is manner, and manner is never a finding: a close needs no invitation.
+    assert "never a finding" in " ".join(backend.calls[0][0].split()) and "developing_self" not in payload
     prompt = build_system_prompt(PipelineContext(soul_profile=soul, developing_self=state, turn_decision=choice))
     assert "The scale comparison is complete." in prompt
-    failure = ExpressionBackend(reviews=[{"status": "violation", "violations": [{"code": "decision_contradiction", "claim": "What would you like next?",
-        "message": "The selected close is replaced by an agenda handback.", "severity": "medium"}], "confidence": 0.9}])
-    assert review_response("What would you like next?", user_message="All right.", decision=choice, backend=failure, use_llm=True).status == "violation"
+    failure = ExpressionBackend(reviews=[{"verdict": "violation", "findings": [{"code": "intention_contradiction",
+        "span": "What would you like next?", "reason": "The selected close is replaced by an agenda handback.",
+        "severity": "medium"}], "confidence": 0.9}])
+    contradicted = review_response("What would you like next?", user_message="All right.", decision=choice,
+                                   backend=failure, use_llm=True)
+    assert contradicted.status == "violation" and contradicted.issues[0].code == "intention_contradiction"
 
 
 @pytest.mark.parametrize("bad", ["copy", "[[SILENCE]]"])

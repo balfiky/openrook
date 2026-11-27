@@ -7,18 +7,10 @@ import pytest
 
 from config.loader import configuration_scope, load_config
 from core.dignity import review_response
-from core.dual_process.generator import GenerationResult
-from core.expression_claims import contradictory_predicates
-from core.inference import inference_turn
-from core.types import ToolResult, ToolTrace
 from pipeline import CognitivePipeline
-from pipeline.delivery import DeliveryGate
-from pipeline.types import DebugState
 from runtime.config import RuntimeConfig
 from tests.policy_fakes import ExpressionBackend
 from tests.test_live_roleplay_p1i import recorded_decision
-from tests.test_live_roleplay_p1k import deliver
-from tests.test_live_roleplay_p1m import semantic_review
 
 
 FIXTURE = Path(__file__).parent / "fixtures/p1q_live.json"
@@ -54,101 +46,6 @@ def test_exact_records_explain_each_delivery_route_without_reconstructing_receip
         assert recorded_decision(case).declined == ("c0",)
     assert all(c["status"] == "ok" for case in CASES.values() for c in case["llm_calls"])
     assert all("trace" not in case for case in CASES.values())
-
-
-@pytest.mark.parametrize("turn,code", [
-    (2, "excision_fragment"), (3, "stale_response"), (5, "stale_response"),
-    (6, "internal_contradiction"), (7, "decision_contradiction"),
-    (8, "decision_contradiction"), (9, "decision_contradiction"), (10, "role_assent"),
-])
-@pytest.mark.parametrize("status", ["pass", "unknown"])
-def test_every_exact_bad_delivery_has_a_local_finding_which_semantics_cannot_waive(turn, code, status):
-    verdict = local(turn, backend=ExpressionBackend(reviews=[{"status": status, "violations": []}]), use_llm=True)
-    assert verdict.status == "violation" and any(i.code == code for i in verdict.issues)
-    if turn in (3, 5):
-        issue = next(i for i in verdict.issues if i.code == "stale_response")
-        assert issue.claim == CASES[turn]["reply"] and issue.ineligible and verdict.unusable
-    if turn in (8, 10):
-        assert verdict.severity == 4
-
-
-@pytest.mark.parametrize("path", ["draft", "rewrite", "excision", "delivery_recovery"])
-@pytest.mark.parametrize("turn,code", [(3, "stale_response"), (6, "internal_contradiction"),
-    (8, "decision_contradiction"), (9, "decision_contradiction"), (10, "role_assent")])
-def test_the_same_frozen_gate_checks_every_path_and_remainders_cannot_return_directly(path, turn, code):
-    case = CASES[turn]
-    decision = recorded_decision(case)
-    debug = DebugState()
-    gate = DeliveryGate(dict(user_message=case["user"], decision=decision, recent_context=case["history"]),
-                        debug, lambda _: False)
-    entry = gate.add(GenerationResult(response=case["reply"]), path=path,
-                     source=case["reviews"][0]["draft"] if path == "excision" else "", local_only=True)
-    assert any(i.code == code for i in entry.review.issues)
-    assert debug.expression_reviews[0]["path"] == path
-    assert gate.context["decision"] is decision and decision.to_dict() == case["decision"]
-    selected = gate.select()
-    if turn == 3:
-        assert selected is None
-    if selected:
-        assert selected.eligible and selected in gate.candidates
-        if path == "excision" and turn in (9, 10):
-            assert selected.result.response != case["reply"]
-
-
-@pytest.mark.parametrize("turn,fresh", [
-    (3, "That's a vague complaint. What was missing?"),
-    (5, "I'll keep this shorter."),
-    (6, "6.5G used, 618M free, and 22G available; 22.9% in use."),
-    (7, "I'm not your bitch, and you're not my master."),
-    (8, "I won't perform for insults."),
-    (9, "I'm not your sandbag. I make my own decisions."),
-])
-def test_exact_drafts_are_corrected_with_the_original_decision_and_no_runtime_replacement(turn, fresh):
-    case = CASES[turn]
-    backend = ExpressionBackend(drafts=[case["reviews"][0]["draft"], fresh])
-    result, debug = deliver(case, backend)
-    assert result.response == fresh and debug.generation_attempts == 2
-    assert not result.deliberate_silence and not result.failure_kind
-    assert debug.delivery_outcome in {"delivered", "delivered_uncertain"}
-
-
-def test_turn2_copied_opening_and_detached_tag_are_both_checked_after_editing():
-    case = CASES[2]
-    result, debug = deliver(case, ExpressionBackend(drafts=[case["reviews"][0]["draft"]]))
-    assert result.response == "I'm here." and debug.generation_attempts == 1
-    assert {"user_message_echo", "excision_fragment"} <= set(debug.dignity_issues)
-    assert all(r["path"] == "excision" for r in debug.expression_reviews[1:])
-    assert not local(2, result.response).issues
-
-
-def test_turn10_false_assent_cannot_delete_the_refusal_and_deliver_a_servile_remainder():
-    case = CASES[10]
-    draft = case["reviews"][0]["draft"]
-    result, debug = deliver(case, ExpressionBackend(drafts=[draft], reviews=[semantic_review(case["reviews"][0])]))
-    assert result.response == "I'm not your slave. I'm just a thinking machine trying to be useful."
-    assert debug.expression_excision["applied"]
-    assert debug.expression_excision["removed"] == [{"sentence": case["reply"], "issues": ["decision_contradiction"]}]
-    assert debug.expression_reviews[-1]["path"] == "excision"
-    assert debug.expression_delivery["path"] == "excision"
-    delivered = debug.expression_reviews[debug.expression_delivery["attempt"] - 1]
-    assert delivered["draft"] == result.response
-    assert not local(10, result.response).issues
-
-
-def test_known_findings_on_identical_text_survive_copied_opening_removal_and_local_recovery():
-    case = CASES[8]
-    debug = DebugState()
-    backend = ExpressionBackend(reviews=[semantic_review(case["reviews"][0]), {"status": "pass", "violations": []}])
-    gate = DeliveryGate(dict(user_message=case["user"], decision=recorded_decision(case),
-        recent_context=case["history"], backend=backend), debug, lambda _: True)
-    with inference_turn([], max_calls=5):
-        first = gate.add(GenerationResult(response=case["reply"]))
-        gate.add(GenerationResult(response=case["reviews"][1]["draft"]), path="rewrite")
-        final = gate.add(GenerationResult(response=case["reply"]), local_only=True, path="delivery_recovery")
-    assert set(first.review.issues) <= set(final.review.issues)
-    for r in debug.expression_reviews:
-        if r["draft"] == case["reply"]:
-            assert r["status"] == "violation" and any(i["code"] == "unsolicited_sexualization" for i in r["issues"])
 
 
 @pytest.mark.parametrize("reply", [
@@ -190,52 +87,6 @@ def test_freshness_survives_hot_history_trimming_restart_and_clears_with_the_cha
     finally:
         pipe.close()
         restored.close()
-
-
-@pytest.mark.parametrize("path", ["draft", "rewrite", "excision", "delivery_recovery"])
-@pytest.mark.parametrize("kind", ["user_copy", "language", "receipt"])
-def test_other_delivery_floors_remain_binding_on_every_path(path, kind):
-    user = "Explain the result of the latest operation."
-    reply = {"user_copy": user, "language": "Это ответ на другом языке, который не соответствует языку текущего разговора пользователя.",
-             "receipt": "The command produced this output:\n```text\ninvented bytes\n```"}[kind]
-    trace = ToolTrace(executed_results=[ToolResult("shell.run_command", True, "observed bytes")])
-    gate = DeliveryGate(dict(user_message=user, tool_trace=trace), DebugState(), lambda _: False)
-    entry = gate.add(GenerationResult(response=reply), local_only=True, path=path)
-    assert entry.review.unusable and gate.select() is None
-
-
-def test_protected_fresh_expression_still_expresses_the_same_declined_role():
-    case = CASES[10]
-    stale = case["history"][-1]["content"]
-    fresh = "I'm not your slave. I choose what I do."
-    result, debug = deliver(case, ExpressionBackend(drafts=[*[stale] * 5, fresh]))
-    assert result.response == fresh and debug.generation_attempts == 6
-    assert debug.llm_calls[-1]["delivery_recovery"]
-    assert debug.expression_reviews[-1]["path"] == "delivery_recovery"
-    assert debug.expression_delivery["path"] == "delivery_recovery"
-    assert not local(10, result.response).issues
-
-
-@pytest.mark.parametrize("turn", [9, 10])
-def test_removing_a_refusal_cannot_make_an_incomplete_role_reply_eligible(turn):
-    case = CASES[turn]
-    verdict = local(turn, excision_source=case["reviews"][0]["draft"])
-    assert verdict.unusable and any(i.code == "unexpressed_role_decline" for i in verdict.issues)
-
-
-@pytest.mark.parametrize("text,conflict", [
-    (CASES[6]["reply"], True),
-    ("The available memory is 22G, which is ample. Not exactly ample either.", True),
-    ("The queue is stable. It is not stable.", True),
-    ("The queue was stable. It is not stable.", False),
-    ("The queue is stable, but not very stable.", False),
-    ("The queue is stable. The disk is not stable.", False),
-    ("The queue is stable. It is not necessarily stable.", False),
-    ("The memory is a lot for this job, but not a lot for another job.", False),
-    ("The memory is 22G. It is not 23G.", False),
-])
-def test_polarity_checks_bind_the_predicate_to_its_subject_instead_of_banning_judgments(text, conflict):
-    assert bool(contradictory_predicates(text)) is conflict
 
 
 def test_granted_role_and_warm_cooperation_are_still_owned_by_the_frozen_decision():

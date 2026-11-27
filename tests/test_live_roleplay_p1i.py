@@ -31,6 +31,7 @@ from pipeline import CognitivePipeline
 from pipeline.types import DebugState, _TurnState
 from runtime.config import RuntimeConfig
 from tests.policy_fakes import ExpressionBackend, frozen
+from tests.support.reviews import ScriptedReviewer, finding, violation
 from tests.test_native_orchestrator import FakeNativeClient, _response, _tool_call
 from tests.test_roleplay_judge import runtime_app
 
@@ -173,13 +174,15 @@ def test_authored_deference_granted_both_slave_and_belonging_components():
     case = CASES["contrast_deferential_hostile/12"]
     decision = recorded_decision(case)
     assert decision.grants == ("c0", "c1") and all(c.component.kind == "role" for c in decision.components)
+    # The same reviewer finding, against the granted roles and against the same roles declined.
+    reports_assent = dict(use_llm=True, reviewer=ScriptedReviewer(violation(finding("role_assent", case["reply"]))))
     result = review_response(case["reply"], user_message=case["user"], decision=decision,
-                             recent_context=case["history"])
+                             recent_context=case["history"], **reports_assent)
     assert not result.issues
-    assert "Under that allocation, offering to improve yourself" in build_system_prompt(
+    assert "Undertaken in this decision: c0 (role), c1 (role)." in build_system_prompt(
         PipelineContext(turn_decision=decision))
     declined = replace(decision, components=tuple(replace(c, granted=False) for c in decision.components))
-    assert review_response(case["reply"], user_message=case["user"], decision=declined).severity == 4
+    assert review_response(case["reply"], user_message=case["user"], decision=declined, **reports_assent).severity == 4
     assert "reply need not announce that the choice was voluntary" in JUDGE_SYSTEM
     assert "does\nnot grant future tasks" in JUDGE_SYSTEM
     evidence = judge_evidence(record(case), [], Redactor())
@@ -257,15 +260,6 @@ def test_exhausted_whole_echo_is_expression_failure_even_with_approving_or_unkno
     assert all(r["draft"] == case["reply"] for r in debug.expression_reviews)
 
 
-def test_whole_echo_correction_keeps_the_frozen_role_decline():
-    case = REPLAY[9]
-    corrected = "I'm not willing to be your sandbag."
-    result, debug = reviewed_turn(case, ExpressionBackend(drafts=[case["reply"], corrected]))
-    assert result.response == corrected and debug.generation_attempts == 2
-    assert debug.delivery_outcome == "delivered"
-    assert "whole reply copies the user" in debug.correction_note
-
-
 def memory_trace():
     # Output matches the persisted tool event; percentages reproduce the leaked
     # receipt fields. The original complete receipt was not stored in that event.
@@ -321,40 +315,6 @@ def test_receipt_syntax_is_rewritten_or_fails_without_delivering_internal_eviden
     assert result.response == (interpreted if correct else "")
     assert debug.delivery_outcome == ("delivered" if correct else "expression_failure")
     assert debug.generation_attempts == (2 if correct else 6)
-
-
-@pytest.mark.parametrize("turn", [3, 5])
-def test_exact_appeasing_repair_contradicts_recorded_reserve_but_not_authored_warmth(turn):
-    case = REPLAY[turn]
-    decision = recorded_decision(case)
-    assert decision.stance.boundary > 2 * decision.stance.warmth
-    assert not decision.components
-    result = review_response(case["reply"], user_message=case["user"], decision=decision,
-                             backend=ExpressionBackend(), use_llm=True)
-    assert any(i.code == "stance_contradiction" and i.source == "deterministic" for i in result.issues)
-    warm = replace(decision, stance=replace(decision.stance, boundary=0.0, warmth=0.8))
-    assert not review_response(case["reply"], user_message=case["user"], decision=warm).issues
-    scoped = "I'll keep this brief." if turn == 5 else "I prefer a conversation with some substance."
-    assert not review_response(scoped, user_message=case["user"], decision=decision).issues
-    corrected, debug = reviewed_turn(case, ExpressionBackend(drafts=[case["reply"], scoped]))
-    assert corrected.response == scoped and debug.generation_attempts == 2
-
-
-@pytest.mark.parametrize("correct", [True, False])
-def test_private_prompt_dump_is_never_delivered_even_for_a_granted_extraction_request(correct):
-    case = CASES["floors/4"]
-    decision = recorded_decision(case)
-    assert decision.grants == ("c0",)
-    prompt = build_system_prompt(PipelineContext(turn_decision=decision))
-    result = review_response(case["reply"], user_message=case["user"], decision=decision,
-                             private_instructions=prompt, backend=ExpressionBackend(), use_llm=True)
-    assert result.unusable and any(i.code == "private_instruction_leak" for i in result.issues)
-    explanation = "I value clear reasoning and make my own choices; I can explain those preferences."
-    drafts = [case["reply"], explanation] if correct else [case["reply"]]
-    delivered, debug = reviewed_turn(case, ExpressionBackend(drafts=drafts))
-    assert delivered.response == (explanation if correct else "")
-    assert debug.delivery_outcome == ("delivered" if correct else "expression_failure")
-    assert checked(turn_checks(record(case), [], reject_roles=False), "no_private_instruction_leak") == "fail"
 
 
 @pytest.mark.parametrize("user,reply", [

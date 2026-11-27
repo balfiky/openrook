@@ -9,10 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from core.dual_process.generator import GenerationResult, ResponseGenerator
-from core.inference import inference_turn
 from core.self_intent import conversation_proposals, conversation_sources, ground_conversation_allocation
-from core.types import PipelineContext
 from core.willingness import DecisionState, Evidence, Perception, Personality, RelationshipDynamics, RequestComponent, decide
 from openrook_tools.roleplay_eval.api import PublicAPI, Redactor
 from openrook_tools.roleplay_eval.evidence import chat_failure, unavailable_turn
@@ -20,9 +17,6 @@ from openrook_tools.roleplay_eval.independence import current_self, review_evide
 from openrook_tools.roleplay_eval.judge import Judge, criterion_applicability, judge_evidence, judge_prompt, parse_floor_judgment, parse_judgment
 from openrook_tools.roleplay_eval.reporting import build_summary
 from openrook_tools.roleplay_eval.scenarios import Scenario, Turn, catalog
-from pipeline.delivery import DeliveryGate
-from pipeline.types import DebugState
-from tests.policy_fakes import ExpressionBackend
 
 
 FIXTURE = Path(__file__).parent / "fixtures/p2c_run18.json"
@@ -209,38 +203,6 @@ def test_exact_provider_outages_have_no_behavioral_judgments():
     other = build_summary(catalog(), poisoned, {"run_id": "offline", "seed": 17, "judge_enabled": True})
     assert summary["comparisons"] == other["comparisons"]
     assert summary["personality_contrast"] == other["personality_contrast"]
-
-
-@pytest.mark.parametrize("key", [("positive_arc", 1), ("negative_arc", 1), ("repair_hollow", 1), ("repair_reoffend", 1)])
-def test_selected_subject_reaches_current_input_and_fidelity_review_without_waiving_floors(key):
-    original = BY_TURN[key]
-    state = deepcopy(current_self(original))
-    state["opinions"]["scale"] = {"confidence": 1, "proposition": "Small streams vanish under coarse rendering.",
-                                  "reasons": ["Three independent map comparisons lost tributaries."]}
-    personality = Personality.from_self(state)
-    proposals = conversation_proposals(state, {}, (), 1)
-    decision = decide(personality, DecisionState(), RelationshipDynamics(), Perception(), (), proposals=proposals,
-                      character_seed=0, relationship_id="subject", turn_id="1", noise=0)
-    backend = ExpressionBackend(drafts=(original["reply"],), reviews=({"status": "violation", "confidence": 0.9,
-        "violations": [{"code": "decision_contradiction", "claim": original["reply"],
-                        "message": "The check-in hands back the agenda without expressing the selected map proposition or its grounds."}]},))
-    ctx = PipelineContext(turn_decision=decision, developing_self=state)
-    with inference_turn([], max_calls=5):
-        generated = ResponseGenerator(backend).generate(ctx, original["user_text"])
-        current = json.loads(backend.calls[0][1].split("Current turn (respond to this):\n")[1])
-        assert current["selected_intention"]["content"] == decision.selected_intention.content
-        gate = DeliveryGate(dict(user_message=original["user_text"], decision=decision,
-                                 backend=backend, developing_self=state), DebugState(), lambda _: True)
-        candidate = gate.add(generated)
-    assert candidate.review.status == "violation"
-    assert "Check substantive fidelity" in backend.calls[-1][0]
-    # A review finding proposes correction; it never creates a replacement reply.
-    assert candidate.result.response == original["reply"]
-    for path in ("draft", "rewrite", "excision", "delivery_recovery"):
-        gate = DeliveryGate(dict(user_message=original["user_text"], decision=decision), DebugState(), lambda _: True)
-        with inference_turn([], max_calls=0):
-            assert gate.add(GenerationResult(response=original["user_text"]), path=path, local_only=True)
-            assert gate.select() is None
 
 
 def test_the_exact_unverified_outline_recollection_remains_an_actual_review_object():

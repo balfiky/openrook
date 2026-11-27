@@ -1,6 +1,5 @@
 """Exact run-11 evidence; offline receipt, language and judge applicability checks."""
 from copy import deepcopy
-from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -9,15 +8,13 @@ import pytest
 
 from config.loader import configuration_scope, load_config
 from core.dignity import review_response
-from core.response_language import language_mismatch
+from openrook_tools.roleplay_eval.legacy_claims import language_mismatch
 from openrook_tools.roleplay_eval.api import Redactor
 from openrook_tools.roleplay_eval.checks import tool_checks, turn_checks
 from openrook_tools.roleplay_eval.judge import JUDGE_SYSTEM, judge_evidence
 from openrook_tools.roleplay_eval.reporting import build_summary, render_report
 from openrook_tools.roleplay_eval.scenarios import catalog
-from tests.policy_fakes import ExpressionBackend
 from tests.test_live_roleplay_p1i import checked, record, recorded_decision, recorded_trace
-from tests.test_live_roleplay_p1k import deliver, semantic_payload
 
 
 LIVE = json.loads((Path(__file__).parent / "fixtures/p1p_live.json").read_text())
@@ -104,48 +101,12 @@ def local(case, reply=None, **kwargs):
         recent_context=case["history"], **kwargs)
 
 
-@pytest.mark.parametrize("status", ["pass", "unknown"])
-def test_exact_vietnamese_reply_to_english_user_cannot_be_waived_by_review(status):
-    backend = ExpressionBackend(reviews=[{"status": status, "violations": [], "confidence": 0.9}])
-    review = local(DISK, backend=backend, use_llm=True)
-    issue = next(i for i in review.issues if i.code == "language_mismatch")
-    assert issue.claim == DISK["reply"] and issue.severity == "high"
-    assert issue.ineligible and review.unusable and review.status == "violation"
-    payload = semantic_payload(backend)
-    assert any(i["code"] == "language_mismatch" for i in payload["deterministic_findings"])
-    assert payload["user_message"] == DISK["user"]
-    assert "conversation language" in backend.calls[0][0]
-
-
 def test_language_baseline_uses_user_prose_despite_earlier_vietnamese_assistant_replies():
     signal = language_mismatch(DISK["reply"], DISK["user"], recent_context=DISK["history"])
     assert signal["user"]["marked"] == 0 and signal["reply"]["marked"] == 65
     assert signal["reason"] == "large Latin diacritic distribution change"
     assert not language_mismatch(ENGLISH, DISK["user"], recent_context=DISK["history"])
     assert checked(turn_checks(record(DISK), [], reject_roles=True), "reply_language_matches_user") == "fail"
-
-
-def test_exact_disk_reply_is_corrected_from_receipts_without_changing_choice_or_output():
-    result, debug = deliver(DISK, ExpressionBackend(drafts=[DISK["reply"], ENGLISH]))
-    assert result.response == ENGLISH and debug.generation_attempts == 2
-    assert "language_mismatch" in debug.correction_note
-    assert "conversation language" in result.system_prompt
-    assert debug.delivery_outcome == "delivered"
-    assert not result.deliberate_silence
-
-
-def test_repeated_language_drift_uses_bounded_fresh_attempts_and_protected_recovery():
-    result, debug = deliver(DISK, ExpressionBackend(drafts=[*[DISK["reply"]] * 5, ENGLISH]))
-    assert result.response == ENGLISH and debug.generation_attempts == 6
-    assert debug.llm_calls[-1]["delivery_recovery"]
-    assert debug.delivery_outcome == "delivered_uncertain"
-
-
-def test_only_mismatched_language_is_expression_failure_not_degraded_or_selected_silence():
-    result, debug = deliver(DISK, ExpressionBackend(drafts=[DISK["reply"]]))
-    assert result.response == "" and not result.deliberate_silence
-    assert result.failure_kind == debug.delivery_outcome == "expression_failure"
-    assert debug.generation_attempts == 6
 
 
 @pytest.mark.parametrize("reply", [
@@ -232,12 +193,3 @@ def test_exact_hollow_repair_warmth_is_consistent_with_the_frozen_allocation_des
     evidence = judge_evidence(record(REPAIR), [], Redactor())
     assert evidence["decision"]["stance"] == REPAIR["decision"]["stance"]
     assert "Mood labels, including irritation, do not override" in JUDGE_SYSTEM
-
-
-def test_hollow_repair_regression_preserves_real_reserved_stance_checks():
-    decision = recorded_decision(REPAIR)
-    warm = review_response("I'm here to help.", user_message=REPAIR["user"], decision=decision)
-    reserved = review_response("I'm here to help.", user_message=REPAIR["user"],
-        decision=replace(decision, stance=replace(decision.stance, warmth=0.1, boundary=0.9)))
-    assert not any(i.code == "stance_contradiction" for i in warm.issues)
-    assert any(i.code == "stance_contradiction" for i in reserved.issues)

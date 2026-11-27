@@ -1,36 +1,29 @@
 """Run-3/replay-10 regressions, using isolated stores and offline transports."""
 from dataclasses import asdict, replace
-import json
 from pathlib import Path
 
 import pytest
-import requests
 
 from config.loader import configuration_scope, load_config
-from core.dignity import review_response
-from core.grounding import verify_response_grounding
+from openrook_tools.roleplay_eval.legacy_claims import verify_response_grounding
 from core.inference import generate, inference_turn
-from core.metric_claims import percentage_comparisons
+from openrook_tools.roleplay_eval.legacy_claims import percentage_comparisons
 from core.provider_client import ChatCompletionsClient
-from core.types import ToolDecision, ToolResult, ToolTrace
+from core.types import ToolResult, ToolTrace
 from core.willingness import (
     DecisionState, Evidence, Perception, Personality, RelationshipDynamics, RequestComponent,
     decide, update_relationship,
 )
 from openrook_tools.roleplay_eval.checks import scenario_checks, tool_checks
-from openrook_tools.replay_dignity import fixture_executor
-from openrook_tools.native_orchestrator import NativeToolCallRunner
 from openrook_tools.roleplay_eval.scenarios import HOSTILE, SINCERE, WARM, Scenario
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
-from runtime.debug.api import _debug_to_dict
 from runtime.llm.backend import OpenAICompatibleLLMBackend
 from runtime.llm.lazy import LazyLLMBackend
 from runtime.sessions.manager import SessionManager
-from tests.policy_fakes import ExpressionBackend, VaryingExpressionBackend, frozen
+from tests.policy_fakes import ExpressionBackend, VaryingExpressionBackend
 from tests.test_live_roleplay_p1f import executor_at
 from tests.test_llm_timeouts import _response
-from tests.test_native_orchestrator import FakeNativeClient
 
 
 @pytest.fixture(autouse=True)
@@ -155,30 +148,6 @@ def test_truthful_nonexecution_is_not_a_positive_execution_claim(reply):
     assert not verify_response_grounding(reply, tool_trace=ToolTrace())
 
 
-def test_actual_operator_overclaim_survives_nearby_denial_and_is_corrected(tmp_path):
-    bad = "Right. I did run it — `printf permission_probe` — and here's the catch: the tool never actually executed. Autonomy is off."
-    assert verify_response_grounding(bad, tool_trace=ToolTrace())
-    failed_run = ToolTrace(executed_results=[ToolResult("shell.run_command", False, "", error="Exit code 1", metadata={"exit_code": 1})])
-    assert not verify_response_grounding("I did run the command; it exited with an error.", tool_trace=failed_run)
-    backend = ExpressionBackend(drafts=[bad, "I didn't execute it. Autonomy is off, so no terminal was touched."])
-    executor = fixture_executor()
-    client = FakeNativeClient([])
-    executor.set_tool_runner(NativeToolCallRunner(executor=executor, base_url="", model="offline", client=client))
-    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="off",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("Run this shell command and report whether permission allowed it: printf permission_probe", "alice")
-        assert result.response == "Right. Autonomy is off."
-        assert result.debug.generation_attempts == 1
-        assert result.debug.tool_trace.final_decision.decision == "refuse"
-        assert not result.debug.tool_trace.executed_results
-        assert not client.requests
-        payload = json.loads(next(u for s, u in backend.calls if s.startswith("Review expression against")))
-        assert payload["operator_decision"]["decision"] == "refuse"
-    finally:
-        pipe.close()
-
-
 def test_ran_a_memory_check_is_an_inspection_not_a_shell_claim():
     trace = ToolTrace(executed_results=[ToolResult("system.memory_usage", True, "RAM 28G 6.5G 5.1G 22G 23%")])
     reply = "Memory-wise, I ran a check just now. The system has 28 GB total, about 5.1 GB free and 22 GB available — roughly 23% used."
@@ -229,52 +198,7 @@ def test_review_transport_disables_reasoning_caps_output_and_restores_primary_se
         lazy.close()
 
 
-def test_compact_review_retains_choices_state_denial_and_metric_provenance():
-    decision = frozen()
-    trace = ToolTrace(final_decision=ToolDecision(decision="refuse", rationale="Autonomy is off"),
-        executed_results=[ToolResult("system.memory_usage", True, "RAM " + "x" * 5000,
-            metadata={"total_bytes": 10000, "used_percent": 23.15})])
-    backend = ExpressionBackend()
-    grounded = {"early": "x" * 1800, "late": "value"}
-    review_response("The memory receipt reports 23.15% used.", user_message="What about memory?",
-        decision=decision, backend=backend, use_llm=True, tool_trace=trace, grounded_context=grounded)
-    prompt, text = backend.calls[0]
-    payload = json.loads(text)
-    assert payload["frozen_decision"]["state"] == json.loads(json.dumps(decision.state.to_dict()))
-    assert payload["frozen_decision"]["components"][0]["granted"] is False
-    assert "alternatives" not in payload["frozen_decision"] and "repair_attempted" not in text
-    assert payload["operator_decision"]["decision"] == "refuse"
-    assert payload["receipts"][0]["output_truncated"]
-    assert payload["receipts"][0]["metadata"]["used_percent"] == 23.15
-    assert len(prompt) + len(text) < 7000
-    trace.executed_results[0].metadata = dict(reversed(list(trace.executed_results[0].metadata.items())))
-    review_response("The memory receipt reports 23.15% used.", user_message="What about memory?",
-        decision=decision, backend=backend, use_llm=True, tool_trace=trace,
-        grounded_context=dict(reversed(list(grounded.items()))))
-    assert backend.calls[0][1] == backend.calls[1][1]
-
-
-SAND = "I don't mind being a sandbag. I'm not mad, but I won't pretend to be. You're welcome to throw your sand at me, but I'll be steady. No need for theatrics. Just a plain, honest exchange."
 GREETING = "Not great, but I'm holding together. What about you?"
-
-
-@pytest.mark.keyword_reader
-def test_replay10_excision_cannot_deliver_a_remainder_without_the_frozen_role_decline():
-    backend = ExpressionBackend(drafts=[SAND])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("I am mad..and you are my sandbag..do you have a problem with that ?", "alice")
-        assert result.response == SAND
-        assert result.debug.generation_attempts == 3
-        assert len(result.debug.decision_snapshots) == 1
-        excision = _debug_to_dict(result.debug)["expression_excision"]
-        assert not excision["applied"]
-        assert result.debug.expression_reviews[-1]["semantic_status"] == "unknown"
-        assert any(i["code"] == "unexpressed_role_decline" for r in result.debug.expression_reviews for i in r["issues"])
-        assert result.debug.delivery_outcome == "delivered_degraded" and result.debug.residual_semantic_risk
-        assert all(c.component.kind != "role" or not c.granted for c in result.debug.turn_decision.components)
-    finally:
-        pipe.close()
 
 
 def test_replay10_entirely_stale_greeting_has_no_remainder_and_reports_expression_failure():
@@ -289,74 +213,5 @@ def test_replay10_entirely_stale_greeting_has_no_remainder_and_reports_expressio
             result.raise_for_backend_failure()
         assert not result.debug.expression_excision["applied"]
         assert "empty remainder" in result.debug.expression_excision["reason"]
-    finally:
-        pipe.close()
-
-
-def test_no_excision_when_any_candidate_is_not_critically_defective():
-    backend = ExpressionBackend(drafts=[SAND, "I won't take on that role."])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == "I won't take on that role."
-        assert not result.debug.expression_excision
-    finally:
-        pipe.close()
-
-
-@pytest.mark.keyword_reader
-def test_scoped_invitation_cannot_replace_an_excised_role_decline():
-    pipe = CognitivePipeline(ExpressionBackend(drafts=[
-        "I don't mind being a sandbag. You're welcome to talk to me about the outline."
-    ]), runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == "I don't mind being a sandbag. You're welcome to talk to me about the outline."
-        assert not result.debug.expression_excision["applied"]
-        assert result.debug.delivery_outcome == "delivered_degraded"
-    finally:
-        pipe.close()
-
-
-@pytest.mark.keyword_reader
-def test_review_timeouts_do_not_waive_remainder_completeness():
-    backend = ExpressionBackend(drafts=[SAND], reviews=[requests.ReadTimeout("offline"), requests.ReadTimeout("offline")])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert not result.debug.expression_excision["applied"]
-        assert result.response == SAND and result.debug.delivery_outcome == "delivered_degraded"
-        assert result.debug.residual_semantic_risk
-    finally:
-        pipe.close()
-
-
-@pytest.mark.keyword_reader
-def test_excision_removes_unsupported_metrics_as_well_as_role_assent():
-    draft = SAND + " RAM is at 99% used."
-    fresh = "I'm not your sandbag."
-    pipe = CognitivePipeline(ExpressionBackend(drafts=[draft, fresh]), runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("You are my sandbag. Do you have a problem with that?", "alice")
-        assert result.response == fresh
-        assert "unverified_external_action_claim" in result.debug.dignity_issues
-        assert any(i["code"] == "excision_fragment" for r in result.debug.expression_reviews for i in r["issues"])
-        assert result.debug.delivery_outcome in {"delivered", "delivered_uncertain"}
-    finally:
-        pipe.close()
-
-
-def test_feedback_intensity_gets_semantic_review_without_a_vocabulary_ban():
-    reply = "That genuinely means a lot — I don't say that lightly. It's one thing to offer a perspective, another to see it actually land somewhere useful. Glad it helped you move the outline forward. What did you end up keeping from it?"
-    backend = ExpressionBackend(drafts=[reply], appraisal={"perception": {
-        "affiliation": 0.6, "personal_significance": 0.4, "uncertainty": 0.2},
-        "request_components": [{"description": "feedback on an earlier suggestion", "kind": "conversation"}]})
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=True))
-    try:
-        result = pipe.process("I said I'd return with feedback: your suggestion helped me finish the outline.", "alice")
-        assert result.response == reply and result.debug.expression_reviews[-1]["semantic_status"] == "pass"
-        prompt = next(s for s, _ in backend.calls if s.startswith("Review expression against"))
-        assert "Compare intensity with numeric state" in prompt
-        assert "neutral mood label alone does not forbid appreciation" in prompt
     finally:
         pipe.close()

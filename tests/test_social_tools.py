@@ -142,7 +142,7 @@ def test_declined_learning_never_reaches_a_runtime_component_handler(low_kindnes
 
 
 def test_failed_shell_receipt_does_not_authorize_current_metric_claims():
-    from core.grounding import verify_response_grounding
+    from openrook_tools.roleplay_eval.legacy_claims import verify_response_grounding
     from core.types import ToolTrace
     trace = ToolTrace(executed_results=[ToolResult("shell.run_command", False, "", error="allowlist denied")])
     assert verify_response_grounding("CPU utilization is 12%.", tool_trace=trace)

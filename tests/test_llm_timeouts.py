@@ -227,7 +227,7 @@ def test_timeout_is_recorded_in_its_actual_execution_scope(monkeypatch, phase):
 
     class SlowAuxiliary(ExpressionBackend):
         def generate(self, system, user):
-            if phase == "expression_review" and system.startswith("Review expression against"):
+            if phase == "expression_review" and system.startswith("You check one draft reply"):
                 raise requests.ReadTimeout("review expired")
             if phase == "self_intent" and system.startswith("You are deciding what"):
                 raise requests.ReadTimeout("self intent expired")

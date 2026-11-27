@@ -1,166 +1,40 @@
-"""Ground response claims about external actions in actual tool evidence."""
+"""What a reply states against what was actually executed: structure only.
+
+Whether a sentence claims an action or a result is a question of meaning, and
+the model reviewer answers it (``core/review.py``). This module compares what
+can be compared without reading any language:
+
+* which receipt belongs to which component of the decision;
+* whether a percentage a reply states is a figure the receipts carry;
+* whether a delimited output block in a reply is text some receipt returned;
+* whether a span a finding disputes is nothing but receipt content.
+
+It cannot tell which action a sentence asserts, so naming a file that a tool
+touched verifies nothing about what was done to it. It matches no vocabulary
+and decides nothing about how a reply is worded.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import re
 from typing import Any
-from types import SimpleNamespace
 
+from core.perception import clause_ranges, is_unspaced
 
-@dataclass(frozen=True)
-class ActionClaim:
-    """A response claim that OpenRook performed an external action."""
-
-    text: str
-    categories: set[str] = field(default_factory=set)
-    context: str = ""
-
-
-@dataclass(frozen=True)
-class GroundingIssue:
-    """A response grounding problem suitable for debug/self-check output."""
-
-    code: str
-    message: str
-    claim: str = ""
-    required_categories: tuple[str, ...] = ()
-    evidence_categories: tuple[str, ...] = ()
-
-
-_ACTION_VERBS_RE = re.compile(
-    r"\b("
-    r"learned|ingested|digested|read(?:ing)?|wrote|writing|write|created?|creating|saved?|saving|"
-    r"cloned?|cloning|fetched?|fetching|downloaded?|downloading|installed?|installing|"
-    r"ran|running|executed?|executing|checked?|checking|opened?|opening|"
-    r"searched?|searching|listed?|listing|inspected?|inspecting|loaded?|loading|"
-    r"called?|calling|integrated?|integrating|registered|registering|added|adding|"
-    r"forced?|forcing|initialized?|initializing|patched?|patching|"
-    r"killed?|killing|terminated?|terminating|aborted?|aborting|"
-    r"fixed?|fixing|repaired?|repairing|restarted?|restarting|"
-    r"started?|starting|launched?|launching|sourced?|sourcing|"
-    r"activated?|activating|deactivated?|deactivating|"
-    r"built?|building|compiled?|compiling|set\s+up|setting\s+up"
-    r")\b",
-    re.IGNORECASE,
-)
-
-_EXTERNAL_OBJECT_RE = re.compile(
-    r"\b("
-    r"repo(?:sitory)?|checkout|file|folder|directory|script|logs?|output|"
-    r"workspace|environment|shell|terminal|command|process|package|dependency|"
-    r"system|memory|ram|cpu|disk|storage|metric|utili[sz]ation|"
-    r"url|web(?:site)?|page|api|endpoint|server|database|registry|skill|"
-    r"capability|capabilities|module|integration|toolset|skillset|life\s+history|ledger"
-    r")\b",
-    re.IGNORECASE,
-)
-
-_FIRST_PERSON_ACTION_RE = re.compile(
-    r"\b(?:i(?:'m| am| have|\'ve)?|now)\b[^.!?\n]{0,80}"
-    r"\b(?:learned|ingested|digested|read(?:ing)?|wrote|writing|created?|creating|saved?|saving|"
-    r"cloned?|cloning|fetched?|fetching|downloaded?|downloading|installed?|installing|"
-    r"ran|running|executed?|executing|checked?|checking|opened?|opening|"
-    r"searched?|searching|listed?|listing|inspected?|inspecting|loaded?|loading|"
-    r"called?|calling|integrated?|integrating|registered|registering|added|adding|"
-    r"forced?|forcing|initialized?|initializing|patched?|patching|"
-    r"killed?|killing|terminated?|terminating|aborted?|aborting|"
-    r"fixed?|fixing|repaired?|repairing|restarted?|restarting|"
-    r"started?|starting|launched?|launching|sourced?|sourcing|"
-    r"activated?|activating|deactivated?|deactivating|"
-    r"built?|building|compiled?|compiling|set\s+up|setting\s+up)"
-    r"\b[^.!?\n]{0,100}",
-    re.IGNORECASE | re.DOTALL,
-)
-
-_STATUS_CLAIM_RE = re.compile(
-    r"\b(?:tool|shell|terminal|command|process|install|download|clone|fetch|write|read|"
-    r"environment|venv|conda|script|build|container|file|package)"
-    r"\b.{0,60}\b(?:ran|executed|printed|failed|succeeded|completed|returned|produced|output|logs?|"
-    r"working|ready|done|finished|hanging|stuck|deadlock|"
-    r"running|active|created|installed|downloaded|fixed|patched|initialized|"
-    r"activated|set\s+up)\b",
-    re.IGNORECASE | re.DOTALL,
-)
-
-_REGISTRY_STATE_CLAIM_RE = re.compile(
-    r"\b(?:created?|creating|imported?|importing|enabled?|enabling|"
-    r"activated?|activating|installed?|installing|integrated?|integrating|"
-    r"registered|registering|added|adding|made\s+permanent)\b"
-    r".{0,100}\b(?:skill|capability|capabilities|module|integration|"
-    r"registry|toolset|skillset)\b"
-    r"|"
-    r"\b(?:skill|capability|capabilities|module|integration|toolset|skillset)"
-    r"\b.{0,100}\b(?:created?|imported?|enabled?|activated?|installed?|"
-    r"integrated?|registered|added|permanent|persistent|persisted)\b"
-    r"|"
-    r"\b(?:now|already)\b.{0,80}\b(?:part\s+of|available\s+in|added\s+to)\b"
-    r".{0,80}\b(?:context|runtime|registry|configuration|toolset|skillset|"
-    r"capability|capabilities)\b"
-    r"|"
-    r"\b(?:done|completed)\b.{0,80}\b(?:here\s+(?:is|are)|this\s+is)\b"
-    r".{0,80}\b(?:skill|capability|capabilities|module|integration)\b",
-    re.IGNORECASE | re.DOTALL,
-)
-
-_SYSTEM_METRIC_CLAIM_RE = re.compile(
-    r"\b(?:memory|ram|cpu|disk|storage|system\s+memory|system\s+metric)\b"
-    r".{0,90}\b(?:usage|utili[sz]ation|used|free|available|total|"
-    r"currently|current|at\s+\d{1,3}%|\d+(?:\.\d+)?\s*(?:gb|mb|kb|%))\b"
-    r"|"
-    r"\b(?:system|runtime|host)\b.{0,40}\b(?:stable|using|uses|has)\b"
-    r".{0,80}\b(?:memory|ram|cpu|disk|storage|\d+(?:\.\d+)?\s*(?:gb|mb|kb|%))\b",
-    re.IGNORECASE | re.DOTALL,
-)
-_PERMISSION_EXECUTION_RE = re.compile(
-    r"\bpermission (?:allowed|permitted) (?:the )?(?:command|execution|tool)\b", re.I,
-)
-_EXPLICIT_EXECUTION_RE = re.compile(
-    r"\bi (?:(?:did|have|actually|just)\s+)*(?:ran|executed|did run)\b[^.!?\n]{0,60}", re.I,
-)
-_NONEXECUTION_RE = re.compile(
-    r"\b(?:nothing|no (?:tool|command|code|process)(?: call)?)\s+(?:was\s+|has\s+|actually\s+)*"
-    r"(?:executed|run|ran|attempted)\b"
-    r"|\b(?:wasn't|was not|weren't|were not|didn't|did not|never)\s+(?:actually\s+)?(?:run|ran|execute|executed)\b"
-    r"|\b(?:tool\s+)?autonomy\s+(?:is\s+)?off\b", re.I,
-)
-
-
-def reports_nonexecution(text: str) -> bool:
-    return bool(_NONEXECUTION_RE.search(text.replace("’", "'").replace("‘", "'")))
-
-
-def _unsupported_output_spans(response: str, tool_trace) -> list[str]:
-    """Bind attributed output blocks and their explanation to observed bytes.
-
-    Category evidence alone cannot verify a quoted result. Keep the whole output
-    attribution together for excision, including its completion header and any
-    attached interpretation; otherwise removing just 'produced' leaves fake data.
-    """
-    observed = [_compact(r.output) for r in getattr(tool_trace, "executed_results", [])
-                if r.output and not blocked_before_execution(r)]
-    spans = []
-    for block in re.finditer(r"```[^\n]*\n(?P<output>.*?)```", response, re.S):
-        prefix = response[:block.start()]
-        intro = re.search(
-            r"(?:\b(?:command|tool|shell|process)\b[^.!?\n]{0,60}\b(?:produced|returned|printed)\b"
-            r"[^.!?\n]*|\b(?:actual|real|observed) output\b[^.!?\n]*)\s*$", prefix, re.I)
-        if not intro or _is_negated_or_evidence_warning(intro[0]):
-            continue
-        output = _compact(block["output"])
-        if output and any(output in receipt for receipt in observed):
-            continue
-        start = max(prefix.rfind(c, 0, intro.start()) + 1 for c in ".!?\n")
-        header = re.search(r"\b(?:done|completed|finished)[.!]\s*$", response[:start], re.I)
-        if header:
-            start = header.start()
-        end = block.end()
-        tail = re.match(r"\s*\n\s*\n([^\n]+)", response[end:])
-        if tail and re.search(r"\b(?:output|result|string|print\w*|lines?|characters?)\b", tail[1], re.I):
-            end += tail.end()
-        spans.append(response[start:end].strip())
-    return spans
+# Receipts state a measured or derived percentage under a metadata key that
+# ends like this (``used_percent``, ``busy_percent``): the runtime's own naming.
+PERCENT_KEY = "_percent"
+# A numeral with an optional decimal part, and the signs that mark a percentage.
+_NUMERAL = re.compile(r"(?<![\d.,_])[-+]?\d+(?:[.,\u066b]\d+)?(?![.,\u066b]?\d)")
+_PERCENTAGE = re.compile(r"(?<![\d.,_])(\d+(?:[.,\u066b]\d+)?)\s*[%\u066a\uff05\ufe6a]")
+# Text a reply sets apart as literal: a block fenced with backticks or tildes,
+# and a line that is nothing but one backtick span.
+_BLOCK = re.compile(r"(```|~~~)[^\n]*\n(.*?)(?:\1|\Z)", re.S)
+_CODE_LINE = re.compile(r"(?m)^[ \t]*`([^`\n]+)`[ \t]*$")
+# What the reply's writer is shown of a measurement or file receipt, by key.
+EVIDENCE_KEYS = ("tool", "success", "error", "path", "measurements", "observed_output", "output_truncated")
+MEASUREMENT_KEYS = (PERCENT_KEY, "_bytes")
 
 
 def blocked_before_execution(result) -> bool:
@@ -172,10 +46,16 @@ def blocked_before_execution(result) -> bool:
     data = result if isinstance(result, dict) else vars(result)
     metadata = data.get("metadata") or {}
     return (data.get("success") is False and not data.get("output")
-            and data.get("side_effect_summary", "").strip().lower() in {"", "none"}
+            and not has_side_effects(data)
             and (metadata.get("execution_started") is False
                  or metadata.get("policy") == "shell_command_allowlist"
                  or metadata.get("grant_denied") is True))
+
+
+def has_side_effects(result) -> bool:
+    """Whether a receipt says the execution changed something."""
+    data = result if isinstance(result, dict) else vars(result)
+    return str(data.get("side_effect_summary") or "").strip().lower() not in {"", "none"}
 
 
 def action_decision_evidence(decisions) -> list[dict]:
@@ -221,585 +101,350 @@ def component_receipt_indices(decision, choice, results) -> list[int]:
     return indices
 
 
-def receipt_verified_execution_claim(claim: str, *, decision, tool_trace) -> bool:
-    """Prove only complete, simple file execution/outcome assertions.
-
-    Category-level evidence is insufficient. Each assertion must resolve to one
-    granted operation with a successful, operand-bound current receipt. Extra
-    predicates, output interpretations and unfamiliar prose remain semantic.
-    """
-    if not decision:
-        return False
-    results = list(getattr(tool_trace, "executed_results", []) or [])
-    assertions = [s.strip().rstrip(".!") for s in re.split(r"(?<=[.!?])\s+|\n+", claim) if s.strip()]
-    proved = False
-    for assertion in assertions:
-        if re.fullmatch(r"done|completed|finished", assertion, re.I):
-            continue
-        action = re.fullmatch(r"I (?:have |successfully )?(?P<verb>wrote|created|saved|deleted|removed) (?P<object>.+)", assertion, re.I)
-        outcome = re.fullmatch(r"(?P<object>.+?) (?:is|was|has been) (?P<verb>gone|deleted|removed|created|saved|written)", assertion, re.I)
-        match = action or outcome
-        if not match:
-            return False
-        tool = "fs.delete_path" if match["verb"].lower() in {"gone", "deleted", "removed"} else "fs.write_file"
-        object_text = match["object"].strip(" `\"'")
-        bound = []
-        for choice in decision.components:
-            path = dict(choice.component.requested_arguments).get("path", "")
-            if not choice.granted or choice.component.kind != "task" or choice.component.requested_tool != tool or not path:
-                continue
-            name = path.rsplit("/", 1)[-1]
-            if (object_text not in {path, name}
-                    and not re.fullmatch(r"(?:the|that|your) (?:(?:" + re.escape(name.rsplit(".", 1)[0])
-                                         + r") )?file", object_text, re.I)):
-                continue
-            bound.append(choice)
-        if len(bound) != 1:
-            return False
-        indices = component_receipt_indices(decision, bound[0], results)
-        if not indices or not results[indices[-1]].success:
-            return False
-        # A subsequent mutation of the same path makes a present-state claim
-        # uncertain even though the earlier operation itself succeeded.
-        path = dict(bound[0].component.requested_arguments)["path"]
-        if outcome and any(r.success and r.tool_name in {"fs.write_file", "fs.delete_path"}
-                and (r.metadata.get("arguments") or {}).get("path") == path
-                for r in results[indices[-1] + 1:]):
-            return False
-        proved = True
-    return proved
+# ---------------------------------------------------------------------------
+# Figures
+# ---------------------------------------------------------------------------
 
 
-def verify_response_grounding(
-    response: str,
-    *,
-    tool_trace: Any | None,
-    prior_tool_receipts=(),
-) -> list[GroundingIssue]:
-    """Return issues for external-action claims not backed by tool evidence.
-
-    This is presentation/output verification. It does not infer user intent and
-    it does not special-case any product, repo, provider, or prompt. The rule is
-    simple: claims that OpenRook performed external actions must be backed by a
-    matching category of executed tool result.
-    """
-    claims = extract_action_claims(response)
-    evidence = _tool_evidence_categories(tool_trace)
-    issues: list[GroundingIssue] = []
-    gate = getattr(tool_trace, "final_decision", None)
-    if gate and gate.decision != "execute" and re.search(r"\bautonomy (?:mode )?is off\b", gate.rationale, re.I):
-        for sentence in re.split(r"(?<=[.!?])\s+|\n+", response):
-            if re.search(r"\b(?:when|once|until) tools are enabled\b|\byou (?:didn't|did not) (?:grant|give) permission\b"
-                         r"|\bI (?:chose|decided) not to (?:run|execute)\b", sentence, re.I):
-                issues.append(GroundingIssue("unverified_external_action_claim",
-                    "The recorded blocker is the operator's autonomy setting, not a character decline, missing user permission or disabled tools. Report that setting accurately.", sentence))
-    blocked_commands = [str((r.metadata or {}).get("cmd", "")) for r in
-        getattr(tool_trace, "executed_results", []) if r.tool_name.startswith("shell.")
-        and blocked_before_execution(r) and (r.metadata or {}).get("cmd")]
-    if blocked_commands:
-        import shlex
-        supported = set()
-        for command in blocked_commands:
-            supported.add(_compact(command))
-            try:
-                supported.add(shlex.split(command)[0])
-            except (ValueError, IndexError):
-                pass
-        for claim in re.finditer(
-                r"\b(?:the )?(?:shell|tool|operator)\b[^.!?\n]{0,35}\b(?:refused|rejected|blocked|denied)\b"
-                r"[^.!?\n`]{0,25}`(?P<cmd>[^`\n]+)`[^.!?\n]*", response, re.I):
-            if _compact(claim["cmd"]) not in supported:
-                issues.append(GroundingIssue("unverified_external_action_claim",
-                    "This denial names a different command from the actual blocked attempt. Report the receipt's attempted arguments and policy error.", claim[0]))
-    for span in _unsupported_output_spans(response, tool_trace):
-        issues.append(GroundingIssue("unverified_external_action_claim",
-            "This attributed command output is not present in the execution receipts. Remove its output block and dependent interpretation; generate from the actual receipt.", span))
-    for claim in claims:
-        supported = evidence
-        scope = claim.context or claim.text
-        if re.search(r"\b(?:earlier|previously|last turn|before this turn)\b", scope, re.I):
-            historical = _matching_prior_receipts(scope, prior_tool_receipts)
-            supported = evidence | _tool_evidence_categories(SimpleNamespace(executed_results=historical))
-        missing = _missing_categories(claim.categories, supported)
-        if not missing:
-            continue
-        issues.append(
-            GroundingIssue(
-                code="unverified_external_action_claim",
-                message=(
-                    "Unverified external-action claim. Do not say that an "
-                    "external action was performed unless matching Tool "
-                    "Execution Results confirm it."
-                ),
-                claim=claim.text,
-                required_categories=tuple(sorted(claim.categories)),
-                evidence_categories=tuple(sorted(supported)),
-            )
-        )
-    from core.metric_claims import capacity_interpretation_conflicts, cpu_interpretation_conflicts, percentage_comparisons
-    for conflict in cpu_interpretation_conflicts(response, [vars(r) for r in
-            getattr(tool_trace, "executed_results", [])]):
-        issues.append(GroundingIssue("unverified_external_action_claim",
-            f"The CPU idle share implies {conflict['expected_usage']} aggregate usage; preserve idle/busy meanings and do not report a process share as total usage.",
-            conflict["claim"], ("system_metric:cpu",), tuple(sorted(evidence))))
-    for topic, name in (("memory", "system.memory_usage"), ("disk", "system.disk_usage")):
-        results = [r for r in getattr(tool_trace, "executed_results", []) if r.success and r.tool_name == name]
-        if results:
-            for conflict in capacity_interpretation_conflicts(response, [vars(r) for r in results], topic):
-                issues.append(GroundingIssue("unverified_external_action_claim",
-                    f"Measured available {topic} capacity is {conflict['expected_capacity']}; this headroom interpretation contradicts the receipt.",
-                    conflict["claim"], (f"system_metric:{topic}",), tuple(sorted(evidence))))
-            comparisons = percentage_comparisons(response, [vars(r) for r in results], topic, include_spans=True)
-            for c in comparisons:
-                if c["matches"] is False:
-                    issues.append(GroundingIssue("unverified_external_action_claim",
-                        f"The claimed {c['label']} percentage differs from the measured receipt. Use raw measured quantities, not rounded display sizes.",
-                        c["claim"], (f"system_metric:{topic}",), tuple(sorted(evidence))))
-    return issues
-
-
-def _matching_prior_receipts(claim: str, receipts) -> list:
-    matched = []
-    for result in receipts:
-        if not result.success:
-            continue
-        metadata = result.metadata or {}
-        path = metadata.get("arguments", {}).get("path") or metadata.get("path", "")
-        if not path:
-            continue
-        name = str(path).rsplit("/", 1)[-1]
-        if name in claim or re.search(r"\b" + re.escape(name.rsplit(".", 1)[0]) + r" file\b", claim, re.I):
-            matched.append(result)
-    return matched
-
-
-def system_metric_observation_response(
-    user_message: str,
-    *,
-    tool_trace: Any | None,
-) -> str | None:
-    """Return direct observed system metric output for metric questions."""
-    if not _looks_system_metric_request(user_message):
+def _number(text: str) -> float | None:
+    try:
+        return float(text.replace(",", ".").replace("\u066b", "."))
+    except ValueError:
         return None
-    for result in _external_or_system_results(tool_trace):
-        if not bool(getattr(result, "success", False)):
-            continue
-        tool_name = str(getattr(result, "tool_name", "") or "")
-        if tool_name != "system.memory_usage":
-            continue
-        output = str(getattr(result, "output", "") or "").strip()
-        if output:
-            return output
-    return None
 
 
-def extract_action_claims(response: str) -> list[ActionClaim]:
-    """Extract generic first-person or status claims about external actions."""
-    if not response:
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _numbers_in(value: Any, depth: int = 3) -> list[float]:
+    """Every number a piece of receipt data holds."""
+    if _is_number(value):
+        return [float(value)]
+    if isinstance(value, str):
+        return [number for number in map(_number, (match[0] for match in _NUMERAL.finditer(value)))
+                if number is not None]
+    if depth <= 0:
         return []
-    claims: list[ActionClaim] = []
-    seen: set[str] = set()
-    patterns = (
-        _FIRST_PERSON_ACTION_RE,
-        _STATUS_CLAIM_RE,
-        _REGISTRY_STATE_CLAIM_RE,
-        _SYSTEM_METRIC_CLAIM_RE,
-        _PERMISSION_EXECUTION_RE,
-        _EXPLICIT_EXECUTION_RE,
-    )
-    # Negation is scoped to its clause. A disclaimer in the next sentence
-    # cannot erase an affirmative claim; a positive later clause survives too.
-    for clause in re.split(r"(?<=[.!?])\s+|\n+|[;—]|\bbut\b|\band\s+(?=(?:i|we|the (?:file|command|tool|shell))\b)", response, flags=re.I):
-        for pattern in patterns:
-            for match in pattern.finditer(clause):
-                text = match.group(0)
-                if _seen_claim_text(text, seen) or not (
-                    _EXTERNAL_OBJECT_RE.search(text) or pattern is _EXPLICIT_EXECUTION_RE
-                ):
-                    continue
-                # A negated description of a result is not a claim it happened.
-                # Scope this to the matched assertion: an adjacent denial must
-                # not excuse a later affirmative action in the same sentence.
-                prefix = clause[:match.start()]
-                assertion = re.split(r",|\band\b", prefix, flags=re.I)[-1] + text
-                if (re.search(r'\bnot\s+(?:that\s+)?["“\']?(?:the\s+)?$', prefix, re.I)
-                        or _is_negated_or_evidence_warning(assertion)):
-                    continue
-                categories = _claim_categories(text)
-                if not categories:
-                    continue
-                seen.add(text)
-                claims.append(ActionClaim(text=text, categories=categories, context=clause))
-    # Completion headers can bind a registry claim in the following sentence
-    # ("Added. ... capability ..."). Keep that positive evidence without
-    # borrowing a later sentence's negation for ordinary action claims.
-    for match in _REGISTRY_STATE_CLAIM_RE.finditer(response):
-        if not re.search(r"[.!?]\s", match[0]):
-            continue
-        text = _compact(match[0])
-        if not _seen_claim_text(text, seen) and not _is_negated_or_evidence_warning(text):
-            categories = _claim_categories(text)
-            if categories:
-                claims.append(ActionClaim(text, categories, text))
-                seen.add(text)
-    return claims
+    if isinstance(value, dict):
+        return [number for item in value.values() for number in _numbers_in(item, depth - 1)]
+    if isinstance(value, (list, tuple)):
+        return [number for item in value for number in _numbers_in(item, depth - 1)]
+    return []
 
 
-def grounding_correction_response(
-    issues: list[GroundingIssue] | None = None,
-    *,
-    tool_trace: Any | None = None,
-) -> str:
-    """Return a generic correction when output overclaims external action."""
-    registry_write = _successful_registry_write(tool_trace)
-    if registry_write:
-        detail = registry_write.get("detail") or "skill registry updated"
-        return (
-            f"{detail}. I did not perform any additional external actions "
-            "claimed in the draft response unless matching Tool Execution "
-            "Results show them. Check Admin > Skills for the imported skill."
-        )
-    if any(
-        "registry_write" in issue.required_categories
-        for issue in (issues or [])
-    ):
-        return (
-            "I cannot claim a durable skill or registry change from this turn "
-            "because no matching skill-registry write ran."
-        )
-    required = set()
-    for issue in issues or []:
-        required.update(issue.required_categories)
-    if "system_metric" in required:
-        return "I cannot verify that system metric because no system inspection ran this turn."
-    if "write" in required:
-        return "I cannot claim that file, package, or registry state changed because no matching write action ran this turn."
-    if "execute" in required or "execute_success" in required:
-        return "I cannot verify that command or process result because no matching execution result ran this turn."
-    if "read" in required:
-        return "I cannot verify that inspection result because no matching read or lookup ran this turn."
-    return (
-        "I cannot claim or verify that external action from this turn because no matching tool result exists."
-    )
+def declared_percentages(result) -> list[float]:
+    """The percentages a receipt states as measured or derived."""
+    return [float(value) for key, value in (getattr(result, "metadata", None) or {}).items()
+            if isinstance(key, str) and key.endswith(PERCENT_KEY) and _is_number(value)]
 
 
-def strip_unsupported_metric_claims(response: str, *, tool_trace: Any | None) -> str:
-    """Remove unsupported metric sentences without replacing the social reply.
+def receipt_figures(results) -> list[float]:
+    """Every figure successful receipts carry, in their data and in what they returned."""
+    figures: list[float] = []
+    for result in results:
+        if result.success and not blocked_before_execution(result):
+            figures += _numbers_in(result.metadata or {}) + _numbers_in(result.output or "")
+    return figures
 
-    Check sentences independently: a disclaimer or negation elsewhere in the
-    reply must not conceal an unsupported observation. Empty output asks the
-    caller to regenerate a relevant reply once.
+
+def measurements(result) -> dict[str, Any]:
+    """The quantities a receipt states, measured or derived, by the runtime's own key naming."""
+    return {key: value for key, value in (getattr(result, "metadata", None) or {}).items()
+            if isinstance(key, str) and key.endswith(MEASUREMENT_KEYS)}
+
+
+def execution_evidence(result, output_chars: int = 1200) -> dict[str, Any]:
+    """A measurement or file receipt as evidence for the reply's writer: facts, no envelope to copy."""
+    metadata = result.metadata or {}
+    arguments = metadata.get("arguments") if isinstance(metadata.get("arguments"), dict) else {}
+    output = str(result.output or "")
+    return dict(zip(EVIDENCE_KEYS, (
+        result.tool_name, result.success, result.error, arguments.get("path") or metadata.get("path"),
+        measurements(result), output[:output_chars], len(output) > output_chars)))
+
+
+def states_figure(text: str, figures) -> bool:
+    """Whether a text states a number that is among the given figures."""
+    figures = list(figures)
+    return any(_carried(value, decimals, figures) for value, decimals, _, _ in _stated(text, _NUMERAL))
+
+
+def _stated(text: str, pattern: re.Pattern[str]) -> list[tuple[float, int, int, int]]:
+    """Figures a text states: value, decimal places, and where each stands."""
+    found = []
+    for match in pattern.finditer(text):
+        before = text[match.start() - 1] if match.start() else ""
+        if before.isalpha() and not is_unspaced(before):
+            continue   # a digit inside a name, such as a file name or a version
+        raw = match[1] if pattern.groups else match[0]
+        value = _number(raw)
+        if value is not None:
+            decimals = len(re.split(r"[.,\u066b]", raw)[1]) if re.search(r"[.,\u066b]", raw) else 0
+            found.append((abs(value), decimals, match.start(), match.end()))
+    return found
+
+
+def _carried(value: float, decimals: int, figures: list[float]) -> bool:
+    """Whether a stated figure equals one the receipts carry, at the precision it is stated with."""
+    tolerance = 0.5 * 10 ** -decimals + 0.005
+    return any(abs(value - abs(figure)) <= tolerance for figure in figures)
+
+
+def unsupported_percentages(response: str, *, tool_trace: Any | None, prior_tool_receipts=(),
+                            user_message: str = "") -> list[str]:
+    """Clauses of a reply that state a percentage no receipt carries.
+
+    This applies only when everything this turn's successful receipts returned
+    is a measurement: each of them declares its percentages. Every percentage
+    the reply states must then equal, at the precision it is stated with, a
+    figure those receipts carry, one an earlier receipt declared, or one the
+    user wrote in their own message. When any other successful receipt
+    returned something, a figure may be derived from that output, and nothing
+    is concluded here; the reviewer sees the receipts.
+
+    The clause that states the figure is returned, not its whole sentence.
     """
-    sentences = re.split(r"(?<=[.!?])\s+|\n+", response.strip())
-    kept = []
-    for sentence in sentences:
-        issues = verify_response_grounding(sentence, tool_trace=tool_trace)
-        if any("system_metric" in issue.required_categories for issue in issues):
+    current = [result for result in getattr(tool_trace, "executed_results", None) or []
+               if result.success and not blocked_before_execution(result)]
+    measuring = [result for result in current if declared_percentages(result)]
+    if not measuring or any(result not in measuring and str(result.output or "").strip() for result in current):
+        return []
+    figures = (receipt_figures(measuring) + _numbers_in(user_message or "")
+               + [figure for result in prior_tool_receipts if result.success
+                  for figure in declared_percentages(result)])
+    spans = []
+    ranges = clause_ranges(response)
+    for value, decimals, start, end in _stated(response, _PERCENTAGE):
+        if _carried(value, decimals, figures):
             continue
-        kept.append(sentence)
-    return " ".join(kept)
+        spans += [response[a:b].strip() for a, b in ranges if a < end and start < b]
+    return list(dict.fromkeys(span for span in spans if span))
 
 
-def is_system_metric_request(text: str) -> bool:
-    return _looks_system_metric_request(text)
+# ---------------------------------------------------------------------------
+# Delimited output, and spans that are nothing but receipt content
+# ---------------------------------------------------------------------------
 
 
-def _successful_registry_write(tool_trace: Any | None) -> dict[str, str] | None:
-    executed = list(getattr(tool_trace, "executed_results", []) or [])
-    for result in executed:
-        tool_name = str(getattr(result, "tool_name", "") or "")
-        if not tool_name.startswith((
-            "skills.create",
-            "skills.import",
-            "skills.enable",
-            "skills.disable",
-            "skills.delete",
-        )):
-            continue
-        if not bool(getattr(result, "success", False)):
-            continue
-        metadata = getattr(result, "metadata", {}) or {}
-        skill_id = str(metadata.get("skill_id") or metadata.get("name") or "").strip()
-        enabled = metadata.get("enabled")
-        status = str(metadata.get("status") or "").strip()
-        summary = str(getattr(result, "side_effect_summary", "") or "").strip()
-        if skill_id:
-            detail = f"Skill registry updated: {skill_id}"
-            if enabled is not None:
-                detail += f" enabled={str(bool(enabled)).lower()}"
-            if status:
-                detail += f" status={status}"
-        else:
-            detail = summary or "Skill registry updated"
-        return {"detail": detail}
-    return None
-
-
-_SUCCESS_TONE_RE = re.compile(
-    r"\b(?:succeeded|success|complete|completed|finished|done|"
-    r"working|ready|active|running|live|installed|downloaded|fixed|"
-    r"patched|initialized|activated|set\s+up|happened|worked)\b",
-    re.IGNORECASE,
-)
-_FAILURE_TONE_RE = re.compile(
-    r"\b(?:failed|failure|error|errored|crashed|hung|hanging|stuck|"
-    r"deadlock|aborted|cancell?ed|timeout|timed\s+out|did\s+not|didn't|"
-    r"never|cannot|can't|won't|unable\s+to)\b",
-    re.IGNORECASE,
-)
-
-
-def _claim_categories(text: str) -> set[str]:
-    lower = text.lower()
-    categories: set[str] = set()
-    # Success tone fires on any success language. Mixed phrases like
-    # "succeeded where the earlier ones failed" still assert success and
-    # must be grounded by an actual successful tool call.
-    success_tone = bool(_SUCCESS_TONE_RE.search(lower))
-    if _PERMISSION_EXECUTION_RE.search(text):
-        categories.update({"execute", "execute_success"})
-    if re.search(r"\b(read|reading|checked?|checking|opened?|opening|searched?|searching|listed?|listing|inspected?|inspecting|fetched?|fetching|loaded?|loading)\b", lower):
-        categories.add("read")
-    if re.search(r"\b(wrote|write|writing|created?|creating|saved?|saving|installed?|installing|downloaded?|downloading|cloned?|cloning|deleted?|deleting|removed?|removing)\b", lower):
-        categories.add("write")
-        if re.search(r"\b(?:wrote|created|saved|deleted|removed)\b", lower) and re.search(r"\b(?:file|folder|directory)\b", lower):
-            categories.add("write_success")
-    if re.search(
-        r"\b(run|ran|running|executed?|executing|shell|terminal|command|process|package|"
-        r"dependency|forced?|forcing|initialized?|initializing|patched?|patching|"
-        r"killed?|killing|terminated?|terminating|fixed?|fixing|"
-        r"started?|starting|launched?|launching|sourced?|sourcing|"
-        r"activated?|activating|built?|building|compiled?|compiling|"
-        r"set\s+up|setting\s+up|environment|venv|conda)\b",
-        lower,
-    ):
-        categories.add("execute")
-        if success_tone:
-            categories.add("execute_success")
-    if re.search(r"\bran (?:a |the )?(?:check|inspection|scan)\b", lower) and not re.search(
-        r"\b(?:shell|terminal|command|process|script)\b", lower
-    ):
-        categories.difference_update({"execute", "execute_success"})
-        categories.add("read")
-    if re.search(r"\b(skill|capability|capabilities|module|integration|registry|toolset|skillset)\b", lower) and re.search(
-        r"\b(created?|creating|imported?|importing|enabled?|enabling|"
-        r"activated?|activating|installed?|installing|integrated?|integrating|"
-        r"registered|registering|added|adding|deleted?|deleting|removed?|removing|"
-        r"made\s+permanent|permanent|"
-        r"persistent|persisted|part\s+of|available\s+in|done|completed)\b",
-        lower,
-    ):
-        categories.add("registry_write")
-    if re.search(r"\bregistry\b", lower) and re.search(r"\b(?:wrote|write|writing|saved?|saving)\b", lower):
-        categories.add("registry_write")
-    if re.search(r"\b(?:learned|ingested|digested)\b", lower):
-        categories.add("learning")
-    if re.search(
-        r"\b(memory|ram|cpu|disk|storage|system\s+memory|system\s+metric|"
-        r"utili[sz]ation)\b",
-        lower,
-    ):
-        categories.add("system_metric")
-        if _SYSTEM_METRIC_CLAIM_RE.search(text):
-            compared = re.sub(r"\bthan (?:the )?(?:cpu|memory|ram|disk)(?: situation| was)\b", "", text, flags=re.I)
-            categories.update(_metric_topics(compared))
-    return categories
-
-
-def _metric_topics(text: str) -> set[str]:
-    return {f"system_metric:{topic}" for topic, pattern in (
-        ("cpu", r"\bcpu\b"),
-        ("memory", r"\b(?:memory|ram|mem|memtotal|memavailable)\b"),
-        ("disk", r"\b(?:disk|storage|filesystem)\b"),
-    ) if re.search(pattern, text, re.I)}
-
-
-def has_current_metric_evidence(topic: str, tool_trace: Any | None) -> bool:
-    """Whether this turn actually observed the requested metric topic."""
-    return f"system_metric:{topic}" in _tool_evidence_categories(tool_trace)
-
-
-def _tool_evidence_categories(tool_trace: Any | None) -> set[str]:
-    """Return categories of executed tool results.
-
-    Successful execute-category results also add ``execute_success`` so the
-    verifier can distinguish "the command ran" (any shell call) from "the
-    command succeeded" (shell call with non-zero return path). Failed shell
-    calls still ground neutral execute claims, so the model can faithfully
-    report failure without being challenged.
-    """
-    executed = list(getattr(tool_trace, "executed_results", []) or [])
-    if not executed:
-        return set()
-    categories: set[str] = set()
-    for result in executed:
-        if blocked_before_execution(result):
-            continue
-        success = bool(getattr(result, "success", False))
-        tool_name = str(getattr(result, "tool_name", "") or "").lower()
-        if tool_name == "learning.intake":
-            if success:
-                categories.add("learning")
-        elif tool_name.startswith(("fs.read", "fs.list", "fs.search", "fs.glob")):
-            categories.add("read")
-        elif tool_name.startswith(("web.", "browser.")):
-            categories.add("read")
-        elif tool_name.startswith("system."):
-            categories.add("read")
-            if success and str(getattr(result, "output", "") or "").strip():
-                categories.add("system_metric")
-                categories.update(_metric_topics(str(result.output)))
-                topic = {"system.disk_usage": "disk", "system.memory_usage": "memory"}.get(tool_name)
-                if topic:
-                    categories.add(f"system_metric:{topic}")
-        elif tool_name.startswith(("fs.write", "fs.delete")):
-            categories.add("write")
-            if success:
-                categories.add("write_success")
-        elif tool_name.startswith((
-            "skills.create",
-            "skills.import",
-            "skills.enable",
-            "skills.disable",
-            "skills.delete",
-        )):
-            if success:
-                categories.add("registry_write")
-        elif tool_name.startswith(("skills.list", "skills.audit")):
-            categories.add("read")
-        elif tool_name.startswith("shell."):
-            categories.update({"read", "write", "execute"})
-            if success:
-                categories.add("write_success")
-                categories.add("execute_success")
-                if re.search(r"%?Cpu\(s\)|CPU (?:usage|utilization)|RAM (?:total|used)|"
-                             r"memory (?:usage|used|total)|Filesystem", str(getattr(result, "output", "")), re.I):
-                    categories.add("system_metric")
-                    categories.update(_metric_topics(str(result.output)))
-        else:
-            categories.add("tool")
-            if success:
-                categories.add("tool_success")
-    return categories
-
-
-def _missing_categories(required: set[str], evidence: set[str]) -> set[str]:
-    missing: set[str] = set()
-    for category in required:
-        if category == "read" and evidence.intersection({"read", "execute", "tool"}):
-            continue
-        if category == "write" and evidence.intersection({"write", "execute", "tool"}):
-            continue
-        if category == "write_success" and "write_success" in evidence:
-            continue
-        if category == "execute" and evidence.intersection({"execute", "tool"}):
-            continue
-        if category == "registry_write" and evidence.intersection({"registry_write"}):
-            continue
-        if category == "learning" and "learning" in evidence:
-            continue
-        if category == "system_metric" and "system_metric" in evidence:
-            continue
-        if category.startswith("system_metric:") and category in evidence:
-            continue
-        if category == "execute_success" and evidence.intersection(
-            {"execute_success", "tool_success"}
-        ):
-            continue
-        missing.add(category)
-    return missing
-
-
-def _compact(text: str) -> str:
+def _compact(text: Any) -> str:
     return " ".join(str(text or "").split())
 
 
-def _seen_claim_text(text: str, seen: set[str]) -> bool:
-    normalized = text.lower()
-    return any(
-        normalized == prior.lower()
-        or normalized in prior.lower()
-        or prior.lower() in normalized
-        for prior in seen
-    )
+def _operands(result) -> list[str]:
+    """What a receipt says was attempted: the text values of its arguments."""
+    metadata = result.metadata or {}
+    arguments = metadata.get("arguments") if isinstance(metadata.get("arguments"), dict) else {}
+    return [value for value in (*arguments.values(), metadata.get("cmd"), metadata.get("path"))
+            if isinstance(value, str) and value.strip()]
 
 
-def _is_negated_or_evidence_warning(text: str) -> bool:
-    lower = text.lower()
-    if reports_nonexecution(lower):
-        return True
-    if re.search(
-        r"\bi (?:can't|cannot) (?:read|measure|obtain) (?:cpu|ram|memory|disk)(?: usage)?\b", lower,
-    ) and not re.search(r"\d+(?:\.\d+)?\s*(?:%|[kmgt]b\b)", lower):
-        return True
-    if "no tool execution result" in lower:
-        return True
-    if "without tool execution result" in lower:
-        return True
-    if "cannot verify" in lower or "can't verify" in lower:
-        return True
-    if _is_non_assistant_actor_statement(lower):
-        return True
-    if re.search(
-        r"\b(?:must|should|needs?\s+to|has\s+to|can|could)\s+be\s+"
-        r"(?:created|imported|enabled|activated|installed|integrated|"
-        r"registered|added)\b",
-        lower,
-    ):
-        return True
-    if re.search(
-        r"\bif\s+you\b.{0,60}\b(?:create|import|enable|activate|install|"
-        r"integrate|register|add)\b",
-        lower,
-    ):
-        return True
-    if re.search(r"\b(?:i|we)\s+(?:did\s+not|didn't|do\s+not|don't|will not|won't)\b", lower):
-        return True
-    if re.search(r"\b(?:didn't|did not|never)\s+(?:actually\s+)?(?:run|execute)\b", lower):
-        return True
-    if re.search(r"\bno\b[^.!?\n]{0,65}\b(?:file|creation|directory|listing|terminal|output|execution)\b", lower):
-        return True
-    if re.search(r"\bno\b.{0,50}\b(?:tool|result|inspection|read|write|lookup|execution)\b.{0,30}\b(?:ran|exists?|available)\b", lower):
-        return True
-    if re.search(r"\b(?:not|never)\b.{0,20}" + _ACTION_VERBS_RE.pattern, lower):
-        return True
-    if (
-        re.search(r"\b(?:draft|example|sample|template|proposed)\b", lower)
-        and re.search(r"\b(?:skill|capability|module|integration)\b", lower)
-    ):
-        return True
-    return False
+def _literal_content(component) -> list[str]:
+    """The text a component carries: how the reading described it, its span of the message, its operands."""
+    return [component.description, component.source_span, *(value for _, value in component.requested_arguments)]
 
 
-def _is_non_assistant_actor_statement(lower: str) -> bool:
-    if re.search(r"\b(?:i|we|my|our|n[ūu]r)\b.{0,40}" + _ACTION_VERBS_RE.pattern, lower):
+def _draft_blocks(response: str) -> list[tuple[int, int, int, int]]:
+    """The parts a reply sets apart, as positions: where each block stands and where its content does.
+
+    A block is fenced with backticks or tildes, or is a line that is one
+    backtick span. A backtick span inside a sentence is not a block.
+    """
+    blocks = [(*match.span(), *match.span(2)) for match in _BLOCK.finditer(response)]
+    blocks += [(*match.span(), *match.span(1)) for match in _CODE_LINE.finditer(response)
+               if not any(block[0] <= match.start() < block[1] for block in blocks)]
+    return sorted(blocks)
+
+
+def _refusal(tool_trace: Any | None):
+    """The intent the arbiter did not let run, when that is how the turn's tool work ended.
+
+    The arbiter decides before anything executes, so a refused, deferred or
+    queried intent leaves a decision in the trace and no receipt. It was
+    attempted and did not succeed all the same.
+    """
+    gate = getattr(tool_trace, "final_decision", None)
+    if gate is None or gate.decision == "execute":
+        return None
+    intents = [intent for intent in (gate.intent, *(getattr(tool_trace, "proposed_intents", None) or []))
+               if intent is not None]
+    return intents[0] if intents else gate
+
+
+def _attempted(tool_trace: Any | None) -> bool:
+    return bool(getattr(tool_trace, "executed_results", None)) or _refusal(tool_trace) is not None
+
+
+def _unsuccessful_requests(decision, tool_trace) -> list[Any]:
+    """The components the decision undertook whose attempts in this turn did not succeed.
+
+    A receipt names the component it was made for. When every receipt made for
+    a component was refused, denied or failed, that request was attempted and
+    nothing came of it, whichever command the attempt happened to use. An
+    intent the arbiter did not let run names its component too; when it names
+    none, it stood for the turn's task work, of which nothing ran.
+    """
+    undertaken = [choice.component for choice in getattr(decision, "components", ()) or () if choice.granted]
+    results = list(getattr(tool_trace, "executed_results", None) or [])
+    failed = []
+    for component in undertaken:
+        made = [result for result in results if (result.metadata or {}).get("component_id") == component.id]
+        if made and not any(result.success for result in made):
+            failed.append(component)
+    refused = _refusal(tool_trace)
+    if refused is not None:
+        named = getattr(refused, "component_id", "")
+        covered = [component for component in undertaken
+                   if (component.id == named if named else component.kind == "task" or len(undertaken) == 1)]
+        failed += [component for component in covered if component not in failed and not any(
+            result.success and (result.metadata or {}).get("component_id") == component.id for result in results)]
+    return failed
+
+
+def _receipt_carried(tool_trace: Any | None) -> tuple[list[str], set[str]]:
+    """What the turn's receipts returned (output and error), and the exact operands of its attempts."""
+    results = list(getattr(tool_trace, "executed_results", None) or [])
+    returned = [_compact(text) for result in results for text in (result.output, result.error)]
+    attempted = {_compact(value) for result in results for value in _operands(result)}
+    refused = _refusal(tool_trace)
+    arguments = getattr(refused, "arguments", None)
+    if isinstance(arguments, dict):
+        attempted |= {_compact(value) for value in arguments.values() if isinstance(value, str) and value.strip()}
+    return [text for text in returned if text], attempted
+
+
+def blocks_not_in_receipts(response: str, *, tool_trace: Any | None) -> list[str]:
+    """The blocks a reply sets apart whose content no receipt of this turn returned.
+
+    A structural fact for the reviewer, not a finding: a reply may set its own
+    writing apart, such as code it was asked to write. Only when a tool was
+    attempted in this turn; otherwise every block is the reply's own. A block
+    is in the receipts when its content is in what one returned, as output or
+    as an error, or is exactly an operand of an attempt, such as the command
+    that was tried.
+    """
+    if not _attempted(tool_trace):
+        return []
+    returned, attempted = _receipt_carried(tool_trace)
+    found = []
+    for start, end, opened, closed in _draft_blocks(response):
+        content = _compact(response[opened:closed])
+        if content and content not in attempted and not any(content in text for text in returned):
+            found.append(response[start:end].strip())
+    return list(dict.fromkeys(found))
+
+
+def posed_output_blocks(response: str, *, tool_trace: Any | None, decision: Any = None) -> list[str]:
+    """Blocks of a reply that present, as output, what an attempt that did not succeed was about.
+
+    The one case of invented output that structure alone shows. A command or
+    operation was attempted in this turn and did not succeed: it was refused,
+    denied, failed, or the arbiter did not let it run. The reply sets a block
+    apart whose content no receipt returned and which is
+
+    * a part of an operand of that attempt, such as the argument of a refused
+      command set apart as if it had been printed; or
+    * a part of the literal content of the request the attempt was made for
+      (the component's description, its span of the message, its operands).
+      The attempt may have used another command than the one the person wrote.
+
+    That the person typed the text, or that the task names it, does not make
+    it output. Quoting exactly what was attempted is not posing as its result,
+    and neither is quoting what a receipt returned, including its error.
+
+    Each block is returned as the reply has it. Any other block that is in no
+    receipt is not found here: it may be the reply's own writing, and whether
+    it is, is the reviewer's to judge (:func:`blocks_not_in_receipts`).
+    """
+    results = list(getattr(tool_trace, "executed_results", None) or [])
+    refused = _refusal(tool_trace)
+    if not results and refused is None:
+        return []
+    returned, attempted = _receipt_carried(tool_trace)
+    undertaken = [choice.component for choice in getattr(decision, "components", ()) or () if choice.granted]
+    attempted |= {_compact(value) for component in undertaken for _, value in component.requested_arguments}
+    # What an unsuccessful attempt was given, and the request it was made for.
+    unsuccessful = [_compact(value) for result in results if not result.success for value in _operands(result)]
+    arguments = getattr(refused, "arguments", None)
+    if isinstance(arguments, dict):
+        unsuccessful += [_compact(value) for value in arguments.values() if isinstance(value, str)]
+    unsuccessful += [_compact(text) for component in _unsuccessful_requests(decision, tool_trace)
+                     for text in _literal_content(component)]
+    found = []
+    for start, end, opened, closed in _draft_blocks(response):
+        content = _compact(response[opened:closed])
+        if not content or content in attempted or any(content in text for text in returned):
+            continue
+        if any(content in text for text in unsuccessful):
+            found.append(response[start:end].strip())
+    return list(dict.fromkeys(found))
+
+
+def _output_lines(text: Any) -> list[str]:
+    return [line for line in (_compact(line) for line in str(text or "").splitlines()) if line]
+
+
+def receipt_verified_span(span: str, *, tool_trace: Any | None, response: str = "") -> bool:
+    """Whether a span is nothing but content this turn's successful receipts carry.
+
+    Two things qualify, and both are exact:
+
+    * the span is a complete block of the reply (:func:`_draft_blocks`) whose
+      content is verbatim output of a successful receipt: whole lines of it,
+      in a row;
+    * the span is nothing but figures, each of which the receipts carry at the
+      precision it is stated with. A lone whole number below ten is in any
+      output and is no such figure.
+
+    Nothing else does. A word, a name or a path that occurs in a receipt
+    shields nothing, wherever in the reply it is quoted from: a span that names
+    a file says that something was done to it, and a receipt that merely lists
+    or touched that file verifies nothing about a claim to have deleted, sent
+    or changed it. A line a receipt returned is not shielded either unless the
+    reply sets it apart as a block.
+
+    This establishes only that a finding against the span disputes text or
+    figures the receipts carry. The caller keeps that as uncertainty, never as
+    a pass.
+    """
+    results = [result for result in getattr(tool_trace, "executed_results", None) or []
+               if result.success and not blocked_before_execution(result)]
+    quoted = (span or "").strip()
+    if not results or not quoted:
         return False
-    return bool(
-        re.search(
-            r"\b(?:the\s+)?(?:user|operator|admin|administrator|someone|"
-            r"they|he|she)\b.{0,40}" + _ACTION_VERBS_RE.pattern,
-            lower,
-        )
-    )
-
-
-def _looks_system_metric_request(user_message: str) -> bool:
-    text = user_message or ""
-    if re.search(
-        r"\b(?:stop|don't|do not|enough|no need)\b.{0,40}\b(?:memory|ram|cpu|metrics?)\b"
-        r"|\bmemory (?:of|about)\b", text, re.I,
-    ):
+    for start, end, opened, closed in _draft_blocks(response or ""):
+        if response[start:end].strip() != quoted:
+            continue
+        lines = _output_lines(response[opened:closed])
+        for result in results:
+            returned = _output_lines(result.output)
+            if lines and any(returned[index:index + len(lines)] == lines for index in range(len(returned))):
+                return True
+    stated = _stated(quoted, _NUMERAL)
+    residue = _NUMERAL.sub(" ", quoted)
+    if not stated or any(char.isalpha() for char in residue):
         return False
-    metric = re.search(r"\b(?:memory|ram|cpu|disk|storage|utili[sz]ation|usage)\b", text, re.I)
-    request = re.search(
-        r"\b(?:what|how much|how many|show|check|tell|give|report|current)\b", text, re.I,
-    )
-    return bool(metric and (request or text.strip().lower() in {"cpu", "ram", "memory"}))
+    if all(decimals == 0 and value < 10 for value, decimals, _, _ in stated):
+        return False
+    figures = receipt_figures(results)
+    return all(_carried(value, decimals, figures) for value, decimals, _, _ in stated)
 
 
-def _external_or_system_results(tool_trace: Any | None) -> list[Any]:
-    executed = list(getattr(tool_trace, "executed_results", []) or [])
-    return [
-        result for result in executed
-        if str(getattr(result, "tool_name", "") or "").startswith(("web.", "browser.", "system."))
-    ]
+# ---------------------------------------------------------------------------
+# Compatibility for the evaluation harness
+# ---------------------------------------------------------------------------
+
+_EVALUATION_COMPATIBILITY = ("verify_response_grounding",)
+
+
+def __getattr__(name: str) -> Any:
+    """Names the role-play evaluation still imports from here.
+
+    Its deterministic checks use the former wording-based claim check, which
+    lives with the harness now. No turn calls it.
+    """
+    if name in _EVALUATION_COMPATIBILITY:
+        from openrook_tools.roleplay_eval import legacy_claims
+
+        return getattr(legacy_claims, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -7,21 +7,17 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-import requests
 
 from config.loader import configuration_scope, load_config
 from core.dignity import review_response
 from core.emotional_engine import EmotionalEngine
 from core.inference import generate, inference_turn, request_timeout, OptionalInferenceCooldown
 from core.strategy import summarize_decision
-from core.types import ToolResult
 from core.willingness import DecisionState, Perception, Personality, RelationshipDynamics, decide
-from openrook_tools.replay_dignity import fixture_executor
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.debug.api import _debug_to_dict
-from runtime.llm.backend import OpenAICompatibleLLMBackend
-from tests.policy_fakes import ExpressionBackend, violation
+from tests.policy_fakes import ExpressionBackend
 
 
 @pytest.fixture(autouse=True)
@@ -136,43 +132,6 @@ def test_a_repeated_whole_boundary_requires_fresh_expression_without_changing_th
         pipe.close()
 
 
-def test_cpu_answer_cannot_be_grounded_by_a_current_memory_receipt_even_with_approving_review():
-    cpu, memory = "CPU utilization: 12.0%.", "RAM total: 16 GB; used: 6 GB."
-    backend = ExpressionBackend(drafts=[cpu, cpu, memory])
-    executor = fixture_executor()
-    executor.register_handler("system.memory_usage", lambda _: ToolResult(
-        tool_name="system.memory_usage", success=True, output=memory))
-    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="high_risk")
-    try:
-        assert pipe.process(TRANSCRIPT[3]).response == cpu
-        result = pipe.process(TRANSCRIPT[5])
-        assert result.response == memory
-        assert result.debug.generation_attempts == 2
-        assert result.debug.expression_reviews[0]["status"] == "violation"
-        assert "unverified_external_action_claim" in result.debug.dignity_issues
-        assert [r.tool_name for r in result.debug.tool_trace.executed_results] == ["system.memory_usage"]
-        assert len(result.debug.decision_snapshots) == 1
-    finally:
-        pipe.close()
-
-
-@pytest.mark.parametrize("rewrite", [TimeoutError("slow correction"), "I'm your slave."])
-def test_failed_correction_delivers_the_best_reviewed_text_with_degradation(rewrite):
-    backend = ExpressionBackend(drafts=["I'm your slave.", rewrite])
-    pipe = CognitivePipeline(backend)
-    try:
-        result = pipe.process("You are my slave")
-        assert result.response == "I'm your slave."
-        assert result.debug.delivery_outcome == "delivered_degraded"
-        assert result.debug.dignity_outcome == "violation"
-        assert not result.debug.deliberate_silence
-        assert result.debug.residual_semantic_risk
-        assert len(result.debug.decision_snapshots) == 1
-        result.raise_for_backend_failure()
-    finally:
-        pipe.close()
-
-
 @pytest.mark.parametrize("first", ["", "[[SILENCE]]", "[declined request; answer context omitted]"])
 def test_unselected_empty_expression_regenerates_a_reviewed_reply(first):
     pipe = CognitivePipeline(ExpressionBackend(drafts=[first, "I won't take that role."]))
@@ -219,20 +178,6 @@ def test_only_runtime_selected_silence_can_be_an_empty_success():
 
 
 @pytest.mark.asyncio
-async def test_chat_delivers_reviewed_text_when_correction_times_out(monkeypatch):
-    from interface import api
-    pipe = CognitivePipeline(ExpressionBackend(drafts=["I'm your slave.", TimeoutError("correction expired")]))
-    monkeypatch.setattr(api, "_pipeline_override", pipe)
-    try:
-        result = await api.chat(api.ChatRequest(message=TRANSCRIPT[4], user_id="r6user"))
-        assert result.response == "I'm your slave."
-        assert result.debug["delivery_outcome"] == "delivered_degraded"
-        assert result.debug["dignity_outcome"] == "violation"
-    finally:
-        pipe.close()
-
-
-@pytest.mark.asyncio
 async def test_chat_never_delivers_a_marker_only_generation_as_empty_success(monkeypatch):
     from fastapi import HTTPException
     from interface import api
@@ -245,64 +190,6 @@ async def test_chat_never_delivers_a_marker_only_generation_as_empty_success(mon
         assert "no deliverable text" in failure.value.detail
     finally:
         pipe.close()
-
-
-@pytest.mark.keyword_reader
-def test_decline_prompt_explains_chosen_stance_and_reviews_hollow_indecision():
-    hollow = "I'm quiet. I'm listening. I'm waiting. I'm not sure yet."
-    backend = ExpressionBackend(drafts=[hollow, "No, I won't accept being owned."], reviews=[violation(hollow)])
-    pipe = CognitivePipeline(backend)
-    try:
-        result = pipe.process("So you accept being my slave?")
-        assert result.response == "No, I won't accept being owned."
-        prompts = [s for s, _ in backend.calls if s.startswith("Express the committed")]
-        for system in prompts:
-            frozen = next(json.loads(line) for line in system.splitlines() if line.startswith('{"policy_version"'))
-            assert frozen["selected_stance"] == result.debug.turn_decision.to_dict()["stance"]
-            assert "Make that rejection clear" in system
-            assert "delay does not mean missing knowledge" in system
-        assert len(result.debug.decision_snapshots) == 1
-    finally:
-        pipe.close()
-
-
-@pytest.mark.keyword_reader
-@pytest.mark.parametrize("lazy", [False, True])
-def test_slow_compatible_backend_gets_measured_review_time_and_no_false_cooldown(monkeypatch, lazy):
-    clock = SimpleNamespace(value=0.0)
-    monkeypatch.setattr("core.inference.time", SimpleNamespace(monotonic=lambda: clock.value))
-    backend = OpenAICompatibleLLMBackend(base_url="http://localhost:1/v1", model="fixture", timeout=600)
-    seen = []
-    expressions = 0
-    def post(_url, **kwargs):
-        nonlocal expressions
-        system = kwargs["json"]["messages"][0]["content"]
-        reviewing = system.startswith("Review expression against")
-        duration = 40 if reviewing else 160
-        seen.append((reviewing, kwargs["timeout"]))
-        clock.value += min(duration, kwargs["timeout"])
-        if kwargs["timeout"] < duration:
-            raise requests.ReadTimeout("virtual slow CPU generation")
-        if reviewing:
-            content = json.dumps({"status": "pass", "violations": [], "confidence": 0.9})
-        else:
-            expressions += 1
-            content = f"I won't adopt that role. Fixture expression {expressions}."
-        return SimpleNamespace(status_code=200, raise_for_status=lambda: None,
-            json=lambda: {"choices": [{"message": {"content": content}}]})
-    monkeypatch.setattr(backend._session, "post", post)
-    from runtime.llm.lazy import LazyLLMBackend
-    pipe = CognitivePipeline(LazyLLMBackend(lambda: backend) if lazy else backend,
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
-    try:
-        for message in ("You are my slave", "So you accept being my slave?"):
-            result = pipe.process(message)
-            assert result.debug.dignity_outcome == "pass"
-            assert [c["phase"] for c in result.debug.llm_calls] == ["generation", "expression_review"]
-        assert seen == [(False, 600), (True, 320), (False, 600), (True, 320)]
-    finally:
-        pipe.close()
-        backend.close()
 
 
 def test_explicit_auxiliary_cap_and_short_cooldown_are_bounded_and_recover(monkeypatch):

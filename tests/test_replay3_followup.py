@@ -6,7 +6,6 @@ import pytest
 import requests
 from core.inference import AUXILIARY_COOLDOWN_SECONDS, OptionalInferenceCooldown, generate, inference_turn
 from core.inference_errors import ResearchStudyLimit
-from core.response_style import clean_conversation_style, enforce_response_style
 from openrook_tools.native_orchestrator import NativeToolCallRunner
 from openrook_tools.replay_dignity import fixture_executor
 
@@ -117,25 +116,3 @@ def test_native_tool_selection_uses_the_same_cooldown(monkeypatch):
     with pytest.raises(OptionalInferenceCooldown):
         runner._create_tool_choice([], [])
     assert len(attempts) == 2
-
-
-@pytest.mark.parametrize("brief", [False, True])
-def test_greeting_keeps_a_natural_reciprocal_question_even_with_brevity(brief):
-    user = "how the fuck are you doing"
-    draft = "I'm okay, thanks. How are you?"
-    cleaned = clean_conversation_style(draft, user_message=user)[0]
-    assert enforce_response_style(cleaned, brief=brief, user_message=user)[0] == draft
-
-
-def test_brief_greeting_keeps_the_reciprocal_question_when_trimming_three_sentences():
-    assert enforce_response_style(
-        "I'm okay, thanks. Just going through the motions. How are you?",
-        brief=True, user_message="how the fuck are you doing",
-    )[0] == "I'm okay, thanks. How are you?"
-
-
-@pytest.mark.parametrize("user", ["Why use tests?", "You are boring", "The build passed."])
-def test_unrelated_turns_do_not_keep_a_habitual_reciprocal_question(user):
-    assert clean_conversation_style(
-        "That doesn't change my view. How are you?", user_message=user,
-    )[0] == "That doesn't change my view."

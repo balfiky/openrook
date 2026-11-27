@@ -96,13 +96,52 @@ def data_model_names() -> set[str]:
     return names
 
 
-def has_vocabulary(pattern: str) -> bool:
-    """Whether a regular expression spells out words rather than only structure."""
+def review_model_names() -> set[str]:
+    """Names the review's data model defines, beside the reading's: records and schema, nothing from prose.
+
+    The review's answer schema, the records a review and a receipt are made of,
+    the structural checks' own codes, and the keys under which receipt evidence
+    is shown. Used for the reply path only.
+    """
+    from core.dignity import LOCAL_CODES, SEVERITY, SOURCES, DignityIssue, ExpressionReview
+    from core.grounding import EVIDENCE_KEYS
+    from core.review import DraftReview, Finding, review_schema
+    from core.types import ToolDecision, ToolResult, ToolTrace
+
+    names = {*LOCAL_CODES, *SEVERITY, *SOURCES, *EVIDENCE_KEYS}
+    for record in (DignityIssue, ExpressionReview, DraftReview, Finding, ToolResult, ToolTrace, ToolDecision):
+        names |= {field.name for field in dataclasses.fields(record)}
+
+    def walk(schema: Any) -> None:
+        if isinstance(schema, dict):
+            names.update(str(key) for key in schema.get("properties", {}))
+            names.update(str(value) for value in schema.get("enum", []))
+            for value in schema.values():
+                walk(value)
+        elif isinstance(schema, list):
+            for value in schema:
+                walk(value)
+
+    walk(review_schema())
+    return names
+
+
+def _without_structure(pattern: str) -> str:
+    """A regular expression with its escapes, classes and group syntax blanked out."""
     bare = re.sub(r"\\[pP]\{[^}]*\}", " ", pattern)                 # \p{..} property classes
     bare = re.sub(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\{[^}]*\}|.)", " ", bare)
     bare = re.sub(r"\[[^\]]*\]", " ", bare)                          # character classes
-    bare = re.sub(r"\(\?(?:P<\w+>|P=\w+|[a-zA-Z]+\)|[a-zA-Z]+:|[:=!]|<[=!])", " ", bare)  # groups, flags
-    return bool(re.search(r"[^\W\d_]{2,}", bare))
+    return re.sub(r"\(\?(?:P<\w+>|P=\w+|[a-zA-Z]+\)|[a-zA-Z]+:|[:=!]|<[=!])", " ", bare)  # groups, flags
+
+
+def has_vocabulary(pattern: str) -> bool:
+    """Whether a regular expression spells out words rather than only structure."""
+    return bool(re.search(r"[^\W\d_]{2,}", _without_structure(pattern)))
+
+
+def spelled_words(pattern: str) -> set[str]:
+    """The words, or stems of three letters and more, that a regular expression spells out."""
+    return {word.casefold() for word in re.findall(r"[^\W\d_]{3,}", _without_structure(pattern))}
 
 
 def looks_like_pattern(text: str) -> bool:
@@ -118,11 +157,27 @@ def looks_like_pattern(text: str) -> bool:
 _LITERAL_MEMBERS = 4000
 
 
-def _as_literal(value: Any, budget: list[int] | None = None) -> ast.AST | None:
+def _holds(value: Any, marker: str, depth: int = 4) -> bool:
+    """Whether plain data holds the traced text: a string with the marker, at any nesting."""
+    if isinstance(value, str):
+        return marker in value.casefold()
+    if depth and isinstance(value, (tuple, list, set, frozenset)):
+        return any(_holds(item, marker, depth - 1) for item in value)
+    if depth and isinstance(value, dict):
+        return any(_holds(key, marker, depth - 1) or _holds(item, marker, depth - 1) for key, item in value.items())
+    return False
+
+
+def _as_literal(value: Any, budget: list[int] | None = None, marker: str = "") -> ast.AST | None:
     """A runtime value written back as the literal it would be in source, when it is plain data.
 
     Strings, compiled patterns (as their pattern text) and collections of plain
     data qualify. Anything else has no literal form and yields None.
+
+    With ``marker``, the traced text itself is left out and everything beside
+    it is kept: a string that holds the marker, and a mapping's entry filed
+    under such a key, are the text travelling. What a table held before the
+    text came, or holds beside it, is still written back.
     """
     budget = [_LITERAL_MEMBERS] if budget is None else budget
     budget[0] -= 1
@@ -131,12 +186,13 @@ def _as_literal(value: Any, budget: list[int] | None = None) -> ast.AST | None:
     if isinstance(value, re.Pattern):
         return ast.Constant(value.pattern) if isinstance(value.pattern, str) else None
     if isinstance(value, str):
-        return ast.Constant(value)
+        return None if marker and marker in value.casefold() else ast.Constant(value)
     if isinstance(value, (tuple, list, set, frozenset)):
-        members = [_as_literal(item, budget) for item in value]
+        members = [_as_literal(item, budget, marker) for item in value]
         return ast.Tuple(elts=[item for item in members if item is not None], ctx=ast.Load())
     if isinstance(value, dict):
-        pairs = [(_as_literal(key, budget), _as_literal(item, budget)) for key, item in value.items()]
+        pairs = [(_as_literal(key, budget, marker), _as_literal(item, budget, marker))
+                 for key, item in value.items() if not (marker and _holds(key, marker))]
         members = [item for pair in pairs for item in pair if item is not None]
         return ast.Tuple(elts=members, ctx=ast.Load())
     return None
@@ -178,7 +234,8 @@ class Scope:
                 self.regex_functions |= {alias.asname or alias.name for alias in node.names
                                          if alias.name in _REGEX_FUNCTIONS}
 
-    def bind_runtime(self, node: ast.AST, namespace: dict[str, Any], owner: Any = None) -> None:
+    def bind_runtime(self, node: ast.AST, namespace: dict[str, Any], owner: Any = None,
+                     marker: str = "") -> None:
         """Bind what the code uses to the values it really has, beside what the source shows.
 
         A word list or pattern imported from another module, reached as
@@ -187,6 +244,11 @@ class Scope:
         written back as one, so a test of the text against it is seen.
         ``namespace`` is the function's module globals and ``owner`` the object
         it was called on, if any. Attributes are read without running any code.
+
+        The traced text itself (``marker``) is left out of a value, and only
+        that: a per-turn cache keyed by what was said holds nothing else and
+        binds to nothing, while a table that mixes fixed wording with the
+        turn's text is still bound to its fixed wording.
         """
         local = {argument.arg for item in ast.walk(node) if isinstance(item, ast.arguments)
                  for argument in (*item.posonlyargs, *item.args, *item.kwonlyargs, item.vararg, item.kwarg)
@@ -204,7 +266,7 @@ class Scope:
             if key is None or key in bound:
                 continue
             bound.add(key)
-            literal = _as_literal(value)
+            literal = _as_literal(value, marker=marker)
             if literal is not None:
                 self.bindings.setdefault(key, []).append(literal)
 
@@ -248,7 +310,8 @@ class Scope:
 
         Unlike :meth:`strings` this leaves out what is not content of the
         collection: the key of a field read (``record.get("context")``,
-        ``record["context"]``), the literal of a comparison, and formatted text.
+        ``record["context"]``, ``getattr(record, "context", None)``), the
+        literal of a comparison, and formatted text.
         """
         found: list[str] = []
         visited: set[str] = set()
@@ -273,6 +336,10 @@ class Scope:
             elif isinstance(item, ast.Subscript):
                 pending.append(item.value)
             elif isinstance(item, ast.Call):
+                if isinstance(item.func, ast.Name) and item.func.id == "getattr":
+                    # ``getattr(record, "field", default)`` reads a field, like ``record.field``.
+                    pending.extend(reversed([*item.args[:1], *item.args[2:]]))
+                    continue
                 if isinstance(item.func, ast.Attribute):
                     if item.func.attr == "get":
                         continue
@@ -428,6 +495,10 @@ def findings(tree: ast.AST, scope: Scope | None = None, *, known: set[str] | Non
       reading's own fields, never with what a person wrote. Elsewhere a literal
       counts when it is not a data-model name; ``strict`` extends that to
       equality tests.
+
+    Two things are not lookups of the text in a table: taking a range out of a
+    sequence (``text[start:end]``), and looking for one piece of the text
+    inside another (``reply in message``), where neither side is fixed wording.
     """
     scope = scope or Scope(tree)
     known = data_model_names() if known is None else known
@@ -475,7 +546,9 @@ def findings(tree: ast.AST, scope: Scope | None = None, *, known: set[str] | Non
                     word = literal(left)
                     if word is not None and _has_letters(word) and (flow.holds(right) or word not in known):
                         found.append(Finding("probe", line, word, (word,), flow.holds(right)))
-                    table = _lettered(scope.table(left)) if flow.holds(right) and word is None else ()
+                    # Both sides text: one piece of writing looked for in another, not fixed wording.
+                    table = _lettered(scope.table(left)) if (
+                        flow.holds(right) and word is None and not flow.holds(left)) else ()
                     if table:   # ``for word in TABLE: word in text``
                         found.append(Finding("probe", line, ", ".join(table[:6]), table, True))
                     table = _lettered(scope.table(right)) if flow.holds(left) else ()
@@ -502,7 +575,8 @@ def findings(tree: ast.AST, scope: Scope | None = None, *, known: set[str] | Non
             if method in _TEXT_METHODS_ON_PATTERN and any(flow.holds(argument) for argument in node.args):
                 found += [Finding("regex", line, text, (text,), True) for text in scope.strings(receiver)
                           if has_vocabulary(text)]
-        if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Constant) and flow.holds(node.slice):
+        if (isinstance(node, ast.Subscript) and not isinstance(node.slice, (ast.Constant, ast.Slice))
+                and flow.holds(node.slice)):
             table = _lettered(scope.table(node.value))
             if table:       # ``TABLE[text]``, of any size
                 found.append(Finding("probe", line, ", ".join(table[:6]), table, True))
@@ -733,6 +807,12 @@ class TextTrace:
     which field names it travelled, so the code can then be checked for tests
     against exactly those expressions. ``self`` is not followed: what an object
     remembers between calls is not an argument.
+
+    ``called`` is every function under ``root`` that ran at all while the
+    trace was on, with or without the text: what a turn never calls, it cannot
+    have used. ``asked`` is every name a module-level ``__getattr__`` under
+    ``root`` was asked to resolve, which is how a name a module does not hold
+    itself is fetched from elsewhere.
     """
 
     def __init__(self, marker: str, root: Path = ROOT, exclude: tuple[str, ...] = ("tests",),
@@ -743,6 +823,9 @@ class TextTrace:
         self.depth = depth
         self.packages = packages
         self.reached: dict[tuple[str, str], dict[str, set[str]]] = {}
+        self.called: set[tuple[str, str]] = set()
+        self.asked: set[tuple[str, str]] = set()
+        self._files: dict[str, Path | None] = {}
         self._namespaces: dict[tuple[str, str], dict[str, Any]] = {}
         self._owners: dict[tuple[str, str], Any] = {}
         self._previous: Any = None
@@ -751,14 +834,23 @@ class TextTrace:
         if event != "call":
             return
         code = frame.f_code
+        if code.co_filename not in self._files:
+            try:
+                # Code without a file, such as a generated method, belongs to no module.
+                self._files[code.co_filename] = None if code.co_filename.startswith("<") else Path(
+                    code.co_filename).resolve().relative_to(self.root)
+            except ValueError:
+                self._files[code.co_filename] = None
+        relative = self._files[code.co_filename]
+        if relative is None or relative.parts[0] in self.exclude:
+            return
+        self.called.add((str(relative), code.co_qualname))
+        if code.co_qualname == "__getattr__" and code.co_argcount == 1:
+            name = frame.f_locals.get(code.co_varnames[0])
+            if isinstance(name, str):
+                self.asked.add((str(relative), name))
         if "<" in code.co_qualname:
             return  # comprehensions, lambdas and nested helpers belong to their function
-        try:
-            relative = Path(code.co_filename).resolve().relative_to(self.root)
-        except ValueError:
-            return
-        if relative.parts[0] in self.exclude:
-            return
         count = code.co_argcount + code.co_kwonlyargcount + bool(code.co_flags & 0x04) + bool(code.co_flags & 0x08)
         direct, leaves = set(), set()
         for name in code.co_varnames[:count]:
@@ -806,7 +898,7 @@ class TextTrace:
             inspected = ast.Module(body=[node, *_referenced(node, tree)], type_ignores=[])
             scope = Scope(_module_level(tree), node)
             scope.bind_runtime(node, self._namespaces.get((relative, qualname), {}),
-                               self._owners.get((relative, qualname)))
+                               self._owners.get((relative, qualname)), marker=self.marker)
             unit = Unit(f"{relative}::{qualname}", inspected, scope, source)
             result.append((unit, set(record["names"]), set(record["leaves"]) | set(CORE_TEXT_FIELDS)))
         return result

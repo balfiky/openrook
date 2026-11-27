@@ -29,7 +29,7 @@ from runtime.config import RuntimeConfig
 from runtime.llm.backend import STRUCTURED_OUTPUT_RETRY_AFTER, OpenAICompatibleLLMBackend
 from runtime.llm.lazy import LazyLLMBackend
 from tests.support.readings import (
-    ReadingBackend, ScriptedReader, conversation, plain, reading, role, task,
+    ReadingBackend, ScriptedReader, conversation, is_review_prompt, plain, reading, role, task,
 )
 
 GREETING_LIKE = "Morning! Everything all right on your side?"
@@ -99,8 +99,11 @@ def test_on_a_compatible_backend_the_reading_gets_the_primary_deadline_and_struc
     def post(_url, **kwargs):
         system = kwargs["json"]["messages"][0]["content"]
         reading_call = system.startswith(READING_SYS_PROMPT[:40])
+        review_call = is_review_prompt(system)
         seen.append((reading_call, kwargs["timeout"], kwargs["json"].get("response_format", {}).get("type")))
-        content = json.dumps(plain("Anything new?")) if reading_call else "Nothing much on my side."
+        content = (json.dumps(plain("Anything new?")) if reading_call else
+                   json.dumps({"verdict": "pass", "findings": [], "confidence": 0.9, "reason": "nothing departs"})
+                   if review_call else "Nothing much on my side.")
         return SimpleNamespace(status_code=200, raise_for_status=lambda: None,
                                json=lambda: {"choices": [{"message": {"content": content}}]})
 
@@ -111,7 +114,9 @@ def test_on_a_compatible_backend_the_reading_gets_the_primary_deadline_and_struc
     try:
         result = pipe.process("Anything new?", "reader")
         assert seen[0] == (True, pytest.approx(600, abs=1), "json_schema")
-        assert [entry[:2] for entry in seen[1:]] == [(False, 600)]
+        # The expression, then its review: required work too, on the same primary deadline.
+        assert [entry[:2] for entry in seen[1:]] == [(False, 600), (False, pytest.approx(600, abs=1))]
+        assert seen[2][2] == "json_schema" and result.debug.delivery_outcome == "delivered"
         assert result.debug.reading["provenance"] == "model"
     finally:
         pipe.close()

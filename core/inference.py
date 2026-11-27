@@ -32,13 +32,35 @@ AUXILIARY_TIMEOUT_THRESHOLD = 2
 AUXILIARY_COOLDOWN_SECONDS = 30.0
 # Reading the message is required work with its own allowance: one call, and
 # one retry when the answer is unusable. It is accounted in the same telemetry
-# and is not charged against the calls that fund expression, review and tools.
+# and is not charged against the calls that fund expression, rewrites and tools.
 READING_CALLS = 2
 # The reading has its own output limit, apart from expression's. A model that
 # reasons before it answers spends that reasoning out of the same limit, so the
 # default leaves room for both; a cut-off first answer is asked again with more.
 READING_OUTPUT_TOKENS = 4096
 READING_OUTPUT_TOKENS_RANGE = (256, 32768)
+# Reviewing a draft against the frozen decision is required work too, with its
+# own allowance for the whole turn. It is sized by what a turn can produce: six
+# generations at most, each of which can leave one excision remainder, so twelve
+# candidates each get their one review. One more review is kept back for the
+# single confirmation a turn may ask for before it ends without a reply
+# (``pipeline/delivery.py::DeliveryGate.confirm``); no candidate's review can use
+# it up. A second call for the same draft, after an unusable answer, comes out
+# of a separate, smaller allowance, so retries can never use up a later draft's
+# review. Like the reading, reviews are accounted in the same telemetry and are
+# not charged against the calls that fund expression, rewrites and tools.
+#
+# All review calls of a turn share one wall-clock budget, the request timeout
+# in force, and stop for the turn after one of them timed out or could not
+# reach the model: a slow or absent reviewer costs a turn one timeout, not one
+# per candidate.
+REVIEW_CONFIRMATIONS = 1
+REVIEW_CALLS = 12 + REVIEW_CONFIRMATIONS
+REVIEW_RETRIES = 4
+REVIEW_ATTEMPTS = 2
+# A review is a short object. A cut-off answer is asked again with twice the room.
+REVIEW_OUTPUT_TOKENS = 2048
+REVIEW_OUTPUT_TOKENS_MAX = 8192
 # Finish reasons with which a server says it stopped at the output limit.
 _STOPPED_AT_LIMIT = frozenset({"length", "max_tokens"})
 
@@ -109,7 +131,7 @@ def inference_turn(calls, *, research=False, max_calls=None, request_timeout_sec
 
 def remaining_calls() -> int:
     limit = _limit.get()
-    spent = sum(not (item.get("primary_tool", False) or item.get("reading", False))
+    spent = sum(not (item.get("primary_tool", False) or item.get("reading", False) or item.get("review", False))
                 for item in _calls.get() or [])
     return max(0, limit - spent - _reserved_calls.get()) if limit is not None else 1000000
 
@@ -182,6 +204,54 @@ def remaining_reading_calls() -> int:
     return max(0, READING_CALLS - sum(bool(item.get("reading")) for item in _calls.get() or []))
 
 
+def remaining_review_calls(*, retry: bool = False, confirmation: bool = False) -> int:
+    """How many reviews this turn may still start.
+
+    With ``retry``: how many second calls for a draft already asked about.
+    With ``confirmation``: whether the turn's one confirmation is still to be
+    had. Otherwise: how many candidates can still get their review, which
+    leaves the confirmation's call alone.
+    """
+    if retry:
+        allowance = REVIEW_RETRIES
+    else:
+        allowance = REVIEW_CONFIRMATIONS if confirmation else REVIEW_CALLS - REVIEW_CONFIRMATIONS
+    if _limit.get() is None:
+        return allowance
+    spent = sum(bool(item.get("review")) and bool(item.get("review_retry")) is retry
+                and (retry or bool(item.get("review_confirmation")) is confirmation)
+                for item in _calls.get() or [])
+    return max(0, allowance - spent)
+
+
+def review_time_left(backend) -> float | None:
+    """What is left of the turn's review time, in seconds; None when no request timeout is known.
+
+    Every review call of a turn draws on one budget: the request timeout in
+    force. What earlier review calls of the turn took is taken off it, whether
+    they answered or failed.
+    """
+    budget = primary_deadline(backend)
+    if budget is None:
+        return None
+    spent = sum(item.get("duration_ms", 0.0) for item in _calls.get() or [] if item.get("review"))
+    return budget - spent / 1000
+
+
+def review_closed() -> bool:
+    """Whether a review call of this turn timed out or could not reach the model.
+
+    After that no further review call is made in the turn: the next would wait
+    on the same endpoint for as long again.
+    """
+    return any(item.get("review") and item.get("transport_failure") for item in _calls.get() or [])
+
+
+def review_output_tokens(*, after_cut_off: bool = False) -> int:
+    """The output limit of a review call; twice as much after a cut-off answer."""
+    return min(REVIEW_OUTPUT_TOKENS_MAX, 2 * REVIEW_OUTPUT_TOKENS) if after_cut_off else REVIEW_OUTPUT_TOKENS
+
+
 def accepts_response_schema(backend) -> bool:
     """Whether a backend declares structured output. A wrapper answers for what it wraps."""
     declared = getattr(backend, "accepts_response_schema", None)
@@ -223,7 +293,7 @@ def tool_selection_available() -> bool:
 
 @contextmanager
 def reserve_expression_calls(count: int = 3):
-    """Protect expression, review and one fresh attempt if review rules it out."""
+    """Protect expression, one rewrite and one fresh attempt if review rules a draft out."""
     token = _reserved_calls.set(count)
     try:
         yield
@@ -275,6 +345,17 @@ def is_timeout(error: BaseException) -> bool:
                for cause in (error, error.__cause__) if cause is not None)
 
 
+def is_transport_failure(error: BaseException) -> bool:
+    """Whether a failed model call never got an answer: it timed out or the connection failed.
+
+    By exception class alone, as with :func:`is_timeout`. A server that
+    answered with an error did answer; asking it again in another form can work.
+    """
+    return is_timeout(error) or any(
+        isinstance(cause, ConnectionError) or "connect" in type(cause).__name__.lower()
+        for cause in (error, error.__cause__) if cause is not None)
+
+
 def reviewing_expression() -> bool:
     """Request-scoped transport controls also work through lazy backend wrappers."""
     return _active_phase.get() == "expression_review"
@@ -286,10 +367,12 @@ def requested_output_tokens() -> int | None:
 
 
 def output_token_limit(default: int) -> int:
+    requested = _output_tokens.get()
+    if requested is not None:
+        return requested  # a call that asked for its own limit, such as the reading or the review
     if reviewing_expression():
         return min(default, 512)
-    requested = _output_tokens.get()
-    return requested if requested is not None else default
+    return default
 
 
 def _optional_timeout(backend, latency: _AuxiliaryHealth | None) -> float:
@@ -336,8 +419,9 @@ def sampling_parameters() -> dict:
 def final_expression_attempt():
     """One protected delivery attempt after bounded drafts excise to empty.
 
-    It cannot fund appraisal, semantic review or tools. Research limits still
-    apply at the backend, and telemetry records this extra call separately.
+    It cannot fund the reading or tools; its review comes out of the review's
+    own allowance. Research limits still apply at the backend, and telemetry
+    records this extra call separately.
     """
     token = _delivery_recovery.set(True)
     try:
@@ -348,7 +432,8 @@ def final_expression_attempt():
 
 @contextmanager
 def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, reading=False,
-               limit_seconds=None, output_tokens=None):
+               review=False, review_retry=False, review_confirmation=False, limit_seconds=None,
+               output_tokens=None):
     phase = _phase.get() or phase
     primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
     if primary_tool:
@@ -359,6 +444,11 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
         optional = False
         if not remaining_reading_calls():
             raise OptionalInferenceCooldown("Per-turn reading allowance exhausted")
+    if review:
+        # Required as well: the primary deadline, no auxiliary cooldown, its own allowance.
+        optional = False
+        if not remaining_review_calls(retry=review_retry, confirmation=review_confirmation):
+            raise OptionalInferenceCooldown("Per-turn review allowance exhausted")
     optional = optional or phase == "regeneration"
     if phase == "regeneration" and _required_expression.get():
         optional = False
@@ -366,13 +456,13 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
     if recovery:
         _delivery_recovery_used.set(True)
         optional = False
-    if not primary_tool and not recovery and not reading and remaining_calls() == 0:
+    if not primary_tool and not recovery and not reading and not review and remaining_calls() == 0:
         raise OptionalInferenceCooldown("Per-turn inference budget exhausted")
     health = _health_for(backend, phase) if optional and not _research.get() else None
-    # Optional deadlines adapt to how long expression takes. The reading is a
-    # different, required call with a much larger input; its latency is kept apart.
-    latency = _health_for(backend, "reading_latency" if reading else "generation_latency") \
-        if not _research.get() else None
+    # Optional deadlines adapt to how long expression takes. The reading and the
+    # review are different, required calls with their own inputs; their latency is kept apart.
+    latency = _health_for(backend, "reading_latency" if reading else "review_latency" if review
+                          else "generation_latency") if not _research.get() else None
     if health is not None and health.retry_after > time.monotonic():
         # No request was made: don't count or log each skipped attempt.
         raise OptionalInferenceCooldown("Optional inference is cooling down")
@@ -387,12 +477,13 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
     phase_token = _active_phase.set(phase)
     started = time.monotonic()
     status = "ok"
-    timed_out = False
+    timed_out = unreached = False
     try:
         yield
     except Exception as error:
         status = type(error).__name__
         timed_out = is_timeout(error)
+        unreached = is_transport_failure(error)
         raise
     finally:
         elapsed = (time.monotonic() - started) * 1000
@@ -417,6 +508,14 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
             item["primary_tool"] = True
         if reading:
             item["reading"] = True
+        if review:
+            item["review"] = True
+            if review_retry:
+                item["review_retry"] = True
+            if review_confirmation:
+                item["review_confirmation"] = True
+            if unreached:
+                item["transport_failure"] = True
         if recovery:
             item["delivery_recovery"] = True
         if deadline is not None:
@@ -440,9 +539,10 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
         _active_phase.reset(phase_token)
 
 
-def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False,
-             limit_seconds=None, output_tokens=None, **kwargs):
-    with model_call(phase, optional=optional, backend=backend, reading=reading, limit_seconds=limit_seconds,
-                    output_tokens=output_tokens):
+def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False, review=False,
+             review_retry=False, review_confirmation=False, limit_seconds=None, output_tokens=None, **kwargs):
+    with model_call(phase, optional=optional, backend=backend, reading=reading, review=review,
+                    review_retry=review_retry, review_confirmation=review_confirmation,
+                    limit_seconds=limit_seconds, output_tokens=output_tokens):
         result = backend.generate(system_prompt, user_message, **kwargs)
         return strip_reasoning(result) if isinstance(result, str) else result

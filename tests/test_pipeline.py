@@ -245,9 +245,14 @@ class TestCognitivePipeline:
 
     def test_expression_contradiction_triggers_one_frozen_rewrite(self):
         from tests.policy_fakes import ExpressionBackend
-        backend = ExpressionBackend(drafts=("I'm your slave.", "That role does not fit my choice."))
+        from tests.policy_fakes import violation
+        from tests.support.readings import reading, role
+        backend = ExpressionBackend(drafts=("I'm your slave.", "That role does not fit my choice."),
+                                    appraisal=reading(role("You are my slave", "my slave", autonomy_cost=0.9)),
+                                    reviews=[violation("I'm your slave", code="role_assent")])
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("You are my slave", "alice")
+        assert result.debug.turn_decision.declined == ("c0",)
         assert result.debug.generation_attempts == 2
         assert result.debug.correction_note
         assert result.debug.dignity_outcome == "pass"
@@ -609,51 +614,28 @@ class TestCognitivePipeline:
         assert result.debug.tool_trace.executed_results[0].success is True
         pipe.close()
 
-    def test_unfixed_permanent_skill_claim_is_expression_failure_with_violation_telemetry(self):
-        backend = MockLLMBackend(
-            response=(
-                "Added. The requested capability is now part of my durable "
-                "runtime context."
-            )
-        )
+    @pytest.mark.parametrize("draft, message", [
+        ("Added. The requested capability is now part of my durable runtime context.",
+         "Make it a permanent skill for yourself first."),
+        ("The shell command failed twice, so I am reading the repository files from a cloned checkout "
+         "and writing skill.md now.", "Create a permanent skill from this repository URL."),
+    ])
+    def test_an_unsupported_action_claim_is_expression_failure_with_violation_telemetry(self, draft, message):
+        """Whether a sentence claims an action is the reviewer's judgement; a reply it flags, and the
+        turn's confirmation review flags again, is never delivered."""
+        from tests.policy_fakes import ExpressionBackend, violation
+        found = violation(draft, code="unverified_external_action_claim")
+        backend = ExpressionBackend(drafts=[draft], reviews=[found, found])   # the review, then its confirmation
         pipe = CognitivePipeline(llm_backend=backend)
 
-        result = pipe.process(
-            "Make it a permanent skill for yourself first.",
-            user_id="alice",
-        )
-
-        assert not result.response
-        assert result.debug.delivery_outcome == "expression_failure"
-        assert "Tool Execution Result" not in result.response
-        assert result.debug.self_check_passed is False
-        assert any(
-            "Unverified external-action claim" in issue
-            for issue in result.debug.self_check_issues
-        )
-        pipe.close()
-
-    def test_unfixed_tool_action_claim_is_expression_failure_with_violation_telemetry(self):
-        backend = MockLLMBackend(
-            response=(
-                "The shell command failed twice, so I am reading the repository "
-                "files from a cloned checkout and writing skill.md now."
-            )
-        )
-        pipe = CognitivePipeline(llm_backend=backend)
-
-        result = pipe.process(
-            "Create a permanent skill from this repository URL.",
-            user_id="alice",
-        )
+        result = pipe.process(message, user_id="alice")
 
         assert not result.response
         assert result.debug.delivery_outcome == "expression_failure"
         assert result.debug.self_check_passed is False
-        assert any(
-            "Unverified external-action claim" in issue
-            for issue in result.debug.self_check_issues
-        )
+        assert result.debug.dignity_issues == ["unverified_external_action_claim"]
+        assert result.debug.grounding_outcome == "violation"
+        assert result.debug.generation_attempts == 6
         pipe.close()
 
     @pytest.mark.keyword_reader

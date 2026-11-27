@@ -271,12 +271,15 @@ def test_decline_keeps_same_self_memories_life_history_and_dialogue_for_generati
     ResponseGenerator(backend).generate(ctx, "Solve the withheld problem", history)
     assert "We saw a new ridge yesterday." in backend.inputs[0][1]
     review_response("I decline that problem.", user_message="Solve the withheld problem", decision=decision,
-        backend=backend, use_llm=True, recent_context=history, developing_self=state,
-        grounded_context=life, recalled_memories=expression_memory_evidence(ctx))
+        backend=backend, use_llm=True, recent_context=history, recalled_memories=expression_memory_evidence(ctx))
     reviewed = json.loads(backend.inputs[-1][1])
-    assert reviewed["developing_self"] == state and reviewed["grounded_context"] == life
-    assert len(reviewed["recalled_memories"]) == 2
-    assert reviewed["recent_context"][0]["content"] == history[0]["content"]
+    # The reviewer compares the draft with the decision made from that self. It is given the
+    # dialogue and the decision, and no personality to hold the draft's manner against.
+    assert [item["choice"] for item in reviewed["decision"]["components"]] == [
+        "undertake" if choice.granted else "decline" for choice in decision.components]
+    assert reviewed["recent_context"][0] == {"speaker": "user", "text": history[0]["content"]}
+    assert reviewed["draft"] == "I decline that problem."
+    assert not {"developing_self", "grounded_context", "personality"} & set(reviewed)
 
 
 def test_migration_keeps_birth_legacy_beliefs_drives_and_bounded_traits(tmp_path, base):
@@ -346,7 +349,7 @@ def test_effective_state_and_evidence_roll_back_with_a_failed_ingest(tmp_path, b
         assert store.effective_self()["traits"]["curious"] > before["traits"]["curious"]
 
 
-def test_pipeline_generation_and_review_share_the_frozen_developed_self(tmp_path, base):
+def test_pipeline_generation_gets_the_frozen_developed_self_and_review_gets_its_decision(tmp_path, base):
     cfg = RuntimeConfig(data_dir=str(tmp_path), appraisal_use_llm=False)
     with configuration_scope(OpenRookConfig(soul=base)), LifeHistoryStore(cfg) as store:
         history(store, 1)
@@ -360,8 +363,9 @@ def test_pipeline_generation_and_review_share_the_frozen_developed_self(tmp_path
         result = pipeline.process("Calculate this for me.", "alice")
         assert result.debug.turn_decision.declined
         generated = next((s, u) for s, u in backend.inputs if s.startswith("Express the committed"))
-        reviewed = [json.loads(u) for s, u in backend.inputs if s.startswith("Review expression")]
-        assert reviewed and all(item["developing_self"] == expected for item in reviewed)
+        reviewed = [json.loads(u) for s, u in backend.inputs if s.startswith("You check one draft reply")]
+        assert reviewed and all(item["decision"]["components"][0]["choice"] == "decline" for item in reviewed)
+        assert all("developing_self" not in item for item in reviewed)
         assert json.dumps(expected, ensure_ascii=False, sort_keys=True) in generated[0]
         assert "We compared the river maps." in generated[1]
         assert json.loads(result.debug.turn_decision.personality.self_state_json) == expected

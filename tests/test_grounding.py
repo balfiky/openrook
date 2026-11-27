@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.grounding import (
-    extract_action_claims,
-    grounding_correction_response,
-    system_metric_observation_response,
-    verify_response_grounding,
-)
+from openrook_tools.roleplay_eval.legacy_claims import extract_action_claims, verify_response_grounding
 from core.types import ToolResult, ToolTrace
 
 
@@ -199,85 +194,6 @@ def test_registry_claim_is_grounded_by_skill_registry_write_tool():
     assert issues == []
 
 
-def test_correction_preserves_successful_registry_write_context():
-    trace = ToolTrace(
-        executed_results=[
-            ToolResult(
-                tool_name="skills.create_from_request",
-                success=True,
-                output="{}",
-                metadata={
-                    "skill_id": "report-writer",
-                    "enabled": True,
-                    "status": "enabled",
-                },
-                side_effect_summary="skill registry updated: imported report-writer; enabled=true",
-            ),
-        ]
-    )
-    issues = verify_response_grounding(
-        "I created the skill and ran the shell setup command.",
-        tool_trace=trace,
-    )
-
-    response = grounding_correction_response(issues, tool_trace=trace)
-
-    assert "Skill registry updated: report-writer" in response
-    assert "enabled=true" in response
-    assert "additional external actions" in response
-
-
-def test_correction_prefers_registry_write_evidence_over_registry_issue():
-    trace = ToolTrace(
-        executed_results=[
-            ToolResult(
-                tool_name="skills.create_from_request",
-                success=True,
-                output="{}",
-                metadata={"skill_id": "report-writer"},
-            ),
-        ]
-    )
-
-    response = grounding_correction_response(
-        [
-            # Defensive regression case: even if an upstream verifier reports a
-            # registry-write issue, actual registry-write evidence must win.
-            verify_response_grounding("I enabled the skill.", tool_trace=None)[0],
-        ],
-        tool_trace=trace,
-    )
-
-    assert "Skill registry updated: report-writer" in response
-    assert "No skill-registry Tool Execution Result ran" not in response
-
-
-def test_generic_grounding_correction_does_not_mention_skills():
-    issues = verify_response_grounding(
-        "I saved it in ./games/tetris.py and it is ready to run.",
-        tool_trace=None,
-    )
-
-    response = grounding_correction_response(issues, tool_trace=None)
-
-    assert "cannot claim" in response
-    assert "Tool Execution Result" not in response
-    assert "SKILL.md" not in response
-    assert "Admin > Skills" not in response
-
-
-def test_system_metric_claim_requires_system_evidence():
-    issues = verify_response_grounding(
-        "Memory usage is currently at 11%, with 3.0GB used out of 28GB total.",
-        tool_trace=None,
-    )
-
-    assert len(issues) == 1
-    assert "system_metric" in issues[0].required_categories
-    response = grounding_correction_response(issues, tool_trace=None)
-    assert response == "I cannot verify that system metric because no system inspection ran this turn."
-
-
 def test_system_metric_claim_grounded_by_system_tool():
     trace = ToolTrace(
         executed_results=[
@@ -293,23 +209,6 @@ def test_system_metric_claim_grounded_by_system_tool():
         "Memory usage is currently at 11%, with 3.0GB used out of 28GB total.",
         tool_trace=trace,
     ) == []
-
-
-def test_system_metric_observation_response_uses_tool_output():
-    trace = ToolTrace(
-        executed_results=[
-            ToolResult(
-                tool_name="system.memory_usage",
-                success=True,
-                output="Memory Total Used Free Available Use%\nRAM 28G 3.0G 14G 26G 11%",
-            ),
-        ]
-    )
-
-    assert system_metric_observation_response(
-        "what is your current memory utilization?",
-        tool_trace=trace,
-    ) == "Memory Total Used Free Available Use%\nRAM 28G 3.0G 14G 26G 11%"
 
 
 def test_registry_claim_is_not_grounded_by_skill_list_tool():

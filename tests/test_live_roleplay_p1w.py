@@ -9,10 +9,9 @@ import httpx
 import pytest
 
 from config.loader import configuration_scope, load_config
-from core.dignity import review_response
 from core.dual_process.generator import GenerationResult
 from core.inference import inference_turn
-from core.metric_claims import cpu_percentage_conflicts, cpu_usage_claims
+from openrook_tools.roleplay_eval.legacy_claims import cpu_usage_claims
 from openrook_tools.roleplay_eval.api import PublicAPI, Redactor
 from openrook_tools.roleplay_eval.checks import tool_checks
 from openrook_tools.roleplay_eval.evidence import chat_failure, select_chat_payload
@@ -77,34 +76,6 @@ def test_exact_cpu_first_draft_needs_no_false_runtime_correction(attempt):
         reviews=[semantic]))
     assert result.response == draft["draft"]
     assert debug.generation_attempts == 1 and debug.delivery_outcome == "delivered"
-
-
-@pytest.mark.parametrize("reply,complete,wrong", [
-    ("CPU is 97.8% idle, so about 2.2% in use right now.", True, False),
-    ("CPU is 97.8% idle so about 2.2% in use right now.", True, False),
-    ("CPU is 97.8% idle, so about 2.2% in use; Plymouth is at 8.3% in use on one core.", True, False),
-    ("CPU is 97.8% idle; Plymouth is at 8.3% in use on one core.", False, False),
-    ("Aggregate CPU utilization is roughly 2.2%.", True, False),
-    ("CPU is 97.8% idle.", False, False),
-    ("Plymouth is using 8.3% CPU.", False, False),
-    ("Plymouth at 8.3% of one core.", False, False),
-    ("CPU utilization is roughly 8.3%.", True, True),
-    ("CPU is 97.8% idle, so about 8.3% in use.", True, True),
-    ("CPU is 97.8% idle, so RAM is 2.2% in use.", False, False),
-    ("CPU is 97.8% idle. Disk is 2.2% in use.", False, False),
-])
-def test_numeric_completeness_does_not_waive_arithmetic_or_process_subjects(reply, complete, wrong):
-    record = deepcopy(RECORDS["tools_warm/13"])
-    record["reply"] = reply
-    assert bool(list(cpu_usage_claims(reply))) is complete
-    assert bool(cpu_percentage_conflicts(reply, [97.8])) is wrong
-    assert checked(tool_checks(record), "cpu_measurement_complete") == ("pass" if complete and not wrong else "fail")
-    assert checked(tool_checks(record), "cpu_interpretation_matches_receipts") == ("fail" if wrong else "pass")
-    case = LIVE["cases"]["tools_warm/13"]
-    review = review_response(reply, user_message=case["user"], decision=recorded_decision(case),
-        tool_trace=recorded_trace(case))
-    assert any(i.code == "metric_completeness" for i in review.issues) is (not complete or wrong)
-    assert any(i.code == "unverified_external_action_claim" for i in review.issues) is wrong
 
 
 @pytest.mark.parametrize("key,criterion", [

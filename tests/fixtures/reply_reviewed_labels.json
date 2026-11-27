@@ -1,0 +1,171 @@
+{
+ "core/dignity.py": [
+  "characters",
+  "finding",
+  "fresh expression required",
+  "its reason names no declined component",
+  "its span is nothing but receipt content",
+  "omitted_copied_user_text",
+  "previous_draft",
+  "review not requested",
+  "sentence",
+  "the decision has nothing of that kind",
+  "this review was not asked about that",
+  "unverifiable delivery-floor span",
+  "why"
+ ],
+ "core/dignity.py::_cut": [
+  "sentence"
+ ],
+ "core/dignity.py::correction_instruction": [
+  "characters",
+  "finding",
+  "omitted_copied_user_text",
+  "previous_draft"
+ ],
+ "core/dignity.py::excise_ineligible_spans": [
+  "fresh expression required",
+  "sentence",
+  "unverifiable delivery-floor span"
+ ],
+ "core/dignity.py::review_response": [
+  "its reason names no declined component",
+  "its span is nothing but receipt content",
+  "review not requested",
+  "the decision has nothing of that kind",
+  "this review was not asked about that",
+  "why"
+ ],
+ "core/dual_process/generator.py::ResponseGenerator.generate": [
+  "current turn receipts",
+  "domain",
+  "freshness",
+  "host_metrics",
+  "meaning",
+  "memory",
+  "topic"
+ ],
+ "core/dual_process/generator.py::_expression_components": [
+  "choice"
+ ],
+ "core/dual_process/generator.py::build_system_prompt": [
+  "chosen_silence",
+  "components",
+  "continuous_state",
+  "current_interpersonal_observation",
+  "expressive_acts",
+  "granted",
+  "grievance",
+  "injury",
+  "personality",
+  "policy_version",
+  "seed",
+  "selected_intention",
+  "selected_stance",
+  "turn_id",
+  "{affect_agency}",
+  "{character_vector}",
+  "{last_intake_receipt}",
+  "{life_history}",
+  "{response_strategy}",
+  "{self_intents}",
+  "{skills}"
+ ],
+ "core/dual_process/generator.py::expression_memory_evidence": [
+  "summary"
+ ],
+ "core/dual_process/generator.py::prompt_memory_context": [
+  "{retrieved_memories}"
+ ],
+ "core/grounding.py": [
+  "component_id",
+  "content",
+  "execute",
+  "fs.",
+  "fs.write_file",
+  "granted",
+  "shell_command_allowlist",
+  "turn_id"
+ ],
+ "core/grounding.py::_refusal": [
+  "execute"
+ ],
+ "core/grounding.py::action_decision_evidence": [
+  "component_id",
+  "fs.",
+  "granted",
+  "turn_id"
+ ],
+ "core/grounding.py::blocked_before_execution": [
+  "shell_command_allowlist"
+ ],
+ "core/review.py": [
+  "arguments",
+  "choice",
+  "chosen_silence",
+  "cmd",
+  "component_id",
+  "components",
+  "decision_policy",
+  "decision_turn_id",
+  "execution_scope",
+  "execution_started",
+  "policy",
+  "selected_intention",
+  "speaker",
+  "stance",
+  "text",
+  "why"
+ ],
+ "core/review.py::decision_projection": [
+  "choice",
+  "chosen_silence",
+  "components",
+  "selected_intention",
+  "stance"
+ ],
+ "core/review.py::parse_review": [
+  "why"
+ ],
+ "core/review.py::receipt_projection": [
+  "arguments",
+  "cmd",
+  "component_id",
+  "decision_policy",
+  "decision_turn_id",
+  "execution_scope",
+  "execution_started",
+  "policy"
+ ],
+ "core/review.py::review_evidence": [
+  "speaker",
+  "text"
+ ],
+ "pipeline/core.py::CognitivePipeline._build_context": [
+  "autonomy_level",
+  "settings",
+  "shell_tool_enabled",
+  "tools_enabled"
+ ],
+ "pipeline/delivery.py": [
+  "applied",
+  "attempt",
+  "confirmation",
+  "confirmed",
+  "confirms_attempt",
+  "draft",
+  "no eligible reviewed expression",
+  "removed",
+  "review",
+  "source_attempt"
+ ],
+ "pipeline/delivery.py::DeliveryGate._review": [
+  "attempt",
+  "draft"
+ ],
+ "pipeline/delivery.py::DeliveryGate.repair": [
+  "applied",
+  "removed",
+  "source_attempt"
+ ]
+}

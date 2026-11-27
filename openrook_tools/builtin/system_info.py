@@ -12,6 +12,7 @@ import platform
 import shutil
 import socket
 import subprocess
+import time
 from typing import Any
 
 from core.types import ToolCapability, ToolCategory, ToolResult
@@ -47,6 +48,12 @@ CAPABILITIES: list[ToolCapability] = [
     ToolCapability(
         name="system.memory_usage",
         description="Return total, used, free, and available RAM for the machine running OpenRook",
+        category=ToolCategory.READ_ONLY,
+        arg_schema={},
+    ),
+    ToolCapability(
+        name="system.cpu_usage",
+        description="Return how busy and how idle the CPUs of the machine running OpenRook are, as percentages",
         category=ToolCategory.READ_ONLY,
         arg_schema={},
     ),
@@ -130,6 +137,9 @@ def _disk_usage(args: dict[str, Any]) -> ToolResult:
         )
 
     used_percent = (usage.used / usage.total * 100.0) if usage.total else 0.0
+    # What can still be written is less than what is not used: some blocks are
+    # reserved. Both figures are stated, so that neither has to be worked out.
+    available_percent = (usage.free / usage.total * 100.0) if usage.total else 0.0
     output = "\n".join(
         [
             "Path Size Used Avail Use%",
@@ -149,10 +159,95 @@ def _disk_usage(args: dict[str, Any]) -> ToolResult:
             "total_bytes": usage.total,
             "used_bytes": usage.used,
             "free_bytes": usage.free,
+            "available_bytes": usage.free,
             "used_percent": round(used_percent, 2),
+            "unused_percent": round(100.0 - used_percent, 2) if usage.total else 0,
+            "free_percent": round(available_percent, 2),
+            "available_percent": round(available_percent, 2),
         },
         side_effect_summary="none",
     )
+
+
+CPU_SAMPLE_SECONDS = 0.25
+
+
+def _cpu_usage(_: dict[str, Any]) -> ToolResult:
+    """How busy the CPUs were over a short interval, with the figures already worked out."""
+    first = _read_cpu_times()
+    if first is not None:
+        time.sleep(CPU_SAMPLE_SECONDS)
+    second = _read_cpu_times()
+    if first is None or second is None:
+        return ToolResult(
+            tool_name="system.cpu_usage",
+            success=False,
+            output="",
+            error="CPU usage is unavailable on this platform",
+            metadata={},
+        )
+    return _cpu_result(first, second, interval=CPU_SAMPLE_SECONDS)
+
+
+def _cpu_result(first: dict[str, int], second: dict[str, int], *, interval: float) -> ToolResult:
+    """The receipt for two readings of the kernel's CPU time counters.
+
+    Busy and idle are stated as separate percentages of the same interval, and
+    so are the user, system and waiting shares, so that a reply has nothing to
+    derive: every figure it may state is in the receipt.
+    """
+    delta = {name: max(0, second.get(name, 0) - first.get(name, 0)) for name in second}
+    total = sum(delta.values())
+    if total <= 0:
+        return ToolResult(
+            tool_name="system.cpu_usage",
+            success=False,
+            output="",
+            error="CPU usage could not be measured: no time passed between the two readings",
+            metadata={},
+        )
+
+    def share(*names: str) -> float:
+        return round(100.0 * sum(delta.get(name, 0) for name in names) / total, 1)
+
+    idle = share("idle", "iowait")
+    busy = round(100.0 - idle, 1)
+    user, system, waiting = share("user", "nice"), share("system", "irq", "softirq"), share("iowait")
+    cores = os.cpu_count() or 0
+    output = (f"CPU: {busy:.1f}% busy, {idle:.1f}% idle "
+              f"(user {user:.1f}%, system {system:.1f}%, waiting for I/O {waiting:.1f}%) "
+              f"over {interval:g}s on {cores} cores")
+    return ToolResult(
+        tool_name="system.cpu_usage",
+        success=True,
+        output=output,
+        metadata={
+            "busy_percent": busy,
+            "idle_percent": idle,
+            "user_percent": user,
+            "system_percent": system,
+            "iowait_percent": waiting,
+            "cores": cores,
+            "interval_seconds": interval,
+        },
+        side_effect_summary="none",
+    )
+
+
+def _read_cpu_times() -> dict[str, int] | None:
+    """The aggregate CPU time counters of the kernel, by name, or None where there are none."""
+    try:
+        with open("/proc/stat", encoding="utf-8") as handle:
+            fields = handle.readline().split()
+    except OSError:
+        return None
+    names = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
+    if len(fields) < 5 or fields[0] != "cpu":
+        return None
+    try:
+        return dict(zip(names, (int(value) for value in fields[1:1 + len(names)])))
+    except ValueError:
+        return None
 
 
 def _memory_usage(_: dict[str, Any]) -> ToolResult:
@@ -414,5 +509,6 @@ HANDLERS: dict[str, ToolHandler] = {
     "system.uname": _uname,
     "system.disk_usage": _disk_usage,
     "system.memory_usage": _memory_usage,
+    "system.cpu_usage": _cpu_usage,
     "system.installed_packages": _installed_packages,
 }

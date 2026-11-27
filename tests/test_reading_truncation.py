@@ -19,7 +19,7 @@ import requests
 from core import inference
 from core.appraisal import READING_SYS_PROMPT, parse_reading, read_message, reading_schema
 from core.inference import (
-    READING_OUTPUT_TOKENS, READING_OUTPUT_TOKENS_RANGE, inference_turn, reading_output_tokens,
+    READING_OUTPUT_TOKENS, READING_OUTPUT_TOKENS_RANGE, REVIEW_OUTPUT_TOKENS, inference_turn, reading_output_tokens,
     response_facts,
 )
 from core.llm_content import ABSENT, CUT_OFF, INVALID, NOT_OBJECT, outermost_json_object
@@ -374,7 +374,8 @@ def test_the_configured_limit_is_used_and_doubled_up_to_the_ceiling_after_a_cut_
     finally:
         pipe.close()
     assert backend.output_limits == [first, second]
-    assert backend.other_limits and set(backend.other_limits) == {None}      # no other call asks for a limit
+    assert backend.other_limits and set(backend.other_limits) == {None}      # expression asks for no limit
+    assert set(backend.review_limits) == {REVIEW_OUTPUT_TOKENS}              # the review has its own
     assert [a["max_output_tokens"] for a in result.debug.reading["attempts"]] == [first, second]
     assert result.debug.reading["provenance"] == "model"
 

@@ -122,14 +122,14 @@ class TestV2EndToEnd:
 # ---------------------------------------------------------------------------
 
 class TestLLMCallBudget:
-    """Every turn reads the message once; expression needs no further deliberation."""
+    """Every turn reads the message once, expresses once and reviews the draft once; no further deliberation."""
 
     def test_calm_message_is_one_reading_and_one_expression(self):
         backend = ReadingBackend(plain)
         pipe = CognitivePipeline(llm_backend=backend)
         result = pipe.process("How are you today?", user_id="alice")
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
-        assert len(backend.calls) == 2 and backend.reading_calls == ["How are you today?"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
+        assert len(backend.calls) == 3 and backend.reading_calls == ["How are you today?"]
 
     def test_unresolved_state_does_not_require_extra_deliberation(self):
         backend = ReadingBackend(plain)
@@ -138,9 +138,9 @@ class TestLLMCallBudget:
 
         result = pipe.process("Hello", "alice")
         assert result.debug.turn_decision.state.resolution > 0
-        assert len(backend.calls) == 2
+        assert len(backend.calls) == 3
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
 
     def test_high_arousal_is_a_choice_input_without_a_slow_path(self):
         backend = ReadingBackend(plain)
@@ -150,9 +150,9 @@ class TestLLMCallBudget:
 
         result = pipe.process("Hello", "alice")
         assert result.debug.turn_decision.state.arousal > 0.9
-        assert len(backend.calls) == 2
+        assert len(backend.calls) == 3
         assert result.debug.dialogue_trace.total_llm_calls == 0
-        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation"]
+        assert [c["phase"] for c in result.debug.llm_calls] == ["appraisal", "generation", "expression_review"]
 
     def test_low_energy_is_a_choice_input_without_a_slow_path(self):
         backend = ReadingBackend(plain)
@@ -161,7 +161,7 @@ class TestLLMCallBudget:
         _add_non_spike_unresolved(pipe)
 
         result = pipe.process("Hello", "alice")
-        expression = [] if result.debug.turn_decision.chosen_silence else ["generation"]
+        expression = [] if result.debug.turn_decision.chosen_silence else ["generation", "expression_review"]
         assert result.debug.turn_decision.state.energy < 0.11
         assert len(backend.calls) == 1 + len(expression)
         assert result.debug.dialogue_trace.total_llm_calls == 0
@@ -380,7 +380,7 @@ class TestInnerDialogueIntegration:
         assert trace.rounds == [] and trace.total_llm_calls == 0
         assert trace.dominant_path == "skip"
         assert trace.reached_deadlock is False
-        assert pipe._llm_backend.call_count == 1
+        assert pipe._llm_backend.call_count == 3   # one generation; its review, unanswerable here, asked twice
 
 
 # ---------------------------------------------------------------------------

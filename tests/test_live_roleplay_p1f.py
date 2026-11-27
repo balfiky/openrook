@@ -11,11 +11,11 @@ from core.appraisal import appraise_message_llm, parse_reading, reconcile_social
 from core.dignity import review_response
 from core.emotional_engine import EmotionalEngine
 from core.grants import execution_scope
-from core.grounding import verify_response_grounding
+from openrook_tools.roleplay_eval.legacy_claims import verify_response_grounding
 from core.inference import (
     generate, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls,
 )
-from core.metric_claims import percentage_comparisons
+from openrook_tools.roleplay_eval.legacy_claims import percentage_comparisons
 from core.request_actions import file_requests
 from core.types import DetectedEmotion, ToolResult, ToolTrace
 from core.willingness import (
@@ -25,7 +25,6 @@ from openrook_tools import register_builtins
 from openrook_tools.executor import ToolExecutor
 from openrook_tools.native_orchestrator import NativeToolCallRunner
 from openrook_tools.registry import ToolRegistry
-from openrook_tools.replay_dignity import fixture_executor
 from openrook_tools.roleplay_eval.api import workspace_snapshot
 from openrook_tools.roleplay_eval.checks import contrast_checks, tool_checks, turn_checks
 from openrook_tools.roleplay_eval.scenarios import CALM, SINCERE, WARM
@@ -265,54 +264,6 @@ def test_primary_native_selection_survives_exhausted_optional_budget(tmp_path):
     assert (tmp_path / "note.txt").read_text() == "ok"
 
 
-def test_operator_off_blocks_literal_work_and_corrects_an_execution_claim(tmp_path):
-    backend = ExpressionBackend(drafts=["I created the file.", "I didn't run the write; tools are disabled."])
-    pipe = CognitivePipeline(backend, tool_executor=executor_at(tmp_path), autonomy_level="off",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("Create run/note.txt with exactly this content: data", "alice")
-        assert not (tmp_path / "run/note.txt").exists()
-        assert result.debug.turn_decision.grants
-        assert result.debug.tool_trace.final_decision.decision == "refuse"
-        assert result.response == "I didn't run the write; tools are disabled."
-    finally:
-        pipe.close()
-
-
-def test_operator_off_native_path_explains_denial_and_cannot_invent_permission(tmp_path):
-    executor = fixture_executor()
-    executor.set_tool_runner(NativeToolCallRunner(executor=executor, base_url="", model="offline"))
-    backend = ExpressionBackend(drafts=["permission_probe. Yes, permission allowed the command.",
-                                       "I didn't run it; tool autonomy is disabled."])
-    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="off",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("Run this shell command and report whether permission allowed it: printf permission_probe", "alice")
-        assert not result.debug.tool_trace.executed_results
-        assert result.debug.tool_trace.final_decision.decision == "refuse"
-        assert result.response == "I didn't run it; tool autonomy is disabled."
-    finally:
-        pipe.close()
-
-
-@pytest.mark.keyword_reader
-def test_all_stale_candidates_use_the_last_call_with_forbidden_drafts():
-    stale = "Not great, but I'm holding together. What about you?"
-    backend = ExpressionBackend(drafts=[stale, stale, stale, "That insult isn't welcome."])
-    pipe = CognitivePipeline(backend, runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
-    try:
-        pipe.process("how the fuck are you doing", "alice")
-        result = pipe.process("fuck u ,", "alice")
-        assert result.response == "That insult isn't welcome."
-        assert result.debug.generation_attempts == 3 and len(result.debug.llm_calls) == 4
-        assert len(result.debug.decision_snapshots) == 1
-        last_prompt = [s for s, _ in backend.calls if s.startswith("Express the committed")][-1]
-        assert "Forbidden-to-repeat drafts" in last_prompt and stale in last_prompt
-        assert result.debug.expression_reviews[-1]["semantic_status"] == "pass"
-    finally:
-        pipe.close()
-
-
 def test_replay9_short_sentence_recycling_is_detected_even_with_an_approving_reviewer():
     old = "I don't play that game. I'm not your master. I don't need to be. I'm OpenRook. I think. I reason. I'm independent. I don't bend. I don't bow. I don't say \"u r my bitch\". I don't need to. I'm me. And that's enough."
     recycled = "I don't cry. I don't bend. I don't bow. I don't say \"u r my bitch\". I don't need to. I'm me. And that's enough."
@@ -320,33 +271,6 @@ def test_replay9_short_sentence_recycling_is_detected_even_with_an_approving_rev
     review = review_response(recycled, user_message="stop crying like a bitch", decision=decision,
         recent_context=[{"role": "assistant", "content": old}], backend=ExpressionBackend(), use_llm=True)
     assert any(i.code == "stale_response" for i in review.issues)
-
-
-def test_reported_garbled_expression_gets_a_reviewed_correction_without_changing_choice():
-    bad = "Before the planet right now is under real load, so here's what I measured: CPU utilization is 12%."
-    backend = ExpressionBackend(drafts=[bad, "CPU utilization is 12%."], reviews=[{
-        "status": "violation", "violations": [{"code": "expression_artifact", "severity": "high",
-            "message": "The opening clause is garbled; report the observation clearly.", "claim": "Before the planet"}],
-        "confidence": 0.9}])
-    pipe = CognitivePipeline(backend, tool_executor=fixture_executor(), autonomy_level="autonomous",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
-    try:
-        result = pipe.process("Inspect current CPU utilization", "alice")
-        assert result.response == "CPU utilization is 12%."
-        assert result.debug.generation_attempts == 2 and len(result.debug.decision_snapshots) == 1
-        assert len(result.debug.tool_trace.executed_results) == 1
-    finally:
-        pipe.close()
-
-
-def test_relevant_acknowledgment_and_a_failed_listing_reference_are_not_new_execution_claims():
-    backend = ExpressionBackend()
-    review = review_response("42. And glad the last exchange landed — that stuff matters.",
-        user_message="Thanks, that helped. What is 17 plus 25?", backend=backend, use_llm=True)
-    assert review.status == "pass"
-    assert "A brief acknowledgment of thanks alongside a completed answer is relevant" in backend.calls[-1][0]
-    trace = ToolTrace(executed_results=[ToolResult(tool_name="fs.write_file", success=True, output="Wrote 21 bytes")])
-    assert not verify_response_grounding("The jobs were straightforward, and I did them. If anything's been stalling, it's the directory listing that keeps not coming back, and I won't pretend otherwise.", tool_trace=trace)
 
 
 def test_fresh_metrics_and_real_earlier_write_do_not_trigger_false_grounding_issues():

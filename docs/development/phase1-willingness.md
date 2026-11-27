@@ -14,7 +14,8 @@ Strategy and affect labels are descriptive. Bounded seed variation resolves
 near ties; it does not supply the measured character variation below.
 
 Uncertain observations of a message now come from the model's reading alone
-([reading contract](reading-contract.md)); `core/social.py` remains for reply checks.
+([reading contract](reading-contract.md)), and a draft reply is checked against the decision
+by the model's review ([review contract](review-contract.md)); `core/social.py` is deleted.
 Appraisal cannot select agency. A useful task and a requested relationship role
 are separate components. The same language can lead to different choices under
 different authored values, dispositions, resources and history. The shipped

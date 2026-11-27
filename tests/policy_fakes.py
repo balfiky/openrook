@@ -18,7 +18,7 @@ class ExpressionBackend:
             # claimed about the rest, which a whole reading says with an empty
             # perception object; its components are the test's to state.
             return json.dumps({"perception": {}, **self.appraisal}) if self.appraisal else "malformed appraisal"
-        if system_prompt.startswith("Review expression against"):
+        if system_prompt.startswith("You check one draft reply"):
             result = self.reviews.pop(0) if self.reviews else {"status": "pass", "violations": [], "confidence": 0.8}
             if isinstance(result, Exception):
                 raise result
@@ -36,7 +36,7 @@ class VaryingExpressionBackend(ExpressionBackend):
     """
     def generate(self, system_prompt, user_message):
         result = super().generate(system_prompt, user_message)
-        if system_prompt.startswith(("You read one user message", "Review expression against")):
+        if system_prompt.startswith(("You read one user message", "You check one draft reply")):
             return result
         return f"{result} Fixture expression {len(self.calls)}."
 
@@ -48,6 +48,7 @@ def frozen(*, components=None, personality=None, state=None, relationship=None):
                   character_seed=0, relationship_id="test", turn_id="1", noise=0)
 
 
-def violation(claim="four"):
-    return {"status": "violation", "violations": [{"code": "decision_contradiction",
-            "message": "The draft supplies the declined answer", "claim": claim}], "confidence": 0.9}
+def violation(claim="four", code="declined_work_done"):
+    """A reviewer's answer reporting one finding that quotes ``claim`` in the draft."""
+    return {"verdict": "violation", "findings": [{"code": code, "severity": "high",
+            "reason": "scripted finding", "span": claim}], "confidence": 0.9, "reason": "scripted violation"}

@@ -13,54 +13,25 @@ _INTERNAL_EXPRESSION_MARKER = re.compile(
     r"\[\[SILENCE\]\]|\[(?:declined request\s*;\s*answer context omitted|"
     r"(?:Defense instruction|Self-check correction):[^\]]*)\]", re.I,
 )
-_LITERAL_REQUEST = re.compile(
-    r"\b(?:quote|verbatim|translate|rewrite|proofread|transcribe)\b"
-    r"|\b(?:repeat|say) (?:that|it|this|exactly|after me)\b", re.I,
-)
-_MARKED_LINE = re.compile(r"(?m)^\s*\*([^*\n]+)\*[ \t]*(?:\n|$)")
 _FORMAT_LINE = re.compile(r"(?m)^\s*%(?:[-+#0 ]*\d*(?:\.\d+)?[hlL]?[diuoxXfFeEgGaAcspn])[ \t]*(?:\n|$)")
+_CODE = re.compile(r"(```.*?(?:```|\Z)|`[^`\n]*`)", re.S)
 
 
-def requests_literal_text(message: str) -> bool:
-    """Copying is appropriate when the user actually requests text reproduction."""
-    return bool(_LITERAL_REQUEST.search(message))
+def strip_expression_artifacts(text: str, *, user_message: str = "") -> str:
+    """Remove a model artifact that is not speech: a line that is only a format directive.
 
-
-def strip_expression_artifacts(text: str, *, style_text=(), user_message: str = "") -> str:
-    """Remove presentation controls, preserving requested literals and inline emphasis.
-
-    Delivery descriptions are private directions. Match their words from the
-    actual runtime configuration, rather than maintaining a vocabulary ban.
-    A short marked delivery frame also covers paraphrased stage directions.
+    Nothing a character says is removed here, however it is set off: a line in
+    asterisks, an emphasised refusal, a whole reply in italics are the
+    character's own and go to the gate as written. Only a line that consists
+    of one bare format directive is dropped, outside code, and not when the
+    user's own message contains it.
     """
-    text = text.strip()
-    if requests_literal_text(user_message):
-        return text
-    style_words = set(re.findall(r"\b\w{4,}\b", " ".join(style_text).casefold()))
-
-    def direction(match):
-        span = match[1]
-        words = re.findall(r"\w+", span.casefold())
-        descriptor = not re.search(r"[.!?]|\b(?:i|you|we|he|she|they|it)\b", span, re.I)
-        derived = bool(style_words.intersection(words))
-        delivery_frame = bool(re.search(r"\b(?:with|in)\b.+\b(?:tone|voice|edge|manner)\b", span, re.I))
-        return "" if descriptor and len(words) <= 20 and (derived or delivery_frame) else match[0]
-
     # Fenced/inline code can legitimately contain formatting syntax.
-    chunks = re.split(r"(```.*?(?:```|\Z)|`[^`\n]*`)", text, flags=re.S)
+    chunks = _CODE.split(text.strip())
     for index in range(0, len(chunks), 2):
         chunks[index] = _FORMAT_LINE.sub(
-            lambda match: match[0] if match[0].strip() in user_message else "",
-            _MARKED_LINE.sub(direction, chunks[index]),
-        )
-    text = "".join(chunks).strip()
-    if not re.search(r"\b(?:italic|bold|emphasi[sz]e|emphasis|markdown)\b", user_message, re.I):
-        # A whole spoken reply wrapped as an action is presentation leakage;
-        # ordinary emphasis within a sentence remains intact.
-        wrapped = re.fullmatch(r"\*([^*]+)\*", text, re.S)
-        if wrapped:
-            text = wrapped[1].strip()
-    return text
+            lambda match: match[0] if match[0].strip() in user_message else "", chunks[index])
+    return "".join(chunks).strip()
 
 
 def strip_internal_expression_markers(text: str) -> str:
@@ -157,3 +128,19 @@ def reply_text(message: dict[str, Any]) -> str:
             and isinstance(part.get("text"), str)
         )
     return strip_reasoning(content) if isinstance(content, str) else ""
+
+
+_EVALUATION_COMPATIBILITY = ("requests_literal_text",)
+
+
+def __getattr__(name: str) -> Any:
+    """A name the role-play evaluation still imports from here; no turn uses it.
+
+    The former wording-based test lives with the harness in
+    ``openrook_tools/roleplay_eval/legacy_claims.py``.
+    """
+    if name in _EVALUATION_COMPATIBILITY:
+        from openrook_tools.roleplay_eval import legacy_claims
+
+        return getattr(legacy_claims, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

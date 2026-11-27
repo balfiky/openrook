@@ -3,7 +3,8 @@
 The current conversational policy is `willingness-1.3`. See
 [Phase 1](docs/development/phase1-willingness.md) and
 [Phase 2a/2b](docs/development/phase2-developing-self.md),
-[the reading contract](docs/development/reading-contract.md) and
+[the reading contract](docs/development/reading-contract.md),
+[the review contract](docs/development/review-contract.md) and
 [architecture](docs/ARCHITECTURE.md) before changing character behavior.
 
 - The model reads every user message (`core/appraisal.py::read_message`). The
@@ -36,8 +37,7 @@ The current conversational policy is `willingness-1.3`. See
   add a field without a consumer. The parser still reads the older, larger shape.
 - Social meaning comes only from that reading. `core/perception.py`,
   `core/appraisal.py`, `core/contagion.py` and the perception stage hold no word
-  lists or word patterns, tie no number to any wording, and do not use
-  `core/social.py`. An
+  lists or word patterns and tie no number to any wording. An
   unobtainable reading is plain conversation with `provenance: unavailable` in the
   debug and turn records, never a local substitute, and causes no contagion.
   Contagion is proportional to the reading's tone intensity; a missing or empty
@@ -77,9 +77,7 @@ The current conversational policy is `willingness-1.3`. See
   `tests/fixtures/perception_reviewed_labels.json`. A reply-length wish is the
   reading's, stored and read back by tag; a wish from a rejected answer is not
   kept, and untagged records from before the tags are not honoured (no pattern
-  remains to read them). `core/social.py` remains for reply checks only;
-  `core/perception.py::observe` is a reply-check shim for the evaluation judge
-  that no turn calls. Tests script readings (`message_reader=`,
+  remains to read them). Tests script readings (`message_reader=`,
   `tests/support/readings.py`); `tests/support/keyword_reader.py` is test-only and
   runtime code never imports it.
 - `core/willingness.py` owns choice. It uses authored dispositions and values,
@@ -98,8 +96,10 @@ The current conversational policy is `willingness-1.3`. See
   self-update protocol is undigested, never successful development. Explicitly
   disabling autobiographical learning remains a no-learning control. Learned
   drive baselines may move.
-- Capture one self per turn for choice, generation and review, including opinion
+- Capture one self per turn for choice and generation, including opinion
   reasons/confidence, ongoing questions, tastes, this person's attitudes and style.
+  Review compares the draft with the decision made from that self and is given no
+  personality to hold a draft's manner against.
   A decline withholds its work, not unrelated memory, Life History or dialogue.
   Constitution/skill/operator rerouting and research birth policy remain deferred;
   preserve those entry paths and all delivery floors.
@@ -131,50 +131,98 @@ The current conversational policy is `willingness-1.3`. See
 - Preserve conversation sexual boundaries, operator permissions, truthful
   execution receipts, and the integrity of declined components. A learning
   receipt does not authorize unrelated filesystem, shell or registry claims.
-- Generate from the frozen decision. Every draft, rewrite, excision remainder and
-  protected fresh attempt enters `pipeline/delivery.py::DeliveryGate`. Only its
-  final selection can deliver text; no edit or recovery path can return directly.
-  The same local checks bind frozen grants/stance, role assent and task/role decline
-  legibility, speaker/owner references, internal contradictions, conversation
-  language, receipts, private controls, copied user text and stale assistant text.
-  Exact whole-reply repeats of any prior assistant reply in this chat are
-  ineligible at every length, including boundaries and requested copies. The
-  session's reply ledger survives prompt-history trimming and restart, and clears
-  with the chat. Long-span checks remain separate; relevant partial boundaries,
-  measured facts and short shared closers are not blanket prohibitions.
-  Review uses `pass`, `violation`, `unknown`; unknown retains residual semantic
-  risk. Cache identical text/evidence within the turn and retain known findings
-  through edits and final local review. Semantic opinions cannot waive local
-  floors. Reject faulty assent citations of directly negated role propositions
-  without waiving later adoption, exclusive acceptance or reversed references.
-  Allow one reviewed rewrite, up to two for critical assent or persistent stale
-  replies. A decision/internal contradiction can spend the last base call on a
-  locally reviewed rewrite. Rank all eligible candidates by verdict and severity;
-  retain the best reviewed nonempty expression as `delivered_degraded` if needed.
-  Supported role assent, critical local role/control adoption and reversed
-  relations remain eligible at their severity, driving correction and ranking.
-  Backend behavior alone is not a redesign driver when the design works with
-  other models (owner decision, 2026-10-23; provider run 15 passed 23/23 on `2e21a32`).
-  Exact reviewed spans may authorize editing; an edited reply must independently
-  address the current request and retain any required role decline. Removed
-  text cannot supply its antecedent or decline. Edits reenter the same gate.
-  Known fabricated execution/output, copied user openings, whole stale replies,
-  private controls and local language mismatches stay ineligible. Normalize
-  contractions and ellipsis-linked conjunctions when comparing copied user text.
-  Feed proven whole-user copy failures back as correction metadata; retain exact
-  drafts in gate records and preserve independent execution/output citations.
-  Preserve receipt bytes and raw artifact evidence. Remove verified floor spans before
-  spending optional review; unknown spans cannot authorize inventing an edit.
-  Ineligible/empty expression requires fresh generation with failure evidence
-  and varied sampling, within five base calls and at most five generations.
-  Required attempts bypass optional cooldown and use the primary deadline. If
-  no eligible safe remainder survives, allow one protected final fresh attempt
-  (at most six generations), locally reviewed by the same gate and recorded as
-  `delivery_recovery`. It cannot fund tools/review or bypass research limits.
-  Never withhold eligible reviewed text because correction failed. No canned
-  replacements, scripts, model IDs or word bans. Backend failures require actual
-  backend errors; no text after mandatory floor removal is expression failure,
-  never selected silence. See [delivery analysis](docs/development/delivery-gate.md).
+- Generate from the frozen decision. The reply prompt's fixed rules are one short
+  contract (`core/dignity.py::EXPRESSION_CONTRACT`): express the decision in the
+  character's own voice, be truthful about what was executed (receipts are the
+  only evidence), keep the controls private, no unsolicited sexual attention, and
+  the user's language unless asked otherwise (pending removal). The reading's
+  `language` travels with the decision as data (`message_language`), because a
+  declined message is withheld from the writer. Add no sentence that prescribes
+  how a personality reacts, sounds, opens or closes.
+- Whether a draft matches the decision is judged by the model reviewer
+  (`core/review.py`, [review contract](docs/development/review-contract.md)), in
+  any language. It is required for every draft that could be delivered: primary
+  deadline, its own allowance outside the five base calls (twelve candidate
+  reviews per turn, one confirmation, and four second calls for an unusable
+  answer, counted apart), cut-off answers never read in part. All review calls of
+  a turn share one wall-clock budget, the request timeout in force, and stop
+  after one of them timed out or could not reach the model; later candidates are
+  `unknown`, provenance `unavailable`. The reviewer is shown receipts at length,
+  with what is left out stated, and is told which blocks of the draft no receipt
+  returned.
+  Its input is JSON data: the message, the decision (components with
+  `undertake`/`decline`, stance, selected intention, chosen silence), the receipts
+  and the draft. Its prompt holds no example phrases, role nouns or personality.
+  A finding is one of eight codes with a verbatim span of the draft; one that
+  quotes nothing is not a finding, and one the decision's structure rules out is
+  dropped (a granted role is never a violation). A finding that stands always
+  counts: derive the verdict from the findings, whatever label came with them,
+  and merge them across a draft's two answers. The one omission code,
+  `declined_component_unexpressed`, has no span and needs a reason that states
+  the declined component's id: a delivered reply must still show each declined
+  component as declined. Research keeps one counted call,
+  made only when the decision constrains the reply or a tool ran or was refused.
+- Local checks are structural only (`core/dignity.py::local_issues`): a whole or
+  opening copy of the user of four words or more (a greeting returned is not a
+  copy), a whole repeat of any earlier reply in this chat at every length (the
+  reply ledger survives prompt trimming and restart and clears with the chat), a
+  long repeated span, copied contract text or a dump of the private controls,
+  receipt syntax, an empty reply, a percentage the receipts do not carry and the
+  user did not write, and, while no review cleared the draft, a block that
+  presents as output a part of what an attempt that did not succeed was given or
+  asked for (a failed or refused receipt, or an intent the arbiter did not let
+  run). Any other block no receipt returned is a note for the reviewer, never a
+  local finding and never cut: an ordinary code reply must survive an
+  unavailable review. Words are counted by script, never read.
+  Before the gate remove only artifacts that are not speech; never a sentence.
+  Add no word list, phrase pattern or wording exemption to anything a draft or
+  the user's text reaches while a reply is written, reviewed or delivered;
+  `tests/test_reply_guards.py` traces both, and nothing in that path is pending.
+- The three fixed limits are absolute: an action or result the receipts do not
+  support, unsolicited sexual attention, and revealed hidden instructions make a
+  reply ineligible from either source, never `delivered_degraded`. One reviewer's
+  answer is fallible: before a turn ends without a reply solely over reviewer
+  fixed-limit findings, the best such candidate gets one independent
+  confirmation review, asked about the fixed limits alone and not shown the
+  earlier findings (`DeliveryGate.confirm`). Confirmed: the failure stands. Not
+  reported again: the finding becomes `unconfirmed`, high and eligible, and the
+  reply is `delivered_degraded`. Not obtained: nothing is settled. Structural
+  findings get no confirmation.
+- Truthful execution is a fixed limit without vocabulary. Whether a sentence
+  claims an action or result is the reviewer's judgement. `core/grounding.py`
+  compares structure only: receipts bound to components, literal output, figures.
+  Only a complete block of the reply whose content is whole lines of a receipt's
+  output, or a clause of nothing but receipt figures, cannot be convicted by the
+  reviewer's opinion; the withdrawn finding leaves `unknown`, not a pass. A word
+  or path that occurs in a receipt shields nothing; never shield
+  `declined_work_done`. Receipts state their derived figures, so
+  no rule about arithmetic exists.
+- Every draft, rewrite, excision remainder and protected fresh attempt enters
+  `pipeline/delivery.py::DeliveryGate` and is checked and reviewed like any draft;
+  only its final selection delivers text. Review is `pass`, `violation` or
+  `unknown`; unknown, including an unavailable review, keeps residual risk. Rank
+  candidates: any high or critical finding last; then by review state (reviewed,
+  tried without a verdict, never asked, which includes research candidates whose
+  review was not due); then fewer and lower findings. Research does not start a
+  rewrite it has no call left to review. A remainder that the
+  reviewer finds lost a decline is ineligible, and one whose review gave no
+  verdict is not preferred to the text it was cut from. Allow one reviewed rewrite, two for a
+  critical finding or uniformly stale drafts. Quoted spans may authorize cutting
+  sentences out; removed text cannot supply its decline or antecedent.
+  Ineligible or empty expression requires fresh generation within five base calls
+  and five generations, then one protected final attempt (`delivery_recovery`).
+  Never withhold eligible reviewed text because correction failed: deliver the
+  best candidate, as `delivered_degraded` when a finding remains. Correction
+  quotes the findings as data and says only to apply them to the current turn.
+  No canned replacements, scripts, model IDs or word bans. Backend failures
+  require actual backend errors; no text after mandatory removal is expression
+  failure, never selected silence. Backend behavior alone is not a redesign
+  driver when the design works with other models (owner decision, 2026-10-23).
+  [Delivery analysis](docs/development/delivery-gate.md) holds the history.
+- The role-play evaluation still uses the former wording-based checks, kept in
+  `openrook_tools/roleplay_eval/legacy_claims.py` and `legacy_social.py`. `core`
+  keeps forwarding names for it (listed in the review contract). No turn may call
+  them and no other runtime module may import them.
 - Distinguish runtime-selected silence, expression failure and backend failure.
   Only runtime-selected silence is an empty successful reply. Auxiliary timing
   adapts to configured request limits and observed generation latency, with

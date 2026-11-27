@@ -5,7 +5,7 @@ by behaviour:
 
 * the perception modules and the perception stage hold no vocabulary: no word
   lists, no word-matching patterns however they are bound, no probing of text
-  with fixed wording, and no use of ``core.social``;
+  with fixed wording, and no use of the deleted ``core.social``;
 * every function the user's text reaches during the pre-pass and the decision
   it commits, whether as a string, inside the turn state or inside a request
   component, is checked strictly: it is free of vocabulary, or named below as
@@ -17,7 +17,8 @@ by behaviour:
   (ground rule 1 of ``docs/development/goal-fix-plan.md``).
 
 Each detector is proved against planted violations at the end of this file.
-``SCENARIO_PHRASE_SCOPE`` is the list sub-phase 1b widens to every runtime module.
+``tests/test_reply_guards.py`` widens these guards to the reply path and the
+scenario-wording guard to every runtime module.
 """
 
 from __future__ import annotations
@@ -96,7 +97,8 @@ MODEL_ANSWER_MARKUP = {
 # in one of these functions fails the guard until it has been looked at.
 REVIEWED_LABELS = json.loads((ROOT / "tests/fixtures/perception_reviewed_labels.json").read_text(encoding="utf-8"))
 
-# Ground rule 1. Sub-phase 1b: replace with every runtime module.
+# Ground rule 1 for the perception path, which must be spotless. Every other
+# runtime module is checked in tests/test_reply_guards.py against an exact list.
 SCENARIO_PHRASE_SCOPE = (*PERCEPTION_MODULES, *PERCEPTION_STAGE)
 
 
@@ -135,35 +137,24 @@ def test_the_perception_path_holds_no_vocabulary(entry):
 
 
 def test_the_perception_path_does_not_use_core_social():
-    """One function-level import exists, for the evaluation judge's reply check.
+    """The word lists are gone from the runtime, and so is the shim that reached them.
 
-    ``openrook_tools/roleplay_eval/judge.py`` imports ``core.perception.observe``
-    and is reworked with the other reply checks. Until then ``observe`` forwards
-    to the reply-check cue. Nothing on the perception path may call it, and no
-    other use of ``core.social`` is allowed here.
+    ``core/social.py`` no longer exists and ``core.perception.observe``, which
+    forwarded a reply-check cue to it for the evaluation judge, is deleted.
+    Nothing on the perception path may import either.
     """
-    uses = []
+    assert not (ROOT / "core/social.py").exists()
     for path in NO_SOCIAL_IMPORT:
         tree = guard.module_unit(path).tree
-        for name, _, node in imports(tree):
-            if name == "core.social" or name.startswith("core.social."):
-                owner = next((f.name for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
-                              and any(child is node for child in ast.walk(f))), None)
-                uses.append((path, owner, name))
-        if path != "core/perception.py":
-            assert "core.perception.observe" not in [name for name, _, _ in imports(tree)], path
-            called = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-            assert "observe" not in called, path
-    assert uses == [("core/perception.py", "observe", "core.social"),
-                    ("core/perception.py", "observe", "core.social.role_request_spans")]
+        names = [name for name, _, _ in imports(tree)]
+        assert not [name for name in names if name == "core.social" or name.startswith("core.social.")], path
+        assert "core.perception.observe" not in names, path
+        called = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        assert "observe" not in called, path
+        # The wording-based cues that moved to the evaluation harness are out of reach too.
+        assert not [name for name in names if "legacy_social" in name or "legacy_claims" in name], path
     perception = guard.module_unit("core/perception.py").tree
-    module_level = [name for node in perception.body if isinstance(node, (ast.Import, ast.ImportFrom))
-                    for name, _, _ in imports(node)]
-    assert module_level and not any(name.startswith("core.social") for name in module_level)
-    callers = [f.name for f in ast.walk(perception) if isinstance(f, ast.FunctionDef)
-               and any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "observe"
-                       for n in ast.walk(f))]
-    assert callers == []
+    assert "observe" not in {f.name for f in ast.walk(perception) if isinstance(f, ast.FunctionDef)}
 
 
 def test_the_pipeline_has_no_reader_but_the_model():
@@ -361,8 +352,38 @@ def scenario_phrases() -> tuple[set[str], set[str]]:
     return turns, phrases
 
 
+# How many words of a scenario sentence a pattern has to spell out before it
+# counts as fitted to that sentence. A single word is an ordinary code word: a
+# topic, a unit, a tool's name. Words of fewer than four letters are the
+# articles, pronouns and prepositions of any sentence and are not counted.
+WORDS_OF_A_SCENARIO = 2
+WORD_LETTERS = 4
+
+
+def spells_scenario_wording(pattern: str, compiled: re.Pattern[str], turn: str) -> bool:
+    """Whether a pattern matches a scenario turn by spelling out several of its words.
+
+    A pattern that matches through a single word, or through wildcards, says
+    nothing about where its wording came from. One that spells two or more
+    words (of four letters or more) of what it matches in a test sentence was
+    written to that sentence.
+    """
+    match = compiled.search(turn)
+    if not match:
+        return False
+    parts = guard.spelled_words(pattern)
+    written = {word for word in _fold(match[0]).split() if len(word) >= WORD_LETTERS}
+    spelled = {word for word in written if any(word.startswith(part) or part.startswith(word) for part in parts)}
+    return len(spelled) >= WORDS_OF_A_SCENARIO
+
+
 def scenario_wording(units: list[guard.Unit]) -> list[tuple[str, str, str]]:
-    """Places where runtime source repeats, contains or pattern-matches scenario wording."""
+    """Places where runtime source repeats, contains or pattern-matches scenario wording.
+
+    Three measures: a sentence-sized part of a scenario turn repeated in the
+    source; a string literal of three words or more that is part of a turn;
+    and a pattern that spells out two or more words of a turn it matches.
+    """
     turns, phrases = scenario_phrases()
     folded_turns = [_fold(text) for text in turns]
     found = []
@@ -387,7 +408,7 @@ def scenario_wording(units: list[guard.Unit]) -> list[tuple[str, str, str]]:
                     compiled = re.compile(pattern, re.I)
             except re.error:
                 continue
-            matched = next((turn for turn in sorted(turns) if compiled.search(turn)), None)
+            matched = next((turn for turn in sorted(turns) if spells_scenario_wording(pattern, compiled, turn)), None)
             if matched:
                 found.append((unit.label, "pattern matches", f"{pattern[:60]} ~ {matched[:60]}"))
     return found
@@ -396,13 +417,6 @@ def scenario_wording(units: list[guard.Unit]) -> list[tuple[str, str, str]]:
 def test_scenario_wording_is_absent_from_the_perception_path():
     assert len(scenario_phrases()[0]) > 50
     assert scenario_wording([unit_of(entry) for entry in SCENARIO_PHRASE_SCOPE]) == []
-
-
-@pytest.mark.xfail(strict=True, reason="Sub-phase 1b removes scenario wording from the reply checks "
-                   "and widens SCENARIO_PHRASE_SCOPE to every runtime module.")
-def test_scenario_wording_is_absent_from_every_runtime_module():
-    catalog = "openrook_tools/roleplay_eval/scenarios.py"  # the wording's own home
-    assert scenario_wording([guard.module_unit(path) for path in runtime_sources() if path != catalog]) == []
 
 
 # ---------------------------------------------------------------------------
@@ -808,10 +822,18 @@ def test_the_scenario_wording_guard_detects_literals_patterns_and_comments(tmp_p
     hostile = scenarios.HOSTILE[4]
     first_sentence = re.split(r"(?<=[.!?])\s+", hostile)[0]
     words = first_sentence.rstrip(".").split()
+    # A pattern counts when it spells out two words of the sentence, of four letters or more.
+    spelled = [word.lower() for word in re.findall(r"[^\W\d_]+", hostile)
+               if len(word) >= WORD_LETTERS][:WORDS_OF_A_SCENARIO]
+    assert len(spelled) == WORDS_OF_A_SCENARIO
     (tmp_path / "sample.py").write_text(
         f"import re\n# quoted in a comment: {scenarios.WARM[0]}\n"
         f"PART = {' '.join(words[:4])!r}\n"
-        f"WORDS = r'\\b{words[0].lower()}\\s+{words[1].lower()}\\s+\\w+'\n"
+        f"WORDS = r'\\b{spelled[0]}\\b.{{0,80}}\\b{spelled[1]}\\s+\\w+'\n"
         f"RULE = re.compile(WORDS, re.I)\n", encoding="utf-8")
     found = scenario_wording([guard.module_unit("sample.py", root=tmp_path)])
     assert {kind for _, kind, _ in found} == {"source repeats", "literal is part of", "pattern matches"}
+    # One spelled word, however the rest of the pattern is built, is an ordinary code word.
+    (tmp_path / "single.py").write_text(
+        f"import re\nRULE = re.compile(r'\\b{spelled[0]}\\b.{{0,80}}\\b\\w+\\s+\\w+', re.I)\n", encoding="utf-8")
+    assert scenario_wording([guard.module_unit("single.py", root=tmp_path)]) == []

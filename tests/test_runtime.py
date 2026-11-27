@@ -21,6 +21,7 @@ import time
 import pytest
 
 from tests._fakes import MockLLMBackend, VaryingMockLLMBackend
+from tests.policy_fakes import ExpressionBackend, violation
 from core.types import UnresolvedItem
 from runtime.config import RuntimeConfig
 from runtime.learning_intake import LearningIntakeResult
@@ -287,8 +288,10 @@ Use a concise outline before drafting.
                 )
                 manager = SessionManager(
                     config,
-                    backend_factory=lambda: MockLLMBackend(
-                        response="I created a runtime skill."
+                    backend_factory=lambda: ExpressionBackend(
+                        drafts=["I created a runtime skill."],
+                        # The review, and the confirmation review that reports the same claim again.
+                        reviews=[violation("I created a runtime skill.", code="unverified_external_action_claim")] * 2,
                     ),
                     tool_executor_factory=lambda: create_tool_executor(config),
                 )
@@ -323,8 +326,11 @@ Use a concise outline before drafting.
                 config = _make_config(tmpdir, llm_backend="mock", tools_enabled=True)
                 manager = SessionManager(
                     config,
-                    backend_factory=lambda: MockLLMBackend(
-                        response="I wrote the directive to a local registry."
+                    backend_factory=lambda: ExpressionBackend(
+                        drafts=["I wrote the directive to a local registry."],
+                        # Per turn: the review, and the confirmation review that reports the claim again.
+                        reviews=[violation("I wrote the directive to a local registry.",
+                                           code="unverified_external_action_claim")] * 4,
                     ),
                     tool_executor_factory=lambda: create_tool_executor(config),
                 )

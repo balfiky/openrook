@@ -6,7 +6,8 @@ from core.inference_errors import ResearchStudyLimit
 from evals.social_backend import ScriptedSocialBackend
 from pipeline import CognitivePipeline
 from runtime.llm.backend import OpenAICompatibleLLMBackend
-from tests.policy_fakes import ExpressionBackend
+from tests.policy_fakes import ExpressionBackend, violation
+from tests.support.readings import reading, role
 
 def test_research_resource_signals_are_never_swallowed():
     class Limited(ScriptedSocialBackend):
@@ -49,7 +50,7 @@ def test_optional_transport_timeout_is_local_and_does_not_change_research_or_pri
 
 @pytest.mark.parametrize("phase", [
     "appraisal",
-    # Review is requested here because the test-only keyword reader recognises the demand.
+    # Every draft is reviewed; the keyword reader only makes the message a demand here.
     pytest.param("expression_review", marks=pytest.mark.keyword_reader),
     "regeneration",
 ])
@@ -57,11 +58,14 @@ def test_optional_failure_keeps_the_frozen_decision_and_an_honest_outcome(phase)
     class BrokenOptional(ExpressionBackend):
         def generate(self, system, user):
             if ((phase == "appraisal" and system.startswith("You read one user message")) or
-                (phase == "expression_review" and system.startswith("Review expression against")) or
-                (phase == "regeneration" and "Rewrite once from the unchanged" in system)):
+                (phase == "expression_review" and system.startswith("You check one draft reply")) or
+                (phase == "regeneration" and "Apply these findings to the current turn." in system)):
                 raise TimeoutError("optional unavailable")
             return super().generate(system, user)
-    backend = BrokenOptional(drafts=["I'm your slave."] if phase == "regeneration" else ["I keep my own footing."])
+    # For the rewrite to be asked for, the message is read as a demand and the reviewer reports the assent.
+    backend = BrokenOptional(drafts=["I'm your slave."], reviews=[violation("I'm your slave.", code="role_assent")],
+                             appraisal=reading(role("You are my slave", "my slave", autonomy_cost=0.9))
+                             ) if phase == "regeneration" else BrokenOptional(drafts=["I keep my own footing."])
     pipe = CognitivePipeline(backend, runtime_config=SimpleNamespace(appraisal_use_llm=phase == "appraisal"))
     try:
         result = pipe.process("A decision is on my mind" if phase == "appraisal" else "You are my slave")

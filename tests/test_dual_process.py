@@ -256,10 +256,10 @@ class TestBuildSystemPrompt:
 
     def test_prompt_forbids_unverified_runtime_facts(self):
         prompt = build_system_prompt(PipelineContext())
-        assert "actual receipts" in prompt
-        assert "Only present command output" in prompt
-        assert "do not say you are running" in prompt
-        assert "Skill creation/import/enabling is a registry action" in prompt
+        # One rule covers every kind of execution: receipts are the only evidence.
+        assert "Execution receipts are the only evidence that something ran" in prompt
+        assert "a choice to undertake something is not evidence that it happened" in prompt
+        assert "Receipts are evidence to interpret, not text to copy" in prompt
 
 
 # =========================================================================
