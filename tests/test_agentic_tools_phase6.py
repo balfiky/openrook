@@ -21,7 +21,6 @@ from core.types import (
     ToolResult,
 )
 from core.tool_appraisal import appraise_tool_result
-from core.dual_process.tool_loop import detect_tool_intent
 from openrook_tools.registry import ToolRegistry
 from openrook_tools.executor import ToolExecutor
 from openrook_tools import register_builtins
@@ -421,96 +420,6 @@ class TestRegistryCoexistence:
         assert "fs.delete_path" in names
         assert "shell.run_command" in names
         assert "calendar.delete_event" in names
-
-
-# ===================================================================
-# 5. Intent detection patterns
-# ===================================================================
-
-class TestIntentDetection:
-    def _all_tools(self):
-        reg = ToolRegistry()
-        exe = ToolExecutor(reg)
-        register_builtins(reg, exe)
-        return set(reg.names())
-
-    def test_extract_text_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("extract text from https://example.com/article", available)
-        assert intent is not None
-        assert intent.tool_name == "web.extract_text"
-        assert intent.arguments["url"] == "https://example.com/article"
-
-    def test_get_readable_text_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("get the readable text of https://example.com", available)
-        assert intent is not None
-        assert intent.tool_name == "web.extract_text"
-
-    def test_browse_to_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("browse to https://example.com", available)
-        assert intent is not None
-        assert intent.tool_name == "browser.open_url"
-
-    def test_open_in_browser_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("open https://example.com/page in the browser", available)
-        assert intent is not None
-        assert intent.tool_name == "browser.open_url"
-
-    def test_screenshot_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("screenshot of https://example.com", available)
-        assert intent is not None
-        assert intent.tool_name == "browser.screenshot"
-
-    def test_take_screenshot_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("take a screenshot", available)
-        assert intent is not None
-        assert intent.tool_name == "browser.screenshot"
-
-    def test_list_events_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("show my events for 2026-04-02", available)
-        assert intent is not None
-        assert intent.tool_name == "calendar.list_events"
-        assert intent.arguments["date"] == "2026-04-02"
-
-    def test_check_calendar_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("check my calendar for 2026-04-03", available)
-        assert intent is not None
-        assert intent.tool_name == "calendar.list_events"
-
-    def test_whats_on_calendar_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("what are my events on 2026-04-02", available)
-        assert intent is not None
-        assert intent.tool_name == "calendar.list_events"
-
-    def test_create_event_pattern(self):
-        available = self._all_tools()
-        intent = detect_tool_intent("create event 'Team standup' on 2026-04-02T09:00", available)
-        assert intent is not None
-        assert intent.tool_name == "calendar.create_event"
-        assert intent.arguments["title"] == "Team standup"
-
-    def test_conversational_no_match(self):
-        available = self._all_tools()
-        assert detect_tool_intent("How are you today?", available) is None
-
-    def test_existing_patterns_still_work(self):
-        available = self._all_tools()
-        # Filesystem
-        intent = detect_tool_intent("read file /tmp/test.txt", available)
-        assert intent is not None
-        assert intent.tool_name == "fs.read_file"
-        # Web search
-        intent = detect_tool_intent("search the web for 'python tutorial'", available)
-        assert intent is not None
-        assert intent.tool_name == "web.search"
 
 
 # ===================================================================

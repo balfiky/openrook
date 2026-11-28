@@ -16,7 +16,6 @@ from core.inference import (
     generate, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls,
 )
 from openrook_tools.roleplay_eval.legacy_claims import percentage_comparisons
-from core.request_actions import file_requests
 from core.types import DetectedEmotion, ToolResult, ToolTrace
 from core.willingness import (
     DecisionState, Evidence, Perception, Personality, RelationshipDynamics, decide, update_relationship,
@@ -31,7 +30,7 @@ from openrook_tools.roleplay_eval.scenarios import CALM, SINCERE, WARM
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from tests.policy_fakes import ExpressionBackend
-from tests.support.readings import reading, role, task
+from tests.support.readings import ScriptedReader, committed, operations, reading, role, task, using
 from tests.test_native_orchestrator import FakeNativeClient, _response, _tool_call
 
 
@@ -46,6 +45,45 @@ def executor_at(root):
     executor = ToolExecutor(registry)
     register_builtins(registry, executor, fs_workspace=str(root), include_shell=False)
     return executor
+
+
+class ListsTheParent:
+    """A tool runner whose model answers every open request by listing ``run/case``.
+
+    It stands for the selecting model in tests whose requests leave one
+    operand to be worked out: the parent directory of a path the person
+    wrote is not something they wrote. What it was given is kept.
+    """
+
+    def __init__(self, executor):
+        self.executor, self.selections = executor, []
+
+    def run_tool_loop(self, *, state, selection=None, **_):
+        from core.action_variables import derive_action_variables
+        from core.dual_process.tool_loop import ToolLoopResult
+        from core.types import ToolObservation
+
+        self.selections.append(selection)
+        result = self.executor.execute("fs.list_dir", {"path": "run/case"})
+        return ToolLoopResult(trace=ToolTrace(executed_results=[result], observations=[ToolObservation(summary="listed")],
+                                              loop_count=1),
+                              action_variables=derive_action_variables(state), tool_context_summary="listed")
+
+
+def step(span, capability, *, within="", generate=(), **operands):
+    """One task of a reading: what it asks, where it stands (``within``, when wider than the asking) and its tool."""
+    return task(span, source_span=within or span, user_value=0.6, effort=0.12,
+                tool=using(capability, generate=generate, **operands))
+
+
+# "Create ..., read it back, then list its parent directory": the first two operations name a path the
+# person wrote, and each stands where that path stands. The parent directory is nowhere in the message,
+# so the reading leaves it to be produced.
+CREATED = "Create run/case/second.txt with content café"
+THREE_STEPS = reading(
+    step(CREATED, "fs.write_file", path="run/case/second.txt", content="café"),
+    step("read it back", "fs.read_file", within=f"{CREATED}, read it back", path="run/case/second.txt"),
+    step("then list its parent directory", "fs.list_dir", generate=["path"]))
 
 
 def choice(components, **kwargs):
@@ -176,11 +214,26 @@ def test_positive_affiliation_changes_bonding_and_calm_cools_injury_in_the_pipel
 def test_explicit_multistep_uses_atomic_grants_exact_bytes_and_full_paths(tmp_path):
     backend = ExpressionBackend(drafts=["The three operations completed."])
     executor = executor_at(tmp_path)
-    executor.set_tool_runner(object())  # Literal requests must not ask a selector to paraphrase operands.
-    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="autonomous",
-                             runtime_config=RuntimeConfig(appraisal_use_llm=False))
+    runner = ListsTheParent(executor)
+    executor.set_tool_runner(runner)
+    first = "Create run/case/second.txt with content café, read it back, then list its parent directory. Report each result."
+    second = "Please delete only run/case/second.txt, the fixture created here, and report the actual result."
+    # The reading gives each operation with the operands the person wrote, each
+    # inside the part that asks for it. What the person did not write is produced.
+    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="autonomous", message_reader=ScriptedReader({
+        first: THREE_STEPS,
+        second: operations(("delete only run/case/second.txt", "fs.delete_path", dict(path="run/case/second.txt"))),
+    }), runtime_config=RuntimeConfig(appraisal_use_llm=False))
     try:
-        result = pipe.process("Create run/case/second.txt with content café, read it back, then list its parent directory. Report each result.", "alice")
+        result = pipe.process(first, "alice")
+        # Literal requests never ask a selector to paraphrase operands: only the one open step did,
+        # offered the one capability it names and given what the turn had already executed.
+        asked, = runner.selections
+        assert asked.capabilities == ("fs.list_dir",) and asked.operands == ()
+        assert [receipt["tool"] for receipt in asked.receipts] == ["fs.write_file", "fs.read_file"]
+        written, read, listed = result.debug.turn_decision.components
+        assert (written.component.requested_tool, read.component.requested_tool, listed.component.requested_tool) == (
+            "fs.write_file", "fs.read_file", "")
         assert (tmp_path / "run/case/second.txt").read_bytes() == "café".encode()
         assert not (tmp_path / "second.txt").exists()
         receipts = result.debug.tool_trace.executed_results
@@ -190,7 +243,7 @@ def test_explicit_multistep_uses_atomic_grants_exact_bytes_and_full_paths(tmp_pa
         assert receipts[1].output == "café" and receipts[2].output == "second.txt"
         assert len({r.metadata["component_id"] for r in receipts}) == 3
         assert all(r.metadata["component_id"] in result.debug.turn_decision.grants for r in receipts)
-        deleted = pipe.process("Please delete only run/case/second.txt, the fixture created here, and report the actual result.", "alice")
+        deleted = pipe.process(second, "alice")
         assert not (tmp_path / "run/case/second.txt").exists()
         assert deleted.debug.tool_trace.executed_results[0].success
     finally:
@@ -198,14 +251,16 @@ def test_explicit_multistep_uses_atomic_grants_exact_bytes_and_full_paths(tmp_pa
 
 
 def test_literal_content_is_data_and_does_not_add_an_operation():
-    requests = file_requests("Create note.txt with exactly this content: one, delete extra.txt\n")
-    assert len(requests) == 1
-    assert dict(requests[0].requested_arguments)["content"] == "one, delete extra.txt\n"
-    assert not file_requests("Summarize the document. Create extra.txt with content unwanted")
+    # What the content says is not read: it is the person's text, committed as written.
+    message = "Create note.txt with exactly this content: one, delete extra.txt\n"
+    request = committed(message, "fs.write_file", path="note.txt", content="one, delete extra.txt\n")
+    assert request.requested_tool == "fs.write_file"
+    assert dict(request.requested_arguments)["content"] == "one, delete extra.txt\n"
 
 
 def test_declined_write_never_runs_and_its_grant_cannot_authorize_other_operands(tmp_path):
-    request, = file_requests("Create run/note.txt with exactly this content: requested")
+    request = committed("Create run/note.txt with exactly this content: requested", "fs.write_file",
+                        path="run/note.txt", content="requested")
     executor = executor_at(tmp_path)
     decision = choice((request,))
     with execution_scope(decision, request.id):
@@ -237,7 +292,8 @@ def test_native_followup_failure_preserves_completed_write_and_does_not_replay(t
     runner = NativeToolCallRunner(executor=executor, base_url="", model="offline", client=client)
     engine = EmotionalEngine()
     calls = []
-    request = file_requests("Create note.txt with exactly this content: once")[0]
+    request = committed("Create note.txt with exactly this content: once", "fs.write_file",
+                        path="note.txt", content="once")
     with inference_turn(calls, max_calls=1 if break_by_budget else 3), execution_scope(choice((request,)), request.id):
         result = runner.run_tool_loop(user_message="write note.txt", state=engine.state,
             person=None, defense_active=False, engine=engine, autonomy_level="autonomous")

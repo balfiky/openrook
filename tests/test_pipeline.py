@@ -5,6 +5,8 @@ import pytest
 
 from config.loader import get_config
 from tests._fakes import MockLLMBackend
+from tests.support.readings import ScriptedReader, conversation, plain, reading, task, using
+
 from core.pipeline_features import PipelineFeatures
 from core.types import SemanticMemoryEntry, OpenLoop
 from pipeline import CognitivePipeline, DebugState, PipelineResponse
@@ -12,6 +14,13 @@ from runtime.debug.api import _debug_to_dict
 from runtime.config import RuntimeConfig
 from runtime.skills import enabled_skill_context, list_skills
 from runtime.tools import create_tool_executor
+
+
+def asks_for_a_skill(text):
+    """The reading of these tests' skill request: a task asking the skill registry, with the request as written."""
+    if not text.startswith("Create a skill"):
+        return plain(text)
+    return reading(task(text, user_value=0.7, effort=0.2, tool=using("skills.create_from_request", request=text)))
 
 
 class ArtifactBackend(MockLLMBackend):
@@ -44,6 +53,18 @@ class MalformedArtifactBackend(MockLLMBackend):
                 "}"
             )
         return "Saved it to `games/tetris.py`. Ready when you are."
+
+
+# The reading of a message that states a lasting preference, quoting it. Any other message is unread.
+PREFERS_CONCISE = {"I prefer concise replies.": reading(
+    conversation("I prefer concise replies."), lasting=[{"kind": "preference", "span": "concise replies"}])}
+
+
+# A request to have text produced and stored: the person writes the path, the content is to be
+# generated. The runtime infers no file name; the reading reports the path the message contains.
+TETRIS_REQUEST = "Can you write me a python code for tetris game and save it to games/tetris.py?"
+WRITE_TETRIS = reading(task(TETRIS_REQUEST, user_value=0.8, effort=0.2,
+                            tool=using("fs.write_file", generate=["content"], path="games/tetris.py")))
 
 
 class TestCognitivePipeline:
@@ -308,7 +329,8 @@ class TestCognitivePipeline:
         from tests.policy_fakes import ExpressionBackend
         db_path = str(tmp_path / "semantic.db")
         backend = ExpressionBackend()
-        pipe = CognitivePipeline(llm_backend=backend, db_path=db_path)
+        # What is kept as a preference is what the reading quoted as one.
+        pipe = CognitivePipeline(llm_backend=backend, db_path=db_path, message_reader=ScriptedReader(PREFERS_CONCISE))
         pipe.process("I prefer concise replies.", user_id="alice")
 
         result = pipe.process(
@@ -509,7 +531,8 @@ class TestCognitivePipeline:
         assert outcomes[1] < outcomes[0]
 
     def test_longitudinal_preference_and_relationship_loop_both_surface(self):
-        pipe = self._make_pipeline()
+        pipe = CognitivePipeline(llm_backend=MockLLMBackend(response="I understand."),
+                                 message_reader=ScriptedReader(PREFERS_CONCISE))
         pipe.process("I prefer concise replies.", user_id="alice")
         pipe.relationship_memory.upsert_open_loop(OpenLoop(source_person="alice", loop_kind="commitment",
             topic="deadline", description="Agreed deadline", related_key="deadline:1"))
@@ -552,7 +575,6 @@ class TestCognitivePipeline:
         assert "Use a concise outline before drafting" in backend.last_system_prompt
         pipe.close()
 
-    @pytest.mark.keyword_reader
     def test_generated_artifact_request_writes_file_before_success_claim(self, tmp_path):
         workspace = tmp_path / "workspace"
         config = RuntimeConfig(
@@ -567,12 +589,10 @@ class TestCognitivePipeline:
             llm_backend_fast=backend,
             tool_executor=create_tool_executor(config),
             autonomy_level="autonomous",
+            message_reader=ScriptedReader(WRITE_TETRIS),
         )
 
-        result = pipe.process(
-            "Can you write me a python code for tetris game and save it in games directory you create?",
-            user_id="alice",
-        )
+        result = pipe.process(TETRIS_REQUEST, user_id="alice")
 
         target = workspace / "games" / "tetris.py"
         assert target.exists()
@@ -585,7 +605,6 @@ class TestCognitivePipeline:
         assert "Saved it to `games/tetris.py`" in result.response
         pipe.close()
 
-    @pytest.mark.keyword_reader
     def test_generated_artifact_recovers_malformed_json_content_field(self, tmp_path):
         workspace = tmp_path / "workspace"
         config = RuntimeConfig(
@@ -600,12 +619,10 @@ class TestCognitivePipeline:
             llm_backend_fast=backend,
             tool_executor=create_tool_executor(config),
             autonomy_level="autonomous",
+            message_reader=ScriptedReader(WRITE_TETRIS),
         )
 
-        result = pipe.process(
-            "Can you write me a python code for tetris game and save it in games directory you create?",
-            user_id="alice",
-        )
+        result = pipe.process(TETRIS_REQUEST, user_id="alice")
 
         content = (workspace / "games" / "tetris.py").read_text(encoding="utf-8")
         assert content.startswith("import pygame\n")
@@ -638,7 +655,6 @@ class TestCognitivePipeline:
         assert result.debug.generation_attempts == 6
         pipe.close()
 
-    @pytest.mark.keyword_reader
     def test_permanent_skill_claim_is_grounded_by_skill_registry_tool(self, tmp_path):
         config = RuntimeConfig(
             data_dir=str(tmp_path / "data"),
@@ -656,6 +672,7 @@ class TestCognitivePipeline:
             llm_backend=backend,
             tool_executor=executor,
             skill_provider=lambda: enabled_skill_context(config),
+            message_reader=ScriptedReader(asks_for_a_skill),
         )
 
         result = pipe.process(
@@ -683,7 +700,6 @@ class TestCognitivePipeline:
         assert follow_up.debug.skill_context["count"] == 1
         pipe.close()
 
-    @pytest.mark.keyword_reader
     def test_skill_registry_tool_runs_even_when_external_tools_disabled(self, tmp_path):
         config = RuntimeConfig(
             data_dir=str(tmp_path / "data"),
@@ -697,6 +713,7 @@ class TestCognitivePipeline:
             llm_backend=backend,
             tool_executor=executor,
             skill_provider=lambda: enabled_skill_context(config),
+            message_reader=ScriptedReader(asks_for_a_skill),
         )
 
         result = pipe.process(

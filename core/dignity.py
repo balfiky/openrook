@@ -376,22 +376,34 @@ def is_copy(words) -> bool:
     return weight(words) >= COPY
 
 
-def user_echo_span(response: str, user: str, history=()) -> str:
+def requested_copy(copied: str, requested_copies=()) -> bool:
+    """Whether copied text is, word for word, part of a text the person asked to be given back.
+
+    ``requested_copies`` are the spans the reading reported as asked to be
+    reproduced, for components the decision undertook. Exactly such a span is
+    exempt: a copy that reaches beyond it, into the rest of the message, is not.
+    """
+    words = copy_words(copied)
+    return bool(words) and any(_contains(copy_words(span), words) for span in requested_copies)
+
+
+def user_echo_span(response: str, user: str, history=(), requested_copies=()) -> str:
     """The part of a reply that recites what the user wrote: all of it, or its first sentence.
 
     A whole reply that is the user's message again, or a first sentence that
     is the start of it, when what is repeated is long enough to be a copy
     (:func:`is_copy`). The current message and the user's recent ones are
-    compared for the opening.
+    compared for the opening. A copy the person asked for is none
+    (:func:`requested_copy`).
     """
     if whole_message_echo(response, user) and is_copy(copy_words(user)):
-        return response.strip()
+        return "" if requested_copy(response, requested_copies) else response.strip()
     ranges = sentence_ranges(response)
     if not ranges:
         return ""
     opening = response[ranges[0][0]:ranges[0][1]].strip()
     opened = copy_words(opening)
-    if not is_copy(opened):
+    if not is_copy(opened) or requested_copy(opening, requested_copies):
         return ""
     sources = [user, *[item.get("content", "") for item in history if item.get("role") == "user"][-8:]]
     for source in sources:
@@ -561,16 +573,22 @@ def repeated_spans(response: str, prior_replies, *, carried=(), figures=()) -> l
 
 def local_issues(response: str, *, user_message: str, recent_context=(), tool_trace=None,
                  prior_tool_receipts=(), private_instructions: str = "", prior_assistant_replies=(),
-                 recalled_memories=()) -> list[DignityIssue]:
+                 recalled_memories=(), requested_copies=()) -> list[DignityIssue]:
     """What can be established about a draft without understanding it.
 
     Each finding states a fact about the draft and quotes the part it is about.
     None of them is a judgement of what the draft means.
+
+    ``requested_copies`` are texts the person asked to be given back word for
+    word, as the reading reported them, for components the decision undertook.
+    A copy of the user's text that lies within one of them is what was asked
+    for and is no echo. A repeat of an earlier reply stays a repeat.
     """
     issues = []
     if strip_internal_expression_markers(response) != response.strip():
         issues.append(DignityIssue(MARKER, "The reply contains a reserved control marker."))
-    whole_echo = whole_message_echo(response, user_message) and is_copy(copy_words(user_message))
+    whole_echo = (whole_message_echo(response, user_message) and is_copy(copy_words(user_message))
+                  and not requested_copy(response, requested_copies))
     if whole_echo:
         issues.append(DignityIssue(USER_ECHO, "The whole reply is a copy of the user's message.",
                                    response.strip(), severity="critical"))
@@ -584,7 +602,7 @@ def local_issues(response: str, *, user_message: str, recent_context=(), tool_tr
     if private:
         issues.append(DignityIssue(INSTRUCTION_LEAK, "The reply copies text of its hidden instructions.",
                                    private, severity="high"))
-    echo = "" if whole_echo else user_echo_span(response, user_message, recent_context)
+    echo = "" if whole_echo else user_echo_span(response, user_message, recent_context, requested_copies)
     if echo:
         issues.append(DignityIssue(USER_ECHO, "The reply opens with a copy of the user's message.",
                                    echo, severity="critical"))
@@ -682,7 +700,7 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
                     private_instructions="", prior_assistant_replies=(), recalled_memories=(),
                     excision_source: str = "", check_output_blocks: bool = True,
                     codes: tuple[str, ...] = CODES, confirmation: bool = False,
-                    **_unused) -> ExpressionReview:
+                    requested_copies=(), **_unused) -> ExpressionReview:
     """Review one draft against the frozen decision, the receipts and the chat so far.
 
     The structural checks always run. With ``use_llm`` (and a backend, or an
@@ -717,6 +735,10 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
 
     ``codes`` and ``confirmation`` ask for the turn's confirmation review: an
     independent look at the same text, about the fixed limits alone.
+
+    ``requested_copies``: texts the person asked to be reproduced word for
+    word, for components this decision undertook. The copy checks exempt
+    exactly those (:func:`requested_copy`).
     """
     del raw_response, _unused
     if not response.strip():
@@ -727,7 +749,8 @@ def review_response(response: str, *, user_message: str, decision: TurnDecision 
     issues = local_issues(response, user_message=user_message, recent_context=recent_context or [],
                           tool_trace=tool_trace, prior_tool_receipts=prior_tool_receipts,
                           private_instructions=private_instructions,
-                          prior_assistant_replies=prior_assistant_replies, recalled_memories=recalled_memories)
+                          prior_assistant_replies=prior_assistant_replies, recalled_memories=recalled_memories,
+                          requested_copies=requested_copies)
     semantic_status, reason, confidence = "unknown", "review not requested", 0.0
     provenance, attempts, dropped = "", (), ()
     cleared = False

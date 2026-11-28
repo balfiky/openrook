@@ -19,6 +19,7 @@ from core.character_vector import assemble_character_vector, format_character_ve
 from core.memory.prompt_limits import MEMORY_PROMPT_LIMIT, RELATIONSHIP_DETAIL_LIMIT
 from core.types import LongTermEntry, PipelineContext, RelationshipContext, SemanticMemoryEntry
 from core.dignity import CONTRACT_HEADER, CONTROLS_HEADER, EXPRESSION_CONTRACT
+from core.request_routing import unavailable_work
 
 # ---------------------------------------------------------------------------
 # LLM backend protocol
@@ -76,13 +77,19 @@ def _expression_components(decision) -> list[dict]:
     """Project choices for expression without execution-authority vocabulary.
 
     A declined request retains its subject. Executable operands remain outside
-    expression; naming the operation is enough to express that decline.
+    expression; naming the operation is enough to express that decline. Work
+    that nothing the character can reach does is marked as not possible, with
+    what the reading said is missing, so that the reply need not guess why it
+    was not undertaken.
     """
+    missing = unavailable_work(decision)
     return [{"id": c.component.id, "kind": c.component.kind,
              "choice": "undertake" if c.granted else "decline",
              **({"requested_operation": c.component.requested_tool}
                 if not c.granted and c.component.kind == "task" and c.component.requested_tool
-                else {"description": c.component.description})}
+                else {"description": c.component.description}),
+             **({} if c.component.feasible else {"possible": False}),
+             **({"unavailable": missing[c.component.id]} if c.component.id in missing else {})}
             for c in decision.components]
 
 
@@ -718,12 +725,6 @@ class ResponseGenerator:
             current = {"components": _expression_components(ctx.turn_decision)}
             if not ctx.turn_decision.declined:
                 current["user_message"] = user_message
-        if ctx.inspection_kind:
-            current["resolved_request"] = {
-                "domain": "host_metrics", "topic": ctx.inspection_kind,
-                "meaning": "RAM usage" if ctx.inspection_kind == "memory" else ctx.inspection_kind + " usage",
-                "freshness": "current turn receipts",
-            }
         if ctx.turn_decision and ctx.turn_decision.selected_intention:
             current["selected_intention"] = asdict(ctx.turn_decision.selected_intention)
         # The reading's report of the message's language travels with the

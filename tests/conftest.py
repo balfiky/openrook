@@ -75,11 +75,31 @@ SUPERSEDED_BY_THE_REVIEW_CONTRACT = {
 }
 
 
+# Tests in the same file that assert the keyword routing sub-phase 1c removed
+# (docs/development/request-routing.md). What a message asks for, and the
+# operands of a tool it asks for, come from the reading now; a message nobody
+# read commits no operation, whatever its words. The behaviour these tests
+# wanted is covered with scripted readings in tests/test_request_routing.py.
+_REMOVED_ROUTING = "asserts keyword routing removed in sub-phase 1c: "
+SUPERSEDED_BY_REQUEST_ROUTING = {
+    "tests/test_live_roleplay_p1j.py::test_literal_shell_operands_are_bound_before_choice_and_cannot_be_substituted":
+        "expects an English pattern to bind a delimited shell command, also in a message that was not read; "
+        "the reading reports the command, and only an exact part of the message is committed",
+    "tests/test_live_roleplay_p1j.py::test_literal_shell_execution_uses_exact_operands_and_keeps_operator_gate":
+        "runs a turn with no reading and expects the command to be recognised from its wording and executed; "
+        "an unread message is plain conversation and runs nothing",
+}
+
+
 def pytest_collection_modifyitems(config, items):
     for item in items:
-        reason = SUPERSEDED_BY_THE_REVIEW_CONTRACT.get(item.nodeid.split("[", 1)[0])
+        name = item.nodeid.split("[", 1)[0]
+        reason = SUPERSEDED_BY_THE_REVIEW_CONTRACT.get(name)
         if reason:
             item.add_marker(pytest.mark.skip(reason=_REMOVED_RULE + reason))
+        reason = SUPERSEDED_BY_REQUEST_ROUTING.get(name)
+        if reason:
+            item.add_marker(pytest.mark.skip(reason=_REMOVED_ROUTING + reason))
 
 
 _FAKE_PUBLIC_IP = "93.184.216.34"  # example.com — a public, non-blocked address

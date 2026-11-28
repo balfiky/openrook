@@ -26,7 +26,7 @@ def resource_signal(request):
     return ResearchStudyLimit("study call limit reached")
 
 
-def _runner(model, *, fallback_to_heuristic=False):
+def _runner(model, *, structured_fallback=False):
     registry = ToolRegistry()
     registry.register(ToolCapability(
         name="test.read",
@@ -39,15 +39,15 @@ def _runner(model, *, fallback_to_heuristic=False):
         base_url="",
         model="test",
         chat_model=model,
-        fallback_to_heuristic=fallback_to_heuristic,
+        structured_fallback=structured_fallback,
     )
 
 
-@pytest.mark.parametrize("fallback_to_heuristic", [False, True])
-def test_graph_resource_signal_propagates(resource_signal, fallback_to_heuristic):
+@pytest.mark.parametrize("structured_fallback", [False, True])
+def test_graph_resource_signal_propagates(resource_signal, structured_fallback):
     model = SimpleNamespace(invoke=Mock(side_effect=resource_signal))
-    runner = _runner(model, fallback_to_heuristic=fallback_to_heuristic)
-    runner._run_heuristic = Mock()
+    runner = _runner(model, structured_fallback=structured_fallback)
+    runner._run_structured_router = Mock()
     engine = EmotionalEngine()
 
     with pytest.raises(type(resource_signal)) as raised:
@@ -62,7 +62,7 @@ def test_graph_resource_signal_propagates(resource_signal, fallback_to_heuristic
 
     assert raised.value is resource_signal
     model.invoke.assert_called_once()
-    runner._run_heuristic.assert_not_called()
+    runner._run_structured_router.assert_not_called()
 
 
 @pytest.mark.parametrize("bound", [False, True])
@@ -74,7 +74,7 @@ def test_structured_router_resource_signal_propagates(resource_signal, bound):
     )
     if not bound:
         model.bind.side_effect = ValueError("response format is unsupported")
-    runner = _runner(model, fallback_to_heuristic=True)
+    runner = _runner(model, structured_fallback=True)
 
     with pytest.raises(type(resource_signal)) as raised:
         runner._ask_structured_router("read test data", [])

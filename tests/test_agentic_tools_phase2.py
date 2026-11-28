@@ -4,7 +4,6 @@ from __future__ import annotations
 from core.strategy import agency_summary
 from tests.policy_fakes import frozen
 
-import pytest
 
 from core.types import (
     ActionVariables,
@@ -19,7 +18,6 @@ from core.types import (
 )
 from core.tool_appraisal import appraise_tool_result
 from core.dual_process.tool_loop import (
-    detect_tool_intent,
     make_tool_decision,
     run_tool_loop,
 )
@@ -30,10 +28,9 @@ from openrook_tools import register_builtins
 from pipeline import (
     CognitivePipeline,
     DebugState,
-    _message_for_model_tool_routing,
-    _message_for_tool_detection,
 )
 from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
+from tests.support.readings import ScriptedReader, file_request
 
 
 # ===================================================================
@@ -48,12 +45,18 @@ def _make_executor():
     return reg, exe
 
 
+def _intent(tool, **arguments):
+    """An operation as a granted component commits it: the tool and its operands."""
+    return ToolIntent(tool_name=tool, arguments=arguments, reason="test", expected_outcome="test")
+
+
 def _make_pipeline_with_tools(tmp_path=None):
     """Create a CognitivePipeline wired to a ToolExecutor."""
     reg = ToolRegistry()
     exe = ToolExecutor(reg)
     register_builtins(reg, exe)
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe,
+                             message_reader=ScriptedReader(file_request))
     return pipe, reg, exe
 
 
@@ -79,275 +82,6 @@ def _make_executor_with_fake_web():
     exe = ToolExecutor(reg)
     register_builtins(reg, exe, web_provider=FakeWebProvider())
     return reg, exe
-
-
-# ===================================================================
-# Tool intent detection (heuristic)
-# ===================================================================
-
-class TestDetectToolIntent:
-    def _available(self):
-        return {
-            "fs.read_file", "fs.list_dir", "fs.search_text", "fs.glob_paths",
-            "fs.write_file", "fs.delete_path", "shell.run_command",
-            "system.memory_usage",
-            "web.search", "web.fetch", "web.extract_text",
-            "skills.list", "skills.create_from_request", "skills.enable",
-            "skills.disable", "skills.audit",
-        }
-
-    def test_no_tool_for_conversational(self):
-        assert detect_tool_intent("How are you today?", self._available()) is None
-
-    def test_no_tool_for_greeting(self):
-        assert detect_tool_intent("Hello!", self._available()) is None
-
-    def test_read_file(self):
-        intent = detect_tool_intent("read file /tmp/test.txt", self._available())
-        assert intent is not None
-        assert intent.tool_name == "fs.read_file"
-        assert intent.arguments["path"] == "/tmp/test.txt"
-
-    def test_list_dir(self):
-        intent = detect_tool_intent("list files in /home/user", self._available())
-        assert intent is not None
-        assert intent.tool_name == "fs.list_dir"
-
-    def test_search_text(self):
-        intent = detect_tool_intent("search for 'hello' in /tmp", self._available())
-        assert intent is not None
-        assert intent.tool_name == "fs.search_text"
-        assert intent.arguments["pattern"] == "hello"
-
-    def test_run_command(self):
-        intent = detect_tool_intent("run command 'echo hello'", self._available())
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "echo hello"
-
-    def test_unquoted_explicit_command_uses_shell(self):
-        intent = detect_tool_intent("do arbitrary-tool --flag", self._available())
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "arbitrary-tool --flag"
-
-    def test_hostname_question_uses_shell(self):
-        intent = detect_tool_intent(
-            "can you tell me the hostname of the machine you are running from?",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "hostname"
-
-    def test_unquoted_uname_uses_shell(self):
-        intent = detect_tool_intent("run uname -a", self._available())
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "uname -a"
-
-    def test_tool_followup_reuses_previous_user_request(self):
-        msg = _message_for_tool_detection(
-            "issue the needed command",
-            [
-                {"role": "user", "content": "can you tell me your hostname?"},
-                {"role": "assistant", "content": "I would need a command."},
-            ],
-        )
-        assert "can you tell me your hostname?" in msg
-        assert "issue the needed command" in msg
-
-    def test_terse_tool_followup_reuses_previous_actionable_request(self):
-        msg = _message_for_tool_detection(
-            "go",
-            [
-                {"role": "user", "content": "how much disk space left?"},
-                {"role": "assistant", "content": "df -h /"},
-                {"role": "user", "content": "stop printing the command"},
-            ],
-        )
-        assert "how much disk space left?" in msg
-        assert "go" in msg
-
-    def test_raw_output_followup_reuses_previous_actionable_request(self):
-        msg = _message_for_tool_detection(
-            "give me raw output",
-            [
-                {"role": "user", "content": "check disk space now"},
-                {"role": "assistant", "content": "df -h /"},
-            ],
-        )
-        assert "check disk space now" in msg
-        assert "give me raw output" in msg
-
-    def test_skill_confirmation_followup_reuses_previous_skill_request(self):
-        msg = _message_for_tool_detection(
-            "please do",
-            [
-                {
-                    "role": "user",
-                    "content": "Create a skill for yourself to summarize reports.",
-                },
-                {"role": "assistant", "content": "I can draft that."},
-            ],
-        )
-        assert "Create a skill for yourself" in msg
-        assert "please do" in msg
-
-    def test_model_tool_routing_includes_history_for_references(self):
-        msg = _message_for_model_tool_routing(
-            "no, execute it on your pc",
-            [
-                {"role": "user", "content": "what is the harddisk utilzation?"},
-                {"role": "assistant", "content": "Run df -h."},
-            ],
-        )
-        assert "Recent conversation for tool routing" in msg
-        assert "what is the harddisk utilzation?" in msg
-        assert "Current user message: no, execute it on your pc" in msg
-
-    def test_model_tool_routing_includes_link_followup_history(self):
-        msg = _message_for_model_tool_routing(
-            "all",
-            [
-                {"role": "user", "content": "search for top PyTorch AI books released in 2026"},
-                {"role": "assistant", "content": "I found one Amazon result and several lists."},
-                {"role": "user", "content": "can you give me their amazon links"},
-            ],
-        )
-        assert "search for top PyTorch AI books released in 2026" in msg
-        assert "can you give me their amazon links" in msg
-        assert "Current user message: all" in msg
-
-    def test_disk_space_question_uses_shell(self):
-        intent = detect_tool_intent("how much disk space left?", self._available())
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "df -h /"
-
-    def test_memory_usage_question_uses_read_only_system_tool(self):
-        intent = detect_tool_intent("what is the current memory utilization?", self._available())
-        assert intent is not None
-        assert intent.tool_name == "system.memory_usage"
-        assert intent.arguments == {}
-
-    def test_memory_request_phrasings_route_to_system_tool(self):
-        """Common imperative phrasings of "give me memory" must route to the
-        memory tool. Regression: a Telegram user asking "give me current
-        memory utilization" produced an unhelpful "cannot verify" reply
-        because the verb wasn't in the original pattern verb-list.
-        """
-        available = self._available()
-        for phrasing in [
-            "give me current memory utilization",
-            "give me the current memory utilization",
-            "read current system memory utilization",
-            "read memory utilization",
-            "fetch the memory usage",
-            "report memory usage",
-            "grab the memory usage now",
-            "show memory utilization",
-        ]:
-            intent = detect_tool_intent(phrasing, available)
-            assert intent is not None, f"intent missed: {phrasing!r}"
-            assert intent.tool_name == "system.memory_usage", (
-                f"wrong tool for {phrasing!r}: {intent.tool_name}"
-            )
-
-    def test_released_after_list_request_uses_web_search(self):
-        intent = detect_tool_intent(
-            "find me top AI books released after March 2026",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "web.search"
-        assert intent.arguments["query"] == "find me top AI books released after March 2026"
-
-    def test_give_me_released_after_list_request_uses_web_search(self):
-        intent = detect_tool_intent(
-            "give me top five AI books released after jaunary 2026",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "web.search"
-
-    def test_direct_df_command_uses_shell(self):
-        intent = detect_tool_intent("df -h /", self._available())
-        assert intent is not None
-        assert intent.tool_name == "shell.run_command"
-        assert intent.arguments["cmd"] == "df -h /"
-
-    def test_web_search(self):
-        intent = detect_tool_intent("search the web for 'python dataclasses'", self._available())
-        assert intent is not None
-        assert intent.tool_name == "web.search"
-
-    @pytest.mark.parametrize(
-        ("message", "query"),
-        [
-            ("what is the latest news about openai?", "latest news about openai"),
-            ("latest openai news", "latest openai news"),
-            ("what happened with OpenAI today?", "what happened with OpenAI today"),
-            ("current price of bitcoin", "current price of bitcoin"),
-            ("who is the current CEO of OpenAI?", "who is the current CEO of OpenAI"),
-        ],
-    )
-    def test_temporal_web_questions_use_search(self, message, query):
-        intent = detect_tool_intent(message, self._available())
-        assert intent is not None
-        assert intent.tool_name == "web.search"
-        assert intent.arguments["query"] == query
-
-    def test_current_personal_state_does_not_trigger_search(self):
-        assert detect_tool_intent("what is your current mood?", self._available()) is None
-
-    def test_fetch_url(self):
-        intent = detect_tool_intent("fetch https://example.com", self._available())
-        assert intent is not None
-        assert intent.tool_name == "web.fetch"
-
-    def test_delete_file(self):
-        intent = detect_tool_intent("delete file /tmp/junk.txt", self._available())
-        assert intent is not None
-        assert intent.tool_name == "fs.delete_path"
-
-    def test_unavailable_tool_skipped(self):
-        # Only fs.read_file available
-        intent = detect_tool_intent("run command 'ls'", {"fs.read_file"})
-        assert intent is None
-
-    def test_cat_file(self):
-        intent = detect_tool_intent("cat /tmp/data.log", self._available())
-        assert intent is not None
-        assert intent.tool_name == "fs.read_file"
-
-    def test_create_skill_request(self):
-        intent = detect_tool_intent(
-            "Create a skill for yourself to convert meeting notes into tasks.",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "skills.create_from_request"
-        assert "meeting notes" in intent.arguments["request"]
-        assert intent.arguments["enable"] is True
-
-    def test_enable_skill_request(self):
-        intent = detect_tool_intent(
-            "Enable skill report-writer",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "skills.enable"
-        assert intent.arguments["skill_id"] == "report-writer"
-
-    def test_audit_skill_request(self):
-        intent = detect_tool_intent(
-            "Can you check the audit log and tell me the problem?",
-            self._available(),
-        )
-        assert intent is not None
-        assert intent.tool_name == "skills.audit"
-        assert intent.arguments["skill_id"] == ""
 
 
 # ===================================================================
@@ -524,28 +258,13 @@ class TestToolAppraisal:
 # ===================================================================
 
 class TestToolLoop:
-    def test_no_tool_intent_returns_empty_trace(self):
-        _, exe = _make_executor()
-        engine = EmotionalEngine()
-        result = run_tool_loop(
-            user_message="How are you?",
-            state=engine.state,
-            person=None,
-            defense_active=False,
-            executor=exe,
-            engine=engine,
-        )
-        assert result.trace.loop_count == 0
-        assert result.trace.proposed_intents == []
-        assert result.tool_context_summary == ""
-
     def test_successful_tool_execution(self, tmp_path):
         _, exe = _make_executor()
         engine = EmotionalEngine()
         f = tmp_path / "data.txt"
         f.write_text("hello world")
         result = run_tool_loop(
-            user_message=f"read file {f}",
+            requested_intent=_intent("fs.read_file", path=str(f)),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -562,7 +281,7 @@ class TestToolLoop:
         _, exe = _make_executor()
         engine = EmotionalEngine()
         result = run_tool_loop(
-            user_message="run command 'printf tool-visible'",
+            requested_intent=_intent("shell.run_command", cmd="printf tool-visible"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -578,7 +297,7 @@ class TestToolLoop:
         _, exe = _make_executor_with_fake_web()
         engine = EmotionalEngine()
         result = run_tool_loop(
-            user_message="what is the latest news about openai?",
+            requested_intent=_intent("web.search", query="what is the latest news about openai"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -595,7 +314,7 @@ class TestToolLoop:
         _, exe = _make_executor_with_fake_web()
         engine = EmotionalEngine()
         result = run_tool_loop(
-            user_message="extract text from https://example.com/article",
+            requested_intent=_intent("web.extract_text", url="https://example.com/article"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -611,7 +330,7 @@ class TestToolLoop:
         engine = EmotionalEngine()
         certainty_before = engine.state.certainty
         result = run_tool_loop(
-            user_message="read file /nonexistent_xyz_42",
+            requested_intent=_intent("fs.read_file", path="/nonexistent_xyz_42"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -627,7 +346,7 @@ class TestToolLoop:
         _, exe = _make_executor()
         engine = EmotionalEngine()
         result = run_tool_loop(
-            user_message="How are you?",
+            requested_intent=_intent("fs.read_file", path="/nonexistent_xyz_42"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -646,7 +365,7 @@ class TestToolLoop:
         engine.state.certainty = 0.1
         person = PersonProfile(person_id="test", trust=0.1)
         result = run_tool_loop(
-            user_message="delete file /tmp/important.dat",
+            requested_intent=_intent("fs.delete_path", path="/tmp/important.dat"),
             state=engine.state,
             person=person,
             defense_active=True,
@@ -664,7 +383,7 @@ class TestToolLoop:
         _, exe = _make_executor()
         engine = EmotionalEngine()
         result = run_tool_loop(
-            user_message="read file /nonexistent_xyz_42",
+            requested_intent=_intent("fs.read_file", path="/nonexistent_xyz_42"),
             state=engine.state,
             person=None,
             defense_active=False,
@@ -683,7 +402,7 @@ class TestToolLoop:
         f = tmp_path / "x.txt"
         f.write_text("data")
         result = run_tool_loop(
-            user_message=f"read file {f}",
+            requested_intent=_intent("fs.read_file", path=str(f)),
             state=engine.state,
             person=None,
             defense_active=False,

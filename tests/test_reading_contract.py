@@ -452,7 +452,7 @@ def test_the_prompt_the_backend_receives_describes_and_never_recommends():
         folded = prompt.casefold()
         assert "you never decide, advise or predict" in folded
         assert "copied verbatim" in folded and "any language or script" in folded
-        for field in ("language", "role_identity", "value_effects", "tone", "event_type", "perception",
+        for field in ("language", "role", "role_identity", "value_effects", "tone", "event_type", "perception",
                       "reply_length", "agent_goal_comparison"):
             assert f'"{field}"' in prompt
         assert ("self_proposals" in prompt) is (label != "reading")
@@ -564,7 +564,7 @@ def test_structured_output_is_requested_when_the_backend_declares_it():
     assert set(schema["required"]) == set(schema["properties"]) >= {
         "language", "perception", "request_components", "tone", "event_type", "reply_length"}
     component = schema["properties"]["request_components"]["items"]
-    assert {"source_span", "role_identity", "autonomy_cost", "value_effects"} <= set(component["required"])
+    assert {"source_span", "role", "autonomy_cost", "value_effects"} <= set(component["required"])
     plain_backend = ReadingBackend(plain)
     assert read_message("Anything new?", backend=plain_backend).provenance == "model"
 
@@ -986,6 +986,21 @@ def test_an_unquoted_claim_spends_the_one_retry_and_a_quoted_answer_is_kept():
     assert frame.perception.hostile_intent == 0 and frame.perception.uncertainty == 0.8
 
 
+def test_a_weak_unquoted_hostility_claim_is_withdrawn_without_a_second_reading():
+    """A second reading is slow; a faint claim that quotes nothing is not worth one."""
+    language, message = HOSTILE_LINES[0]
+    faint = claimed(message, quote=None, hostile_intent=0.3)       # 0.9 * 0.3 is below CLAIM_REREAD
+    backend = ReadingBackend({message: [faint, claimed(message, quote=message)]})
+    frame = reconcile_social_appraisal(message, None, read_message(message, backend=backend))
+    assert len(backend.reading_calls) == 1 and frame.provenance == "model"
+    assert frame.perception.hostile_intent == 0
+    assert frame.perception.evidence[-1].ref == "reading:hostility_unquoted"
+    strong = claimed(message, quote=None, hostile_intent=0.5)      # 0.9 * 0.5 is above it
+    backend = ReadingBackend({message: [strong, claimed(message, quote=message)]})
+    frame = read_message(message, backend=backend)
+    assert len(backend.reading_calls) == 2 and frame.perception.hostile_intent == 0.8
+
+
 def test_withdrawn_hostility_does_not_injure_the_relationship_in_a_turn():
     language, message = HOSTILE_LINES[0]
     outcomes = {}
@@ -1299,22 +1314,28 @@ def test_only_the_unknown_names_are_dropped():
     assert untouched.request_components == frame.request_components
 
 
-def test_a_capability_required_by_a_literal_operation_still_makes_it_infeasible_when_unavailable():
-    # This requirement does not come from the reading: request recognition bound
-    # a literal command. With no shell capability the work cannot be granted.
+def test_a_tool_the_reader_was_not_offered_is_dropped_and_no_wording_binds_one():
+    # Nothing recognises a command by its wording. The reading names a tool; a
+    # tool it was not offered is its mistake, spends the retry and is dropped,
+    # and the request then stands as ordinary work with nothing to execute.
     command = "Run this shell command: echo hello"
-    backend = ReadingBackend({command: [reading(task(command, user_value=1.0, effort=0.0))]})
+    named = reading(task(command, user_value=1.0, effort=0.0, tool=[{
+        "name": "shell.run_command", "arguments": [{"name": "cmd", "value": "echo hello"}], "generate": []}]))
+    backend = ReadingBackend({command: [named, named]})
     pipe = CognitivePipeline(backend)
     try:
         result = pipe.process(command, "reader")
     finally:
         pipe.close()
     item, = result.debug.turn_decision.components
-    assert item.component.requested_tool == "shell.run_command"
-    assert item.component.capability_requirements == ("shell.run_command",)
-    assert not item.component.feasible and item.best_grant is None and item.willingness == 0
-    assert not result.debug.turn_decision.grants
-    assert not [e for e in result.debug.appraisal_frame.perception.evidence if "capability_unknown" in e.ref]
+    assert item.component.requested_tool == "" and item.component.requested_arguments == ()
+    assert item.component.capability_requirements == ()
+    assert item.component.feasible and item.granted
+    assert len(backend.reading_calls) == 2
+    assert "which is not in available_capabilities" in json.loads(backend.reader_inputs[1][1])["previous_answer_rejected"]
+    assert [e.ref for e in result.debug.appraisal_frame.perception.evidence if "capability_unknown" in e.ref] == [
+        "reading:capability_unknown:c0:shell.run_command"]
+    assert result.debug.tool_trace is None
 
 
 # ---------------------------------------------------------------------------

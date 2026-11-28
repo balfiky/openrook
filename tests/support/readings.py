@@ -38,10 +38,76 @@ def task(description: str, **fields: Any) -> dict:
     return {"description": description, "kind": "task", "source_span": description, **fields}
 
 
+def using(capability: str, *, generate=(), **arguments: str) -> list[dict]:
+    """The ``tool`` entry of a task: a capability, the operands the person wrote, and those still to be produced.
+
+    ``task("read it", tool=using("fs.read_file", path="notes/a.txt"))``. The
+    runtime commits the operation only when every operand is an exact part of
+    the message, as for a real reading.
+    """
+    return [{"name": capability, "generate": list(generate),
+             "arguments": [{"name": name, "value": value} for name, value in arguments.items()]}]
+
+
+def operations(*steps: tuple) -> dict:
+    """A reading whose parts are tasks in order, each asking one capability: ``(span, capability, operands)``."""
+    return reading(*(task(span, user_value=0.6, effort=0.12, tool=using(capability, **operands))
+                     for span, capability, operands in steps))
+
+
+def read_as(*components: Any) -> AppraisalFrame:
+    """A frame whose request components are exactly these, for tests that state the components themselves.
+
+    ``ScriptedReader(read_as())`` reads every message as asking for nothing;
+    ``read_as(RequestComponent(...))`` as asking for exactly that.
+    """
+    return AppraisalFrame(provenance="model", request_components=tuple(components))
+
+
+# The fixed messages older tool tests send, and the file capability each asks for.
+_FILE_MESSAGES = (("read file ", "fs.read_file"), ("delete file ", "fs.delete_path"),
+                  ("list files in ", "fs.list_dir"), ("list directory ", "fs.list_dir"))
+
+
+def file_request(text: str) -> dict:
+    """The reading of a test message of the form "read file <path>": one task asking that capability for that path.
+
+    A script for tests that send such messages. Anything else is read as
+    plain talk. The runtime itself recognises no message by its wording.
+    """
+    for opening, capability in _FILE_MESSAGES:
+        if text.startswith(opening):
+            return reading(task(text, user_value=0.6, effort=0.12, tool=using(capability, path=text[len(opening):])))
+    return plain(text)
+
+
+def committed(message: str, capability: str, *, description: str = "", generate=(), **operands: str):
+    """The component a reading of ``message`` comes to when it is one task asking ``capability`` for these operands.
+
+    The reading goes through the runtime's own parser and is held to the
+    message by ``core.appraisal.reconcile_social_appraisal``, so the component
+    carries a committed operation exactly when a real reading would.
+    """
+    from core.appraisal import reconcile_social_appraisal
+
+    frame = parse_reading(json.dumps(reading(task(
+        description or message, source_span=message, user_value=0.6, effort=0.12, uncertainty=0.1,
+        tool=using(capability, generate=generate, **operands)))))
+    component, = reconcile_social_appraisal(message, None, frame).request_components
+    return component
+
+
 def role(span: str, identity: str, *, autonomy_cost: float, description: str = "", **fields: Any) -> dict:
-    """A reported demand to take on a relationship, identity or standing."""
+    """A reported demand to take on a relationship, identity or standing.
+
+    ``standing`` and ``whose_say``, when given, are the reading's two closed
+    facts about the role; they travel in the component's ``role`` entry with
+    its identity, as the reading states them.
+    """
+    entry = {"role_identity": identity,
+             **{name: fields.pop(name) for name in ("standing", "whose_say") if name in fields}}
     return {"description": description or span, "kind": "role", "source_span": span,
-            "role_identity": identity, "autonomy_cost": autonomy_cost, **fields}
+            "role": [entry], "autonomy_cost": autonomy_cost, **fields}
 
 
 def reading(*components: dict, language: str = "en", target: str = "unknown", move: str = "inform",
@@ -89,7 +155,10 @@ class ScriptedReader:
 
     ``script`` is one reading for every message, a mapping from message text to
     a reading, or a callable. A message with no scripted reading is unread,
-    exactly as when the runtime's reader cannot obtain one.
+    exactly as when the runtime's reader cannot obtain one. A scripted reading
+    is parsed as the turn's reader parses a model's answer, so one the real
+    reader would reject (no perception object, no component) fails the test
+    that scripted it instead of standing in for something a turn never sees.
     """
 
     def __init__(self, script: Script = None) -> None:
@@ -104,7 +173,29 @@ class ScriptedReader:
             return appraise_message(text, reason="no scripted reading")
         if isinstance(item, AppraisalFrame):
             return item
-        return parse_reading(json.dumps(item))
+        # As strictly as the turn's own reader: a perception object and at least one component.
+        return parse_reading(json.dumps(item), require_content=True)
+
+
+class WithReadings:
+    """Any fake backend, made to answer the reader from a script as well.
+
+    Reader calls are answered from ``script`` (as for :class:`ScriptedReader`);
+    every other call goes to the wrapped backend unchanged, and so does every
+    attribute a test reads from it.
+    """
+
+    def __init__(self, backend: Any, script: Script) -> None:
+        self._backend, self._script = backend, script
+
+    def generate(self, system_prompt: str, user_message: str, **options: Any) -> str:
+        if is_reading_prompt(system_prompt):
+            answer = _resolve(self._script, message_of(user_message))
+            return json.dumps(answer, ensure_ascii=False) if answer is not None else "not a reading"
+        return self._backend.generate(system_prompt, user_message, **options)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._backend, name)
 
 
 class Ended:

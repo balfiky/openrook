@@ -13,6 +13,7 @@ from openrook_tools.replay_dignity import (
 )
 
 
+@pytest.mark.keyword_reader   # the replay scripts no readings; its tool turns need the test-only reader's routing
 @pytest.mark.parametrize("mode", ["heuristic", "model-neutral"])
 def test_replay_is_deterministic_and_records_pipeline_evidence(mode):
     rows = run_replay(mode)

@@ -6,7 +6,7 @@ import json
 import re
 
 from core.llm_content import reply_text, strip_reasoning
-from core.system_inspection import inspection_kind
+from openrook_tools.roleplay_eval.legacy_routing import inspection_kind
 
 from .api import PublicAPI, Redactor
 # Wording-based cues the harness keeps for nominating criteria without an

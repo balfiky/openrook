@@ -15,9 +15,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from config.loader import configuration_scope, load_config
-from core.dual_process.tool_loop import run_tool_loop
+from core.action_variables import derive_action_variables
+from core.dual_process.tool_loop import ToolLoopResult, run_tool_loop
 from openrook_tools.roleplay_eval.legacy_claims import verify_response_grounding
-from core.types import ToolCapability, ToolCategory, ToolResult
+from core.types import ToolCapability, ToolCategory, ToolIntent, ToolResult, ToolTrace
 from openrook_tools.executor import ToolExecutor
 from openrook_tools.registry import ToolRegistry
 from pipeline import CognitivePipeline
@@ -126,16 +127,22 @@ class FixtureToolRouter:
         self.backend = backend
         self.executor = executor
 
-    def run_tool_loop(self, **kwargs):
-        # Tool selection is part of the fixture, like native model tool calls.
+    def run_tool_loop(self, *, user_message, **kwargs):
+        # Tool selection is part of the fixture, like native model tool calls:
+        # the script's own turn decides which fixture observation is made.
         turn = self.backend.turn if self.backend else None
-        message = (TURNS[turn][0] if turn is not None else
-                   kwargs["user_message"].rsplit("Current user message: ", 1)[-1])
+        message = TURNS[turn][0] if turn is not None else user_message
+        selected = None
         if turn == 3 or (turn is None and "cpu" in message.lower()):
-            message = "run top -bn1"
+            selected = ("shell.run_command", {"cmd": "top -bn1"})
         elif turn in {5, 11} or (turn is None and "memory" in message.lower()):
-            message = "show current memory usage"
-        return run_tool_loop(**{**kwargs, "user_message": message}, executor=self.executor)
+            selected = ("system.memory_usage", {})
+        if selected is None:
+            return ToolLoopResult(trace=ToolTrace(), tool_context_summary="",
+                                  action_variables=derive_action_variables(kwargs["state"]))
+        intent = ToolIntent(tool_name=selected[0], arguments=selected[1], reason="Scripted fixture selection",
+                            expected_outcome="Observe the fixture")
+        return run_tool_loop(requested_intent=intent, executor=self.executor, **kwargs)
 
 
 def fixture_executor(backend: ScriptedBackend | None = None) -> ToolExecutor:

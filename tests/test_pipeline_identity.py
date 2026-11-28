@@ -1,4 +1,8 @@
-"""User memory questions must use stored conversation context, not self history."""
+"""User memory questions must use stored conversation context, not self history.
+
+Whether a message asks about the character's own past and development is the
+reading's to say (``about_self``); no wording is matched. These tests script it.
+"""
 
 import json
 
@@ -7,9 +11,14 @@ import pytest
 from core.types import LongTermEntry, SemanticMemoryEntry, OpenLoop
 from tests.policy_fakes import ExpressionBackend
 from pipeline import CognitivePipeline
-from pipeline.heuristics import _is_identity_question
 from runtime.debug.explain import explain_turn
 from tests._fakes import MockLLMBackend
+from tests.support.readings import ScriptedReader, conversation, reading
+
+
+def about_itself(text):
+    """The reading of a message that asks about the character's own past and development."""
+    return reading(conversation(text), about_self=True)
 
 
 @pytest.mark.parametrize("question", [
@@ -26,9 +35,13 @@ from tests._fakes import MockLLMBackend
 ])
 def test_user_memory_question_generates_with_saved_context_after_restart(tmp_path, question):
     db_path = str(tmp_path / "memory.db")
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend(response="I understand."), db_path=db_path)
+    stated = "I prefer short answers."
+    # The preference is kept because the reading quoted it; nothing recognises it by its wording.
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend(response="I understand."), db_path=db_path,
+                             message_reader=ScriptedReader({stated: reading(conversation(stated), lasting=[
+                                 {"kind": "preference", "span": "short answers"}])}))
     try:
-        pipe.process("I prefer short answers.", user_id="alice")
+        pipe.process(stated, user_id="alice")
         pipe.relationship_memory.upsert_open_loop(OpenLoop(source_person="alice", loop_kind="commitment",
             topic="deadline", description="Agreed deadline", related_key="deadline:1"))
         pipe.process("I'm angry with you about the deadline.", user_id="alice")
@@ -41,7 +54,7 @@ def test_user_memory_question_generates_with_saved_context_after_restart(tmp_pat
     try:
         result = pipe.process(question, user_id="alice")
 
-        assert not _is_identity_question(question)
+        assert "identity_records" not in result.debug.life_history_context
         assert result.response == "You prefer short answers."
         assert result.debug.generation_attempts >= 1
         assert backend.call_count >= 1
@@ -64,16 +77,14 @@ def test_user_memory_question_generates_with_saved_context_after_restart(tmp_pat
 
 
 @pytest.mark.parametrize("question", [
-    "What did you learn?", "What do you learn about yourself?", "What changed?",
-    "What did you change about yourself?", "Did you evolve?", "How have you changed?", "evolve",
-    "What do you remember about yourself?", "What do you believe?", "What are your priorities?",
+    "How have you changed?", "¿Qué has aprendido sobre ti?", "あなたはどう変わりましたか",
 ])
 def test_self_identity_questions_use_frozen_choice_and_grounded_generation(question):
     backend = ExpressionBackend(drafts=("I have no saved changes to describe.",))
-    pipe = CognitivePipeline(llm_backend=backend)
+    pipe = CognitivePipeline(llm_backend=backend, message_reader=ScriptedReader(about_itself))
     try:
         result = pipe.process(question, "alice")
-        assert _is_identity_question(question)
+        assert result.debug.reading["about_self"] is True
         assert result.response == "I have no saved changes to describe."
         prompts = [s for s, _ in backend.calls if s.startswith("Express the committed decision")]
         assert len(prompts) == 1 and "Grounded identity records: {}" in prompts[0]
@@ -97,6 +108,7 @@ def test_identity_reply_reports_saved_beliefs_and_priority_changes_plainly():
                 "reason": "Learning made independence more relevant.",
             }],
         },
+        message_reader=ScriptedReader(about_itself),
     )
     try:
         result = pipe.process("What do you believe?", user_id="alice")
@@ -157,7 +169,8 @@ def test_identity_generation_reports_only_the_context_actually_supplied(tmp_path
     backend = ExpressionBackend(drafts=("Actual saved belief.",))
     pipe = CognitivePipeline(llm_backend=backend, db_path=str(tmp_path / "identity.db"),
         life_history_provider=lambda: {"beliefs": [{"statement": "Superseded retrieved belief."}]},
-        life_history_snapshot_provider=lambda: {"beliefs": [{"statement": "Actual saved belief."}]})
+        life_history_snapshot_provider=lambda: {"beliefs": [{"statement": "Actual saved belief."}]},
+        message_reader=ScriptedReader(about_itself))
     try:
         pipe.semantic_memory.store(SemanticMemoryEntry(summary="You prefer bullet points.", source_person="alice", salience=1.0))
         pipe.long_term.store(LongTermEntry(summary="An earlier discussion.", source_person="alice", confidence=1.0))
@@ -180,6 +193,7 @@ def test_identity_reply_reports_drive_only_change_when_user_asks_for_drives():
         life_history_snapshot_provider=lambda: {
             "drives": [{"name": "curiosity", "value": 0.7, "baseline": 0.5}],
         },
+        message_reader=ScriptedReader(about_itself),
     )
     try:
         result = pipe.process("What are your drives?", user_id="alice")
@@ -197,7 +211,8 @@ def test_identity_generation_distinguishes_unavailable_records_from_empty_record
     def unavailable():
         raise OSError("unavailable")
     backend = ExpressionBackend(drafts=("I could not read the saved record.",))
-    pipe = CognitivePipeline(llm_backend=backend, life_history_snapshot_provider=unavailable)
+    pipe = CognitivePipeline(llm_backend=backend, life_history_snapshot_provider=unavailable,
+                             message_reader=ScriptedReader(about_itself))
     try:
         result = pipe.process("What changed?", "alice")
         assert result.response == "I could not read the saved record."

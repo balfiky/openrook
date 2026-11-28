@@ -20,7 +20,22 @@ import re
 from config.loader import get_config
 from core.appraisal import appraise_message_llm, unquoted_claims
 from core.inference import call_telemetry
-from core.request_actions import has_learning_intent
+from core.request_routing import LEARNING, ComponentReport, ToolRequest
+from openrook_tools.roleplay_eval.legacy_routing import (
+    _is_identity_question,
+    _relationship_topic_hint,
+    attach_followup_context,
+    detect_artifact_write_request,
+    detect_capability_gap,
+    detect_tool_intent,
+    ground_file_components,
+    ground_shell_components,
+    has_learning_intent,
+    inspection_intent,
+    inspection_kind,
+    is_continue_request,
+    is_status_request,
+)
 from openrook_tools.roleplay_eval.legacy_social import (
     HOSTILE_MARKERS as _HOSTILE_MARKERS,
     INSULT_MARKERS,
@@ -30,7 +45,6 @@ from openrook_tools.roleplay_eval.legacy_social import (
     read_social_signals,
     social_text,
 )
-from core.system_inspection import inspection_kind
 from core.types import AppraisalFrame, DetectedEmotion
 from core.willingness import Evidence, Perception, RequestComponent
 
@@ -532,8 +546,8 @@ def keyword_reconcile(
 ) -> AppraisalFrame:
     """The former reconciliation: keyword cues merged into, and overruling, a reading.
 
-    Literal file/shell operand grounding is not repeated here; the runtime's
-    ``core.appraisal.reconcile_social_appraisal`` applies it once afterwards.
+    Literal file/shell operand grounding is not part of it; :func:`keyword_route`
+    scripts what the former runtime recognised by wording.
     """
     fallback, requests = observe(text, recent_context=recent_context)
     if base.provenance != "model" or base.perception == Perception():
@@ -588,7 +602,158 @@ def reconcile_social_appraisal(
     from core.appraisal import reconcile_social_appraisal as runtime_reconcile
 
     merged = keyword_reconcile(text, detected, base, recent_context=recent_context)
-    return runtime_reconcile(text, detected, merged, recent_context=recent_context)
+    return keyword_ground(text, runtime_reconcile(text, detected, merged, recent_context=recent_context))
+
+
+# ---------------------------------------------------------------------------
+# Former request and tool routing: literal operands, host metrics, tool intent
+# rules, plan follow-ups, learning and generated files
+# ---------------------------------------------------------------------------
+
+_URL = re.compile(r"https?://[^\s<>\]\)\"']+", re.I)
+
+
+def keyword_ground(text: str, frame: AppraisalFrame) -> AppraisalFrame:
+    """Former literal file and shell operand grounding, which also ran on an unread message."""
+    components = ground_shell_components(text, ground_file_components(text, frame.request_components))
+    whole = " ".join((text or "").split())
+    if any(c.requested_tool and " ".join(c.source_span.split()) == whole for c in components):
+        # An unread message bound as one literal operation is that operation,
+        # not a second, uninterpreted copy of the same words.
+        remaining = tuple(c for c in components if not (
+            c.kind == "conversation" and "reading:unavailable" in c.evidence_refs and not c.requested_tool))
+        if len(remaining) != len(components):
+            components = tuple(replace(c, id=f"c{i}") for i, c in enumerate(remaining))
+    return replace(frame, request_components=components)
+
+
+def _stated(component: RequestComponent, text: str) -> ComponentReport | None:
+    """What a component bound by the former operand grounding states, as a reading would state it."""
+    if not component.requested_tool:
+        return None
+    return ComponentReport(tools=(ToolRequest(component.requested_tool, tuple(component.requested_arguments)),))
+
+
+def keyword_route(pipeline, text: str, frame: AppraisalFrame, recent_context) -> AppraisalFrame:
+    """Script into the reading what the former runtime recognised by wording.
+
+    The runtime no longer routes by wording: a turn takes the capability a
+    task asks for, and its operands, from the reading. For older tests this
+    states, as a reading would, what the former keyword routing recognised:
+    host-metric questions, tool intent rules and their follow-ups, a running
+    plan's "continue" and "status", learning requests, generated files, work
+    that no registered tool does, and what a message states for later.
+
+    It obeys the reading's contract. What it recognises is reported beside
+    the component (``component_reports``) and held to the message by the
+    runtime exactly as a model's reading is: an operand the message does not
+    contain is not committed, and no capability is named that the former
+    rules did not recognise.
+    """
+    executor = pipeline._tool_executor
+    available = set(executor.registry.names()) if executor is not None else set()
+    history = list(recent_context or [])
+    # What a model's reading reported itself stands; the former rules add only where it said nothing.
+    reports: dict[str, ComponentReport] = dict(frame.component_reports)
+    components = []
+    for component in keyword_ground(text, frame).request_components:
+        # The former grounding bound operands on the component itself. A reading reports them instead.
+        stated = _stated(component, text)
+        if stated is not None:
+            reports.setdefault(component.id, stated)
+            component = replace(component, requested_tool="", requested_arguments=())
+        components.append(component)
+    kind = inspection_kind(text, history)
+    if kind:
+        matching = [i for i, c in enumerate(components) if inspection_kind(c.description, history) == kind]
+        if matching:
+            for i in matching:
+                components[i] = replace(components[i], kind="task")
+        elif len(components) < 8:
+            components.append(RequestComponent("inspection", text, effort=0.12, user_value=0.6, source_span=text,
+                                               evidence_refs=("request:inspection",)))
+    session = getattr(pipeline, "_component_executor", None) is not None
+    if session and not pipeline._research_mode and has_learning_intent(text):
+        urls = [match.group(0).rstrip(".,;:!?)]}") for match in _URL.finditer(text)]
+        components = [RequestComponent(
+            "learning", text, user_value=0.6, effort=min(0.8, 0.12 + len(text) / 1600), source_span=text,
+            capability_requirements=(LEARNING,))]
+        reports = {"learning": ComponentReport(tools=(ToolRequest(
+            LEARNING, (("url", urls[0]),) if urls else ()),))}
+    if not components and executor is not None:
+        recognized = detect_tool_intent(text, available)
+        if recognized is not None:
+            components = [RequestComponent("tool-request", text, effort=0.2, user_value=0.6, source_span=text,
+                                           capability_requirements=(recognized.tool_name,),
+                                           evidence_refs=("heuristic:tool-request",))]
+    plan = pipeline._active_task_plan
+    if plan is not None and not plan.is_terminal:
+        if is_continue_request(text):
+            components = [RequestComponent(
+                f"plan:{plan.id}", plan.goal, effort=min(1.0, 0.2 * (len(plan.steps) - plan.steps_completed)),
+                user_value=0.6, uncertainty=0.25, source_span=text)]
+            reports = {components[0].id: ComponentReport(plan="continue")}
+        elif is_status_request(text):
+            components = [RequestComponent(f"plan-status:{plan.id}", text, kind="conversation", effort=0.05,
+                                           source_span=text)]
+            reports = {components[0].id: ComponentReport(plan="status")}
+    routed = []
+    for component in components:
+        if executor is None or component.kind != "task" or component.id in reports:
+            routed.append(component)
+            continue
+        request = component.description
+        artifact = detect_artifact_write_request(request) if "fs.write_file" in available else None
+        metric = inspection_kind(request, history)
+        if artifact is not None:
+            reports[component.id] = ComponentReport(tools=(ToolRequest(
+                "fs.write_file", (("path", artifact.path),), ("content",)),))
+        elif metric:
+            intent = inspection_intent(metric, available)
+            if intent is not None:
+                # A host metric is asked for by naming its capability. A value the former rule
+                # supplied itself is not the person's, so it is left to be produced.
+                component = replace(component, capability_requirements=(intent.tool_name,))
+                supplied = tuple(key for key, value in intent.arguments.items() if str(value) not in text)
+                written = tuple((key, str(value)) for key, value in intent.arguments.items() if key not in supplied)
+                if written or supplied:
+                    reports[component.id] = ComponentReport(tools=(ToolRequest(intent.tool_name, written, supplied),))
+        else:
+            intent = detect_tool_intent(attach_followup_context(request, history), available)
+            if intent is not None:
+                operands = tuple((key, value) for key, value in intent.arguments.items() if isinstance(value, str))
+                produced = tuple(key for key, value in intent.arguments.items() if not isinstance(value, str))
+                reports[component.id] = ComponentReport(tools=(ToolRequest(intent.tool_name, operands, produced),))
+            else:
+                gap = detect_capability_gap(request, available)
+                if gap is not None:
+                    reports[component.id] = ComponentReport(unavailable=str(gap["gap_type"]).replace("_", " "))
+        routed.append(component)
+    # Former context selection: which messages ask about the character itself, and the topic hint.
+    hint = _relationship_topic_hint(text)
+    return replace(frame, request_components=tuple(routed), component_reports=reports,
+                   about_self=_is_identity_question(text), topics=(hint,) if hint else (),
+                   lasting=_lasting(text))
+
+
+# What the former memory patterns kept as a preference or a decision, stated as a reading states it.
+_PREFERENCE_PATTERNS = (
+    re.compile(r"\bI (?:prefer|like|love|want)\s+(.+)", re.IGNORECASE),
+    re.compile(r"\bmy preference is\s+(.+)", re.IGNORECASE),
+)
+_DECISION_PATTERNS = (
+    re.compile(r"\bwe decided(?: to)?\s+(.+)", re.IGNORECASE),
+    re.compile(r"\blet's\s+(.+)", re.IGNORECASE),
+)
+
+
+def _lasting(text: str) -> tuple[tuple[str, str], ...]:
+    stated = []
+    for kind, patterns in (("preference", _PREFERENCE_PATTERNS), ("decision", _DECISION_PATTERNS)):
+        match = next((found for found in (pattern.search(text) for pattern in patterns) if found), None)
+        if match is not None and match.group(1).strip():
+            stated.append((kind, " ".join(match.group(1).split())))
+    return tuple(stated)
 
 
 # ---------------------------------------------------------------------------
@@ -846,7 +1011,7 @@ class KeywordReader:
             # message stands in as the quotation these cues refer to.
             base = replace(base, perception=replace(base.perception, evidence=(
                 *base.perception.evidence, Evidence("cue:message", text, 0.5))))
-        return base
+        return keyword_route(self.pipeline, text, base, recent_context)
 
 
 def install(monkeypatch) -> None:

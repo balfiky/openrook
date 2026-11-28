@@ -110,8 +110,8 @@ Code entry point: `pipeline/core.py::CognitivePipeline.process`.
 
 | Stage | Work | Model calls |
 |---|---|---|
-| `_stage_pre_pass` | The model's reading of the message, context retrieval, relationship integration and pure utility choice; persist grants before execution | 1 for the reading (2 with its one retry) |
-| `_stage_deliberation` | Execute granted components through the shared executor, operator gates and scoped receipts | Conditional tool/artifact/learning inference |
+| `_stage_pre_pass` | The model's reading of the message, including what each task asks a capability for; context retrieval, relationship integration and pure utility choice; persist grants before execution | 1 for the reading (2 with its one retry) |
+| `_stage_deliberation` | Carry out granted components as the reading reported them: a committed operation directly, a plan continuation, learning intake, a generated file, or model tool selection for an open request; shared executor, operator gates and scoped receipts | None for a committed operation or a task that names no capability; otherwise tool selection, a file draft or a learning digest |
 | `_stage_generate` | Express the committed continuous stance and grants; chosen silence skips generation | 0–1 |
 | `_stage_self_check` | Structural checks and the model's review of each draft against the frozen decision; severity ranking; bounded rewrites, quoted-span excision and one protected final delivery attempt | 1 for the review (up to 6), plus 0–4 rewrites |
 | `_stage_post_process` | Actual input/decision/delivery records, resource drain, bounded trust update, optional ordinary self-development and debug | 0–1 |
@@ -123,9 +123,20 @@ uses the primary deadline and has its own allowance of two calls, recorded with
 in force. It has its own output-token limit (default 4096, doubled for the
 retry after a cut-off answer; `llm_reading_max_output_tokens` overrides it), and
 only a whole answer is used: a cut-off one is never read in part.
-Social meaning comes only from it and has no local substitute;
-the wording-based request routing and context selection that remain are listed
-in the contract.
+Social meaning comes only from it and has no local substitute. So does what is
+asked: the reading names the capability a task asks for and gives the operands
+the person wrote, each held to the person's own characters as a whole written
+unit inside the part of the message that asks for it
+([request routing](development/request-routing.md)). Long text is given by its
+first and last words and taken from the message itself. Work that no offered
+capability does is reported as unavailable: it cannot be granted, and it is kept
+as a capability gap. For a role the reading also answers two closed questions,
+where taking it on would put the character with the speaker and whose decision
+would then settle what it does, and those set a floor under the role's autonomy
+cost until the decision prices them itself
+([reading contract](development/reading-contract.md)). No turn recognises a
+request, a tool, a plan follow-up or a context by its wording, and nothing a
+turn keeps as memory is picked by wording either.
 Every draft that could be delivered is reviewed by the model against the frozen
 decision ([review contract](development/review-contract.md)). The review is
 required too: primary deadline, no cooldown, and its own allowance recorded with
@@ -137,9 +148,20 @@ that does not answer costs a turn one timeout: eight request timeouts bound a
 turn without tools, sixteen at the maximum of tool selections. Research keeps one counted review call
 and makes it only when the decision constrains the reply or a tool ran or was refused.
 The conversational base budget is five further inference calls, including optional work.
-Each granted atomic task also receives one protected primary tool selection;
-these calls are recorded with `primary_tool: true`, at most eight extra per turn.
-Literal file operations execute their bound operands without model selection.
+A granted task that names a capability without a committed operation receives
+one protected primary tool selection; these calls are recorded with
+`primary_tool: true`, at most eight extra per turn. A task that asked for text
+to be written to a file spends that call on the draft of the text instead
+(`artifact_draft`). The selecting model is offered the capabilities the task
+names and no other, is given the task, the recent turns and this turn's receipts
+as data, and the grant check denies any other tool, any change to an operand
+the person wrote for that tool, and any value nobody wrote for an argument the
+reading got wrong. Inside the stages of a turn an execution without a scope is
+denied. A committed operation runs
+its operands without model selection, and a task that names no capability is
+work done in the reply: it reaches no tool selection at all. A tool-calling
+request the backend fails as unsupported or at the transport level is not
+repeated in the turn and pauses selection for ten turns.
 A routine turn needs three calls: the reading, one expression and its review.
 A finding leads to one reviewed rewrite, two for a critical finding or uniformly
 stale drafts; a rewrite costs one base call, and its review comes out of the
@@ -203,12 +225,14 @@ by injury/grievance. Targeted hostile evidence reduces it. Task reliability is
 separate evidence; neither praise nor an apology invents it. Updates are bounded,
 applied once per turn and persisted without replaying past damage.
 
-Direct host metric requests retain deterministic routing (pending sub-phase 1c);
-a CPU question uses the read-only `system.cpu_usage` tool before the shell. Their
-grants, shell allowlist and operator autonomy are checked before execution. Verified readings
-and unavailability reasons enter expression as facts, without a fixed first-person
-reply. Conversational learning, including a pending paste, also requires a fresh
-grant before ingestion. Its receipt cannot ground unrelated external actions.
+A question about the host is an ordinary task whose reading names the
+system-information capability it asks for (`system.cpu_usage`,
+`system.memory_usage`, `system.disk_usage`); a follow-up is resolved by the reader
+from the recent turns. Grants, the shell allowlist and operator autonomy are
+checked before execution. Verified readings and unavailability reasons enter
+expression as facts, without a fixed first-person reply. Conversational learning
+is a task that names `learning.intake`; it requires a grant in the turn that
+carries the material, and its receipt cannot ground unrelated external actions.
 
 `pipeline/delivery.py::DeliveryGate` is the single expression delivery exit.
 Initial drafts, rewrites, excision remainders and protected fresh attempts enter
@@ -411,7 +435,7 @@ Supported v1 inputs:
 | Pasted text | `POST /admin/life/experiences/text` |
 | Browser-uploaded text/Markdown file | `POST /admin/life/experiences/upload` |
 | Advanced local text/Markdown file | `POST /admin/life/experiences/file` |
-| Explicit conversation learning URL/text | `runtime.learning_intake` via `SessionManager` |
+| Explicit conversation learning URL/text | A task whose reading names `learning.intake`; `runtime.learning_intake` via `SessionManager`, inside that task's grant |
 | Salient session autobiography | `CognitivePipeline.end_session` when `autobiographical_learning` is enabled |
 
 Browser uploads are the normal product path. Local file intake is restricted to
@@ -657,20 +681,20 @@ generator as bounded tool context. The shell tool is a separate high-risk
 opt-in and runs through the local shell, so pipes and other normal shell syntax
 work when the operator deliberately enables it.
 
-Tool intent routing (step 15) is two-tier. When external tools are enabled and
-an OpenAI-compatible endpoint is configured (`llm_base_url` + `llm_model`), a `NativeToolCallRunner`
-(`openrook_tools/native_orchestrator.py`) is attached and routing happens through
-real model tool-calls — the model sees the registered tool schemas and picks.
-The fallback is a declarative heuristic rule table: `INTENT_RULES` in
-`core/dual_process/tool_loop.py`, an ordered tuple of named regex rules
-matched first-hit-wins (order encodes precedence). It serves backends with no
-tool-call API (the Codex CLI backend), runtimes with no runner attached, and
-offline tests. To extend it, insert an `IntentRule` at the right precedence
-position and add a matching example utterance to `RULE_EXAMPLES` in
-`tests/test_intent_rules.py` — the coverage test fails for any rule without a
-reachable example, which also catches rules shadowed by earlier ones.
-Both selection paths use the same executor and policy boundary; native routing
-does not bypass the external-tools switch, workspace policy, or shell opt-in.
+Which tool a request asks for is reported by the reading of the message
+([request routing](development/request-routing.md)). The reader is offered every
+registered capability with a one-line purpose and its argument names. A task
+whose named capability has every required operand as an exact part of what the
+person wrote is a committed operation and runs without any model choosing a
+tool. A task that names a capability but leaves operands open goes to model tool
+selection: when external tools are enabled and an OpenAI-compatible endpoint is
+configured (`llm_base_url` + `llm_model`), a `NativeToolCallRunner`
+(`openrook_tools/native_orchestrator.py`) is attached, and the model sees the
+registered tool schemas and picks. With no runner attached (the Codex CLI
+backend) such a task runs nothing, and the reply is told so. There is no keyword
+rule table and no heuristic fallback: when the model selects no tool, none runs.
+Every path uses the same executor and policy boundary; none bypasses the
+external-tools switch, workspace policy, or shell opt-in.
 
 Every selected tool must be registered and pass its execution policy.
 Filesystem paths outside `tools_workspace` are refused; network tools retain

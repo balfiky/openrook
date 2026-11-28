@@ -222,21 +222,24 @@ def test_interleaved_chats_share_relationship_history_without_reusing_turn_ids(t
 
 
 def test_actual_missing_capability_cannot_receive_an_execution_grant():
-    # The requirement here is the runtime's own: request recognition bound a
-    # literal shell command, and this pipeline has no shell capability at all.
+    # This pipeline has no shell capability at all. The reading says so itself: the work needs
+    # something outside the reply that nothing offered does. Such work cannot be granted, however
+    # much the person wants it, and nothing is executed or invented for it.
     command = "Run this shell command: echo done"
     backend = ExpressionBackend(appraisal={"primary_target":"shared_problem", "social_move":"request",
-        "request_components":[{"description":command, "kind":"task", "source_span":command,
-                               "user_value":1, "effort":0}]})
+        "perception":{}, "request_components":[{"description":command, "kind":"task", "source_span":command,
+                               "user_value":1, "effort":0, "unavailable":["running a shell command"]}]})
     pipe = CognitivePipeline(backend, runtime_config=SimpleNamespace(appraisal_use_llm=True))
     try:
         result = pipe.process(command)
         component = result.debug.turn_decision.components[0]
-        assert component.component.capability_requirements == ("shell.run_command",)
+        assert component.component.kind == "task" and component.component.capability_requirements == ()
         assert not component.component.feasible
         assert component.best_grant is None
         assert not result.debug.turn_decision.grants
         assert not (result.debug.tool_trace and result.debug.tool_trace.executed_results)
+        assert result.debug.appraisal_frame.unavailable == (("c0", "running a shell command"),)
+        assert [gap["gap_type"] for gap in pipe._capability_gaps.values()] == ["running a shell command"]
     finally:
         pipe.close()
 

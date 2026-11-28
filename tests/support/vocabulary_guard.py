@@ -92,7 +92,7 @@ def data_model_names() -> set[str]:
             for value in schema:
                 walk(value)
 
-    walk(reading_schema(proposals=True))
+    walk(reading_schema(proposals=True, plan=True))
     return names
 
 

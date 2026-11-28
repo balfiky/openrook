@@ -375,6 +375,24 @@ class AppraisalFrame:
     # ended (finish reason, completion tokens, whether it was cut off) and what
     # became of it. Empty for a frame no model call produced.
     reading_attempts: tuple[dict[str, Any], ...] = ()
+    # What the reading reports about requests (docs/development/request-routing.md).
+    # ``component_reports`` is the reading's own word, by component id, until it
+    # has been held to the message (``core.appraisal.reconcile_social_appraisal``);
+    # the tool part then lives on the components, and what stands of the rest is
+    # in ``reproductions`` and ``plan_relations`` as (component id, value) pairs.
+    component_reports: dict[str, Any] = field(default_factory=dict)
+    # For each role the reading reported: its two closed facts (standing, whose
+    # say), the reader's own autonomy cost, the floor those facts give and the
+    # cost decided on (``core.appraisal.RoleFacts``), by component id.
+    role_facts: dict[str, Any] = field(default_factory=dict)
+    reproductions: tuple[tuple[str, str], ...] = ()     # text asked to be given back word for word
+    plan_relations: tuple[tuple[str, str], ...] = ()    # continue | status, for the running plan
+    unavailable: tuple[tuple[str, str], ...] = ()       # what a task needs that nothing offered does
+    # What the message states that is meant to last, as the reading quotes it:
+    # (preference | decision, verbatim span). Memory keeps each as a typed record.
+    lasting: tuple[tuple[str, str], ...] = ()
+    about_self: bool = False                            # asks about the character's own past and development
+    topics: tuple[str, ...] = ()                        # up to three spans of the message naming its subject
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -406,6 +424,13 @@ class AppraisalFrame:
             "provenance": self.provenance,
             "language": self.language,
             "reply_length": self.reply_length,
+            "reproductions": [list(pair) for pair in self.reproductions],
+            "plan_relations": [list(pair) for pair in self.plan_relations],
+            "unavailable": [list(pair) for pair in self.unavailable],
+            "role_facts": {key: facts.to_dict() for key, facts in self.role_facts.items()},
+            "lasting": [list(pair) for pair in self.lasting],
+            "about_self": self.about_self,
+            "topics": list(self.topics),
         }
 
 
@@ -566,8 +591,6 @@ class PipelineContext:
     operator_execution: dict[str, Any] = field(default_factory=dict)
     # Historical choices explain prior declines; they are not execution receipts.
     prior_action_decisions: list[dict[str, Any]] = field(default_factory=list)
-    # Resolved host-metric referent, retained through expression and correction.
-    inspection_kind: str = ""
     # Self-action layer: actions OpenRook invoked on its own behalf this turn.
     self_intents: list["SelfIntent"] = field(default_factory=list)
     # Runtime learning receipt from the prior completed intake, if any.

@@ -198,7 +198,14 @@ async def test_native_requests_replay_through_the_real_runner_without_external_c
     class NativeBackend(ResearchBackend):
         def generate(self, system_prompt, user_message):
             if '"primary_target"' in system_prompt:
-                return '{"primary_target":"shared_problem","social_move":"request"}'
+                # The reading names the capability the request asks for and leaves its
+                # operands to be produced, so the model is asked to select the tool call.
+                return json.dumps({
+                    "primary_target": "shared_problem", "social_move": "request", "perception": {},
+                    "request_components": [{
+                        "description": "Write a note to note.md", "kind": "task",
+                        "source_span": "Write a note to note.md", "user_value": 0.9, "effort": 0.05,
+                        "tool": [{"name": "fs.write_file", "arguments": [], "generate": ["path", "content"]}]}]})
             return super().generate(system_prompt, user_message)
 
     runtime = SessionManager(
@@ -251,11 +258,6 @@ def test_native_and_tool_execution_never_fall_back_after_resource_stop(tmp_path,
     )
     runner = NativeToolCallRunner(
         executor=executor, base_url="recorded", model="fixture", client=client
-    )
-    monkeypatch.setattr(
-        runner,
-        "_heuristic_fallback",
-        lambda **kwargs: pytest.fail("Resource stops cannot trigger fallback actions"),
     )
     engine = EmotionalEngine()
     with pytest.raises(type(error)):
@@ -370,7 +372,8 @@ async def test_generated_artifact_preserves_resource_stops_and_ordinary_failure(
 
     backend = ArtifactBackend(error, "Generate one complete file")
     executor = ToolExecutor(ToolRegistry())
-    executor.registry.register(ToolCapability("fs.write_file", "Write", ToolCategory.WRITE, {}))
+    executor.registry.register(ToolCapability("fs.write_file", "Write", ToolCategory.WRITE, {
+        "path": {"type": "string", "required": True}, "content": {"type": "string", "required": True}}))
     executor.register_handler(
         "fs.write_file", lambda arguments: pytest.fail("Failed drafts must not write files")
     )

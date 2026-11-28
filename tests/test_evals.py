@@ -425,6 +425,7 @@ class TestIntegrationScenarios:
         result = run_scenario(scenario)
         assert result.passed, _failures(result)
 
+    @pytest.mark.keyword_reader   # the mock backend scripts no reading; the test-only reader scripts the request
     def test_tool_read_file(self, tmp_path):
         """Tool read with a real file on disk."""
         f = tmp_path / "test_eval.txt"
@@ -449,6 +450,7 @@ class TestIntegrationScenarios:
         assert result.passed, _failures(result)
         assert result.metrics.tool_call_count >= 1
 
+    @pytest.mark.keyword_reader   # the mock backend scripts no reading; the test-only reader scripts the request
     def test_tool_list_dir(self, tmp_path):
         scenario = EvalScenario(
             id="integration_list",
@@ -571,6 +573,7 @@ class TestLifeAndSemanticScenarios:
         result = run_scenario(scenario)
         assert result.passed, _failures(result)
 
+    @pytest.mark.keyword_reader   # what is kept as a preference is what the reading quoted; the mock scripts none
     def test_semantic_preference_scenario(self):
         scenario = next(s for s in semantic_memory_scenarios() if s.id == "semantic_preference_written_and_retrieved")
         result = run_scenario(scenario)
@@ -618,11 +621,14 @@ class TestRunnerBatch:
     def test_run_by_character_independence_tag(self):
         report = run_by_tag(all_scenarios(), "character_independence")
         assert report.total_scenarios == 6
+        # Every one passes, the skill want included: a repeated capability gap comes from
+        # the reading, which reports work that nothing offered can do (``unavailable``).
         assert report.failed_scenarios == 0, [
             (result.scenario_id, _failures(result))
             for result in report.results if not result.passed
         ]
 
+    @pytest.mark.keyword_reader   # preferences and decisions are kept when the reading quotes them
     def test_run_by_semantic_memory_tag(self):
         report = run_by_tag(all_scenarios(), "semantic_memory")
         assert report.total_scenarios == 6
@@ -649,6 +655,7 @@ class TestMetricsCollection:
         # Each turn = at least 1 LLM call (generator)
         assert result.metrics.llm_call_count >= 2
 
+    @pytest.mark.keyword_reader   # the mock backend scripts no reading; the test-only reader scripts the request
     def test_tool_count(self, tmp_path):
         f = tmp_path / "metric_test.txt"
         f.write_text("data")

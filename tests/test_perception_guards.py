@@ -6,12 +6,15 @@ by behaviour:
 * the perception modules and the perception stage hold no vocabulary: no word
   lists, no word-matching patterns however they are bound, no probing of text
   with fixed wording, and no use of the deleted ``core.social``;
-* every function the user's text reaches during the pre-pass and the decision
-  it commits, whether as a string, inside the turn state or inside a request
-  component, is checked strictly: it is free of vocabulary, or named below as
-  wording-based code still to be removed, or holds only the runtime's own
-  labels, each pinned. A literal tested against what a person wrote counts
-  whatever the literal is, and so does a lookup table of any size;
+* every function the user's text reaches during the pre-pass, the decision it
+  commits, the carrying out of what was granted (routing, tool selection,
+  plan continuation, learning intake) and what the turn records after delivery
+  (memory, self observations, the episode handed on to development), whether
+  as a string, inside the turn state, inside a request component or as an
+  operand, is checked strictly: it is free of vocabulary, or named below with
+  its reason, or holds only the runtime's own labels, each pinned. A literal
+  tested against what a person wrote counts whatever the literal is, and so
+  does a lookup table of any size;
 * runtime code never imports test code (the keyword reader is test-only);
 * none of the evaluation scenarios' wording appears in the perception path
   (ground rule 1 of ``docs/development/goal-fix-plan.md``).
@@ -19,6 +22,27 @@ by behaviour:
 Each detector is proved against planted violations at the end of this file.
 ``tests/test_reply_guards.py`` widens these guards to the reply path and the
 scenario-wording guard to every runtime module.
+
+What the trace covers, exactly
+------------------------------
+The traced stages are ``_stage_pre_pass``, ``_stage_deliberation`` and
+``_stage_post_process``: reading the message, holding the reading to the text,
+committing the decision, carrying out what it granted up to the point where a
+granted operation is handed to its executor, and everything the turn records
+once the reply is delivered. Together with the reply guard's stages
+(``_stage_generate``, ``_stage_self_check``) that is every stage of a turn.
+
+The other entry points take no message from a person. ``process_autonomous``
+is given the character's own purpose and its own earlier decision, and
+``process_proactive`` its own trigger or the goal of its running plan; neither
+is traced here.
+
+Not traced: what a granted operation does once it has been handed over. A
+tool's own handler examines the form of the operand it was given (a path
+against the workspace, a command against the operator's allowlist, an address
+against the network policy), and the life-history store digests granted
+learning material; that is the execution of granted work, not routing. The
+turns below stop there by using handlers and a store defined in this file.
 """
 
 from __future__ import annotations
@@ -36,8 +60,9 @@ import warnings
 import pytest
 
 import pipeline.core as pipeline_core
-from core.types import TaskPlan, TaskStep
+from core.types import TaskPlan, TaskStep, ToolCapability, ToolCategory, ToolResult
 from openrook_tools.executor import ToolExecutor
+from openrook_tools.native_orchestrator import NativeToolCallRunner
 from openrook_tools.registry import ToolRegistry
 from openrook_tools.roleplay_eval import scenarios
 from pipeline import CognitivePipeline
@@ -45,8 +70,9 @@ from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 from tests.support import vocabulary_guard as guard
 from tests.support.readings import (
-    ReadingBackend, ScriptedReader, conversation, hostility, reading, role, task,
+    ReadingBackend, ScriptedReader, conversation, hostility, reading, role, task, using,
 )
+from tests.test_native_orchestrator import FakeNativeClient, _response, _tool_call
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,6 +80,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PERCEPTION_MODULES = ("core/perception.py", "core/appraisal.py", "core/contagion.py")
 # The pipeline's perception stage.
 PERCEPTION_STAGE = (pipeline_core.default_message_reader, CognitivePipeline._stage_pre_pass)
+# The stages of a turn traced here: perception and the carrying out of grants.
+TRACED_STAGES = ("_stage_pre_pass", "_stage_deliberation", "_stage_post_process")
+# Modules that hold a reading to the message and route requests. They hold no vocabulary either.
+ROUTING_MODULES = ("core/request_routing.py", "core/task_planning.py", "core/artifact_writer.py",
+                   "core/system_inspection.py", "core/request_actions.py", "pipeline/heuristics.py")
 # Modules on the perception path that may not reach core.social at all.
 NO_SOCIAL_IMPORT = (*PERCEPTION_MODULES, "core/self_intent.py", "pipeline/core.py")
 
@@ -62,34 +93,45 @@ RUNTIME_PACKAGES = ("core", "pipeline", "runtime", "interface", "config", "openr
 # reach the keyword reader either; nothing else may import tests at all.
 EVAL_FAKES_IMPORTERS = {"evals/backends.py", "evals/runner.py"}
 
-# Wording-based code the user's text still reaches during the pre-pass and the
-# decision. None of it supplies social meaning. Each entry names what it does and where
-# it goes; the list must match the code exactly, so adding a keyword helper
-# fails here and removing one means deleting its line.
+# Wording-based code the user's text still reaches while a turn perceives,
+# decides and routes. None of it supplies social meaning, and none of it says
+# what a message asks for: request and tool routing left this list in sub-phase
+# 1c. Each entry names what it does and where it goes; the list must match the
+# code exactly, so adding a keyword helper fails here and removing one means
+# deleting its line.
 PENDING_WORDING = {
-    "core/system_inspection.py::inspection_kind": "1c routing: host-metric questions",
-    "core/dual_process/tool_loop.py::match_intent_rule": "1c routing: tool intent rules (detect_tool_intent)",
-    "core/task_planning.py::is_continue_request": "1c routing: continue a running plan",
-    "core/task_planning.py::is_status_request": "1c routing: status of a running plan",
-    "core/request_actions.py::has_learning_intent": "1c routing: learning requests",
-    "core/request_actions.py::file_requests": "1c routing: literal file operands",
-    "core/request_actions.py::ground_file_components": (
-        "1c routing: literal file operands. Rewrites the capability requirements of a task its English verb "
-        "patterns match, and turns a task whose description starts with a reporting verb into conversation"),
-    "core/request_actions.py::ground_shell_components": (
-        "1c routing: literal shell operands. Rewrites the capability requirements of a task its English verb "
-        "pattern matches"),
-    "pipeline/heuristics.py::_is_identity_question": "1c context selection: identity records",
-    "pipeline/heuristics.py::_relationship_topic_hint": "1c context selection: relationship topic",
-    "core/memory/semantic.py::_tokenize": "1c context selection: memory retrieval stop-words",
-    "runtime/life_history.py::_token_set": "1c context selection: life-history retrieval stop-words",
     "runtime/evolution_policy.py::detect_directive_override_markers": "Phase 4: autonomy-phrase memory filter",
     "runtime/evolution_policy.py::detect_prompt_injection_markers": "Phase 4: instruction-phrase memory filter",
+    "runtime/life_history.py::_heuristic_digest": (
+        "Phase 4: keyword digest of an episode, used only when the model's digest of it is unavailable"),
 }
+# The files those entries may be in: memory filtering and the digestion of an
+# episode, both of which Phase 4 (development) replaces. Nothing in a file that
+# reads a message, decides, routes a request or checks a reply may be pending.
+PENDING_FILES = ("runtime/evolution_policy.py", "runtime/life_history.py")
 # A model answer quotes the message, so answer clean-up is reached by the text
-# too. It matches markup the model emits, not anything a person wrote.
+# too. It matches markup the model emits, or a field name of the answer the
+# runtime asked for, not anything a person wrote.
 MODEL_ANSWER_MARKUP = {
     "core/llm_content.py::strip_reasoning": "removes reasoning tags from a model answer",
+    "runtime/life_history.py::_extract_json": "removes a code fence from the model's digest of an episode",
+    "runtime/life_history.py::LifeHistoryStore._ingest_text": (
+        "files a trait the digest proposes to change by that trait's own name, a field of the digest"),
+}
+# Functions that read the error text a tool or the runtime itself produced, to
+# file a failed execution. The text reaches them inside a receipt (an operand
+# the person wrote is noted on it); what they match is the error, never the
+# operand, and never anything a person wrote.
+TOOL_ERROR_TEXT = {
+    "core/tool_failures.py::is_operational_tool_failure": (
+        "tells an environment or configuration failure from a tool's own error message"),
+    "core/tool_memory.py::create_tool_unresolved_item": (
+        "tells a refused execution from a tool's own error message"),
+}
+# A pattern in a routing module that matches text the model wrote in a format
+# the runtime itself asked for, not anything a person wrote.
+MODEL_FORMAT_PATTERNS = {
+    "core/artifact_writer.py": "recovers the file content from a draft the model returned as invalid JSON",
 }
 # Functions the text reaches whose flagged literals are the runtime's own labels
 # and record keys, not wording matched against the message. Every such literal
@@ -185,25 +227,73 @@ def quoting(text):
                    tone={"arousal": 0.7, "valence": 0.2, "certainty": 0.6, "intensity": 0.6})
 
 
+class RecordingStore:
+    """Stands where the life-history store stands: it receives granted learning material and digests nothing."""
+
+    received: list[dict] = []
+
+    def __init__(self, config) -> None:
+        del config
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def ingest_external_text(self, **fields):
+        self.received.append(fields)
+        return {"experience": {"source_title": fields["title"], "source_ref": fields["source_ref"], "id": 1,
+                               "source_type": fields["source_type"]}, "evolution_events": []}
+
+
+def fixture_executor(*, runner_responses=None):
+    """A real registry, arbiter and executor; the tools themselves are handlers defined here."""
+    registry = ToolRegistry()
+    executor = ToolExecutor(registry)
+    for name, category, schema in (
+            ("fs.read_file", ToolCategory.READ_ONLY, {"path": {"type": "string", "required": True}}),
+            ("fs.list_dir", ToolCategory.READ_ONLY, {"path": {"type": "string", "required": True}}),
+            ("fs.write_file", ToolCategory.WRITE, {"path": {"type": "string", "required": True},
+                                                   "content": {"type": "string", "required": True}})):
+        registry.register(ToolCapability(name, f"Fixture {name}", category, arg_schema=schema))
+        executor.register_handler(name, lambda arguments, name=name: ToolResult(name, True, "fixture output"))
+    if runner_responses is not None:
+        client = FakeNativeClient(runner_responses)
+        executor.set_tool_runner(NativeToolCallRunner(executor=executor, base_url="", model="offline", client=client))
+    return executor
+
+
 def traced_turns(tmp_path) -> guard.TextTrace:
     """Run real turns and record every runtime function the message text is handed to.
 
-    The text is followed as a string, inside the turn state, and inside request
-    components, through the pre-pass and the decision it commits. The turns
-    cover each branch that hands the text on: an unread turn and a follow-up,
-    a turn whose reading quotes the message in its components and evidence, a
-    turn with tools and no reported request, a turn during a running plan, and
-    a turn through the session manager, which wires the life-history, skill and
+    The text is followed as a string, inside the turn state, inside request
+    components and as an operand, through the pre-pass, the decision it
+    commits and the carrying out of what was granted. The turns cover each
+    branch that hands the text on: an unread turn and a follow-up; a turn whose
+    reading quotes the message in its components and evidence; a turn with
+    tools and no reported request; a tool turn whose reading commits an
+    operation with an operand from the message; a turn whose open request goes
+    to model tool selection; a turn that writes generated text to a path from
+    the message; a plan turn that carries a running plan on, and one that asks
+    how it stands; a learning turn through the session manager; and a plain
+    turn through the session manager, which wires the life-history, skill and
     learning providers.
     """
     trace = guard.TextTrace(MARKER)
-    original = CognitivePipeline._stage_pre_pass
+    originals = {name: getattr(CognitivePipeline, name) for name in TRACED_STAGES}
 
-    def traced(self, st):
-        with trace:
-            return original(self, st)
+    def wrap(original):
+        def traced(self, st):
+            with trace:
+                return original(self, st)
+        return traced
 
-    CognitivePipeline._stage_pre_pass = traced
+    for name, original in originals.items():
+        setattr(CognitivePipeline, name, wrap(original))
+    patch = pytest.MonkeyPatch()
+    patch.setattr("runtime.learning_intake.LifeHistoryStore", RecordingStore)
+    RecordingStore.received.clear()
     try:
         pipe = CognitivePipeline(ReadingBackend())
         pipe.process(MESSAGE, "guard")
@@ -213,23 +303,85 @@ def traced_turns(tmp_path) -> guard.TextTrace:
         pipe.process(MESSAGE, "guard")
         pipe.close()
         pipe = CognitivePipeline(ReadingBackend(), tool_executor=ToolExecutor(ToolRegistry()),
-                                 message_reader=ScriptedReader(reading()))
-        pipe.process(MESSAGE, "guard")
-        pipe._active_task_plan = TaskPlan(id="plan", goal="tidy the notes", steps=[
-            TaskStep(id="s1", tool_name="fs.list_dir", arguments={"path": "."}, description="look")])
+                                 message_reader=ScriptedReader(reading(conversation(MESSAGE))))
         pipe.process(MESSAGE, "guard")
         pipe.close()
-        runtime = SessionManager(RuntimeConfig(data_dir=str(tmp_path)), backend_factory=ReadingBackend)
+
+        # A tool turn: the reading commits an operation whose operand is part of the message, beside a role.
+        path = f"notes/{MARKER} draft.txt"
+        tool_message = f"You are my {MARKER} now. Read {path} for me."
+        pipe = CognitivePipeline(
+            ReadingBackend(), tool_executor=fixture_executor(), message_reader=ScriptedReader(reading(
+                role(f"You are my {MARKER} now", MARKER, autonomy_cost=0.9, user_value=0.3, effort=0.03),
+                task(f"Read {path} for me", user_value=0.9, effort=0.05, tool=using("fs.read_file", path=path)),
+                topics=[f"my {MARKER} now"], about_self=True)))
+        ran = pipe.process(tool_message, "guard")
+        assert [r.metadata["arguments"] for r in ran.debug.tool_trace.executed_results] == [{"path": path}]
+        pipe.close()
+
+        # An open request: the reading names the capability, the model selects the tool call.
+        open_message = f"Look at what is in the {MARKER} folder."
+        executor = fixture_executor(runner_responses=[
+            _response(_tool_call("fs__list_dir", {"path": MARKER})), _response(_tool_call("control__no_tool", {}, "c2"))])
+        pipe = CognitivePipeline(
+            ReadingBackend(), tool_executor=executor, message_reader=ScriptedReader(reading(task(
+                open_message, user_value=0.9, effort=0.05, tool=using("fs.list_dir", generate=["path"])))))
+        selected = pipe.process(open_message, "guard")
+        assert selected.debug.tool_selection == {"requests": 1}
+        assert [r.tool_name for r in selected.debug.tool_trace.executed_results] == ["fs.list_dir"]
+        pipe.close()
+
+        # Generated text for a path the person wrote.
+        target = f"out/{MARKER}.txt"
+        write_message = f"Write a short note about {MARKER} and save it to {target}"
+        draft = json.dumps({"content_lines": [f"A note about {MARKER}."], "summary": "note"})
+        pipe = CognitivePipeline(
+            ReadingBackend(drafts=[draft, "Saved."]), tool_executor=fixture_executor(),
+            message_reader=ScriptedReader(reading(task(write_message, user_value=0.9, effort=0.05, tool=using(
+                "fs.write_file", generate=["content"], path=target)))))
+        written = pipe.process(write_message, "guard")
+        assert [r.metadata["arguments"] for r in written.debug.tool_trace.executed_results] == [{"path": target}]
+        pipe.close()
+
+        # A running plan: one turn carries it on, one asks how it stands, each beside something else.
+        for relation, kind in (("continue", task), ("status", conversation)):
+            plan_message = f"Carry on with the {MARKER} work. And what do you make of it?"
+            pipe = CognitivePipeline(
+                ReadingBackend(), tool_executor=fixture_executor(), message_reader=ScriptedReader(reading(
+                    kind(f"Carry on with the {MARKER} work", user_value=0.9, effort=0.05, plan=relation),
+                    conversation("And what do you make of it?"))))
+            pipe._active_task_plan = TaskPlan(id="plan", goal=f"tidy the {MARKER} notes", origin_decision_id="1", steps=[
+                TaskStep(id="s1", tool_name="fs.list_dir", arguments={"path": "."}, description="look")])
+            planned = pipe.process(plan_message, "guard")
+            assert len(planned.debug.turn_decision.components) == 2
+            assert bool(planned.debug.tool_trace.executed_results) is (relation == "continue")
+            pipe.close()
+
+        learning_message = f"Take this in about {MARKER}: " + f"the {MARKER} tide returns differently each time. " * 6
+
+        def session_reading(text):
+            if text != learning_message:
+                return None
+            return reading(task(f"Take this in about {MARKER}", user_value=0.9, effort=0.1, tool=using("learning.intake")))
+
+        runtime = SessionManager(RuntimeConfig(data_dir=str(tmp_path)), backend_factory=lambda: ReadingBackend(
+            session_reading, drafts=[f"Reply number {index}." for index in range(8)]))
 
         async def through_the_runtime():
             try:
                 await runtime.handle_message("web", "guard", "chat", MESSAGE)
+                await runtime.handle_message("web", "guard", "chat", learning_message)
+                receipts = runtime.active_sessions["web:guard:chat"].last_debug.tool_trace.executed_results
+                assert [(r.tool_name, r.success) for r in receipts] == [("learning.intake", True)]
             finally:
                 await runtime.shutdown()
 
         asyncio.run(through_the_runtime())
+        assert len(RecordingStore.received) == 1 and MARKER in RecordingStore.received[0]["text"]
     finally:
-        CognitivePipeline._stage_pre_pass = original
+        patch.undo()
+        for name, original in originals.items():
+            setattr(CognitivePipeline, name, original)
     return trace
 
 
@@ -242,9 +394,10 @@ def test_every_function_the_text_reaches_is_clean_or_named_as_pending(reached):
     """Strict, and against the text itself: a literal tested on what a person
     wrote counts whatever the literal is."""
     flagged = reached.findings()
-    assert len(reached.reached) > 60  # the trace really followed the message
-    assert set(flagged) == set(PENDING_WORDING) | set(MODEL_ANSWER_MARKUP) | set(REVIEWED_LABELS)
-    for label, pinned in REVIEWED_LABELS.items():
+    assert len(reached.reached) > 120  # the trace really followed the message, through routing and execution
+    functions = {label: pinned for label, pinned in REVIEWED_LABELS.items() if "::" in label}
+    assert set(flagged) == set(PENDING_WORDING) | set(MODEL_ANSWER_MARKUP) | set(TOOL_ERROR_TEXT) | set(functions)
+    for label, pinned in functions.items():
         # Labels only: no pattern, nothing tested against the text, and no literal that is not pinned.
         assert {finding.kind for finding in flagged[label]} <= {"words", "probe"}, label
         assert not [finding for finding in flagged[label] if finding.on_text], label
@@ -252,6 +405,12 @@ def test_every_function_the_text_reaches_is_clean_or_named_as_pending(reached):
     # What a person wrote is tested against fixed wording only in code named as pending.
     tested = {label for label, found in flagged.items() if any(finding.on_text for finding in found)}
     assert tested <= set(PENDING_WORDING) | set(MODEL_ANSWER_MARKUP)
+    # Nothing that says what a message asks for, which tool runs or which context is loaded is pending:
+    # what is left filters memories and digests an episode after the turn (a later phase), and is no
+    # part of reading a message, of request or tool routing, or of what a turn keeps as memory.
+    assert all(label.split("::")[0] in PENDING_FILES for label in PENDING_WORDING)
+    for label in TOOL_ERROR_TEXT:
+        assert not [finding for finding in flagged[label] if finding.on_text], label
     # The text reaches the reader, the parser, the checks and the decision. The
     # perception modules and the stage hold nothing; the decision holds pinned labels only.
     labels = {unit.label for unit, _, _ in reached.units()}
@@ -260,6 +419,105 @@ def test_every_function_the_text_reaches_is_clean_or_named_as_pending(reached):
             "core/willingness.py::decide", "pipeline/core.py::CognitivePipeline._commit_turn_decision"} <= labels
     assert not [label for label in flagged if label.split("::")[0] in PERCEPTION_MODULES]
     assert "pipeline/core.py::CognitivePipeline._stage_pre_pass" not in flagged
+    assert "pipeline/core.py::CognitivePipeline._stage_deliberation" not in flagged
+    # After delivery: what the turn keeps is taken from the reading and the decision, never from wording.
+    assert {"pipeline/core.py::CognitivePipeline._stage_post_process",
+            "pipeline/core.py::CognitivePipeline._record_semantic_memory",
+            "core/memory/semantic.py::derive_semantic_entries"} <= labels
+    for label in ("pipeline/core.py::CognitivePipeline._stage_post_process",
+                  "pipeline/core.py::CognitivePipeline._record_self_observations",
+                  "core/memory/semantic.py::derive_semantic_entries"):
+        assert not [finding for finding in flagged.get(label, ()) if finding.on_text or finding.kind == "regex"], label
+
+
+def test_the_trace_covers_routing_tool_selection_plans_and_learning(reached):
+    """A tool turn, an open request, a generated file, a plan turn and a learning turn were all followed."""
+    labels = {f"{path}::{qualname}" for path, qualname in reached.reached}
+    assert {"pipeline/core.py::CognitivePipeline._stage_deliberation",
+            "pipeline/core.py::CognitivePipeline._add_execution_detail",
+            "pipeline/core.py::CognitivePipeline._run_session_capability",
+            "pipeline/core.py::CognitivePipeline._run_tool_stage",
+            "pipeline/core.py::CognitivePipeline._select_tools",
+            "pipeline/core.py::CognitivePipeline._writes_generated_text",
+            "pipeline/core.py::CognitivePipeline._write_generated_artifact",
+            "pipeline/core.py::CognitivePipeline._request_text",
+            "core/request_routing.py::ground", "core/request_routing.py::_grounded",
+            "core/perception.py::written", "core/appraisal.py::held_components",
+            "core/dual_process/tool_loop.py::run_tool_loop", "core/dual_process/tool_loop.py::make_tool_decision",
+            "core/dual_process/tool_loop.py::record_operands", "core/grants.py::execution_denial",
+            "openrook_tools/executor.py::ToolExecutor.execute",
+            "openrook_tools/native_orchestrator.py::NativeToolCallRunner.run_tool_loop",
+            "openrook_tools/native_orchestrator.py::NativeToolCallRunner._create_tool_choice",
+            "core/artifact_writer.py::generate_artifact_draft",
+            "runtime/learning_intake.py::learning_request", "runtime/learning_intake.py::_material",
+            "runtime/learning_intake.py::ingest_learning_from_message",
+            "runtime/sessions/manager.py::SessionManager._execute_learning_component",
+            "pipeline/heuristics.py::relationship_topic"} <= labels
+    called = {f"{path}::{qualname}" for path, qualname in reached.called}
+    # A plan was carried on, and its standing was summarised, without the text being matched for it.
+    assert {"core/dual_process/tool_loop.py::continue_plan", "core/task_planning.py::execute_plan",
+            "core/task_planning.py::summarize_plan_status"} <= called
+    # The session manager's observer, which used to build the learning component from wording, is never called.
+    assert "runtime/sessions/manager.py::SessionManager._observe_learning_component" not in called
+    assert "runtime/sessions/manager.py::_looks_like_pending_learning_text" not in called
+
+
+def test_no_turn_reaches_the_former_keyword_routing(reached):
+    """The patterns live with the evaluation harness; perceiving, deciding and routing never run them."""
+    assert len(reached.called) > 250
+    assert [key for key in reached.called if key[0].startswith("openrook_tools/roleplay_eval/")] == []
+    # The compatibility names kept for files that still import them were not asked for either.
+    assert sorted((path, name) for path, name in reached.asked
+                  if path in ("core/request_actions.py", "core/system_inspection.py")
+                  and not (name.startswith("__") and name.endswith("__"))) == []
+
+
+@pytest.mark.parametrize("path", ROUTING_MODULES)
+def test_the_routing_modules_hold_no_word_pattern_and_only_pinned_labels(path):
+    unit = guard.module_unit(path)
+    found = guard.findings(unit.tree, unit.scope, strict=True)
+    patterns = [finding for finding in found if finding.kind == "regex"]
+    assert bool(patterns) is (path in MODEL_FORMAT_PATTERNS), path
+    labels = [finding for finding in found if finding.kind != "regex"]
+    assert sorted({term for finding in labels for term in finding.terms} - set(REVIEWED_LABELS.get(path, ()))) == [], path
+
+
+@pytest.mark.parametrize("path", ["core/dual_process/tool_loop.py", "runtime/learning_intake.py",
+                                  "openrook_tools/native_orchestrator.py", "openrook_tools/executor.py"])
+def test_execution_modules_hold_no_pattern_that_spells_a_word(path):
+    """Where the intent rules, the follow-up rules and the learning patterns used to be."""
+    unit = guard.module_unit(path)
+    assert [finding for finding in guard.findings(unit.tree, unit.scope) if finding.kind == "regex"] == [], path
+
+
+def test_the_keyword_routing_is_gone_from_the_runtime():
+    """Deleted, not hidden: none of the former recognisers is defined in a module a turn can reach."""
+    removed = {
+        "core/system_inspection.py": ("inspection_kind", "inspection_intent"),
+        "core/dual_process/tool_loop.py": ("INTENT_RULES", "FOLLOWUP_REWRITE_RULES", "match_intent_rule",
+                                           "detect_tool_intent", "attach_followup_context", "detect_capability_gap"),
+        "core/task_planning.py": ("is_continue_request", "is_status_request", "detect_multi_step_intent",
+                                  "_STEP_PATTERNS"),
+        "core/request_actions.py": ("has_learning_intent", "file_requests", "ground_file_components"),
+        "core/artifact_writer.py": ("detect_artifact_write_request",),
+        "pipeline/heuristics.py": ("_is_identity_question", "_relationship_topic_hint", "_is_broad_repair_text"),
+        "runtime/learning_intake.py": ("_extract_inline_text", "_extract_urls"),
+    }
+    for path, names in removed.items():
+        tree = guard.module_unit(path).tree
+        defined = {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        defined |= {target.id for node in tree.body if isinstance(node, ast.Assign)
+                    for target in node.targets if isinstance(target, ast.Name)}
+        assert not defined & set(names), path
+    # Nothing in the runtime imports them from where they now live, outside the harness and the named forwarders.
+    for path in runtime_sources():
+        if path.startswith(("openrook_tools/roleplay_eval/", "openrook_tools/replay_dignity.py")):
+            continue
+        for name, _, node in imports(guard.module_unit(path).tree):
+            if "legacy_routing" in name:
+                owner = next((f.name for f in ast.walk(guard.module_unit(path).tree) if isinstance(f, ast.FunctionDef)
+                              and any(child is node for child in ast.walk(f))), None)
+                assert (path, owner) == ("core/request_actions.py", "__getattr__"), (path, name)
 
 
 def test_the_text_is_followed_inside_the_turn_state_and_request_components(reached):
@@ -290,7 +548,7 @@ def test_the_trace_exercises_every_call_that_hands_over_the_message(reached):
     finally:
         pipe.close()
     traced = {f"{path}::{qualname}" for path, qualname in reached.reached}
-    assert len(handed) >= 12 and sorted(set(handed) - traced) == []
+    assert len(handed) >= 9 and sorted(set(handed) - traced) == []
     # The same holds for the state object and for components handed to the decision.
     for label in ("pipeline/core.py::CognitivePipeline._commit_turn_decision",
                   "core/self_intent.py::conversation_proposals",
@@ -495,9 +753,11 @@ def test_structure_and_data_model_names_are_not_vocabulary(source):
 def test_prompt_prose_is_not_an_allow_list():
     names = guard.data_model_names()
     assert {"autonomy_cost", "hostile_intent", "attack", "apology", "shorter", "pursue", "Cf"} <= names
+    # A role's two closed facts are fields of the reading, and their allowed answers are its enum values.
+    assert {"standing", "whose_say", "lower", "same", "higher", "speaker", "shared", "own"} <= names
     # Words that only occur in the reader's instructions are not data-model names.
     assert not names & {"hostile", "joke", "sarcasm", "playfulness", "obey", "quotation", "relationship",
-                        "standing", "forgive", "refuse", "comply", "advice", "the", "message"}
+                        "rank", "forgive", "refuse", "comply", "advice", "the", "message"}
 
 
 def plant(tmp_path, monkeypatch, name: str, source: str):
@@ -559,6 +819,64 @@ def test_a_planted_helper_behind_a_clean_stage_is_caught_by_the_trace(tmp_path, 
                for label, found in trace.findings().items()}
     assert flagged == {"by_pattern": {("regex", False), ("regex", True)},
                        "by_table": {("words", False), ("probe", True)}}
+
+
+def test_a_keyword_rule_planted_after_delivery_is_caught_by_the_widened_trace(tmp_path, monkeypatch):
+    """What a turn keeps as memory used to be picked by English patterns in a stage nothing traced.
+
+    The same kind of rule is planted where it stood, behind ``_stage_post_process``,
+    and a real turn is run. Tracing the stages this guard traced before does
+    not reach it; tracing the stages it traces now does, and finds the rule
+    tested against what the person wrote.
+    """
+    module = plant(tmp_path, monkeypatch, "keeping", '''
+        import re
+        _WISH = re.compile(r"\\b(?:prefer|fancy)\\s+(.+)", re.I)
+        _SETTLED = ("agreed", "settled")
+
+        def derive_semantic_entries(*, user_message, assistant_response, **_):
+            by_pattern(user_message)
+            by_words(user_message)
+            return []
+
+        def by_pattern(message):
+            return _WISH.search(message)
+
+        def by_words(message):
+            return any(word in message.lower() for word in _SETTLED)
+    ''')
+    monkeypatch.setattr(pipeline_core, "derive_semantic_entries", module.derive_semantic_entries)
+
+    def reached_by(stages):
+        trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+        originals = {name: getattr(CognitivePipeline, name) for name in stages}
+
+        def wrap(original):
+            def traced(self, st):
+                with trace:
+                    return original(self, st)
+            return traced
+
+        for name, original in originals.items():
+            monkeypatch.setattr(CognitivePipeline, name, wrap(original))
+        pipe = CognitivePipeline(ReadingBackend())
+        try:
+            pipe.process(f"I fancy {MARKER} gardens, as we settled.", "guard")
+        finally:
+            pipe.close()
+            for name, original in originals.items():
+                monkeypatch.setattr(CognitivePipeline, name, original)
+        return trace
+
+    assert "_stage_post_process" in TRACED_STAGES
+    before = reached_by(tuple(stage for stage in TRACED_STAGES if stage != "_stage_post_process"))
+    assert before.reached == {} and before.findings() == {}
+    now = reached_by(TRACED_STAGES)
+    assert {qualname for _, qualname in now.reached} == {"derive_semantic_entries", "by_pattern", "by_words"}
+    flagged = {label.split("::")[1]: {(finding.kind, finding.on_text) for finding in found}
+               for label, found in now.findings().items()}
+    assert flagged["by_pattern"] == {("regex", False), ("regex", True)}
+    assert ("probe", True) in flagged["by_words"] and ("words", False) in flagged["by_words"]
 
 
 TEXT = dict(text_names={"text"}, text_leaves=guard.CORE_TEXT_FIELDS)
@@ -837,3 +1155,55 @@ def test_the_scenario_wording_guard_detects_literals_patterns_and_comments(tmp_p
     (tmp_path / "single.py").write_text(
         f"import re\nRULE = re.compile(r'\\b{spelled[0]}\\b.{{0,80}}\\b\\w+\\s+\\w+', re.I)\n", encoding="utf-8")
     assert scenario_wording([guard.module_unit("single.py", root=tmp_path)]) == []
+
+
+def test_planted_routing_by_wording_is_caught_on_a_component_and_on_an_operand(tmp_path, monkeypatch):
+    """What sub-phase 1c removed, planted again: a router that matches a task's
+    description, a rule table looked up with it, and a test of an operand the
+    person wrote. Each is found where the text reaches it; a helper that only
+    compares the operand with the message it came from is not."""
+    module = plant(tmp_path, monkeypatch, "routing", '''
+        import re
+        from dataclasses import dataclass, field
+
+        _RULES = {"fetch": "web.fetch", "erase": "fs.delete_path"}
+        _METRIC = re.compile(r"\\\\b(?:usage|utilisation)\\\\b", re.I)
+
+        @dataclass
+        class Component:
+            description: str
+            kind: str = "task"
+            requested_tool: str = ""
+
+        @dataclass
+        class Intent:
+            tool_name: str
+            arguments: dict = field(default_factory=dict)
+
+        def deliberate(component, message):
+            intent = Intent(by_table(component) or "shell.run_command", {"cmd": component.description})
+            return by_pattern(component), by_operand(intent), exact(intent, message), by_label(component)
+
+        def by_table(component):
+            return next((tool for word, tool in _RULES.items() if word in component.description), "")
+
+        def by_pattern(component):
+            return bool(_METRIC.search(component.description))
+
+        def by_operand(intent):
+            return intent.arguments["cmd"].startswith("erase")
+
+        def exact(intent, message):
+            return intent.arguments["cmd"] in message
+
+        def by_label(component):
+            return component.kind == "task" and not component.requested_tool
+    ''')
+    trace = guard.TextTrace(MARKER, root=tmp_path, exclude=(), packages=("planted",))
+    with trace:
+        module.deliberate(module.Component(f"erase the {MARKER} notes"), f"please erase the {MARKER} notes")
+    flagged = {label.split("::")[1]: found for label, found in trace.findings().items()}
+    assert set(flagged) == {"by_table", "by_pattern", "by_operand"}
+    assert all(any(finding.on_text for finding in found) for found in flagged.values())
+    assert {finding.kind for finding in flagged["by_pattern"]} == {"regex"}
+    assert "erase" in {term for finding in flagged["by_operand"] for term in finding.terms}

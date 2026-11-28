@@ -23,6 +23,7 @@ from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.developing_self import birth_state, project_self
 from runtime.life_history import LifeHistoryStore, life_history_db_path
+from tests.support.readings import ScriptedReader, read_as
 
 
 class Digest:
@@ -357,7 +358,7 @@ def test_pipeline_generation_gets_the_frozen_developed_self_and_review_gets_its_
     backend = Expression()
     backend.reply = "I decline the calculation."
     with closing(CognitivePipeline(backend, runtime_config=cfg,
-            component_observer=lambda _: (RequestComponent("declined", "A calculation", feasible=False),))) as pipeline:
+            message_reader=ScriptedReader(read_as(RequestComponent("declined", "A calculation", feasible=False))))) as pipeline:
         pipeline.restore_conversation_history([{"role": "user", "content": "We compared the river maps."},
                                                {"role": "assistant", "content": "Their scales differed."}])
         result = pipeline.process("Calculate this for me.", "alice")

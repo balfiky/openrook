@@ -27,15 +27,12 @@ conversation and in research mode, with receipts that a real tool loop
 produced, through rewrites, excision, the protected final attempt and the
 confirmation review.
 
-Not traced, by this guard or by the perception guard: the deliberation stage
-(``_stage_deliberation``), where tools are selected and run and requests are
-routed. The user's text reaches that stage and is still matched against
-wording there, by the routing that sub-phase 1c reworks: on the one tool turn
-traced here, ``core/system_inspection.py::inspection_kind`` and
-``core/artifact_writer.py::detect_artifact_write_request``. That stage is
-covered only by the source-level wording guard below and its exact list
-(``SCENARIO_WORDING_PENDING``). The draft never reaches it: it runs before the
-reply is written.
+The stages before these, in which the message is read, the decision is made
+and what it granted is carried out (``_stage_pre_pass``,
+``_stage_deliberation``), are traced by ``tests/test_perception_guards.py``:
+since sub-phase 1c nothing in them matches the user's text against wording to
+say what is asked or which tool runs. The draft never reaches them: they run
+before the reply is written.
 """
 
 from __future__ import annotations
@@ -56,7 +53,9 @@ from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
 from runtime.tools import create_tool_executor
 from tests.support import vocabulary_guard as guard
-from tests.support.readings import ReadingBackend, ScriptedReader, conversation, plain, reading, role, task
+from tests.support.readings import (
+    ReadingBackend, ScriptedReader, conversation, plain, reading, role, task, using,
+)
 from tests.support.reviews import ScriptedReviewer, finding, passed, violation
 from tests.test_perception_guards import (
     WORD_LETTERS, WORDS_OF_A_SCENARIO, imports, plant, runtime_sources, scenario_phrases, scenario_wording,
@@ -81,8 +80,10 @@ RUNTIME_MARKUP = {
 REVIEWED_LABELS = json.loads((ROOT / "tests/fixtures/reply_reviewed_labels.json").read_text(encoding="utf-8"))
 
 # The former wording-based checks live with the evaluation harness.
-LEGACY_MODULES = ("openrook_tools.roleplay_eval.legacy_claims", "openrook_tools.roleplay_eval.legacy_social")
-LEGACY_FILES = ("openrook_tools/roleplay_eval/legacy_claims.py", "openrook_tools/roleplay_eval/legacy_social.py")
+LEGACY_MODULES = ("openrook_tools.roleplay_eval.legacy_claims", "openrook_tools.roleplay_eval.legacy_social",
+                  "openrook_tools.roleplay_eval.legacy_routing")
+LEGACY_FILES = ("openrook_tools/roleplay_eval/legacy_claims.py", "openrook_tools/roleplay_eval/legacy_social.py",
+                "openrook_tools/roleplay_eval/legacy_routing.py")
 # Who may import them: the harness itself, the offline replay tool, and the
 # compatibility names below, each inside a module ``__getattr__`` and nowhere else.
 HARNESS = ("openrook_tools/roleplay_eval/", "openrook_tools/replay_dignity.py")
@@ -93,6 +94,8 @@ COMPATIBILITY = {
     "core/system_inspection.py": ("addresses_inspection",),
     "core/response_language.py": ("language_mismatch",),
     "core/llm_content.py": ("requests_literal_text",),
+    # For tests/test_live_roleplay_p1j.py, which imports it and is being changed elsewhere.
+    "core/request_actions.py": ("ground_shell_components",),
 }
 DELETED = ("core/social.py", "core/expression_claims.py", "core/response_style.py")
 
@@ -100,15 +103,15 @@ DELETED = ("core/social.py", "core/expression_claims.py", "core/response_style.p
 # still carries evaluation wording and where that goes. The list must match the
 # code exactly: a new offender fails, and so does an entry that has been fixed.
 SCENARIO_WORDING_PENDING = {
-    "core/system_inspection.py": "1c routing: host-metric questions",
-    "core/dual_process/tool_loop.py": "1c routing: tool intent rules and follow-up rules",
-    "core/task_planning.py": "1c routing: plan templates, continue and status",
-    "core/request_actions.py": "1c routing: learning requests, literal file and shell operands",
     "runtime/evolution_policy.py": "Phase 4: instruction-phrase memory filter",
     "openrook_tools/replay_dignity.py": "offline replay tool: carries its own script of turns",
     "openrook_tools/roleplay_eval/legacy_claims.py": "evaluation harness: the former wording-based claim checks",
     "openrook_tools/roleplay_eval/legacy_social.py": "evaluation harness: the former social and role cues",
+    "openrook_tools/roleplay_eval/legacy_routing.py": "evaluation harness: the former keyword routing of requests",
 }
+# No module a turn runs is on that list any more: what is left is a memory
+# filter of a later phase, an offline tool with its own script, and the harness.
+TURN_PATH_PACKAGES = ("core/", "pipeline/")
 SCENARIO_CATALOG = "openrook_tools/roleplay_eval/scenarios.py"   # the wording's own home
 
 
@@ -286,7 +289,7 @@ def traced_turns(tmp_path) -> guard.TextTrace:
         pipe = CognitivePipeline(
             ReadingBackend(drafts=[f"The {MARKER} RAM total is 16 GB."]), tool_executor=executor,
             runtime_config=config, autonomy_level="high_risk", expression_reviewer=ScriptedReviewer(passed()),
-            message_reader=ScriptedReader(lambda text: reading(task(text, capabilities=("system.memory_usage",)))))
+            message_reader=ScriptedReader(lambda text: reading(task(text, tool=using("system.memory_usage")))))
         ran = pipe.process(f"Show current memory usage, {MARKER}", "guard")
         assert [result.tool_name for result in ran.debug.tool_trace.executed_results] == ["system.memory_usage"]
         pipe.close()
@@ -440,8 +443,9 @@ def test_the_compatibility_names_still_resolve_for_the_evaluation():
     from core.llm_content import requests_literal_text
     from core.metric_claims import cpu_idle_percentages, percentage_comparisons
     from core.response_language import language_mismatch
+    from core.request_actions import ground_shell_components
     from core.system_inspection import addresses_inspection
-    from openrook_tools.roleplay_eval import legacy_claims
+    from openrook_tools.roleplay_eval import legacy_claims, legacy_routing
 
     assert verify_response_grounding is legacy_claims.verify_response_grounding
     assert requests_literal_text is legacy_claims.requests_literal_text
@@ -449,6 +453,7 @@ def test_the_compatibility_names_still_resolve_for_the_evaluation():
     assert percentage_comparisons is legacy_claims.percentage_comparisons
     assert language_mismatch is legacy_claims.language_mismatch
     assert addresses_inspection is legacy_claims.addresses_inspection
+    assert ground_shell_components is legacy_routing.ground_shell_components
     import core.metric_claims
 
     with pytest.raises(AttributeError):
@@ -465,6 +470,7 @@ def test_scenario_wording_is_absent_from_every_runtime_module_outside_the_exact_
     found = scenario_wording([guard.module_unit(path) for path in runtime_sources() if path != SCENARIO_CATALOG])
     offenders = {label for label, _, _ in found}
     assert offenders == set(SCENARIO_WORDING_PENDING), sorted(found)
+    assert not [path for path in SCENARIO_WORDING_PENDING if path.startswith(TURN_PATH_PACKAGES)]
     # None of the modules that write, review or deliver a reply is on the list.
     reply_path = {*REVIEW_MODULES, "core/dual_process/generator.py", "core/llm_content.py", "core/perception.py",
                   "pipeline/core.py"}

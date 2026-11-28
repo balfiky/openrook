@@ -34,6 +34,7 @@ from core.types import (
     UnresolvedItem,
 )
 from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
+from tests.support.readings import ScriptedReader, file_request
 from core.tool_memory import (
     ToolMemoryEffects,
     compute_tool_trust_delta,
@@ -113,12 +114,18 @@ def _high_risk_action_vars() -> ActionVariables:
     )
 
 
-def _make_pipeline_with_tools():
-    """Create a CognitivePipeline wired to a ToolExecutor."""
+def _make_pipeline_with_tools(scripted=True):
+    """Create a CognitivePipeline wired to a ToolExecutor.
+
+    Its reader is scripted: a message of the form "read file <path>" is read as
+    a task that asks the file capability for that path. ``scripted=False``
+    leaves the reader to the test (the keyword reader of a marked test).
+    """
     reg = ToolRegistry()
     exe = ToolExecutor(reg)
     register_builtins(reg, exe)
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe,
+                             message_reader=ScriptedReader(file_request) if scripted else None)
     return pipe, reg, exe
 
 
@@ -513,7 +520,7 @@ class TestPipelineToolMemoryIntegration:
 
     @pytest.mark.keyword_reader
     def test_missing_browser_provider_is_operational_not_unresolved(self):
-        pipe, _, _ = _make_pipeline_with_tools()
+        pipe, _, _ = _make_pipeline_with_tools(scripted=False)
         resp = pipe.process("get page text from https://example.com", user_id="u1")
         effects = resp.debug.tool_memory_effects
         assert effects is not None

@@ -152,13 +152,14 @@ def test_langgraph_runner_accepts_life_influence_and_records_action_effect() -> 
     assert result.action_variables.persistence_drive > 0.5
 
 
-def test_hybrid_falls_back_to_heuristic_when_model_skips_tool() -> None:
-    model = FakeMessagesListChatModel(responses=[AIMessage(content="df -h /")])
+def test_nothing_runs_when_the_model_selects_no_tool() -> None:
+    """Neither the graph nor the structured choice named a tool: no wording of the request stands in for one."""
+    model = FakeMessagesListChatModel(responses=[AIMessage(content="df -h /"), AIMessage(content="No tool.")])
     runner = LangGraphToolRunner(
         executor=_executor(),
         base_url="http://localhost:8000/v1",
         model="test",
-        fallback_to_heuristic=True,
+        structured_fallback=True,
         chat_model=model,
     )
     engine = EmotionalEngine()
@@ -172,9 +173,8 @@ def test_hybrid_falls_back_to_heuristic_when_model_skips_tool() -> None:
         autonomy_level="high_risk",
     )
 
-    assert result.trace.loop_count == 1
-    assert result.trace.executed_results[0].metadata["cmd"] == "df -h /"
-    assert "Filesystem" in result.tool_context_summary
+    assert result.trace.loop_count == 0 and result.trace.executed_results == []
+    assert result.tool_context_summary == ""
 
 
 def test_structured_router_handles_unseen_disk_phrasing() -> None:
@@ -197,7 +197,7 @@ def test_structured_router_handles_unseen_disk_phrasing() -> None:
         executor=_fake_shell_executor(),
         base_url="http://localhost:8000/v1",
         model="test",
-        fallback_to_heuristic=True,
+        structured_fallback=True,
         chat_model=model,
     )
     engine = EmotionalEngine()
@@ -237,7 +237,7 @@ def test_structured_router_uses_history_for_followup_reference() -> None:
         executor=_fake_shell_executor(),
         base_url="http://localhost:8000/v1",
         model="test",
-        fallback_to_heuristic=True,
+        structured_fallback=True,
         chat_model=model,
     )
     engine = EmotionalEngine()
@@ -280,7 +280,7 @@ def test_structured_router_handles_confirmation_after_pending_tool_request() -> 
         executor=_fake_shell_executor(),
         base_url="http://localhost:8000/v1",
         model="test",
-        fallback_to_heuristic=True,
+        structured_fallback=True,
         chat_model=model,
     )
     engine = EmotionalEngine()
@@ -301,37 +301,6 @@ def test_structured_router_handles_confirmation_after_pending_tool_request() -> 
 
     assert result.trace.loop_count == 1
     assert result.trace.executed_results[0].metadata["cmd"] == "df -h /"
-
-
-def test_hybrid_falls_back_for_explicit_unquoted_shell_command() -> None:
-    model = FakeMessagesListChatModel(responses=[AIMessage(content="Done.")])
-    runner = LangGraphToolRunner(
-        executor=_fake_shell_executor(),
-        base_url="http://localhost:8000/v1",
-        model="test",
-        fallback_to_heuristic=True,
-        chat_model=model,
-    )
-    engine = EmotionalEngine()
-
-    result = runner.run_tool_loop(
-        user_message="do arbitrary-tool --flag",
-        state=engine.state,
-        person=None,
-        defense_active=False,
-        engine=engine,
-        autonomy_level="high_risk",
-    )
-
-    assert result.trace.loop_count == 1
-    assert result.trace.executed_results[0].metadata["cmd"] == "arbitrary-tool --flag"
-    assert "ran arbitrary-tool --flag" in result.tool_context_summary
-
-
-# ---------------------------------------------------------------------------
-# Optional-extra import behavior: the module must import without langgraph
-# installed, and the runner constructor must fail with install guidance.
-# ---------------------------------------------------------------------------
 
 
 def test_module_imports_without_langgraph(monkeypatch) -> None:
@@ -375,45 +344,54 @@ def test_module_imports_without_langgraph(monkeypatch) -> None:
         importlib.reload(lg_mod)
 
 
-def test_langgraph_runner_gates_plan_continuation_under_assisted(tmp_path) -> None:
-    """Round-7 regression: the LangGraph runner must gate each plan step on
-    continuation, not launder a write step past assisted autonomy.
-    """
-    from core.task_planning import TaskPlan, TaskStep
-    from core.types import TaskStatus
+class _RecordingModel:
+    """A chat model that keeps what it was bound to and asked, and answers from a script."""
 
-    victim = tmp_path / "victim.txt"
-    victim.write_text("precious")
-    steps = [
-        TaskStep(id="s1", tool_name="fs.list_dir",
-                 arguments={"path": str(tmp_path)}, description="list (read-only)"),
-        TaskStep(id="s2", tool_name="fs.write_file",
-                 arguments={"path": str(victim), "content": "clobbered"},
-                 description="overwrite (write)"),
-    ]
-    plan = TaskPlan(id="p1", goal="list then overwrite", steps=steps,
-                    status=TaskStatus.IN_PROGRESS)
+    def __init__(self, replies) -> None:
+        self.replies, self.asked, self.tools = list(replies), [], None
 
-    # No model call happens on plan continuation, so an empty fake is fine.
-    runner = LangGraphToolRunner(
-        executor=_executor(),
-        base_url="http://localhost:8000/v1",
-        model="test",
-        chat_model=FakeMessagesListChatModel(responses=[AIMessage(content="x")]),
-    )
+    def bind_tools(self, tools):
+        self.tools = sorted(tool.name for tool in tools)
+        return self
+
+    def invoke(self, messages):
+        self.asked.append(list(messages))
+        return self.replies.pop(0)
+
+
+def test_a_granted_task_is_offered_only_its_capabilities_and_is_given_as_data() -> None:
+    from core.request_routing import Selection
+    from openrook_tools.native_orchestrator import SELECTION_INPUT
+
+    model = _RecordingModel([
+        AIMessage(content="", tool_calls=[{"name": "system__hostname", "args": {}, "id": "call_1"}]),
+        AIMessage(content="done"),
+    ])
+    executor = _executor()
+    runner = LangGraphToolRunner(executor=executor, base_url="http://localhost:8000/v1", model="test", chat_model=model)
     engine = EmotionalEngine()
+    selection = Selection(
+        request="which machine is this?", capabilities=("system.hostname",),
+        recent_turns=(("user", "I moved you to the new box."), ("character", "Noted.")),
+        receipts=({"tool": "system.uname", "success": True, "output": "Linux"},))
 
     result = runner.run_tool_loop(
-        user_message="continue",
-        state=engine.state,
-        person=None,
-        defense_active=False,
-        engine=engine,
-        active_plan=plan,
-        autonomy_level="assisted",
+        user_message=selection.request, selection=selection, state=engine.state, person=None,
+        defense_active=False, engine=engine, autonomy_level="high_risk",
     )
 
-    assert result.trace.task_trace is not None
-    assert result.trace.task_trace.plan_outcome == "blocked"
-    assert steps[1].status == TaskStatus.BLOCKED
-    assert victim.read_text() == "precious"
+    assert len(executor.registry.list_tools()) > 20 and model.tools == ["system__hostname"]
+    system, human = model.asked[0][0], model.asked[0][1]
+    assert SELECTION_INPUT in system.content
+    assert json.loads(human.content) == {
+        "request": "which machine is this?",
+        "recent_turns": [{"speaker": "user", "text": "I moved you to the new box."},
+                         {"speaker": "character", "text": "Noted."}],
+        "receipts": [{"tool": "system.uname", "success": True, "output": "Linux"}]}
+    assert [r.tool_name for r in result.trace.executed_results] == ["system.hostname"]
+    # Without a selection the runner behaves as before: the request text alone, every allowed tool.
+    plain = _RecordingModel([AIMessage(content="done")])
+    LangGraphToolRunner(executor=executor, base_url="http://localhost:8000/v1", model="test", chat_model=plain).run_tool_loop(
+        user_message="which machine is this?", state=engine.state, person=None, defense_active=False,
+        engine=engine, autonomy_level="high_risk")
+    assert len(plain.tools) > 20 and plain.asked[0][1].content == "which machine is this?"

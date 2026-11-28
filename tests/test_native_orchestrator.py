@@ -215,7 +215,8 @@ def test_native_runner_returns_empty_trace_when_model_chooses_no_tool() -> None:
     assert result.tool_context_summary == ""
 
 
-def test_native_runner_falls_back_to_heuristic_for_skill_registry(tmp_path) -> None:
+def test_native_runner_runs_nothing_when_the_model_selects_no_tool(tmp_path) -> None:
+    """There is no other way to choose a tool: no wording of the request stands in for the model's selection."""
     config = RuntimeConfig(data_dir=str(tmp_path / "data"), tools_enabled=False)
     client = FakeNativeClient([
         _response(_tool_call("control__no_tool", {"reason": "no external tool"})),
@@ -241,10 +242,10 @@ def test_native_runner_falls_back_to_heuristic_for_skill_registry(tmp_path) -> N
         autonomy_level="assisted",
     )
 
-    assert result.trace.loop_count == 1
-    assert result.trace.executed_results[0].tool_name == "skills.create_from_request"
-    assert result.trace.executed_results[0].success is True
-    assert list_skills(config)["skills"][0]["enabled"] is True
+    assert len(client.requests) == 1
+    assert result.trace.loop_count == 0 and result.trace.executed_results == []
+    assert result.trace.proposed_intents == [] and result.tool_context_summary == ""
+    assert list_skills(config)["skills"] == []
 
 
 def test_native_runner_accepts_life_influence_and_records_action_effect() -> None:
@@ -320,28 +321,25 @@ def _read_then_write_plan(tmp_path):
     return plan, victim, steps
 
 
-def test_native_runner_gates_plan_continuation_under_assisted(tmp_path) -> None:
-    """Round-7 regression: the native (default production) runner must gate
-    each plan step on continuation, not launder a write past assisted autonomy.
+def test_plan_continuation_is_gated_step_by_step_under_assisted(tmp_path) -> None:
+    """Round-7 regression: continuing a plan must gate each step, not launder a
+    write past assisted autonomy. A running plan is carried on by
+    ``continue_plan``, whichever tool runner the executor has; no model call
+    is involved.
     """
+    from core.dual_process.tool_loop import continue_plan
     from core.types import TaskStatus
 
-    runner = NativeToolCallRunner(
-        executor=_executor(),
-        base_url="http://localhost:8002/v1",
-        model="test-model",
-        client=FakeNativeClient([]),  # no model call expected on plan continuation
-    )
     engine = EmotionalEngine()
     plan, victim, steps = _read_then_write_plan(tmp_path)
 
-    result = runner.run_tool_loop(
-        user_message="continue",
+    result = continue_plan(
+        plan,
         state=engine.state,
         person=None,
         defense_active=False,
+        executor=_executor(),
         engine=engine,
-        active_plan=plan,
         autonomy_level="assisted",
     )
 
@@ -351,24 +349,20 @@ def test_native_runner_gates_plan_continuation_under_assisted(tmp_path) -> None:
     assert victim.read_text() == "precious"
 
 
-def test_native_runner_allows_plan_continuation_under_autonomous(tmp_path) -> None:
+def test_plan_continuation_completes_under_autonomous(tmp_path) -> None:
     """The same plan completes under autonomous autonomy (gate is not a wall)."""
-    runner = NativeToolCallRunner(
-        executor=_executor(),
-        base_url="http://localhost:8002/v1",
-        model="test-model",
-        client=FakeNativeClient([]),
-    )
+    from core.dual_process.tool_loop import continue_plan
+
     engine = EmotionalEngine()
     plan, victim, steps = _read_then_write_plan(tmp_path)
 
-    result = runner.run_tool_loop(
-        user_message="continue",
+    result = continue_plan(
+        plan,
         state=engine.state,
         person=None,
         defense_active=False,
+        executor=_executor(),
         engine=engine,
-        active_plan=plan,
         autonomy_level="autonomous",
     )
 

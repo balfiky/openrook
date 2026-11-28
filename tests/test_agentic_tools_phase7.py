@@ -1,8 +1,6 @@
 """Tests for Agentic Tools Phase 7: Multi-step task planning and task memory."""
 
 from __future__ import annotations
-from core.strategy import agency_summary
-from tests.policy_fakes import frozen
 
 
 
@@ -20,11 +18,7 @@ from core.types import (
     ToolTrace as ToolTraceType,
 )
 from core.task_planning import (
-    MAX_PLAN_STEPS,
-    detect_multi_step_intent,
     execute_plan,
-    is_continue_request,
-    is_status_request,
     summarize_plan_status,
 )
 from core.tool_memory import (
@@ -32,7 +26,9 @@ from core.tool_memory import (
     create_task_unresolved_item,
     derive_task_self_observations,
 )
-from core.dual_process.tool_loop import run_tool_loop
+from core.dual_process.tool_loop import continue_plan, run_tool_loop
+from core.types import ToolIntent
+from tests.support.readings import ScriptedReader, reading, task
 from openrook_tools.registry import ToolRegistry
 from openrook_tools.executor import ToolExecutor
 from openrook_tools import register_builtins
@@ -123,127 +119,10 @@ class TestTaskTypes:
         assert trace.plan_outcome == ""
 
 
-class TestHostInfoPlanning:
-    def test_uname_and_hostname_file_become_two_shell_steps(self):
-        plan = detect_multi_step_intent(
-            "run uname -a and cat /etc/hostname",
-            {"shell.run_command"},
-        )
-
-        assert plan is not None
-        assert [step.tool_name for step in plan.steps] == [
-            "shell.run_command",
-            "shell.run_command",
-        ]
-        assert [step.arguments["cmd"] for step in plan.steps] == [
-            "uname -a",
-            "cat /etc/hostname",
-        ]
-
+class TestToolTraceShape:
     def test_tool_trace_has_task_trace_field(self):
         tt = ToolTraceType()
         assert tt.task_trace is None
-
-
-# ===================================================================
-# Multi-step intent detection
-# ===================================================================
-
-class TestDetectMultiStepIntent:
-    def test_compound_and_then(self):
-        msg = "read file /tmp/a.txt and then delete file /tmp/a.txt"
-        available = {"fs.read_file", "fs.delete_path", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is not None
-        assert len(plan.steps) == 2
-        assert plan.steps[0].tool_name == "fs.read_file"
-        assert plan.steps[1].tool_name == "fs.delete_path"
-
-    def test_compound_then(self):
-        msg = "list directory /tmp then read file /tmp/test.txt"
-        available = {"fs.read_file", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is not None
-        assert len(plan.steps) == 2
-        assert plan.steps[0].tool_name == "fs.list_dir"
-        assert plan.steps[1].tool_name == "fs.read_file"
-
-    def test_no_multi_step_for_single(self):
-        msg = "read file /tmp/a.txt"
-        available = {"fs.read_file", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is None
-
-    def test_no_multi_step_for_conversational(self):
-        msg = "hello how are you doing today"
-        available = {"fs.read_file", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is None
-
-    def test_unavailable_tools_filtered(self):
-        msg = "read file /tmp/a.txt and then delete file /tmp/a.txt"
-        available = {"fs.read_file"}  # no delete
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is None  # only 1 valid step → not multi-step
-
-    def test_max_steps_capped(self):
-        # Build a message with many steps
-        parts = []
-        for i in range(8):
-            parts.append(f"read file /tmp/f{i}.txt")
-        msg = " and then ".join(parts)
-        available = {"fs.read_file"}
-        plan = detect_multi_step_intent(msg, available)
-        if plan:
-            assert len(plan.steps) <= MAX_PLAN_STEPS
-
-    def test_first_then_pattern(self):
-        msg = "first list directory /tmp then read file /tmp/a.txt"
-        available = {"fs.read_file", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is not None
-        assert len(plan.steps) >= 2
-
-    def test_goal_stored(self):
-        msg = "read file /tmp/a.txt and then list directory /tmp"
-        available = {"fs.read_file", "fs.list_dir"}
-        plan = detect_multi_step_intent(msg, available)
-        assert plan is not None
-        assert "read file" in plan.goal.lower()
-
-    def test_plan_id_unique(self):
-        msg = "read file /tmp/a.txt and then list directory /tmp"
-        available = {"fs.read_file", "fs.list_dir"}
-        p1 = detect_multi_step_intent(msg, available)
-        p2 = detect_multi_step_intent(msg, available)
-        assert p1 is not None and p2 is not None
-        assert p1.id != p2.id
-
-
-# ===================================================================
-# Follow-up detection
-# ===================================================================
-
-class TestFollowUpDetection:
-    def test_continue_patterns(self):
-        assert is_continue_request("continue") is True
-        assert is_continue_request("go on") is True
-        assert is_continue_request("keep going") is True
-        assert is_continue_request("next step") is True
-        assert is_continue_request("proceed") is True
-
-    def test_not_continue(self):
-        assert is_continue_request("hello") is False
-        assert is_continue_request("read file /tmp/a.txt") is False
-
-    def test_status_patterns(self):
-        assert is_status_request("what happened") is True
-        assert is_status_request("what's the status") is True
-        assert is_status_request("how is the task") is True
-        assert is_status_request("progress") is True
-
-    def test_not_status(self):
-        assert is_status_request("hello") is False
 
 
 class TestSummarizePlanStatus:
@@ -485,28 +364,6 @@ class TestExecutePlan:
 # ===================================================================
 
 class TestToolLoopMultiStep:
-    def test_multi_step_detected_and_executed(self, tmp_path):
-        """Tool loop detects multi-step intent and returns TaskTrace."""
-        reg, exe = _make_executor_with_builtins()
-        engine = FakeEngine()
-
-        target = str(tmp_path / "loop_test.txt")
-        msg = f"write 'hello' to {target} and then read file {target}"
-
-        result = run_tool_loop(
-            user_message=msg,
-            state=engine.state,
-            person=PersonProfile(person_id="u1", trust=0.7),
-            defense_active=False,
-            executor=exe,
-            engine=engine,
-        )
-
-        assert result.trace.task_trace is not None
-        assert result.trace.task_trace.plan is not None
-        assert result.trace.task_trace.steps_executed >= 2
-        assert result.tool_context_summary != ""
-
     def test_single_step_no_task_trace(self, tmp_path):
         """Single-step intent does not produce a TaskTrace."""
         reg, exe = _make_executor_with_builtins()
@@ -516,7 +373,8 @@ class TestToolLoopMultiStep:
         f.write_text("data")
 
         result = run_tool_loop(
-            user_message=f"read file {f}",
+            requested_intent=ToolIntent(tool_name="fs.read_file", arguments={"path": str(f)},
+                                        reason="test", expected_outcome="test"),
             state=engine.state,
             person=PersonProfile(person_id="u1", trust=0.7),
             defense_active=False,
@@ -546,95 +404,20 @@ class TestToolLoopMultiStep:
             current_step_index=1, status=TaskStatus.IN_PROGRESS,
         )
 
-        result = run_tool_loop(
-            user_message="continue",
+        result = continue_plan(
+            active_plan,
             state=engine.state,
             person=PersonProfile(person_id="u1", trust=0.7),
             defense_active=False,
             executor=exe,
             engine=engine,
-            active_plan=active_plan,
         )
 
         assert result.trace.task_trace is not None
         assert result.trace.task_trace.steps_executed >= 1
 
-    def test_status_request_returns_summary(self, tmp_path):
-        """Status request returns plan summary without executing."""
-        reg, exe = _make_executor_with_builtins()
-        engine = FakeEngine()
-
-        steps = [
-            TaskStep(id="s1", tool_name="fs.list_dir",
-                     arguments={"path": str(tmp_path)},
-                     description="list", status=TaskStatus.COMPLETED),
-            TaskStep(id="s2", tool_name="fs.list_dir",
-                     arguments={"path": str(tmp_path)},
-                     description="list again"),
-        ]
-        active_plan = TaskPlan(
-            id="p1", goal="test status", steps=steps,
-            current_step_index=1, status=TaskStatus.IN_PROGRESS,
-        )
-
-        result = run_tool_loop(
-            user_message="what's the status",
-            state=engine.state,
-            person=PersonProfile(person_id="u1", trust=0.7),
-            defense_active=False,
-            executor=exe,
-            engine=engine,
-            active_plan=active_plan,
-        )
-
-        assert "test status" in result.tool_context_summary
-        assert result.trace.task_trace is None  # no execution
-
-    def test_conversational_no_tools(self):
-        """Conversational message returns empty trace."""
-        reg, exe = _make_executor_with_builtins()
-        engine = FakeEngine()
-
-        result = run_tool_loop(
-            user_message="hello how are you",
-            state=engine.state,
-            person=PersonProfile(person_id="u1", trust=0.7),
-            defense_active=False,
-            executor=exe,
-            engine=engine,
-        )
-
-        assert result.trace.task_trace is None
-        assert len(result.trace.executed_results) == 0
-        assert result.tool_context_summary == ""
-
-    def test_multi_step_arbiter_can_refuse(self):
-        """Arbiter can refuse multi-step plan if risk tolerance is too low."""
-        reg, exe = _make_executor_with_builtins()
-        engine = FakeEngine()
-        # Low certainty + low bonding → low risk tolerance
-        engine.state.certainty = 0.1
-        engine.state.bonding = 0.1
-        engine.state.energy = 0.2
-
-        msg = "delete file /tmp/a.txt and then delete file /tmp/b.txt"
-
-        result = run_tool_loop(
-            user_message=msg,
-            state=engine.state,
-            person=PersonProfile(person_id="u1", trust=0.1),
-            defense_active=True,
-            executor=exe,
-            engine=engine,
-            agency_decision=agency_summary(frozen()),
-        )
-
-        # Should be refused or clarify (destructive + low trust)
-        if result.trace.final_decision:
-            assert result.trace.final_decision.decision in ("refuse", "clarify")
-
-    def test_run_tool_loop_gates_each_plan_step_under_assisted(self, tmp_path):
-        """run_tool_loop wires a per-step gate so assisted autonomy blocks a
+    def test_plan_continuation_gates_each_step_under_assisted(self, tmp_path):
+        """Plan continuation wires a per-step gate so assisted autonomy blocks a
         write step even when the leading step is read-only.
 
         End-to-end regression for the round-5 plan-step laundering finding.
@@ -657,14 +440,13 @@ class TestToolLoopMultiStep:
             status=TaskStatus.IN_PROGRESS,
         )
 
-        result = run_tool_loop(
-            user_message="continue",
+        result = continue_plan(
+            active_plan,
             state=engine.state,
             person=PersonProfile(person_id="u1", trust=0.7),
             defense_active=False,
             executor=exe,
             engine=engine,
-            active_plan=active_plan,
             autonomy_level="assisted",
         )
 
@@ -831,26 +613,6 @@ class TestPipelineTaskIntegration:
         d = DebugState()
         assert d.task_trace is None
 
-    def test_multi_step_sets_debug_task_trace(self, tmp_path):
-        """Full pipeline run with multi-step message populates task_trace."""
-        from pipeline import CognitivePipeline
-        from openrook_tools.registry import ToolRegistry
-        from openrook_tools.executor import ToolExecutor
-        from openrook_tools import register_builtins
-
-        reg = ToolRegistry()
-        exe = ToolExecutor(reg)
-        register_builtins(reg, exe)
-
-        p = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
-        target = str(tmp_path / "pipeline_test.txt")
-        msg = f"write 'data' to {target} and then read file {target}"
-        result = p.process(msg)
-
-        if result.debug.task_trace is not None:
-            assert result.debug.task_trace.steps_executed >= 2
-
-
 # ===================================================================
 # Debug API serialization
 # ===================================================================
@@ -931,7 +693,8 @@ class TestPhase7Regression:
         f.write_text("ok")
 
         result = run_tool_loop(
-            user_message=f"read file {f}",
+            requested_intent=ToolIntent(tool_name="fs.read_file", arguments={"path": str(f)},
+                                        reason="test", expected_outcome="test"),
             state=engine.state,
             person=PersonProfile(person_id="u1", trust=0.7),
             defense_active=False,
@@ -958,18 +721,22 @@ class TestPhase7Regression:
         assert len(reg) == 36
 
     def test_terminal_plan_cleared_from_session(self, tmp_path):
-        """Completed plan is cleared from _active_task_plan."""
+        """A running plan that a granted continuation completes is cleared from _active_task_plan."""
         from pipeline import CognitivePipeline
         reg = ToolRegistry()
         exe = ToolExecutor(reg)
         register_builtins(reg, exe)
 
-        p = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
-        target = str(tmp_path / "clear_test.txt")
-        msg = f"write 'x' to {target} and then read file {target}"
-        result = p.process(msg)
+        message = "carry on with it"
+        p = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe, message_reader=ScriptedReader(
+            reading(task(message, user_value=0.9, effort=0.05, plan="continue"))))
+        # A plan that a committed decision started; one without such a decision cannot be carried on.
+        p._active_task_plan = TaskPlan(id="p1", goal="look around", status=TaskStatus.IN_PROGRESS, origin_decision_id="1",
+                                       steps=[TaskStep(id="s1", tool_name="fs.list_dir", arguments={"path": str(tmp_path)},
+                                                       description="list")])
+        result = p.process(message)
 
-        # If a plan was executed and completed, it should be cleared
-        if result.debug.task_trace and result.debug.task_trace.plan:
-            if result.debug.task_trace.plan.is_terminal:
-                assert p._active_task_plan is None
+        assert result.debug.task_trace is not None and result.debug.task_trace.plan.is_terminal
+        assert [r.tool_name for r in result.debug.tool_trace.executed_results] == ["fs.list_dir"]
+        assert p._active_task_plan is None
+        p.close()

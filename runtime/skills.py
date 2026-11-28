@@ -26,9 +26,11 @@ import os
 import re
 import shutil
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any
 
+from core.perception import is_unspaced, quoted_in, tokens
 from runtime.config import RuntimeConfig
 
 
@@ -89,7 +91,7 @@ def enabled_skill_context(
     """
     root = skills_root(config)
     registry = _read_registry(root)
-    hint_tokens = _context_hint_tokens(context_hint)
+    hint = _context_hint_text(context_hint)
     skills: list[dict[str, Any]] = []
     for record in registry.get("skills", []):
         if not record.get("enabled") or record.get("status") != "enabled":
@@ -107,7 +109,7 @@ def enabled_skill_context(
         if warnings:
             continue
         applies_when = str(metadata.get("applies_when") or "").strip()
-        if applies_when and hint_tokens and not _trigger_matches(applies_when, hint_tokens):
+        if applies_when and hint.strip() and not _trigger_matches(applies_when, hint):
             continue
         skills.append({
             "id": record.get("id") or "",
@@ -128,13 +130,20 @@ def enabled_skill_context(
         "root": str(root),
         "count": len(skills),
         "skills": skills,
-        "context_hint_tokens": sorted(hint_tokens),
+        "context_hint_tokens": sorted(set(tokens(hint))),
     }
 
 
-def _context_hint_tokens(context_hint: dict[str, Any] | None) -> set[str]:
+def _word_text(text: str) -> str:
+    """Text with what separates words turned into spaces. The marks inside a tool name stay."""
+    return "".join(char if char in "._-" or unicodedata.category(char)[0] not in ("P", "S") else " "
+                   for char in text)
+
+
+def _context_hint_text(context_hint: dict[str, Any] | None) -> str:
+    """What a generation is about, as one text: the message, the tool and the strategy in play."""
     if not context_hint:
-        return set()
+        return ""
     parts: list[str] = []
     for key in ("user_message", "tool_name", "response_strategy"):
         value = context_hint.get(key)
@@ -143,15 +152,40 @@ def _context_hint_tokens(context_hint: dict[str, Any] | None) -> set[str]:
     extras = context_hint.get("extras")
     if isinstance(extras, (list, tuple)):
         parts.extend(str(item) for item in extras if item)
-    blob = " ".join(parts).lower()
-    # Tokenize on word boundaries; keep alphanumeric + dot for tool names like fs.read_file.
-    return set(re.findall(r"[a-z0-9][a-z0-9._-]*", blob))
+    return _word_text(" ".join(parts))
 
 
-def _trigger_matches(applies_when: str, hint_tokens: set[str]) -> bool:
-    """Return True if any token in applies_when appears in the context hint."""
-    trigger_tokens = set(re.findall(r"[a-z0-9][a-z0-9._-]*", applies_when.lower()))
-    return bool(trigger_tokens & hint_tokens)
+def _trigger_terms(applies_when: str) -> list[str]:
+    """What a skill's own trigger names, in any script.
+
+    Each word of a script written with spaces is a term, a tool name such as
+    ``fs.read_file`` included. Where a script writes no spaces, an unbroken
+    run of its characters is one term, as the owner wrote it.
+    """
+    terms: list[str] = []
+    for chunk in _word_text(applies_when).split():
+        run: list[str] = []
+        for token in tokens(chunk):
+            if is_unspaced(token):
+                run.append(token)
+                continue
+            if run:
+                terms.append("".join(run))
+                run = []
+            terms.append(token)
+        if run:
+            terms.append("".join(run))
+    return terms
+
+
+def _trigger_matches(applies_when: str, hint: str) -> bool:
+    """Return True if any term of applies_when stands in the context hint as whole words.
+
+    The trigger is the owner's own data. Words are compared as their script
+    delimits them (``core.perception``), so a trigger written in any language
+    is matched the same way.
+    """
+    return any(quoted_in(term, hint) for term in _trigger_terms(applies_when))
 
 
 def import_skill(

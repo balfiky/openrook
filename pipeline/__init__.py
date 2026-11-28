@@ -7,31 +7,27 @@ tri-state validation and bounded correction -> delivery and grounded outcome
 records.
 
 Every user message is read by the model: a required call with its own allowance
-of two (one retry for an unusable answer). Ordinary conversation then needs one
-expression call. Constrained expression adds review; a rewrite adds generation
-and review. The base budget for that work is five calls, including supplemental
-tool/learning inference. Only
+of two (one retry for an unusable answer). The reading also says what each task
+asks a capability for; nothing recognises a request by its wording. Ordinary
+conversation then needs one expression call and its review; a rewrite adds
+generation and review. The base budget for that work is five calls, including
+supplemental tool/learning inference. Only
 when bounded drafts leave no safe remainder may one protected final expression
-attempt use an additional call, recorded as delivery_recovery. Each
-granted task also has one protected primary tool selection, fully accounted. No
+attempt use an additional call, recorded as delivery_recovery. A granted task
+that names a capability without all of its operands has one protected primary
+tool selection, fully accounted; a task that names none never reaches tool
+selection. No
 mandatory inner dialogue or user-turn self-intent proposals run in this policy.
 Independent activity has its own decision and execution scope.
 """
 
 from core.types import PipelineContext
 from pipeline.heuristics import (
-    _BROAD_REPAIR_RE as _BROAD_REPAIR_RE,
     _CONVERSATION_HISTORY_MAX as _CONVERSATION_HISTORY_MAX,
-    _IDENTITY_QUESTION_RE as _IDENTITY_QUESTION_RE,
     _REPAIRABLE_UNRESOLVED_SOURCES as _REPAIRABLE_UNRESOLVED_SOURCES,
-    _clean_topic_hint as _clean_topic_hint,
     _format_generated_artifact_summary as _format_generated_artifact_summary,
-    _is_broad_repair_text as _is_broad_repair_text,
-    _is_identity_question as _is_identity_question,
     _is_repairable_unresolved_source as _is_repairable_unresolved_source,
-    _message_for_model_tool_routing as _message_for_model_tool_routing,
-    _message_for_tool_detection as _message_for_tool_detection,
-    _relationship_topic_hint as _relationship_topic_hint,
+    relationship_topic as relationship_topic,
 )
 from pipeline.types import DebugState, PipelineResponse, _TurnState as _TurnState
 from pipeline.core import CognitivePipeline

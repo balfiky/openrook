@@ -29,21 +29,8 @@ from core.proactive import (
     evaluate_proactive,
 )
 from core.character_vector import assemble_character_vector
-from core.dual_process.tool_loop import detect_capability_gap
 from core.types import PipelineContext
 from tests._fakes import MockLLMBackend
-
-
-def test_detects_common_missing_tool_capability_gaps():
-    assert (
-        detect_capability_gap("Create an image of a blue robot", set())["gap_type"]
-        == "image_generation"
-    )
-    assert (
-        detect_capability_gap("Analyze this spreadsheet and make charts", set())["gap_type"]
-        == "spreadsheet"
-    )
-    assert detect_capability_gap("Query my postgres database", set())["gap_type"] == "database"
 
 
 # ===================================================================
@@ -481,9 +468,8 @@ class TestEvaluateProactive:
         assert "high" in action.trigger.description.lower()
 
     def test_skill_want_trigger_from_repeated_capability_gap(self):
-        gap = detect_capability_gap("Read this PDF for me", {"fs.read_file"})
-        assert gap is not None
-        gap["recent_recurrence"] = 4
+        gap = {"id": "gap:pdf_reader", "gap_type": "pdf_reader", "recent_recurrence": 4,
+               "frustration_intensity": 0.4}
         vector = assemble_character_vector(PipelineContext(
             life_history_context={
                 "drives": [
@@ -768,11 +754,15 @@ class TestPhase8Regression:
         exe = ToolExecutor(reg)
         register_builtins(reg, exe)
 
-        p = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
+        from tests.support.readings import ScriptedReader, file_request
+
+        p = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe,
+                              message_reader=ScriptedReader(file_request))
         f = tmp_path / "test.txt"
         f.write_text("hello")
         result = p.process(f"read file {f}")
         assert result.debug.tool_trace is not None
+        assert [r.tool_name for r in result.debug.tool_trace.executed_results] == ["fs.read_file"]
 
     def test_builtin_count_unchanged(self):
         from openrook_tools.registry import ToolRegistry

@@ -138,9 +138,16 @@ def test_curiosity_pressure_creates_semantic_salience_delta():
         assistant_response="We can study that.",
         event_intensity=0.0,
         life_influence=derive_life_influence({"drives": [{"name": "curiosity", "delta": 0.2}]}),
+        learned=True,   # the turn took in learning material: a fact about the turn, not its wording
     )
 
     assert influenced_entries[0].salience - base_entries[0].salience == pytest.approx(0.2)
+    # The same words without that fact earn nothing.
+    unlearned = derive_semantic_entries(
+        config=config, user_id="alice", user_message="I want to learn graph databases.",
+        assistant_response="We can study that.", event_intensity=0.0,
+        life_influence=derive_life_influence({"drives": [{"name": "curiosity", "delta": 0.2}]}))
+    assert unlearned[0].salience == base_entries[0].salience
 
 
 def test_neutral_context_creates_no_action_variable_delta():

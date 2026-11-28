@@ -10,13 +10,13 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import re
 import sqlite3
 from core.clock import clock as time
 
 from config.loader import SemanticMemoryConfig
 from core.life_influence import LifeInfluence, curiosity_salience_bonus
 from core.schema import ensure_schema_version
+from core.perception import MIN_TELLING_TEXTS, retrieval_words, telling
 from core.types import SemanticMemoryEntry
 from runtime.evolution_policy import (
     detect_directive_override_markers,
@@ -24,33 +24,22 @@ from runtime.evolution_policy import (
 )
 
 
-_WORD_RE = re.compile(r"[a-z0-9_]+")
-_STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "but", "by", "do", "for",
-    "from", "how", "i", "if", "in", "is", "it", "me", "my", "of", "on",
-    "or", "our", "that", "the", "this", "to", "us", "we", "what", "you",
-    "your",
-}
-
 # A standing wish about reply length, as the reading reported it. The record
 # carries the wish as a tag; its text is never matched to recover it.
 BRIEF_REPLIES_TAG = "brief_replies"
 DETAILED_REPLIES_TAG = "detailed_replies"
 
-_PREFERENCE_PATTERNS = (
-    re.compile(r"\bI (?:prefer|like|love|want)\s+(.+)", re.IGNORECASE),
-    re.compile(r"\bmy preference is\s+(.+)", re.IGNORECASE),
-)
-
-_DECISION_PATTERNS = (
-    re.compile(r"\bwe decided(?: to)?\s+(.+)", re.IGNORECASE),
-    re.compile(r"\blet's\s+(.+)", re.IGNORECASE),
-)
+# What a message states that is meant to last, as the reading quotes it
+# (``AppraisalFrame.lasting``): the kind of record each becomes, with the label
+# its summary opens with, its confidence and the least salience it is given.
+_LASTING_RECORDS = {
+    "preference": ("User preference: ", 0.85, 0.65),
+    "decision": ("Decision: ", 0.8, 0.7),
+}
 
 
-def _tokenize(text: str) -> set[str]:
-    tokens = {match.group(0).lower() for match in _WORD_RE.finditer(text)}
-    return {token for token in tokens if token not in _STOPWORDS and len(token) > 1}
+def _entry_words(entry: SemanticMemoryEntry) -> set[str]:
+    return retrieval_words(" ".join([entry.summary, entry.content, entry.topic, " ".join(entry.tags)]))
 
 
 def _trim(text: str, limit: int = 180) -> str:
@@ -73,17 +62,17 @@ def _score_entry(
     query: str,
     source_person: str = "",
     topic: str = "",
+    query_words: set[str] | None = None,
 ) -> float:
-    query_tokens = _tokenize(query)
-    haystack = " ".join(
-        [
-            entry.summary,
-            entry.content,
-            entry.topic,
-            " ".join(entry.tags),
-        ]
-    ).lower()
-    haystack_tokens = _tokenize(haystack)
+    """How well a stored memory fits a query: shared words, topic, person, confidence, salience, recency.
+
+    Words are compared as their script delimits them, in any language, and no
+    list of function words is consulted. ``query_words`` are the query's words
+    that tell the candidate memories apart (``core.perception.telling``); when
+    not given, all of the query's words count.
+    """
+    query_tokens = retrieval_words(query) if query_words is None else query_words
+    haystack_tokens = _entry_words(entry)
     overlap = len(query_tokens & haystack_tokens)
     if query_tokens:
         overlap_score = overlap / len(query_tokens)
@@ -231,12 +220,20 @@ class SQLiteSemanticMemory:
             (source_person, source_person),
         ).fetchall()
 
+        entries = [entry for entry in map(self._row_to_entry, rows)
+                   if not _has_directive_override_text(f"{entry.summary}\n{entry.content}")]
+        # A word most of the stored memories contain tells none of them apart.
+        spread = [_entry_words(entry) for entry in entries]
+        if len(spread) < MIN_TELLING_TEXTS and source_person:
+            # Too few memories of this person to show which words are common. The whole store
+            # shows it: only how widely each word is used there is taken, never what it says.
+            spread = [_entry_words(entry) for entry in map(self._row_to_entry, self._conn.execute(
+                "SELECT * FROM semantic_memories ORDER BY timestamp DESC LIMIT 250").fetchall())]
+        query_words = telling(retrieval_words(query), spread)
         scored: list[tuple[float, SemanticMemoryEntry]] = []
-        for row in rows:
-            entry = self._row_to_entry(row)
-            if _has_directive_override_text(f"{entry.summary}\n{entry.content}"):
-                continue
-            score = _score_entry(entry, query=query, source_person=source_person, topic=topic)
+        for entry in entries:
+            score = _score_entry(entry, query=query, source_person=source_person, topic=topic,
+                                 query_words=query_words)
             if score <= 0.0:
                 continue
             entry.score = score
@@ -414,11 +411,17 @@ def derive_semantic_entries(
     event_intensity: float = 0.0,
     life_influence: LifeInfluence | None = None,
     reply_length: str = "",
+    lasting: tuple[tuple[str, str], ...] = (),
+    learned: bool = False,
 ) -> list[SemanticMemoryEntry]:
     """Create canonical semantic-memory records from a completed turn.
 
-    ``reply_length`` is the standing wish about reply length that the reading
-    of this message reported ("shorter", "longer" or nothing).
+    Nothing is recognised by wording here. ``reply_length`` is the standing
+    wish about reply length that the reading of this message reported
+    ("shorter", "longer" or nothing). ``lasting`` is what the reading says
+    the message states for later, as (kind, verbatim span) pairs: a lasting
+    preference of the person, or something settled. ``learned`` says whether
+    the turn took in learning material.
     """
     entries: list[SemanticMemoryEntry] = []
     now = time.time()
@@ -427,7 +430,7 @@ def derive_semantic_entries(
         return entries
     base_salience = max(0.2, min(1.0, 0.35 + event_intensity * 0.5))
     if life_influence is not None:
-        base_salience = min(1.0, base_salience + curiosity_salience_bonus(life_influence, raw_text))
+        base_salience = min(1.0, base_salience + curiosity_salience_bonus(life_influence, learned))
 
     if config.write_raw_turns:
         entries.append(
@@ -445,60 +448,30 @@ def derive_semantic_entries(
             )
         )
 
-    if config.write_preferences:
-        brief = {"shorter": True, "longer": False}.get(reply_length)
-        if brief is not None:
-            entries.append(SemanticMemoryEntry(
-                timestamp=now, kind="preference", source_person=user_id,
-                topic="response_style",
-                summary="User preference: " + ("short answers." if brief else "detailed answers."),
-                content=user_message, source="conversation", confidence=0.95,
-                salience=max(base_salience, 0.65),
-                tags=["preference", "response_style", BRIEF_REPLIES_TAG if brief else DETAILED_REPLIES_TAG],
-            ))
-        for pattern in _PREFERENCE_PATTERNS:
-            if brief is not None:
-                break
-            match = pattern.search(user_message)
-            if not match:
-                continue
-            preference_text = _trim(match.group(1), limit=120)
-            entries.append(
-                SemanticMemoryEntry(
-                    timestamp=now,
-                    kind="preference",
-                    source_person=user_id,
-                    topic=topic,
-                    summary=f"User preference: {preference_text}",
-                    content=user_message,
-                    source="conversation",
-                    confidence=0.85,
-                    salience=max(base_salience, 0.65),
-                    tags=[tag for tag in [topic, "preference"] if tag],
-                )
-            )
-            break
-
-    if config.write_decisions:
-        for pattern in _DECISION_PATTERNS:
-            match = pattern.search(user_message)
-            if not match:
-                continue
-            decision_text = _trim(match.group(1), limit=120)
-            entries.append(
-                SemanticMemoryEntry(
-                    timestamp=now,
-                    kind="decision",
-                    source_person=user_id,
-                    topic=topic,
-                    summary=f"Decision: {decision_text}",
-                    content=user_message,
-                    source="conversation",
-                    confidence=0.8,
-                    salience=max(base_salience, 0.7),
-                    tags=[tag for tag in [topic, "decision"] if tag],
-                )
-            )
-            break
+    kept: set[str] = set()
+    brief = {"shorter": True, "longer": False}.get(reply_length)
+    if config.write_preferences and brief is not None:
+        # The runtime's own tagged record of a wish about reply length. What the person said
+        # in their own words is kept beside it, when the reading quoted that too.
+        entries.append(SemanticMemoryEntry(
+            timestamp=now, kind="preference", source_person=user_id,
+            topic="response_style",
+            summary="User preference: " + ("short answers." if brief else "detailed answers."),
+            content=user_message, source="conversation", confidence=0.95,
+            salience=max(base_salience, 0.65),
+            tags=["preference", "response_style", BRIEF_REPLIES_TAG if brief else DETAILED_REPLIES_TAG],
+        ))
+    wanted = {"preference": config.write_preferences, "decision": config.write_decisions}
+    for kind, span in lasting:
+        if kind in kept or not wanted.get(kind) or not span.strip():
+            continue   # one quoted record of each kind for one turn
+        kept.add(kind)
+        label, confidence, salience = _LASTING_RECORDS[kind]
+        entries.append(SemanticMemoryEntry(
+            timestamp=now, kind=kind, source_person=user_id, topic=topic,
+            summary=label + _trim(span, limit=120), content=user_message, source="conversation",
+            confidence=confidence, salience=max(base_salience, salience),
+            tags=[tag for tag in [topic, kind] if tag],
+        ))
 
     return entries

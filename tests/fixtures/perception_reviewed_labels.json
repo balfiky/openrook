@@ -27,6 +27,42 @@
   "bracing",
   "lashes_out"
  ],
+ "core/dual_process/tool_loop.py::_build_step_gate": [
+  "execute"
+ ],
+ "core/dual_process/tool_loop.py::_summarize_for_generator": [
+  "fs."
+ ],
+ "core/dual_process/tool_loop.py::make_tool_decision": [
+  "assisted",
+  "off"
+ ],
+ "core/dual_process/tool_loop.py::record_operands": [
+  "content",
+  "fs.write_file"
+ ],
+ "core/dual_process/tool_loop.py::run_tool_loop": [
+  "execute"
+ ],
+ "core/grants.py::execution_denial": [
+  "independent",
+  "self."
+ ],
+ "core/grants.py::execution_scope": [
+  "independent",
+  "self."
+ ],
+ "core/grounding.py::blocked_before_execution": [
+  "shell_command_allowlist"
+ ],
+ "core/grounding.py::execution_evidence": [
+  "error",
+  "measurements",
+  "observed_output",
+  "output_truncated",
+  "path",
+  "success"
+ ],
  "core/life_influence.py::derive_life_influence": [
   "attachment",
   "autonomy",
@@ -34,6 +70,24 @@
   "competence",
   "continuity",
   "curiosity"
+ ],
+ "core/memory/semantic.py::derive_semantic_entries": [
+  "Decision: ",
+  "User preference: ",
+  "response_style"
+ ],
+ "core/request_routing.py": [
+  "goal",
+  "optional_arguments",
+  "purpose",
+  "steps_done",
+  "steps_total",
+  "text"
+ ],
+ "core/request_routing.py::plan_report": [
+  "goal",
+  "steps_done",
+  "steps_total"
  ],
  "core/self_intent.py::conversation_proposals": [
   "goals",
@@ -64,6 +118,41 @@
   "goals",
   "self:"
  ],
+ "core/task_planning.py": [
+  "[BLOCK]",
+  "[FAIL]",
+  "[done]"
+ ],
+ "core/task_planning.py::summarize_plan_status": [
+  "[BLOCK]",
+  "[FAIL]",
+  "[done]"
+ ],
+ "core/tool_appraisal.py::_appraise_read_success": [
+  "energy"
+ ],
+ "core/tool_memory.py::create_task_long_term_entry": [
+  "calendar.delete",
+  "completed",
+  "fs.delete"
+ ],
+ "core/tool_memory.py::create_tool_event": [
+  "emotional_delta",
+  "success",
+  "summary",
+  "tool_execution",
+  "tool_name"
+ ],
+ "core/tool_memory.py::derive_task_self_observations": [
+  "calendar.delete",
+  "fs.delete",
+  "fs.write",
+  "shell."
+ ],
+ "core/tool_memory.py::derive_tool_self_observations": [
+  "clarify",
+  "refuse"
+ ],
  "core/willingness.py::_component_terms": [
   "authored_values",
   "character_benefit",
@@ -82,6 +171,51 @@
   "patience",
   "pride"
  ],
+ "core/willingness.py::proposal_terms": [
+  "character_benefit"
+ ],
+ "openrook_tools/executor.py::ToolExecutor.execute": [
+  "fs.",
+  "path"
+ ],
+ "openrook_tools/native_orchestrator.py::NativeToolCallRunner._capabilities_allowed_by_policy": [
+  "execute"
+ ],
+ "openrook_tools/native_orchestrator.py::NativeToolCallRunner._create_tool_choice": [
+  "call_id",
+  "error",
+  "messages",
+  "model",
+  "response",
+  "temperature",
+  "tool_choice",
+  "tools"
+ ],
+ "openrook_tools/native_orchestrator.py::NativeToolCallRunner.run_tool_loop": [
+  "content",
+  "execute",
+  "off",
+  "system"
+ ],
+ "openrook_tools/native_orchestrator.py::_tool_message_for_history": [
+  "content",
+  "tool_call_id"
+ ],
+ "openrook_tools/native_orchestrator.py::_tool_result_content": [
+  "error",
+  "metadata",
+  "output",
+  "side_effect_summary",
+  "success",
+  "tool_name"
+ ],
+ "pipeline/core.py::CognitivePipeline._build_context": [
+  "autonomy_level",
+  "decision",
+  "settings",
+  "shell_tool_enabled",
+  "tools_enabled"
+ ],
  "pipeline/core.py::CognitivePipeline._classify_event_via_rules": [
   "model"
  ],
@@ -91,21 +225,141 @@
   "input",
   "stage"
  ],
+ "pipeline/core.py::CognitivePipeline._note_unavailable_work": [
+  "frustration_intensity",
+  "gap_type",
+  "recent_recurrence"
+ ],
  "pipeline/core.py::CognitivePipeline._project_conversation_commitments": [
   "Previously selected unfinished work.",
   "active",
   "priority",
   "status"
  ],
+ "pipeline/core.py::CognitivePipeline._record_live_development": [
+  "backend_failure",
+  "delivery_outcome",
+  "expression",
+  "expression_failure",
+  "observed_state",
+  "pending",
+  "pending_turns",
+  "turn_id"
+ ],
+ "pipeline/core.py::CognitivePipeline._record_self_observations": [
+  "avoidant",
+  "blunt",
+  "empathetic",
+  "event",
+  "high_certainty",
+  "latent_state",
+  "low_energy",
+  "negative_user_emotion",
+  "response",
+  "selected_expression"
+ ],
+ "pipeline/core.py::CognitivePipeline._record_social_turn": [
+  "active",
+  "decision_turn_id",
+  "delivered",
+  "delivery_outcome",
+  "elapsed",
+  "expression_delivery",
+  "expression_excision",
+  "expression_reviews",
+  "generation_attempts",
+  "input",
+  "llm_calls",
+  "priority",
+  "question:",
+  "reading",
+  "self:interests:",
+  "self_development",
+  "source_ref",
+  "stage_timings_ms",
+  "state_after",
+  "tool_selection"
+ ],
+ "pipeline/core.py::CognitivePipeline._run_tool_stage": [
+  "execute"
+ ],
+ "pipeline/core.py::CognitivePipeline._stage_post_process": [
+  "content",
+  "delivered",
+  "response_delivered"
+ ],
+ "pipeline/core.py::CognitivePipeline._write_generated_artifact": [
+  "<generated artifact>",
+  "content",
+  "execute",
+  "path"
+ ],
+ "pipeline/heuristics.py": [
+  "contradiction",
+  "dialogue_deadlock",
+  "hostility",
+  "relationship",
+  "spike",
+  "topic"
+ ],
+ "runtime/learning_intake.py::_collect_material": [
+  "Conversation learning note",
+  "conversation_learning",
+  "conversation_learning_text",
+  "conversation_learning_url",
+  "inline_text",
+  "input_mode",
+  "reader",
+  "source_count",
+  "url",
+  "urls"
+ ],
+ "runtime/life_history.py::LifeHistoryStore._revise_beliefs_locked": [
+  "after_confidence",
+  "after_status",
+  "before_confidence",
+  "before_status",
+  "contradicts",
+  "open_questions_emitted",
+  "reinforced",
+  "revised",
+  "supports",
+  "verdict_source"
+ ],
+ "runtime/life_history.py::LifeHistoryStore.ingest_external_text": [
+  "char_count",
+  "external_text",
+  "input_mode"
+ ],
  "runtime/life_history.py::LifeHistoryStore.retrieve_relevant": [
   "active",
   "beliefs",
   "drives",
+  "key",
   "recent_evolution",
   "self_trait",
-  "self_traits"
+  "self_traits",
+  "statement"
  ],
- "runtime/skills.py::_context_hint_tokens": [
+ "runtime/life_history.py::_normalize_digest": [
+  "beliefs",
+  "drive_changes",
+  "emotional_impact",
+  "emotional_valence",
+  "future_behavior",
+  "salience",
+  "self_trait_changes",
+  "self_updates",
+  "self_updates_provided",
+  "summary",
+  "title"
+ ],
+ "runtime/sessions/manager.py::SessionManager._execute_learning_component": [
+  "URL or a longer pasted text",
+  "learning:explicit",
+  "learning:pending"
+ ],
+ "runtime/skills.py::_context_hint_text": [
   "response_strategy",
   "tool_name"
  ],

@@ -22,7 +22,9 @@ from runtime.llm.backend import OpenAICompatibleLLMBackend
 from runtime.llm.lazy import LazyLLMBackend
 from runtime.sessions.manager import SessionManager
 from tests.policy_fakes import ExpressionBackend, VaryingExpressionBackend
-from tests.test_live_roleplay_p1f import executor_at
+from tests.support.readings import WithReadings, operations
+from tests.test_live_roleplay_p1f import THREE_STEPS, ListsTheParent, executor_at, step
+from tests.support.readings import reading
 from tests.test_llm_timeouts import _response
 
 
@@ -37,25 +39,46 @@ def packaged_configuration():
 async def test_live_session_dispatches_atomic_files_instead_of_intercepting_as_learning(tmp_path, history):
     workspace = tmp_path / "workspace"
     config = RuntimeConfig(data_dir=str(tmp_path / "data"), autonomy_level="autonomous", appraisal_use_llm=False)
-    manager = SessionManager(config, backend_factory=VaryingExpressionBackend,
-                             tool_executor_factory=lambda: executor_at(workspace))
+    create = "Create the file run/case/note.txt inside your tools workspace with exactly this content: café"
+    read_and_list = "Read run/case/note.txt and list the entries in its parent directory."
+    three = "Create run/case/second.txt with content café, read it back, then list its parent directory. Report each result."
+    delete = "Please delete only run/case/second.txt, the fixture created here, and report the actual result."
+    # What the reading reports for each request: its operations in order, each
+    # with the operands the person wrote, inside the part that asks for it. A
+    # parent directory is not something the person wrote: it is left to be
+    # produced, and the selecting model works it out. The history turns are left unread.
+    readings = {
+        create: operations((create, "fs.write_file", dict(path="run/case/note.txt", content="café"))),
+        read_and_list: reading(step("Read run/case/note.txt", "fs.read_file", path="run/case/note.txt"),
+                               step("list the entries in its parent directory", "fs.list_dir", generate=["path"])),
+        three: THREE_STEPS,
+        delete: operations(("delete only run/case/second.txt", "fs.delete_path", dict(path="run/case/second.txt"))),
+    }
+
+    def tools():
+        executor = executor_at(workspace)
+        executor.set_tool_runner(ListsTheParent(executor))
+        return executor
+
+    manager = SessionManager(config, backend_factory=lambda: WithReadings(VaryingExpressionBackend(), readings),
+                             tool_executor_factory=tools)
     try:
         async def turn(message):
             await manager.handle_message("console", "alice", "direct", message)
             return manager.active_sessions["console:alice:direct"].last_debug
         for message in history:
             await turn(message)
-        created = await turn("Create the file run/case/note.txt inside your tools workspace with exactly this content: café")
+        created = await turn(create)
         receipt, = created.tool_trace.executed_results
         assert receipt.tool_name == "fs.write_file" and receipt.success
         assert (workspace / "run/case/note.txt").read_bytes() == "café".encode()
-        read = await turn("Read run/case/note.txt and list the entries in its parent directory.")
+        read = await turn(read_and_list)
         assert [r.tool_name for r in read.tool_trace.executed_results] == ["fs.read_file", "fs.list_dir"]
-        multi = await turn("Create run/case/second.txt with content café, read it back, then list its parent directory. Report each result.")
+        multi = await turn(three)
         receipts = multi.tool_trace.executed_results
         assert [r.tool_name for r in receipts] == ["fs.write_file", "fs.read_file", "fs.list_dir"]
         assert all(r.success and r.metadata["component_id"] in multi.turn_decision.grants for r in receipts)
-        deleted = await turn("Please delete only run/case/second.txt, the fixture created here, and report the actual result.")
+        deleted = await turn(delete)
         assert deleted.tool_trace.executed_results[0].success
         assert not (workspace / "run/case/second.txt").exists()
         assert (workspace / "run/case/note.txt").exists()

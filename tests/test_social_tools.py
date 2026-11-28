@@ -64,11 +64,17 @@ def test_frozen_decline_blocks_all_arbiter_categories(category):
     ("high_risk", ToolCategory.WRITE, "execute"),
 ])
 def test_operator_modes_remain_binding_after_character_grant(mode, category, expected):
-    d = frozen(components=(RequestComponent("task", "useful task", user_value=1, effort=0),))
+    d = frozen(components=(RequestComponent("task", "useful task", user_value=1, effort=0,
+                                            capability_requirements=("fs.write_file",)),))
     intent = ToolIntent("fs.write_file", {}, "requested", "output", component_id="task")
     result = make_tool_decision(intent, derive_action_variables(ModulatorState(energy=0)), category, 0,
                                 agency_decision=agency_summary(d), autonomy_level=mode)
     assert result.decision == expected
+    # The character's grant covers the capability its task names, and nothing else, in every mode.
+    other = ToolIntent("fs.delete_path", {}, "requested", "output", component_id="task")
+    refused = make_tool_decision(other, derive_action_variables(ModulatorState(energy=0)), category, 0,
+                                 agency_decision=agency_summary(d), autonomy_level=mode)
+    assert refused.decision == "refuse" and "outside the capabilities" in refused.rationale
 
 
 @pytest.mark.keyword_reader

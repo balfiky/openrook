@@ -156,7 +156,18 @@ character has no topics of its own (audit, point 1).
    - The draw comes from real randomness, and is stored so a turn can be replayed exactly.
    - Tests inject the draw.
 
-**Tests.** Birth mapping, effects of extra values, replay with a stored draw.
+4. **Pride prices standing, the autonomy value prices whose say.**
+   - Since sub-phase 1c a reading states two closed facts about a role: where taking it on
+     would put the character with the speaker (`standing`), and whose decision would then
+     settle what it does (`whose_say`). See [the reading contract](reading-contract.md).
+   - For now they only set a floor under the role's `autonomy_cost`, where the reading becomes
+     a component (0.75, 0.5, 0.3). That floor is a stop-gap.
+   - In this phase the decision prices the two facts itself, and separately: pride prices a
+     lower standing, the autonomy value prices handing over or sharing the say. The floor and
+     its constants (`core/appraisal.py::ROLE_FLOOR_*`) are then removed.
+
+**Tests.** Birth mapping, effects of extra values, replay with a stored draw, and the two role
+facts priced separately once the floor is gone.
 
 **Simulation check.** Across sampled situations, report how often the random element changes the
 choice at each spontaneity setting. The default should change about 1 in 10 moderately close
@@ -225,7 +236,17 @@ tools for itself. Feelings never lead to action (audit, points 5 and 6).
 8. **Settings.** The life loop is on by default. The owner sets how often it may wake and a cap on
    model calls per hour.
 
-**Tests.** Loop scheduling, decision scope, delivery, shared mood, call cap.
+9. **Multi-step work across turns returns here, as the character's own intention.**
+   - Sub-phase 1c removed the regex step templates, which were the only thing that created a
+     task plan in a user turn. Nothing creates one now.
+   - Until this phase a multi-step request runs as separately granted components within the
+     turn, each given the receipts of the ones before it. `continue` and `status` apply only
+     to a plan restored from a saved session. See [request routing](request-routing.md).
+   - Here a plan becomes something the character chooses to carry on between turns, priced
+     and picked by the same decision function as its other intentions.
+
+**Tests.** Loop scheduling, decision scope, delivery, shared mood, call cap, and a plan carried
+across turns by the character's own choice.
 
 **Live check.** A day-long run on the owner's backend within the call cap. Confirm self-started
 messages with real content, own tool use, and reflection results in the study log.

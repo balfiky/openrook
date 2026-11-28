@@ -3,13 +3,17 @@
 This adapter keeps OpenRook's existing tool registry/executor, appraisal, traces,
 and memory coupling, but delegates tool selection/execution flow to a
 LangGraph tool-calling graph when configured.
+
+Like the native runner it is asked only for a granted task that names a
+capability without all of its operands, and it has no other way to choose a
+tool than the model: when the model selects none, none runs.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Iterable
 
 from pydantic import Field, create_model
 
@@ -20,10 +24,8 @@ from core.dual_process.tool_loop import (
     DEFAULT_MAX_EXECUTIONS,
     ToolLoopResult,
     _apply_emotional_deltas,
-    _build_step_gate,
     _summarize_for_generator,
     make_tool_decision,
-    run_tool_loop as run_heuristic_tool_loop,
 )
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.life_influence import (
@@ -32,19 +34,13 @@ from core.life_influence import (
     apply_character_vector_to_action_variables,
     apply_life_influence_to_action_variables,
 )
-from core.task_planning import (
-    execute_plan,
-    is_continue_request,
-    is_status_request,
-    summarize_plan_status,
-)
+from core.request_routing import Selection
 from core.tool_appraisal import appraise_tool_result
 from core.types import (
     ActionVariables,
     AgencyDecision,
     ModulatorState,
     PersonProfile,
-    TaskPlan,
     ToolCategory,
     ToolDecision,
     ToolIntent,
@@ -53,6 +49,7 @@ from core.types import (
     ToolTrace,
 )
 from openrook_tools.executor import ToolExecutor
+from openrook_tools.native_orchestrator import SELECTION_FAILURE, SELECTION_INPUT, selection_failure
 
 # langgraph/langchain are an optional extra: this module must import cleanly
 # without them so `import openrook_tools.langgraph_orchestrator` (and the test
@@ -149,7 +146,7 @@ class LangGraphToolRunner:
         model: str,
         api_key: str = "",
         timeout: float = 120.0,
-        fallback_to_heuristic: bool = False,
+        structured_fallback: bool = False,
         chat_model: Any | None = None,
     ) -> None:
         _require_langgraph()
@@ -169,7 +166,9 @@ class LangGraphToolRunner:
 
         self._executor = executor
         self._base_model = chat_model
-        self._fallback_to_heuristic = fallback_to_heuristic
+        # When the graph executed nothing, ask the model once more for one
+        # structured choice of tool. There is no other fallback.
+        self._structured_fallback = structured_fallback
         self._safe_to_original: dict[str, str] = {}
         self._original_to_safe: dict[str, str] = {}
         self._last_results: list[ToolResult] = []
@@ -184,58 +183,26 @@ class LangGraphToolRunner:
         engine: Any,
         max_executions: int = DEFAULT_MAX_EXECUTIONS,
         hard_cap: int = HARD_CAP_EXECUTIONS,
-        active_plan: TaskPlan | None = None,
         agency_decision: AgencyDecision | None = None,
         autonomy_level: str = "autonomous",
         life_influence: LifeInfluence | None = None,
         character_vector: CharacterVector | None = None,
+        selection: Selection | None = None,
     ) -> ToolLoopResult:
-        """Run one tool turn and return the same shape as the legacy loop."""
+        """Run one tool turn for one granted task.
+
+        ``selection`` is that task as data (``core.request_routing.Selection``):
+        only the capabilities it names are offered, and the model is given the
+        request, the operands the person wrote, the recent turns and this
+        turn's receipts. ``user_message`` is the request text alone, for a
+        caller that has nothing more.
+        """
         trust = person.trust if person else 0.5
         action_vars = derive_action_variables(
             state, trust=trust, defense_active=defense_active,
         )
         effective_action_vars = action_vars
         life_effects: dict[str, float] = {}
-
-        # Preserve the existing explicit task-plan state machine. LangGraph
-        # handles fresh multi-tool requests, but active plans are OpenRook state.
-        if active_plan and not active_plan.is_terminal:
-            if is_status_request(user_message):
-                return ToolLoopResult(
-                    trace=ToolTrace(),
-                    action_variables=action_vars,
-                    tool_context_summary=summarize_plan_status(active_plan),
-                )
-            if is_continue_request(user_message):
-                # Gate every step against its own category so plan
-                # continuation cannot launder a risky step past the autonomy
-                # arbiter (parity with the heuristic and native loops).
-                task_trace = execute_plan(
-                    active_plan, self._executor, action_vars, engine=engine,
-                    step_gate=_build_step_gate(
-                        action_vars, trust, agency_decision, autonomy_level,
-                    ),
-                )
-                executed = [
-                    step.result for step in active_plan.steps if step.result is not None
-                ]
-                observations = [
-                    step.observation
-                    for step in active_plan.steps
-                    if step.observation is not None
-                ]
-                summary = _summarize_for_generator(observations, executed)
-                return ToolLoopResult(
-                    trace=ToolTrace(
-                        executed_results=executed,
-                        observations=observations,
-                        loop_count=task_trace.steps_executed,
-                        task_trace=task_trace,
-                    ),
-                    action_variables=action_vars,
-                    tool_context_summary=summary,
-                )
 
         tools = self._tools_allowed_by_policy(
             action_vars=action_vars,
@@ -244,6 +211,7 @@ class LangGraphToolRunner:
             autonomy_level=autonomy_level,
             life_influence=life_influence,
             character_vector=character_vector,
+            offered=selection.capabilities if selection is not None else None,
         )
         if not tools:
             return ToolLoopResult(
@@ -252,37 +220,26 @@ class LangGraphToolRunner:
                 tool_context_summary="",
             )
 
+        asked = selection.to_text() if selection is not None else user_message
         self._last_results = []
         try:
-            graph = self._compile_graph(tools)
+            graph = self._compile_graph(tools, described=selection is not None)
             output = graph.invoke(
-                {"messages": [HumanMessage(content=user_message)]},
+                {"messages": [HumanMessage(content=asked)]},
                 config={"recursion_limit": max(3, min(max_executions, hard_cap) * 2 + 3)},
             )
         except (ResearchBudgetExceeded, ResearchStudyLimit):
             raise
         except Exception as exc:
-            if self._fallback_to_heuristic:
-                return self._run_heuristic(
-                    user_message=user_message,
-                    state=state,
-                    person=person,
-                    defense_active=defense_active,
-                    engine=engine,
-                    max_executions=max_executions,
-                    hard_cap=hard_cap,
-                    active_plan=active_plan,
-                    agency_decision=agency_decision,
-                    autonomy_level=autonomy_level,
-                    life_influence=life_influence,
-                    character_vector=character_vector,
-                )
             failure = ToolResult(
                 tool_name="langgraph.agent",
                 success=False,
                 output="",
                 error=f"{type(exc).__name__}: {exc}",
             )
+            kind = selection_failure(exc)
+            if kind:
+                failure.metadata.update({SELECTION_FAILURE: kind, "execution_started": False})
             return ToolLoopResult(
                 trace=ToolTrace(executed_results=[failure], loop_count=0),
                 action_variables=action_vars,
@@ -291,9 +248,10 @@ class LangGraphToolRunner:
 
         proposed = self._extract_proposed_intents(output, action_vars)
         executed_results = list(self._last_results)
-        if not executed_results and self._fallback_to_heuristic:
+        if not executed_results and self._structured_fallback:
             routed = self._run_structured_router(
-                user_message=user_message,
+                user_message=asked,
+                offered=selection.capabilities if selection is not None else None,
                 action_vars=action_vars,
                 trust=trust,
                 agency_decision=agency_decision,
@@ -304,20 +262,6 @@ class LangGraphToolRunner:
             )
             if routed is not None:
                 return routed
-            return self._run_heuristic(
-                user_message=user_message,
-                state=state,
-                person=person,
-                defense_active=defense_active,
-                engine=engine,
-                max_executions=max_executions,
-                hard_cap=hard_cap,
-                active_plan=active_plan,
-                agency_decision=agency_decision,
-                autonomy_level=autonomy_level,
-                life_influence=life_influence,
-                character_vector=character_vector,
-            )
 
         observations = [
             self._appraise_and_apply(result, engine) for result in executed_results
@@ -353,7 +297,7 @@ class LangGraphToolRunner:
             life_influence_effects=life_effects,
         )
 
-    def _compile_graph(self, tools: list[StructuredTool]) -> Any:
+    def _compile_graph(self, tools: list[StructuredTool], *, described: bool = False) -> Any:
         model = self._base_model
         bind_tools = getattr(model, "bind_tools", None)
         if callable(bind_tools):
@@ -363,7 +307,7 @@ class LangGraphToolRunner:
                 pass
 
         def call_model(graph_state: MessagesState) -> dict[str, list[Any]]:
-            messages = [SystemMessage(content=_TOOL_SYSTEM_PROMPT)]
+            messages = [SystemMessage(content=_TOOL_SYSTEM_PROMPT + ("\n" + SELECTION_INPUT if described else ""))]
             messages.extend(graph_state["messages"])
             return {"messages": [model.invoke(messages)]}
 
@@ -388,6 +332,7 @@ class LangGraphToolRunner:
         autonomy_level: str,
         life_influence: LifeInfluence | None = None,
         character_vector: CharacterVector | None = None,
+        offered: Iterable[str] | None = None,
     ) -> list[StructuredTool]:
         return [
             self._to_langchain_tool(capability.name)
@@ -398,6 +343,7 @@ class LangGraphToolRunner:
                 autonomy_level=autonomy_level,
                 life_influence=life_influence,
                 character_vector=character_vector,
+                offered=offered,
             )
         ]
 
@@ -410,9 +356,14 @@ class LangGraphToolRunner:
         autonomy_level: str,
         life_influence: LifeInfluence | None = None,
         character_vector: CharacterVector | None = None,
+        offered: Iterable[str] | None = None,
     ) -> list[Any]:
+        """The tools that may be offered: allowed by the operator and the grant, and asked for by the task."""
+        names = None if offered is None else set(offered)
         capabilities: list[Any] = []
         for capability in self._executor.registry.list_tools():
+            if names is not None and capability.name not in names:
+                continue
             adjusted_action_vars = _with_life_influence(
                 action_vars,
                 life_influence,
@@ -437,6 +388,7 @@ class LangGraphToolRunner:
                 trust,
                 agency_decision=agency_decision,
                 autonomy_level=autonomy_level,
+                availability_only=True,
             )
             if decision.decision == "execute":
                 capabilities.append(capability)
@@ -520,6 +472,7 @@ class LangGraphToolRunner:
         life_influence: LifeInfluence | None,
         engine: Any,
         character_vector: CharacterVector | None = None,
+        offered: Iterable[str] | None = None,
     ) -> ToolLoopResult | None:
         capabilities = self._capabilities_allowed_by_policy(
             action_vars=action_vars,
@@ -528,6 +481,7 @@ class LangGraphToolRunner:
             autonomy_level=autonomy_level,
             life_influence=life_influence,
             character_vector=character_vector,
+            offered=offered,
         )
         if not capabilities:
             return ToolLoopResult(
@@ -536,7 +490,7 @@ class LangGraphToolRunner:
                 tool_context_summary="",
             )
 
-        route = self._ask_structured_router(user_message, capabilities)
+        route = self._ask_structured_router(user_message, capabilities, described=offered is not None)
         if route is _ROUTER_PARSE_FAILED:
             return None
         if route is None:
@@ -609,6 +563,7 @@ class LangGraphToolRunner:
         self,
         user_message: str,
         capabilities: list[Any],
+        described: bool = False,
     ) -> (
         tuple[str, dict[str, Any], float, str]
         | None
@@ -628,7 +583,8 @@ class LangGraphToolRunner:
             "available_tools": tools_payload,
         }
         messages = [
-            SystemMessage(content=_STRUCTURED_ROUTER_SYSTEM_PROMPT),
+            SystemMessage(content=_STRUCTURED_ROUTER_SYSTEM_PROMPT + (
+                "\nThe user_message field holds the work as data. " + SELECTION_INPUT if described else "")),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
         ]
 
@@ -675,9 +631,6 @@ class LangGraphToolRunner:
         observation = appraise_tool_result(result, category)
         _apply_emotional_deltas(engine, observation)
         return observation
-
-    def _run_heuristic(self, **kwargs: Any) -> ToolLoopResult:
-        return run_heuristic_tool_loop(executor=self._executor, **kwargs)
 
 
 def _pydantic_args_schema(tool_name: str, arg_schema: dict[str, Any]) -> type[Any]:

@@ -9,7 +9,8 @@ from interface.api import EndSessionRequest
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from runtime.sessions.manager import SessionManager
-from tests._fakes import VaryingMockLLMBackend as MockLLMBackend
+from tests._fakes import VaryingMockLLMBackend
+from tests.support.readings import WithReadings, conversation, reading
 
 
 pytestmark = pytest.mark.anyio
@@ -17,6 +18,14 @@ pytestmark = pytest.mark.anyio
 OMAR_MESSAGE = (
     "Please remember: I'm Omar, a teacher, and I prefer examples over theory."
 )
+# Its reading quotes the preference it states, which is what makes memory keep one.
+# Every other message in these tests is unread.
+READINGS = {OMAR_MESSAGE: reading(conversation(OMAR_MESSAGE), lasting=[
+    {"kind": "preference", "span": "examples over theory"}])}
+
+
+def MockLLMBackend(response="I understand."):
+    return WithReadings(VaryingMockLLMBackend(response=response), READINGS)
 
 
 @pytest.fixture

@@ -21,7 +21,6 @@ from runtime.developing_self import birth_state, project_self, soul_from_self
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.inference import call_telemetry, expression_retry, final_expression_attempt, generate, inference_phase, inference_turn, primary_tool_inference, remaining_calls, reserve_expression_calls
 from core.types import (
-    AgencyDecision,
     AppraisalFrame,
     DetectedEmotion,
     DefenseActivation,
@@ -31,7 +30,6 @@ from core.types import (
     LongTermEntry,
     ModulatorState,
     PipelineContext,
-    PersonProfile,
     RelationshipEvent,
     SelfIntent,
     TaskPlan,
@@ -48,6 +46,7 @@ from core.types import (
     ValueHierarchy,
 )
 from core.appraisal import (
+    CONTEXT_WINDOW,
     MessageReader,
     appraise_with_life_history,
     read_message,
@@ -57,12 +56,15 @@ from core.appraisal import (
 from core.affect import resolve_affect
 from core.strategy import agency_summary, decision_trace, summarize_decision
 from core.dignity import STALE, correction_instruction, excisable_choice_issues
-from core.review import ExpressionReviewer, review_draft
-from core.system_inspection import inspection_intent, inspection_kind
+from core.review import ExpressionReviewer, receipt_projection, review_draft
 from core.action_variables import derive_action_variables
-from core.task_planning import is_continue_request, is_status_request, summarize_plan_status
-from core.artifact_writer import detect_artifact_write_request, generate_artifact_draft
-from core.grants import execution_metadata, execution_scope
+from core.task_planning import summarize_plan_status
+from core.artifact_writer import ArtifactWriteRequest, generate_artifact_draft
+from core.grants import execution_metadata, execution_scope, turn_stages
+from core.perception import fold
+from core.request_routing import (
+    LEARNING, LEARNING_GRANT, LEARNING_OFFER, Offer, Selection, held_operands, offers_of, plan_report, same_gap,
+)
 from core.willingness import (
     DecisionState, Personality, RelationshipDynamics, RequestComponent,
     commit_relationship, decide, update_relationship,
@@ -104,8 +106,9 @@ from core.self_intent import (
 from openrook_tools.builtin.self_actions import SelfActionContext
 from core.dual_process.tool_loop import (
     ToolLoopResult,
-    detect_tool_intent,
+    continue_plan,
     make_tool_decision,
+    record_operands,
     run_tool_loop,
 )
 from core.tool_appraisal import appraise_tool_result
@@ -126,13 +129,22 @@ from core.tool_memory import (
 from pipeline.heuristics import (
     _CONVERSATION_HISTORY_MAX,
     _format_generated_artifact_summary,
-    _is_identity_question,
-    _relationship_topic_hint,
+    relationship_topic as topic_of,
 )
 from pipeline.delivery import DeliveryGate
 from pipeline.types import DebugState, PipelineResponse, _TurnState
 
 log = logging.getLogger(__name__)
+
+# How many turns model tool selection is left alone after the backend failed a
+# tool-calling request as unsupported or at the transport level. It is offered
+# again afterwards, as structured output is (``runtime/llm/backend.py``).
+TOOL_SELECTION_PAUSE_TURNS = 10
+KNOWN_GAPS = 8                   # how many known capability gaps the reader is shown
+SELECTION_TURN_CHARS = 1500      # how much of one earlier turn the selecting model is shown
+SELECTION_RECEIPT_CHARS = 1200   # how much of one receipt's output it is shown
+WRITE_FILE = "fs.write_file"
+WRITE_PATH = "path"   # the one operand of a file write that the person writes when its content is to be produced
 
 
 def default_message_reader(pipeline: "CognitivePipeline") -> MessageReader:
@@ -178,7 +190,6 @@ class CognitivePipeline:
         skill_provider: Callable[[], dict[str, Any] | None] | None = None,
         runtime_config: Any | None = None,
         component_executor: Callable[..., ToolResult | None] | None = None,
-        component_observer: Callable[[str], tuple[RequestComponent, ...] | None] | None = None,
         message_reader: MessageReader | None = None,
         expression_reviewer: ExpressionReviewer | None = None,
     ) -> None:
@@ -205,6 +216,10 @@ class CognitivePipeline:
                                    ``data/shared/life_history.db``.
             skill_provider: Optional callable returning enabled imported skill
                             guidance for generation.
+            component_executor: Optional executor of the session's own
+                                capability, learning intake. When one is wired
+                                the reader is offered that capability, and a
+                                granted task that names it is handed over.
             message_reader: Optional reader of each user message
                             (``core.appraisal.MessageReader``). Defaults to
                             the model reader; every turn is read by it.
@@ -328,7 +343,6 @@ class CognitivePipeline:
         # The legacy ``self._config`` is the global OpenRookConfig from get_config()
         # which has no data_dir, so paths to shared SQLite databases need this.
         self._runtime_config = runtime_config
-        self._component_observer = component_observer
         self._component_executor = component_executor
         self.last_intake_receipt: str = ""
         self._owned_pursuits: dict[str, dict] = {}
@@ -338,6 +352,9 @@ class CognitivePipeline:
 
         # Session-scoped task plan (Phase 7)
         self._active_task_plan: TaskPlan | None = None
+        # Turns left during which model tool selection is not asked for, after
+        # the backend failed a tool-calling request.
+        self._tool_selection_pause = 0
         # Proactive behavior tracking (Phase 8)
         self._proactive_count: int = 0
         self._last_proactive_at: float | None = None
@@ -437,6 +454,87 @@ class CognitivePipeline:
         return catalog
 
     # ------------------------------------------------------------------
+    # Requests by understanding (docs/development/request-routing.md)
+    # ------------------------------------------------------------------
+
+    def _capability_offers(self) -> tuple[Offer, ...]:
+        """What the character can reach this turn, as the reader is told of it.
+
+        Every registered tool, and the session's learning intake when a
+        session wired its executor. The same set decides whether a component's
+        capability requirements can be met.
+        """
+        offers = offers_of(self._tool_executor.registry) if self._tool_executor is not None else ()
+        if self._component_executor is not None:
+            offers = (*offers, LEARNING_OFFER)
+        return offers
+
+    def _running_plan(self) -> TaskPlan | None:
+        """The plan a person's turn may carry on or ask about.
+
+        It must be running, and a committed decision must have started it
+        (``origin_decision_id``), the rule the character's own continuation
+        already follows. A plan with no originating decision was never
+        granted by anyone: the reader is not told of it, so no part of a
+        message can continue it. See docs/development/request-routing.md for
+        what is and is not checked when a plan is carried on.
+        """
+        plan = self._active_task_plan
+        return plan if plan is not None and not plan.is_terminal and plan.origin_decision_id else None
+
+    def _add_execution_detail(self, appraisal: AppraisalFrame, plan: TaskPlan | None) -> AppraisalFrame:
+        """Add what execution needs to components the reading reported. Nothing else.
+
+        No component is added, removed or replaced here, and none changes its
+        kind, description or price: a role or a piece of conversation in the
+        same message reaches the decision exactly as it was read.
+
+        * A task the reading tied to the running plan as its continuation
+          carries the plan's id, so that a grant of it carries the plan on,
+          and names the capabilities the plan's remaining steps use, so that
+          the grant covers those and no other.
+        * A task the reading reported as asking for learning intake carries
+          the mark the session's learning executor requires.
+        """
+        relations = dict(appraisal.plan_relations)
+        components = []
+        for component in appraisal.request_components:
+            if plan is not None and relations.get(component.id):
+                reference = f"plan:{plan.id}"
+                component = replace(
+                    component, evidence_refs=tuple(dict.fromkeys((*component.evidence_refs, reference))))
+                if relations[component.id] == "continue":
+                    remaining = (step.tool_name for step in plan.steps if step.status != TaskStatus.COMPLETED)
+                    component = replace(component, continuation_of=plan.id, capability_requirements=tuple(
+                        dict.fromkeys((*component.capability_requirements, *remaining))))
+            if component.kind == "task" and component.requested_tool == LEARNING:
+                component = replace(component, evidence_refs=tuple(dict.fromkeys(
+                    (*component.evidence_refs, LEARNING_GRANT))))
+            components.append(component)
+        return replace(appraisal, request_components=tuple(components))
+
+    def _note_unavailable_work(self, appraisal: AppraisalFrame) -> None:
+        """Keep work that nothing offered can do as a capability gap.
+
+        The reading says what a task needs that no offered capability does.
+        The same need reported again, in whatever words, counts as the same
+        gap (``core.request_routing.same_gap``), and how much it matters is
+        how much the person wanted that work. Repeated gaps are what the
+        character's own wish for a new skill starts from (``core/proactive.py``).
+        """
+        missing = dict(appraisal.unavailable)
+        gaps = []
+        for component in appraisal.request_components:
+            described = missing.get(component.id)
+            if not described:
+                continue
+            known = next((key for key, gap in self._capability_gaps.items()
+                          if same_gap(described, str(gap.get("gap_type") or ""))), f"gap:{fold(described)}")
+            gaps.append({"id": known, "gap_type": described, "recent_recurrence": 1,
+                         "frustration_intensity": component.user_value})
+        self._record_capability_gaps(gaps)
+
+    # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
 
@@ -471,24 +569,27 @@ class CognitivePipeline:
 
         # Stage 1: deterministic pre-pass (Steps 0-11b). May short-circuit
         # with a direct identity answer.
-        short_circuit = self._stage_pre_pass(st)
-        if short_circuit is not None:
-            return short_circuit
+        # Everything executed in these stages belongs to a granted component and runs inside its
+        # execution scope. A call that reaches the executor here without one is denied.
+        with turn_stages():
+            short_circuit = self._stage_pre_pass(st)
+            if short_circuit is not None:
+                return short_circuit
 
-        # Stage 2: gated deliberation — inner dialogue, tool loop,
-        # self-intent, defense shaping, response strategy (Steps 12-13b).
-        self._stage_deliberation(st)
+            # Stage 2: gated deliberation — inner dialogue, tool loop,
+            # self-intent, defense shaping, response strategy (Steps 12-13b).
+            self._stage_deliberation(st)
 
-        # Stage 3: master LLM generation (Step 14).
-        self._stage_generate(st)
+            # Stage 3: master LLM generation (Step 14).
+            self._stage_generate(st)
 
-        # Stage 4: rule-based + LLM self-check, coherence, grounding,
-        # tone floor.
-        self._stage_self_check(st)
+            # Stage 4: rule-based + LLM self-check, coherence, grounding,
+            # tone floor.
+            self._stage_self_check(st)
 
-        # Stage 5: post-processing — memory writes, energy drain, debug
-        # trace (Steps 14b-15).
-        return self._stage_post_process(st)
+            # Stage 5: post-processing — memory writes, energy drain, debug
+            # trace (Steps 14b-15).
+            return self._stage_post_process(st)
 
     # ------------------------------------------------------------------
     # Stage 1: deterministic pre-pass
@@ -555,7 +656,51 @@ class CognitivePipeline:
         st.life_history_context = life_history_context
         self._capture_developing_self(st)
         self._project_conversation_commitments(st)
-        if self._features.life_history_context and _is_identity_question(user_message):
+        timings["life_history_retrieval"] = (time.perf_counter() - _ts) * 1000
+
+        # ---- Step 3: READING (required; the model reads every message) ----
+        # No greeting, vocabulary, host-metric or latency condition skips it,
+        # and nothing stands in for it: an unobtainable reading is recorded as
+        # plain conversation with explicit uncertainty. The reading also says
+        # what each task asks a capability for; nothing below recognises a
+        # request, a tool or a plan follow-up by its wording.
+        _ts = time.perf_counter()
+        st.tool_selection_paused = self._tool_selection_pause > 0
+        if st.tool_selection_paused:
+            self._tool_selection_pause -= 1
+        offers = self._capability_offers()
+        plan = self._running_plan()
+        reading = self._message_reader(
+            user_message, backend=self._llm_backend_fast,
+            recent_context=self._conversation_history,
+            agent_context=reader_context(
+                state=self.engine.snapshot(), authored_values=self.values.values,
+                dispositions=st.developing_self["dispositions"], current_self=st.developing_self,
+                conversation_sources=conversation_sources(st.developing_self, life_history_context,
+                    self.engine.state.energy) if self._features.self_intent else {},
+                available_capabilities=offers, identity=life_history_context,
+                running_plan=plan_report(plan),
+                # Things already found to be missing, in the words they were reported in, so that
+                # the same need comes back in the same words.
+                known_gaps=[str(gap.get("gap_type") or "") for gap in self._capability_gaps.values()
+                            if gap.get("gap_type")][-KNOWN_GAPS:]),
+            research=self._research_mode,
+        )
+        base_appraisal = reconcile_social_appraisal(user_message, None, reading,
+                                                    recent_context=self._conversation_history,
+                                                    available_capabilities=offers, plan_running=plan is not None)
+        attempts = [dict(item) for item in base_appraisal.reading_attempts]
+        debug.reading = dict(provenance=base_appraisal.provenance, reason=base_appraisal.reason,
+                             language=base_appraisal.language, attempts_used=len(attempts),
+                             truncated=any(item.get("truncated") for item in attempts), attempts=attempts,
+                             about_self=base_appraisal.about_self, topics=list(base_appraisal.topics),
+                             # What the reading said each role would do to the character, the reader's own
+                             # number and the floor applied, kept so that the choice can be studied later.
+                             roles=[{"component": key, **facts.to_dict()}
+                                    for key, facts in base_appraisal.role_facts.items()])
+        if self._features.life_history_context and base_appraisal.about_self:
+            # The message asks about the character's own past and development:
+            # its identity records are part of this turn's context.
             identity = self._load_life_history_snapshot()
             life_history_context = {**life_history_context, **identity, "identity_records": identity}
             evolution = identity.get("evolution_events")
@@ -566,47 +711,6 @@ class CognitivePipeline:
         life_influence = derive_life_influence(life_history_context)
         st.life_influence = life_influence
         debug.life_influence = life_influence
-        timings["life_history_retrieval"] = (time.perf_counter() - _ts) * 1000
-
-        # ---- Step 3: READING (required; the model reads every message) ----
-        # No greeting, vocabulary, host-metric or latency condition skips it,
-        # and nothing stands in for it: an unobtainable reading is recorded as
-        # plain conversation with explicit uncertainty.
-        _ts = time.perf_counter()
-        st.inspection_kind = inspection_kind(user_message, self._conversation_history)
-        capabilities = self._tool_executor.registry.names() if self._tool_executor else []
-        reading = self._message_reader(
-            user_message, backend=self._llm_backend_fast,
-            recent_context=self._conversation_history,
-            agent_context=reader_context(
-                state=self.engine.snapshot(), authored_values=self.values.values,
-                dispositions=st.developing_self["dispositions"], current_self=st.developing_self,
-                conversation_sources=conversation_sources(st.developing_self, life_history_context,
-                    self.engine.state.energy) if self._features.self_intent else {},
-                available_capabilities=capabilities, identity=life_history_context),
-            research=self._research_mode,
-        )
-        base_appraisal = reconcile_social_appraisal(user_message, None, reading,
-                                                    recent_context=self._conversation_history,
-                                                    available_capabilities=capabilities)
-        attempts = [dict(item) for item in base_appraisal.reading_attempts]
-        debug.reading = dict(provenance=base_appraisal.provenance, reason=base_appraisal.reason,
-                             language=base_appraisal.language, attempts_used=len(attempts),
-                             truncated=any(item.get("truncated") for item in attempts), attempts=attempts)
-        if st.inspection_kind:
-            # A contextual host-metric follow-up is work, even when it was
-            # read as conversation. This recognizes a component; the same
-            # utility still decides its grant.
-            components = list(base_appraisal.request_components)
-            matching = [i for i, c in enumerate(components)
-                        if inspection_kind(c.description, self._conversation_history) == st.inspection_kind]
-            if matching:
-                for i in matching:
-                    components[i] = replace(components[i], kind="task")
-            elif len(components) < 8:
-                components.append(RequestComponent("inspection", user_message, effort=0.12,
-                                                   user_value=0.6, evidence_refs=("request:inspection",)))
-            base_appraisal.request_components = tuple(components)
         if base_appraisal.perceived_emotion is not None:
             # Tone is part of the reading. Without one there is no tone to
             # catch: mood is left alone instead of drifting toward a midpoint.
@@ -622,29 +726,8 @@ class CognitivePipeline:
             user_message,
             life_history_context,
         )
-        if self._component_observer is not None:
-            observed = self._component_observer(user_message)
-            if observed is not None:
-                appraisal.request_components = observed
-        if not appraisal.request_components and self._tool_executor is not None:
-            # Routing recognition is perception only; no tool runs until decide().
-            recognized = detect_tool_intent(user_message, set(self._tool_executor.registry.names()))
-            if recognized is not None:
-                appraisal.request_components = (RequestComponent(
-                    "tool-request", user_message, effort=0.2, user_value=0.6,
-                    capability_requirements=(recognized.tool_name,),
-                    evidence_refs=("heuristic:tool-request",)),)
-        if self._active_task_plan is not None and not self._active_task_plan.is_terminal:
-            plan = self._active_task_plan
-            if is_continue_request(user_message):
-                appraisal.request_components = (RequestComponent(
-                    f"plan:{plan.id}", plan.goal, effort=min(1.0, 0.2 * (len(plan.steps) - plan.steps_completed)),
-                    user_value=0.6, uncertainty=0.25, continuation_of=plan.id,
-                    evidence_refs=(f"plan:{plan.id}",)),)
-            elif is_status_request(user_message):
-                appraisal.request_components = (RequestComponent(
-                    f"plan-status:{plan.id}", user_message, kind="conversation", effort=0.05,
-                    evidence_refs=(f"plan:{plan.id}",)),)
+        appraisal = self._add_execution_detail(appraisal, plan)
+        self._note_unavailable_work(appraisal)
         st.appraisal = appraisal
         debug.appraisal_frame = appraisal
         personality = Personality.from_self(st.developing_self, st.user_id)
@@ -728,7 +811,7 @@ class CognitivePipeline:
         st.self_prof = self_prof
         active_topics = self._detect_topics(user_message)
         st.active_topics = active_topics
-        relationship_topic = active_topics[0].topic if active_topics else _relationship_topic_hint(user_message)
+        relationship_topic = active_topics[0].topic if active_topics else topic_of(appraisal.topics)
         st.relationship_topic = relationship_topic
         _ts = time.perf_counter()
         relationship_context = self.relationship_memory.build_context(
@@ -822,7 +905,17 @@ class CognitivePipeline:
     # ------------------------------------------------------------------
 
     def _stage_deliberation(self, st: _TurnState) -> None:
-        """Execute committed grants. No social self-deliberation or second choice."""
+        """Execute committed grants. No social self-deliberation or second choice.
+
+        Each granted task is carried out as the reading reported it and the
+        decision committed it: a committed operation runs directly, a
+        continuation carries the running plan on, learning goes to the
+        session's executor, and a task that names a capability without all of
+        its operands goes to model tool selection, which is offered the
+        capabilities that task names and no other. A task that names no
+        capability is work done in the reply: nothing is executed for it, no
+        tool is selected and no receipt is made.
+        """
         st.dialogue_trace = InnerDialogueTrace(rounds=[], final_candidate="", total_llm_calls=0,
                                               reached_deadlock=False, dominant_path="skip")
         st.debug.dialogue_trace = st.dialogue_trace
@@ -835,18 +928,22 @@ class CognitivePipeline:
             derive_action_variables(self.engine.state, trust=st.person.trust if st.person else 0.5)
             if self._tool_executor is not None else None
         )
-        original_message, original_kind = st.user_message, st.inspection_kind
         combined = ToolTrace()
         summaries = []
+        # Where a value the person wrote may stand when a part of this message refers back.
+        earlier = tuple(str(item.get("content", "")) for item in self._conversation_history[-CONTEXT_WINDOW:]
+                        if item.get("role") == "user")
+        asks_status = {component_id for component_id, relation in (st.appraisal.plan_relations if st.appraisal else ())
+                       if relation == "status"}
         for item in st.turn_decision.components:
-            if item.granted and item.component.id.startswith("plan-status:") and self._active_task_plan:
+            component = item.component
+            if item.granted and component.id in asks_status and self._running_plan() is not None:
                 summaries.append(summarize_plan_status(self._active_task_plan))
-            if not item.granted or item.component.kind != "task":
+            if not item.granted or component.kind != "task":
                 continue
-            st.user_message = "continue" if item.component.continuation_of else item.component.description
-            st.inspection_kind = inspection_kind(st.user_message, self._conversation_history)
-            with execution_scope(st.turn_decision, item.component.id), reserve_expression_calls(), primary_tool_inference():
-                receipt = self._component_executor(item.component, st.user_id, self._llm_backend_fast) if self._component_executor and not item.component.continuation_of else None
+            with execution_scope(st.turn_decision, component.id, message=st.user_message, earlier=earlier), \
+                    reserve_expression_calls(), primary_tool_inference():
+                receipt = self._run_session_capability(st, component)
                 if receipt is not None:
                     receipt.metadata.update(execution_metadata())
                     combined.executed_results.append(receipt)
@@ -854,13 +951,11 @@ class CognitivePipeline:
                     combined.loop_count += 1
                     summaries.append(f"[{receipt.tool_name}] success={receipt.success}; {receipt.output or receipt.error}")
                     continue
-                if self._tool_executor is None:
-                    continue
-                intent = ToolIntent(tool_name=item.component.requested_tool,
-                    arguments=dict(item.component.requested_arguments), reason="Literal user request",
-                    expected_outcome="Execute the granted atomic operation") if item.component.requested_tool else None
-                self._run_tool_stage(st, requested_intent=intent)
-            trace = st.debug.tool_trace or ToolTrace()
+                outcome = (self._run_tool_stage(st, component, combined.executed_results)
+                           if self._tool_executor is not None else None)
+            if outcome is None:
+                continue
+            trace = outcome.trace
             combined.proposed_intents.extend(trace.proposed_intents)
             combined.executed_results.extend(trace.executed_results)
             combined.observations.extend(trace.observations)
@@ -868,90 +963,147 @@ class CognitivePipeline:
             combined.final_decision = trace.final_decision or combined.final_decision
             combined.task_trace = trace.task_trace or combined.task_trace
             summaries.append(st.tool_context_summary)
-        st.user_message, st.inspection_kind = original_message, original_kind
         st.tool_context_summary = "\n".join(filter(None, summaries))
         st.debug.tool_trace = combined if combined.executed_results or self._tool_executor is not None else None
         # Independent work is proposed through process_autonomous(), with its
         # own decision and scope, never by relabeling a declined user task.
 
-    def _run_tool_stage(self, st: _TurnState, *, requested_intent: ToolIntent | None = None) -> None:
-        """Tool loop + memory coupling (Steps 12b-12d).
+    def _run_session_capability(self, st: _TurnState, component: RequestComponent) -> ToolResult | None:
+        """Hand a granted learning task to the session's executor; None when the task is not one.
 
-        Only called when a tool executor is attached.
+        The session carries out learning intake, and only that: a task reaches
+        its executor when the reading reported it as asking for the learning
+        capability, never because of a reference a component happens to carry.
+        It is handed over together with the request it was granted: the
+        address the person wrote, or the message's own text.
+
+        A task that names learning intake alone but committed no operation
+        gave an address the person did not write, or left it to be produced.
+        Nothing is fetched from an address that is not theirs: the receipt
+        says that nothing was attempted, and why.
+        """
+        if self._component_executor is None or component.continuation_of:
+            return None
+        if component.requested_tool != LEARNING:
+            if component.capability_requirements != (LEARNING,):
+                return None
+            return ToolResult(LEARNING, False, "", metadata={"execution_started": False},
+                              error="Not attempted: no address written by the person was committed for learning intake.")
+        from runtime.learning_intake import granted_learning, learning_request
+
+        operands = dict(component.requested_arguments)
+        request = learning_request(url=operands.get("url", ""), message=st.user_message,
+                                   asked_in=component.source_span)
+        with granted_learning(request):
+            receipt = self._component_executor(component, st.user_id, self._llm_backend_fast)
+        if receipt is None:
+            receipt = ToolResult(LEARNING, False, "", metadata={"execution_started": False},
+                                 error="Not attempted: learning intake is not available in this session.")
+        record_operands(receipt, operands)
+        return receipt
+
+    @staticmethod
+    def _request_text(component: RequestComponent) -> str:
+        """What a task asks, as the reading reports it: its description and, when that adds to it, its span."""
+        span = component.source_span.strip()
+        return component.description if not span or span in component.description else f"{component.description}\n{span}"
+
+    def _stage_arguments(self, st: _TurnState) -> dict[str, Any]:
+        return dict(state=self.engine.state, person=st.person, defense_active=False, engine=self.engine,
+                    agency_decision=st.agency_decision, autonomy_level=self._autonomy_level)
+
+    def _selection(self, component: RequestComponent, receipts: list[ToolResult]) -> Selection:
+        """One granted task as the selecting model is given it: all of it data.
+
+        The request, the capabilities it names (the only ones offered), the
+        operands the person wrote, the latest turns of the conversation and
+        what this turn has already executed, so that a request which refers
+        to an earlier turn or to an earlier step can be resolved.
+        """
+        turns = tuple(("character" if item.get("role") == "assistant" else "user" if item.get("role") == "user"
+                       else "other", str(item.get("content", ""))[:SELECTION_TURN_CHARS])
+                      for item in self._conversation_history[-CONTEXT_WINDOW:])
+        return Selection(
+            request=self._request_text(component), capabilities=component.capability_requirements,
+            operands=held_operands(component), recent_turns=turns,
+            receipts=tuple(receipt_projection(result, SELECTION_RECEIPT_CHARS) for result in receipts))
+
+    def _select_tools(self, st: _TurnState, component: RequestComponent,
+                      receipts: list[ToolResult] | None = None) -> ToolLoopResult:
+        """Model tool selection for a granted task that names a capability without all of its operands.
+
+        Asked only here. The model is offered the capabilities the task names
+        and no other, and is given the task as data (:meth:`_selection`). The
+        grant check holds whatever it answers to those capabilities and to the
+        operands the person wrote. When the backend's tool-calling request
+        fails as unsupported or at the transport level, that is recorded, no
+        further selection is asked for in this turn, and selection is left
+        alone for ``TOOL_SELECTION_PAUSE_TURNS`` turns before it is offered
+        again.
+        """
+        record = st.debug.tool_selection
+        unavailable = ""
+        if self._tool_runner is None:
+            record.update(status="unavailable")
+            unavailable = "this backend has no tool selection"
+        elif st.tool_selection_paused:
+            record.update(status=record.get("status") or "paused", skipped=record.get("skipped", 0) + 1,
+                          paused_turns_left=self._tool_selection_pause)
+            unavailable = "tool selection is paused after the backend failed a tool-calling request"
+        if unavailable:
+            return ToolLoopResult(
+                trace=ToolTrace(), action_variables=derive_action_variables(
+                    self.engine.state, trust=st.person.trust if st.person else 0.5),
+                tool_context_summary=("No tool ran for this request: not all of its operands were given by the "
+                                      f"person, and {unavailable}. Nothing was executed."))
+        record.update(requests=record.get("requests", 0) + 1)
+        selection = self._selection(component, receipts or [])
+        result = self._tool_runner.run_tool_loop(
+            user_message=selection.request, selection=selection, life_influence=st.life_influence,
+            character_vector=st.character_vector, **self._stage_arguments(st))
+        failure = next((receipt.metadata.get("tool_selection_failure") for receipt in result.trace.executed_results
+                        if isinstance(receipt.metadata, dict) and receipt.metadata.get("tool_selection_failure")), "")
+        if failure and not self._research_mode:   # a study keeps its own call contract: nothing is paused
+            st.tool_selection_paused = True
+            self._tool_selection_pause = TOOL_SELECTION_PAUSE_TURNS
+            record.update(status="failed", failure=failure, paused_turns_left=TOOL_SELECTION_PAUSE_TURNS)
+        return result
+
+    def _writes_generated_text(self, component: RequestComponent) -> bool:
+        """A task to store text that still has to be written, in a file the person named."""
+        written = {name for name, _ in component.requested_arguments}
+        return (set(component.capability_requirements) == {WRITE_FILE} and written == {WRITE_PATH}
+                and self._tool_executor.registry.get(WRITE_FILE) is not None)
+
+    def _run_tool_stage(self, st: _TurnState, component: RequestComponent,
+                        receipts: list[ToolResult] | None = None) -> ToolLoopResult | None:
+        """Carry out one granted task + memory coupling (Steps 12b-12d).
+
+        Only called when a tool executor is attached. Returns None when the
+        task asks for no execution: it names no capability, so it is work done
+        in the reply. ``receipts`` is what this turn has executed so far.
         """
         debug = st.debug
-        user_message = st.user_message
         user_id = st.user_id
-        person = st.person
-        agency_decision = st.agency_decision
-        life_influence = st.life_influence
-        character_vector = st.character_vector
 
         _ts_tool = time.perf_counter()
-        artifact_result = self._maybe_write_generated_artifact(
-            user_message=user_message,
-            person=person,
-            defense_active=False,
-            agency_decision=agency_decision,
-            autonomy_level=self._autonomy_level,
-        ) if requested_intent is None else None
-        if requested_intent is not None:
-            tool_loop_result = run_tool_loop(user_message=user_message, requested_intent=requested_intent,
-                state=self.engine.state, person=person, defense_active=False,
-                executor=self._tool_executor, engine=self.engine, agency_decision=agency_decision,
-                autonomy_level=self._autonomy_level, life_influence=life_influence,
-                character_vector=character_vector)
-        elif artifact_result is not None:
-            tool_loop_result = artifact_result
-        elif st.inspection_kind:
-            intent = inspection_intent(st.inspection_kind, set(self._tool_executor.registry.names()))
-            tool_loop_result = (
-                run_tool_loop(
-                    user_message=user_message, requested_intent=intent,
-                    state=self.engine.state, person=person, defense_active=False,
-                    executor=self._tool_executor, engine=self.engine,
-                    agency_decision=agency_decision, autonomy_level=self._autonomy_level,
-                    life_influence=life_influence, character_vector=character_vector,
-                ) if intent else ToolLoopResult(
-                    trace=ToolTrace(), action_variables=derive_action_variables(self.engine.state),
-                    tool_context_summary=(
-                        "Inspection unavailable: system tools are disabled."
-                        if not getattr(self._runtime_config, "tools_enabled", True) else
-                        "Inspection unavailable: shell access is disabled."
-                        if st.inspection_kind == "cpu" and not getattr(self._runtime_config, "shell_tool_enabled", True) else
-                        "No tool available for the requested system inspection."
-                    ),
-                )
-            )
-        elif self._tool_runner is not None:
-            tool_user_message = user_message
-            tool_loop_result = self._tool_runner.run_tool_loop(
-                user_message=tool_user_message,
-                state=self.engine.state,
-                person=person,
-                defense_active=False,  # defense hasn't fired yet
-                engine=self.engine,
-                active_plan=self._active_task_plan,
-                agency_decision=agency_decision,
-                autonomy_level=self._autonomy_level,
-                life_influence=life_influence,
-                character_vector=character_vector,
-            )
-        else:
-            tool_user_message = user_message
+        if component.continuation_of:
+            plan = self._running_plan()
+            if plan is None or plan.id != component.continuation_of:
+                return None
+            tool_loop_result = continue_plan(plan, executor=self._tool_executor, **self._stage_arguments(st))
+        elif component.requested_tool:
+            intent = ToolIntent(tool_name=component.requested_tool, arguments=dict(component.requested_arguments),
+                                reason="Literal user request", expected_outcome="Execute the granted atomic operation")
             tool_loop_result = run_tool_loop(
-                user_message=tool_user_message,
-                state=self.engine.state,
-                person=person,
-                defense_active=False,  # defense hasn't fired yet
-                executor=self._tool_executor,
-                engine=self.engine,
-                active_plan=self._active_task_plan,
-                agency_decision=agency_decision,
-                autonomy_level=self._autonomy_level,
-                life_influence=life_influence,
-                character_vector=character_vector,
-            )
+                requested_intent=intent, executor=self._tool_executor, life_influence=st.life_influence,
+                character_vector=st.character_vector, **self._stage_arguments(st))
+        elif not component.capability_requirements:
+            return None
+        elif self._writes_generated_text(component):
+            tool_loop_result = self._write_generated_artifact(st, component)
+        else:
+            tool_loop_result = self._select_tools(st, component, receipts)
         debug.tool_trace = tool_loop_result.trace
         debug.action_variables = tool_loop_result.action_variables
         st.tool_context_summary = tool_loop_result.tool_context_summary
@@ -1063,7 +1215,8 @@ class CognitivePipeline:
 
             debug.tool_memory_effects = effects
 
-        st.timings["tool_loop"] = (time.perf_counter() - _ts_tool) * 1000
+        st.timings["tool_loop"] = st.timings.get("tool_loop", 0.0) + (time.perf_counter() - _ts_tool) * 1000
+        return tool_loop_result
 
     def _run_self_intent_stage(self, st: _TurnState) -> None:
         owner = self._research_owner
@@ -1408,6 +1561,14 @@ class CognitivePipeline:
         st.gen_result = self._check_dignity(st, st.gen_result)
         st.timings["self_check"] = (time.perf_counter() - start) * 1000
 
+    @staticmethod
+    def _requested_copies(st: _TurnState) -> tuple[str, ...]:
+        """Texts the person asked to have reproduced word for word, for components this decision undertook."""
+        if st.appraisal is None or st.turn_decision is None:
+            return ()
+        return tuple(span for component_id, span in st.appraisal.reproductions
+                     if st.turn_decision.permits(component_id))
+
     def _check_dignity(self, st: _TurnState, gen_result):
         """Review and spend bounded correction effort in proportion to severity.
 
@@ -1429,7 +1590,8 @@ class CognitivePipeline:
             recent_context=self._conversation_history,
             prior_assistant_replies=tuple(self._assistant_replies), tool_trace=debug.tool_trace,
             prior_tool_receipts=self._receipt_history,
-            recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else ())
+            recalled_memories=expression_memory_evidence(st.ctx) if st.ctx else (),
+            requested_copies=self._requested_copies(st))
 
         def research_review_due():
             """Research keeps its bounded call contract: a review is one counted call, and it is
@@ -1592,6 +1754,8 @@ class CognitivePipeline:
         self._record_self_observations(
             event, st.detected, st.appraisal, st.defense, self.engine.state,
             gen_result.response,
+            declined=bool(st.turn_decision is not None and st.turn_decision.declined
+                          and debug.delivery_outcome.startswith("delivered")),
         )
 
         # ---- Semantic memory writes ----
@@ -1603,6 +1767,9 @@ class CognitivePipeline:
             event=event,
             life_influence=st.life_influence,
             reply_length=st.appraisal.reply_length if st.appraisal else "",
+            lasting=st.appraisal.lasting if st.appraisal else (),
+            learned=any(receipt.tool_name == LEARNING and receipt.success
+                        for receipt in (debug.tool_trace.executed_results if debug.tool_trace else ())),
         )
         if salience_delta:
             debug.life_influence_effects["memory_salience_delta"] = salience_delta
@@ -1653,6 +1820,7 @@ class CognitivePipeline:
                   "expression_excision": st.debug.expression_excision,
                   "expression_delivery": st.debug.expression_delivery,
                   "llm_calls": call_telemetry(),
+                  "tool_selection": dict(st.debug.tool_selection),
                   "self_development": st.debug.self_development,
                   "stage_timings_ms": {**st.timings, "elapsed": (time.perf_counter() - st.t_total) * 1000},
                   "state_after": self.engine.snapshot()}
@@ -1691,7 +1859,7 @@ class CognitivePipeline:
             # Independent execution retains its already grounded component,
             # while sharing the same active-commitment/resource projection.
             state, _ = ground_conversation_allocation(personality, state, st.life_history_context, (), ())
-        capabilities = set(self._tool_executor.registry.names()) if self._tool_executor else set()
+        capabilities = {offer.name for offer in self._capability_offers()}
         components = tuple(replace(c, feasible=c.feasible and set(c.capability_requirements).issubset(capabilities))
                            for c in components)
         decision = decide(personality, state, st.dynamics, st.appraisal.perception,
@@ -1767,7 +1935,6 @@ class CognitivePipeline:
                 "decision": asdict(st.debug.tool_trace.final_decision)
                     if st.debug.tool_trace and st.debug.tool_trace.final_decision else None,
             },
-            inspection_kind=st.inspection_kind,
             self_intents=list(self_intents) if self_intents else [],
             last_intake_receipt=self.last_intake_receipt,
             research_mode=self._research_mode,
@@ -1901,33 +2068,11 @@ class CognitivePipeline:
             and self._active_task_plan is not None
         ):
             with execution_scope(st.turn_decision, "activity", purpose="self"):
-                if self._tool_runner is not None:
-                    tool_loop_result = self._tool_runner.run_tool_loop(
-                        user_message="continue",
-                        state=self.engine.state,
-                        person=person,
-                        defense_active=False,
-                        engine=self.engine,
-                        active_plan=self._active_task_plan,
-                        agency_decision=st.agency_decision,
-                        autonomy_level=self._autonomy_level,
-                        life_influence=life_influence,
-                        character_vector=character_vector,
-                    )
-                else:
-                    tool_loop_result = run_tool_loop(
-                        user_message="continue",
-                        state=self.engine.state,
-                        person=person,
-                        defense_active=False,
-                        executor=self._tool_executor,
-                        engine=self.engine,
-                        active_plan=self._active_task_plan,
-                        agency_decision=st.agency_decision,
-                        autonomy_level=self._autonomy_level,
-                        life_influence=life_influence,
-                        character_vector=character_vector,
-                    )
+                # The character's own decision to go on with its plan carries it on directly.
+                tool_loop_result = continue_plan(
+                    self._active_task_plan, state=self.engine.state, person=person, defense_active=False,
+                    executor=self._tool_executor, engine=self.engine, agency_decision=st.agency_decision,
+                    autonomy_level=self._autonomy_level)
             tool_context = tool_loop_result.tool_context_summary
             debug.tool_trace = tool_loop_result.trace
             debug.action_variables = tool_loop_result.action_variables
@@ -2073,88 +2218,6 @@ class CognitivePipeline:
             return {"error": exc.__class__.__name__}
         return snapshot if isinstance(snapshot, dict) else {}
 
-    def _identity_question_response(
-        self, user_message: str, *, debug: DebugState | None = None,
-    ) -> str | None:
-        if not _is_identity_question(user_message):
-            return None
-        snapshot = self._load_life_history_snapshot()
-        if debug is not None:
-            debug.life_history_context = {}
-            debug.life_influence = derive_life_influence({})
-        if snapshot.get("error"):
-            return "I couldn't read my saved record of changes right now. Please try again."
-        evolution = snapshot.get("evolution_events") if isinstance(snapshot, dict) else []
-        beliefs = snapshot.get("beliefs") if isinstance(snapshot, dict) else []
-        drives = snapshot.get("drives") if isinstance(snapshot, dict) else []
-        experiences = snapshot.get("experiences") if isinstance(snapshot, dict) else []
-        evolution = evolution if isinstance(evolution, list) else []
-        beliefs = beliefs if isinstance(beliefs, list) else []
-        drives = drives if isinstance(drives, list) else []
-        experiences = experiences if isinstance(experiences, list) else []
-        show_drive_details = bool(re.search(r"\bdrives?\b", user_message, re.IGNORECASE))
-        changed_drives = []
-        changed_drive_records = []
-        for drive in drives:
-            name = str(drive.get("name") or "").replace("_", " ")
-            value = float(drive.get("value", 0.5))
-            baseline = float(drive.get("baseline", 0.5))
-            if abs(value - baseline) >= 0.01:
-                changed_drive_records.append(drive)
-                if show_drive_details:
-                    changed_drives.append(f"- {name}: {value:.2f} ({value - baseline:+.2f})")
-                else:
-                    direction = "higher" if value > baseline else "lower"
-                    changed_drives.append(f"- {name}: {direction} priority than its starting setting.")
-        if debug is not None:
-            debug.life_history_context = {
-                key: records
-                for key, records in (
-                    ("beliefs", beliefs[:5]),
-                    ("recent_evolution", evolution[:5]),
-                    ("drives", changed_drive_records[:7]),
-                )
-                if records
-            }
-        if not evolution and not beliefs and not changed_drives:
-            if experiences:
-                if debug is not None:
-                    debug.life_history_context["experiences"] = experiences[:3]
-                lines = [
-                    "I've saved learning material, but it hasn't changed my recorded beliefs or priorities:",
-                ]
-                for experience in experiences[:3]:
-                    title = str(experience.get("source_title") or "Untitled material")
-                    metadata = experience.get("metadata") if isinstance(experience, dict) else {}
-                    metadata = metadata if isinstance(metadata, dict) else {}
-                    reason = ""
-                    if metadata.get("directive_sanitized"):
-                        reason = " Its influence was blocked because the text tried to override instructions."
-                    lines.append(f"- {title}.{reason}")
-                return "\n".join(lines)
-            return "I don't have any recorded changes to my beliefs or priorities yet."
-        lines = ["Here is what my saved record shows about my beliefs and priorities:"]
-        if evolution:
-            lines.append("Recent changes:")
-            for event in evolution[:5]:
-                subject = str(event.get("subject") or event.get("domain") or "change").replace("_", " ")
-                after = str(event.get("after_state") or event.get("reason") or "")
-                if event.get("domain") == "drive" and not show_drive_details:
-                    subject = str(event.get("subject") or "priority").replace("_", " ")
-                    after = str(event.get("reason") or "priority setting changed.")
-                if after:
-                    lines.append(f"- {subject}: {after}")
-        if beliefs:
-            lines.append("Recorded beliefs:")
-            for belief in beliefs[:5]:
-                statement = str(belief.get("statement") or "")
-                if statement:
-                    lines.append(f"- {statement}")
-        if changed_drives:
-            lines.append("Drive shifts:" if show_drive_details else "Changed priorities:")
-            lines.extend(changed_drives[:7])
-        return "\n".join(lines)
-
     def _load_skill_context(
         self,
         *,
@@ -2214,32 +2277,25 @@ class CognitivePipeline:
             existing["last_seen"] = now
             self._capability_gaps[gap_id] = existing
 
-    def _maybe_write_generated_artifact(
-        self,
-        *,
-        user_message: str,
-        person: PersonProfile | None,
-        defense_active: bool,
-        agency_decision: AgencyDecision | None,
-        autonomy_level: str,
-    ) -> ToolLoopResult | None:
-        """Generate a requested artifact and persist it through fs.write_file."""
-        if self._tool_executor is None:
-            return None
-        if "fs.write_file" not in set(self._tool_executor.registry.names()):
-            return None
-        request = detect_artifact_write_request(user_message)
-        if request is None:
-            return None
+    def _write_generated_artifact(self, st: _TurnState, component: RequestComponent) -> ToolLoopResult:
+        """Write text the granted task asked to have produced, to the path it committed.
 
+        The reading reported the task: the file-writing capability, the path
+        the person wrote, and content that has to be produced. The model
+        drafts the content; the file is written through fs.write_file under
+        the same arbiter as any write, at exactly the committed path.
+        """
+        path = dict(component.requested_arguments)[WRITE_PATH]
+        request = ArtifactWriteRequest(path=path, request=self._request_text(component))
+        person = st.person
         trust = person.trust if person else 0.5
         action_vars = derive_action_variables(
             self.engine.state,
             trust=trust,
-            defense_active=defense_active,
+            defense_active=False,
         )
         placeholder_intent = ToolIntent(
-            tool_name="fs.write_file",
+            tool_name=WRITE_FILE,
             arguments={"path": request.path, "content": "<generated artifact>"},
             reason="User requested generated artifact saved to disk",
             expected_outcome=f"Write generated artifact to {request.path}",
@@ -2254,8 +2310,8 @@ class CognitivePipeline:
             action_vars,
             ToolCategory.WRITE,
             trust,
-            agency_decision=agency_decision,
-            autonomy_level=autonomy_level,
+            agency_decision=st.agency_decision,
+            autonomy_level=self._autonomy_level,
         )
         if decision.decision != "execute":
             return ToolLoopResult(
@@ -2298,10 +2354,10 @@ class CognitivePipeline:
             )
 
         intent = ToolIntent(
-            tool_name="fs.write_file",
-            arguments={"path": draft.path, "content": draft.content},
+            tool_name=WRITE_FILE,
+            arguments={"path": request.path, "content": draft.content},
             reason=placeholder_intent.reason,
-            expected_outcome=f"Write generated artifact to {draft.path}",
+            expected_outcome=f"Write generated artifact to {request.path}",
             urgency=placeholder_intent.urgency,
             risk_tolerance=placeholder_intent.risk_tolerance,
             autonomy_bias=placeholder_intent.autonomy_bias,
@@ -2310,6 +2366,7 @@ class CognitivePipeline:
         )
         decision.intent = intent
         result = self._tool_executor.execute(intent.tool_name, intent.arguments)
+        record_operands(result, intent.arguments)
         observation = appraise_tool_result(result, ToolCategory.WRITE)
         summary = _format_generated_artifact_summary(result, draft.summary)
         return ToolLoopResult(
@@ -2334,12 +2391,17 @@ class CognitivePipeline:
         event: EmotionalEvent,
         life_influence: LifeInfluence | None = None,
         reply_length: str = "",
+        lasting: tuple[tuple[str, str], ...] = (),
+        learned: bool = False,
     ) -> float:
-        """Persist semantic memories derived from the completed turn."""
+        """Persist semantic memories derived from the completed turn.
+
+        What is kept as a preference or a decision is what the reading quoted
+        as such (``lasting``); nothing is recognised by its wording.
+        """
         salience_delta = 0.0
         if life_influence is not None:
-            raw_text = f"User: {user_message}\nAssistant: {assistant_response}"
-            salience_delta = curiosity_salience_bonus(life_influence, raw_text)
+            salience_delta = curiosity_salience_bonus(life_influence, learned)
         for entry in derive_semantic_entries(
             config=self._semantic_cfg,
             user_id=user_id,
@@ -2349,6 +2411,8 @@ class CognitivePipeline:
             event_intensity=event.intensity,
             life_influence=life_influence,
             reply_length=reply_length,
+            lasting=lasting,
+            learned=learned,
         ):
             self.semantic_memory.store(entry)
         return round(salience_delta, 6)
@@ -2376,15 +2440,22 @@ class CognitivePipeline:
         defense: DefenseActivation | None,
         state: ModulatorState,
         response: str,
+        *,
+        declined: bool = False,
     ) -> None:
-        """Record 1-3 behavioral self-observations after each turn."""
+        """Record 1-3 behavioral self-observations after each turn.
+
+        ``declined`` says that the turn's decision declined something and the
+        reply was delivered. That a refusal was expressed is taken from this
+        fact of the decision, in whatever words the reply put it.
+        """
         if self._research_mode:
             if self._research_owner is not None:
                 self._research_owner.store.observe("behavior_observation", {
                     "response": response, "event": event.event_type.value,
                     "latent_state": state.to_dict(), "source": "selected_expression",
                 })
-            if re.search(r"\bI (?:refuse|won't|will not)\b", response, re.IGNORECASE):
+            if declined:
                 self.self_profile.record_behavior("expressed_refusal", 1.0, response[:200])
             return
         observations: list[tuple[str, float, str]] = []  # (trait, value, context)

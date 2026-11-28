@@ -424,6 +424,7 @@ class TestMemoryEndpoints:
         assert data["returned"] == 0
         assert data["entries"] == []
 
+    @pytest.mark.keyword_reader   # a preference is kept when the reading quotes it; the mock scripts no reading
     def test_semantic_memory_lists_recent_entries(self, client):
         client.post(
             "/v1/chat",

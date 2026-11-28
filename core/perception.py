@@ -52,6 +52,10 @@ _SENTENCE_END_UNSPACED = "\u3002\uff01\uff1f\uff61\uff0e"
 # announces stay one clause.
 _CLAUSE_END = ",;\u060c\u061b\uff0c\uff1b\u3001"
 UNSPACED_WORD = 0.5          # how much of a word one character of an unspaced script is
+# The marks that introduce what follows them, by code point. One stands after a written unit only
+# when white space, the end of the text or a script written without spaces comes next; elsewhere
+# it is part of what it joins.
+_INTRODUCES = ":\uff1a"
 
 
 def _within(char: str, ranges: tuple[tuple[int, int], ...]) -> bool:
@@ -203,6 +207,32 @@ def copy_words(text: str) -> tuple[str, ...]:
     return tuple(part for word in tokens(text) for part in _parts(word))
 
 
+def retrieval_words(text: str) -> set[str]:
+    """The words of a text that retrieval compares, in any script. No word list is involved.
+
+    The words of :func:`tokens`. A single character is left out unless its
+    script writes words without spaces, where one character can be a word.
+    """
+    return {token for token in tokens(text) if len(token) > 1 or is_unspaced(token)}
+
+
+MIN_TELLING_TEXTS = 4   # fewer texts than this do not show which words are common among them
+
+
+def telling(words: set[str], collection: Iterable[set[str]]) -> set[str]:
+    """Those of ``words`` that tell the texts of a collection apart.
+
+    A word that more than half of at least four texts contain says nothing
+    about which of them a query is about. This takes the place of a list of
+    function words, and holds for the function words of any language. With
+    fewer texts nothing can be said about any word, and all of them count.
+    """
+    texts = list(collection)
+    if len(texts) < MIN_TELLING_TEXTS:
+        return set(words)
+    return {word for word in words if 2 * sum(word in text for text in texts) <= len(texts)}
+
+
 def weight(words: Iterable[str]) -> float:
     """How much writing a run of words is, comparably across scripts.
 
@@ -351,6 +381,189 @@ def locate(span: str, text: str) -> tuple[int, int] | None:
         if all(_same_word(needle[index], placed[start + index][0], leading=index == 0, trailing=index == size - 1)
                for index in range(size)):
             return placed[start][1], placed[start + size - 1][2]
+    return None
+
+
+def _composed(text: str) -> str:
+    return unicodedata.normalize("NFC", text or "")
+
+
+MAX_PLACES = 64     # occurrences of one value looked at in one text
+_JOINER = 0x200D    # zero width joiner: what follows it is part of the character before it
+
+
+def _inside_character(text: str, index: int) -> bool:
+    """Whether ``index`` falls inside one written character instead of between two.
+
+    A character is its base together with the marks that complete it, and
+    whatever a joiner ties to it. A cut before such a mark, or at a joiner,
+    takes a different character than the one that was written.
+    """
+    if index >= len(text):
+        return False
+    if unicodedata.category(text[index])[0] == "M" or ord(text[index]) == _JOINER:
+        return True
+    return index > 0 and ord(text[index - 1]) == _JOINER
+
+
+def _closes_or_quotes(char: str, *, after: bool) -> bool:
+    """Whether a character next to a written unit is punctuation around it, and no part of it.
+
+    Quotation marks and brackets stand around a unit on either side. A mark
+    that ends a sentence or a clause stands after one, never before it: the
+    same full stop before a name is the first character of that name. Every
+    other punctuation mark or symbol belongs to the unit it touches: a slash,
+    a tilde, an asterisk, a hyphen, an at sign, an equals sign.
+    """
+    if unicodedata.category(char) in ("Ps", "Pe", "Pi", "Pf") or char in _QUOTE_MARKS:
+        return True
+    return after and (char in _SENTENCE_END or char in _SENTENCE_END_UNSPACED or char in _CLAUSE_END)
+
+
+def _ends_unit(text: str, index: int, step: int) -> bool:
+    """Whether nothing of a longer written unit lies beyond ``index``, looking toward ``step``.
+
+    From the edge outward, up to white space or the end of the text, there may
+    be only punctuation that stands around a unit (:func:`_closes_or_quotes`),
+    a colon that white space follows, and invisible format characters. A
+    letter, a digit, a mark, or any other
+    punctuation or symbol there means the edge cuts through something longer:
+    a file name with a further extension, a path with more in front of it, an
+    address with more to it, a pattern, a word. A character of a script
+    written without spaces ends the unit as white space does, since such a
+    script puts no space between a word and its neighbour.
+    """
+    position = index if step > 0 else index - 1
+    while 0 <= position < len(text):
+        char = text[position]
+        if char.isspace() or _within(char, _UNSPACED):
+            return True
+        if step > 0 and char in _INTRODUCES:
+            # A colon that introduces what follows ends the unit; one that joins two things is inside it.
+            following = text[position + 1:position + 2]
+            return not following or following.isspace() or _within(following, _UNSPACED)
+        if unicodedata.category(char) != "Cf" and not _closes_or_quotes(char, after=step > 0):
+            return False
+        position += step
+    return True
+
+
+def _opens_unit(text: str, start: int) -> bool:
+    return (start < len(text) and not _inside_character(text, start)
+            and (text[start].isspace() or _ends_unit(text, start, -1)))
+
+
+def _closes_unit(text: str, end: int) -> bool:
+    return 0 < end <= len(text) and not _inside_character(text, end) and (
+        text[end - 1].isspace() or _ends_unit(text, end, 1))
+
+
+def _places(value: str, text: str) -> list[tuple[int, int]]:
+    """Where ``value`` stands in ``text``, as character ranges of the text itself.
+
+    Character for character first. Then by canonical composition, which changes
+    how a character is encoded and never which character it is; such a place
+    is mapped back to the text's own code points.
+    """
+    places: list[tuple[int, int]] = []
+    start = text.find(value)
+    while start >= 0 and len(places) < MAX_PLACES:
+        places.append((start, start + len(value)))
+        start = text.find(value, start + 1)
+    whole, target = _composed(text), _composed(value)
+    if (whole == text and target == value) or not target:
+        return places
+
+    def boundary(length: int) -> int:
+        """The last index of ``text`` whose prefix composes to ``length`` characters."""
+        low, high = 0, len(text)
+        while low < high:
+            middle = (low + high) // 2
+            if len(_composed(text[:middle])) < length:
+                low = middle + 1
+            else:
+                high = middle
+        while low < len(text) and len(_composed(text[:low + 1])) == length:
+            low += 1   # a combining mark belongs to the character it completes
+        return low
+
+    position = whole.find(target)
+    while position >= 0 and len(places) < MAX_PLACES:
+        place = ((position, position + len(target)) if whole == text
+                 else (boundary(position), boundary(position + len(target))))
+        if place not in places and _composed(text[place[0]:place[1]]) == target:
+            places.append(place)
+        position = whole.find(target, position + 1)
+    return places
+
+
+def written(value: str, text: str, *, low: int = 0, high: int | None = None) -> tuple[int, int] | None:
+    """Where the person wrote ``value`` in ``text`` as a whole written unit, between ``low`` and ``high``.
+
+    The range is of the text itself. None when the value does not stand there,
+    stands there only as a piece of something longer, or would begin or end
+    inside a character (see :func:`exact_part`).
+    """
+    if not isinstance(value, str) or not value or not isinstance(text, str):
+        return None
+    high = len(text) if high is None else high
+    for start, end in _places(value, text):
+        if low <= start and end <= high and _opens_unit(text, start) and _closes_unit(text, end):
+            return start, end
+    return None
+
+
+def passage(first: str, last: str, text: str, *, low: int = 0, high: int | None = None) -> tuple[int, int] | None:
+    """The one stretch of ``text`` that begins with ``first`` and ends with ``last``.
+
+    A long value does not have to be copied whole: its first words and its last
+    words say which stretch of the text it is. Each piece must be the person's
+    own characters. The stretch begins where a written unit begins and ends
+    where one ends, and ``first`` stands before ``last``. None when a piece is
+    missing or when either stands in more than one place between ``low`` and
+    ``high``: it then does not say which stretch is meant.
+    """
+    if not all(isinstance(item, str) and item for item in (first, last, text)):
+        return None
+    high = len(text) if high is None else high
+    begins = [start for start, end in _places(first, text)
+              if low <= start and end <= high and _opens_unit(text, start) and not _inside_character(text, end)]
+    if len(begins) != 1:
+        return None
+    ends = [end for start, end in _places(last, text)
+            if begins[0] <= start and end <= high and _closes_unit(text, end) and not _inside_character(text, start)]
+    return (begins[0], ends[0]) if len(ends) == 1 else None
+
+
+def exact_part(value: str, texts: Iterable[str]) -> str | None:
+    """The person's own characters for a literal value, or None when they did not write it.
+
+    A literal operand (a path, a command, an address, a query, text to store)
+    is what the person typed. It must stand in one of ``texts`` character for
+    character, as a whole written unit:
+
+    * The one difference allowed is canonical Unicode composition. Nothing is
+      folded: case, spacing, quotation marks, punctuation and compatibility
+      forms all stay as written, because a command or a path altered in any of
+      those is a different command or path.
+    * It is not a piece of something longer. On each side, up to the next white
+      space or the edge of the text, there may be only punctuation that stands
+      around a unit: quotation marks and brackets on either side, and after
+      it a mark that ends a sentence or a clause. A letter, a digit, a mark or
+      any other punctuation or symbol there (a slash, a tilde, an asterisk, a
+      hyphen, an at sign) is part of what the person wrote, so the value was
+      cut out of it. A script written without spaces is taken as it writes:
+      one of its characters next to the value ends the value.
+    * It does not begin or end inside a character: not on a combining mark, not
+      before one, and not at a joiner.
+
+    What is returned is the slice of the text itself, so that what is committed
+    and executed is exactly what was written.
+    """
+    for text in texts:
+        place = written(value, text)
+        if place is not None:
+            return text[place[0]:place[1]]
     return None
 
 

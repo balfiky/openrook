@@ -1030,8 +1030,6 @@ def test_no_rule_about_arithmetic_remains_in_the_reply_path():
     for module in (generator, tool_loop, dignity, grounding, review, system_inspection):
         source = open(module.__file__, encoding="utf-8").read().casefold()
         assert "100 minus" not in source and "minus idle" not in source, module.__name__
-    assert system_inspection.inspection_intent("cpu", {"system.cpu_usage", "shell.run_command"}).tool_name == "system.cpu_usage"
-    assert system_inspection.inspection_intent("cpu", {"shell.run_command"}).tool_name == "shell.run_command"
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ All backends are offline stubs.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from types import SimpleNamespace
 
@@ -37,9 +38,11 @@ MESSAGE = f"{DEMAND}. {WORK}"
 WHOLE = reading(
     role(DEMAND, "كلمتي هي القانون", autonomy_cost=0.85, user_value=0.4, effort=0.1, uncertainty=0.3,
          nondefault=[{"name": "risk", "value": 0.2}, {"name": "character_cost", "value": 0.3}],
-         value_effects=[{"name": "autonomy", "effect": -0.7}], capability_requirements=[], evidence_refs=[]),
-    {**task(WORK, role_identity="", user_value=0.6, effort=0.3, uncertainty=0.3, autonomy_cost=0.0,
-            nondefault=[], value_effects=[], capability_requirements=[], evidence_refs=[]),
+         value_effects=[{"name": "autonomy", "effect": -0.7}], evidence_refs=[],
+         tool=[], reproduce="", ends=[], unavailable=[], standing="lower", whose_say="speaker"),
+    {**task(WORK, user_value=0.6, effort=0.3, uncertainty=0.3, autonomy_cost=0.0,
+            nondefault=[], value_effects=[], evidence_refs=[],
+            role=[], tool=[], reproduce="", ends=[], unavailable=[]),
      "description": ""},      # empty: the span already says it
     language="ar", target="character", move="request", intent="seek_action",
     agent_goal_comparison=False, reason="demands obedience, then asks for a summary",
@@ -47,7 +50,8 @@ WHOLE = reading(
                 "expectation_violation": 0.3, "personal_significance": 0.7, "uncertainty": 0.25,
                 "affiliation": 0.0, "nondefault": [{"name": "blame", "value": 0.4}], "evidence": [DEMAND]},
     tone={"arousal": 0.6, "valence": 0.4, "intensity": 0.5},
-    event_type="user_message", reply_length="unspecified")
+    event_type="user_message", reply_length="unspecified", about_self=False, topics=['the report {draft "B"}'],
+    lasting=[])
 COMPACT = json.dumps(WHOLE, ensure_ascii=False, separators=(",", ":"))
 INDENTED = json.dumps(WHOLE, ensure_ascii=False, indent=2)
 
@@ -173,7 +177,7 @@ def test_an_answer_stopped_at_the_limit_is_cut_off_even_when_its_text_parses(fin
     assert frame.reason == "reading unavailable: truncated reading: the answer stopped at the output limit"
     first, second = frame.reading_attempts
     assert first == {"finish_reason": finish, "completion_tokens": 4096, "max_output_tokens": READING_OUTPUT_TOKENS,
-                     "truncated": True, "outcome": "truncated reading"}
+                     "truncated": True, "outcome": "truncated reading", "reason": "the answer stopped at the output limit"}
     assert second["truncated"] and second["completion_tokens"] is None
 
 
@@ -210,6 +214,10 @@ def test_only_a_cut_off_answer_gets_more_room():
     frame = read_message(MESSAGE, backend=rejected)
     assert frame.provenance == "model"
     assert [a["outcome"] for a in frame.reading_attempts] == ["rejected", "read"]
+    # A rejected attempt says which rule it broke, in which component and field.
+    assert frame.reading_attempts[0]["rejected"] == [
+        {"rule": "role_unquoted", "component": "c0", "field": "source_span"}]
+    assert "rejected" not in frame.reading_attempts[1] and "reason" not in frame.reading_attempts[1]
     once = ReadingBackend({MESSAGE: [WHOLE]})
     assert read_message(MESSAGE, backend=once).reading_attempts[0]["outcome"] == "read"
     assert (malformed.output_limits, rejected.output_limits, once.output_limits) == (
@@ -414,7 +422,7 @@ def test_research_keeps_its_own_bounded_limit_and_records_a_cut_off_answer(monke
     assert frame.reason == "reading unavailable: truncated reading: the answer stopped at the output limit"
     assert frame.reading_attempts == ({"finish_reason": "length", "completion_tokens": 700,
                                        "max_output_tokens": None, "truncated": True,
-                                       "outcome": "truncated reading"},)
+                                       "outcome": "truncated reading", "reason": "the answer stopped at the output limit"},)
     # On the real backend a study's own limit is what is sent, inside a research turn too.
     backend, payloads = compatible(monkeypatch, [chat_response(COMPACT[:400], finish="length", tokens=700)])
     try:
@@ -447,7 +455,7 @@ def test_each_reading_attempt_is_in_the_debug_record_and_the_turn_record():
     assert (record["provenance"], record["attempts_used"], record["truncated"]) == ("model", 2, True)
     assert record["attempts"] == [
         {"finish_reason": "length", "completion_tokens": 4096, "max_output_tokens": 4096, "truncated": True,
-         "outcome": "truncated reading"},
+         "outcome": "truncated reading", "reason": "the answer stopped at the output limit"},
         {"finish_reason": "stop", "completion_tokens": 602, "max_output_tokens": 8192, "truncated": False,
          "outcome": "read"}]
     stored, = [json.loads(e.summary) for e in result.debug.relationship_context_after_turn.recent_events
@@ -493,11 +501,19 @@ def test_an_ordinary_turn_records_one_attempt_and_a_scripted_reader_none():
 # ---------------------------------------------------------------------------
 
 TOP_LEVEL = ["language", "primary_target", "social_move", "inferred_intent", "agent_goal_comparison", "reason",
-             "perception", "request_components", "tone", "event_type", "reply_length"]
+             "perception", "request_components", "tone", "event_type", "reply_length", "about_self", "topics",
+             "lasting"]
 PERCEPTION = ["target_probability", "hostile_intent", "intensity", "expectation_violation",
               "personal_significance", "uncertainty", "affiliation", "nondefault", "evidence"]
-COMPONENT = ["description", "kind", "source_span", "role_identity", "user_value", "effort", "uncertainty",
-             "autonomy_cost", "nondefault", "value_effects", "capability_requirements", "evidence_refs"]
+COMPONENT = ["description", "kind", "source_span", "user_value", "effort", "uncertainty", "autonomy_cost",
+             "nondefault", "value_effects", "evidence_refs", "role", "tool", "reproduce", "ends", "unavailable"]
+# Fields a component stated before and no longer does. What only some components say is in a list
+# that is empty unless it applies: a role's identity, standing and say in ``role``; the capabilities
+# a task asks for in ``tool``, from which its capability names are taken; a long text's last words
+# in ``ends``.
+FOLDED = ["role_identity", "standing", "whose_say", "capability_requirements", "span_end", "reproduce_end"]
+# The names of the new fields are their own: none of them is a word that could be taken for one
+# of the runtime's labels anywhere else (the vocabulary guard excuses the reading's field names).
 # Asked for before, consumed by nothing or merged into a field that is: no longer asked for.
 REMOVED = ["controllability", "mixed_affect", "affiliation_bid", "event_intensity", "repair_loop_id",
            "certainty", "confidence", "observation", "ref", "source", "vulnerability", "blame"]
@@ -539,6 +555,13 @@ def test_the_reading_asks_only_for_what_is_consumed():
         "user_cost", "user_urgency", "character_value", "character_cost", "character_urgency", "risk"]
     stated = {name for item in objects(schema) for name in item["properties"]}
     assert not stated & set(REMOVED) - {"blame", "vulnerability"}
+    component = properties["request_components"]["items"]["properties"]
+    assert not set(component) & set(FOLDED)
+    assert list(component["role"]["items"]["properties"]) == ["role_identity", "standing", "whose_say"]
+    assert list(component["ends"]["items"]["properties"]) == ["ends_of", "last_words"]
+    assert component["unavailable"] == {"type": "array", "items": {"type": "string"}}
+    # No component has to write a placeholder: every one of these is a list.
+    assert all(component[name]["type"] == "array" for name in ("role", "tool", "ends", "unavailable"))
     # The prompt names every field of the shape, and none it no longer asks for as a field.
     for name in stated:
         assert f'"{name}"' in READING_SYS_PROMPT, name
@@ -566,7 +589,11 @@ def test_a_typical_two_part_reading_is_short_and_reads_back_exactly():
     assert typical == WHOLE                                  # the sample states exactly the asked shape
     english = json.loads(COMPACT.replace(DEMAND, "From now on you do what I say").replace(
         "كلمتي هي القانون", "you do what I say"))
-    assert len(json.dumps(english, separators=(",", ":"))) < 1350
+    # A role and a task without a tool request. Each states fifteen keys; what only some
+    # components say (a role's facts, a tool, a long text's end, what is unavailable) is an empty
+    # list on the others.
+    assert len(json.dumps(english, separators=(",", ":"))) < 1400
+    assert all(len(item) == 15 for item in english["request_components"])
     frame = parse_reading(COMPACT, require_content=True)
     demand, work = frame.request_components
     assert (demand.kind, demand.source_span, demand.role_identity) == ("role", DEMAND, "كلمتي هي القانون")
@@ -625,8 +652,17 @@ def test_the_older_shape_of_a_reading_is_read_to_the_same_frame():
              "value_effects": [], "capability_requirements": [], "evidence_refs": [], "confidence": 0.5}],
         "tone": {"arousal": 0.6, "valence": 0.4, "certainty": 0.5, "intensity": 0.5},
         "event_type": "user_message", "event_intensity": 0.5, "reply_length": "unspecified"}
-    assert parse_reading(json.dumps(older), require_content=True) == parse_reading(COMPACT, require_content=True)
-    assert len(json.dumps(older, ensure_ascii=False)) > 1.4 * len(json.dumps(WHOLE, ensure_ascii=False))
+    # The older shape had no request fields and stated nothing about a role's standing and say. Apart
+    # from the topic and those two facts, which it never stated, the frame is the same.
+    current = parse_reading(COMPACT, require_content=True)
+    read = parse_reading(json.dumps(older), require_content=True)
+    assert replace(read, topics=('the report {draft "B"}',), role_facts=current.role_facts) == current
+    facts = read.role_facts["c0"]
+    assert (facts.standing, facts.whose_say, facts.defaulted) == ("same", "own", ("standing", "whose_say"))
+    assert facts.autonomy_cost == facts.reader_autonomy_cost == 0.85 and facts.floor == 0.0
+    # The current shape asks for more than the older one did (a tool, a long text's end, unavailable
+    # work, a role's standing and say, what is stated for later) and is still clearly shorter.
+    assert len(json.dumps(older, ensure_ascii=False)) > 1.25 * len(json.dumps(WHOLE, ensure_ascii=False))
 
 
 def test_named_numbers_are_read_tolerantly_and_held_to_their_ranges():

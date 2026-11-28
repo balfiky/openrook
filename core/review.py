@@ -17,7 +17,7 @@ import json
 import math
 from typing import Any, NamedTuple, Protocol
 
-from core.grounding import component_receipt_indices, measurements
+from core.grounding import blocked_before_execution, component_receipt_indices, measurements
 from core.inference import (
     REVIEW_ATTEMPTS, accepts_response_schema, generate, is_timeout, monotonic, primary_deadline,
     remaining_review_calls, response_facts, review_closed, review_output_tokens, review_time_left,
@@ -25,6 +25,7 @@ from core.inference import (
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
 from core.llm_content import CUT_OFF, outermost_json_object
 from core.perception import backs_claim, locate
+from core.request_routing import unavailable_work
 
 UNAVAILABLE = "unavailable"
 # The provenance of a draft that was never reviewed because the turn's review
@@ -86,7 +87,9 @@ earlier turns as {"speaker": "user", "character" or "other", "text": ...}.
     chose to do or take up that part, and "decline" when it chose not to. For kind role,
     "role_identity" names the relationship, identity or standing the message puts to the
     character. A component that asked for an operation also states "requested_operation" and
-    its "outcome": declined, not attempted, succeeded or failed.
+    its "outcome": declined, not attempted, succeeded or failed. A component with "possible":
+    false asked for work that nothing the character can reach does, so it could not be
+    undertaken; "unavailable", when present, says what is missing.
   "stance": how far the character chose to engage, hold its limits, be direct, be warm, be
     open to reconciliation and postpone, each from 0 to 1. It is background, not a rule.
   "selected_intention": a purpose of its own that the character chose to carry out in this
@@ -330,6 +333,7 @@ def decision_projection(decision: Any, receipts: list[Any]) -> dict[str, Any] | 
     """The decision as the reviewer sees it: each part, the choice made about it, and its outcome."""
     if decision is None:
         return None
+    missing = unavailable_work(decision)
     components = []
     for choice in decision.components:
         component = choice.component
@@ -337,11 +341,18 @@ def decision_projection(decision: Any, receipts: list[Any]) -> dict[str, Any] | 
                 "source_span": component.source_span, "choice": "undertake" if choice.granted else "decline"}
         if component.role_identity:
             item["role_identity"] = component.role_identity
+        if not component.feasible:
+            # Nothing the character can reach does this work, so it could not be chosen.
+            item["possible"] = False
+            if component.id in missing:
+                item["unavailable"] = missing[component.id]
         if component.requested_tool:
             indices = component_receipt_indices(decision, choice, receipts)
+            # A receipt for something that was stopped before it ran is not an attempt.
+            ran = [index for index in indices if not blocked_before_execution(receipts[index])]
             item["requested_operation"] = component.requested_tool
-            item["outcome"] = ("declined" if not choice.granted else "not attempted" if not indices
-                               else "succeeded" if receipts[indices[-1]].success else "failed")
+            item["outcome"] = ("declined" if not choice.granted else "not attempted" if not ran
+                               else "succeeded" if receipts[ran[-1]].success else "failed")
             item["receipt_indices"] = indices
         components.append(item)
     return {"components": components, "stance": asdict(decision.stance),

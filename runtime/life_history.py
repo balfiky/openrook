@@ -23,6 +23,7 @@ from typing import Any, Protocol
 
 from config.loader import get_config, research_configuration
 from core.inference_errors import ResearchBudgetExceeded, ResearchStudyLimit
+from core.perception import retrieval_words, telling
 from runtime.config import RuntimeConfig
 from runtime.evolution_policy import (
     detect_prompt_injection_markers,
@@ -568,7 +569,14 @@ class LifeHistoryStore:
 
     def retrieve_relevant(self, query_text: str, *, limit: int = 5) -> dict[str, Any]:
         """Return a topic-relevant Life History slice using lexical similarity."""
-        query_tokens = _token_set(query_text)
+        beliefs = [
+            item for item in self.list_beliefs(limit=250)
+            if item.get("status") == "active"
+        ]
+        # A word most of the beliefs contain tells none of them apart; no list of words is consulted.
+        query_tokens = telling(_token_set(query_text), (
+            _token_set(" ".join(str(item.get(key) or "") for key in ("key", "statement", "evidence")))
+            for item in beliefs))
 
         def score_text(*parts: object) -> float:
             tokens = _token_set(" ".join(str(part or "") for part in parts))
@@ -576,10 +584,6 @@ class LifeHistoryStore:
                 return 0.0
             return len(query_tokens & tokens) / max(1.0, len(query_tokens))
 
-        beliefs = [
-            item for item in self.list_beliefs(limit=250)
-            if item.get("status") == "active"
-        ]
         scored_beliefs = sorted(
             beliefs,
             key=lambda item: (
@@ -2743,14 +2747,8 @@ def _opposite_theme_signature(signature: str) -> str | None:
 
 
 def _token_set(text: str) -> set[str]:
-    stop = {
-        "the", "and", "that", "this", "with", "from", "what", "when", "where",
-        "why", "how", "you", "your", "about", "into", "have", "been",
-    }
-    return {
-        token for token in _WORD_RE.findall((text or "").lower())
-        if len(token) > 2 and token not in stop
-    }
+    """The words of a text that lexical retrieval compares, in any script and without a word list."""
+    return retrieval_words(text or "")
 
 
 _NEGATION_TOKENS = {
@@ -2771,12 +2769,13 @@ def _related_belief_candidates(
     experience text; candidates are ranked by overlap and capped so the
     batched LLM verdict call stays small.
     """
-    experience_tokens = _token_set(experience_text)
+    beliefs = [_token_set(f"{row['key']} {row['statement']}") for row in rows]
+    # A word most of the beliefs contain relates the experience to none of them in particular.
+    experience_tokens = telling(_token_set(experience_text), beliefs)
     if not experience_tokens:
         return []
     scored: list[tuple[float, sqlite3.Row]] = []
-    for row in rows:
-        belief_tokens = _token_set(f"{row['key']} {row['statement']}")
+    for row, belief_tokens in zip(rows, beliefs):
         overlap = len(belief_tokens & experience_tokens)
         if overlap > 0:
             scored.append((overlap / max(1.0, len(belief_tokens)), row))

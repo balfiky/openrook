@@ -22,6 +22,8 @@ import pytest
 
 from tests._fakes import MockLLMBackend, VaryingMockLLMBackend
 from tests.policy_fakes import ExpressionBackend, violation
+from tests.support.readings import WithReadings, conversation, reading, task, using
+
 from core.types import UnresolvedItem
 from runtime.config import RuntimeConfig
 from runtime.learning_intake import LearningIntakeResult
@@ -37,6 +39,14 @@ from runtime.sessions.persistence import (
 from runtime.skills import import_skill, list_skills, set_skill_enabled
 from runtime.tools import create_tool_executor
 from pipeline import CognitivePipeline
+
+
+def learning_reading(text):
+    """The reading of these tests' learning messages: a task asking for learning intake of the message itself."""
+    if text == "what did you learn":
+        return reading(conversation(text), about_self=True)
+    return reading(task(text, user_value=0.6, effort=0.2,
+                        tool=using("learning.intake", **({"url": text.split()[-1]} if "https://" in text else {}))))
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +257,7 @@ Use a concise outline before drafting.
                 )
                 manager = SessionManager(
                     config,
-                    backend_factory=lambda: MockLLMBackend(response="Noted."),
+                    backend_factory=lambda: WithReadings(MockLLMBackend(response="Noted."), learning_reading),
                 )
                 try:
                     response = await _send(
@@ -288,11 +298,11 @@ Use a concise outline before drafting.
                 )
                 manager = SessionManager(
                     config,
-                    backend_factory=lambda: ExpressionBackend(
+                    backend_factory=lambda: WithReadings(ExpressionBackend(
                         drafts=["I created a runtime skill."],
                         # The review, and the confirmation review that reports the same claim again.
                         reviews=[violation("I created a runtime skill.", code="unverified_external_action_claim")] * 2,
-                    ),
+                    ), learning_reading),
                     tool_executor_factory=lambda: create_tool_executor(config),
                 )
                 try:
@@ -326,12 +336,12 @@ Use a concise outline before drafting.
                 config = _make_config(tmpdir, llm_backend="mock", tools_enabled=True)
                 manager = SessionManager(
                     config,
-                    backend_factory=lambda: ExpressionBackend(
+                    backend_factory=lambda: WithReadings(ExpressionBackend(
                         drafts=["I wrote the directive to a local registry."],
                         # Per turn: the review, and the confirmation review that reports the claim again.
                         reviews=[violation("I wrote the directive to a local registry.",
                                            code="unverified_external_action_claim")] * 4,
-                    ),
+                    ), learning_reading),
                     tool_executor_factory=lambda: create_tool_executor(config),
                 )
                 try:

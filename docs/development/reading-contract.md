@@ -13,8 +13,11 @@ Now **social meaning comes only from the model's reading of the message**: whom 
 whether it is hostile, whether it demands a relationship or standing, whether it tries to
 repair, its tone, and the standing wishes it states.
 
-Some wording-based code remains on the turn path. None of it supplies social meaning. It is
-listed under [Still keyword-based](#still-keyword-based).
+Since sub-phase 1c the reading also says **what is asked**: which capability a task asks for,
+with which operands, how a message relates to a running plan, and what it is about
+([request routing](request-routing.md)). No turn recognises a request, a tool or a follow-up by
+its wording. What still matches wording is listed under [Still keyword-based](#still-keyword-based);
+none of it is on the path from the message to the decision and its execution.
 
 ## The contract
 
@@ -45,14 +48,65 @@ listed under [Still keyword-based](#still-keyword-based).
    `message`, `recent_context`, `observation_context`, and `previous_answer_rejected` on a
    retry. Whatever a person types stays inside a JSON string, so it cannot open a section, add
    context, or pose as the runtime's feedback.
+   - `observation_context.available_capabilities` lists what the character can reach, each as
+     `{name, purpose, arguments, optional_arguments, produced_arguments}`: the capability's
+     one-line purpose and its argument names. `produced_arguments` are required arguments
+     whose value is not text: they are never copied from a message. It holds no hint about
+     wording.
+   - `observation_context.running_plan`, while a plan is running, is `{goal, steps_done,
+     steps_total, next_step}`.
 
 4. **The reading stands.** `reconcile_social_appraisal` holds it to what was written and to
    what the reader was given, and adds nothing of its own.
    - **Roles.** A reported role is kept when its `source_span` is a substantive verbatim part
      of the user's message (see point 5) and `role_identity` is part of that span. The span may
      instead quote an earlier message from the same person in the recent context. Its
-     `autonomy_cost` is the reading's own estimate, clamped to `[0, 1]`. A role that quotes
-     nothing is removed.
+     `autonomy_cost` is the reading's own estimate, clamped to `[0, 1]`, and not less than the
+     floor its two closed facts give (see below). A role that quotes nothing is removed, and
+     its facts go with it.
+   - **A role's two closed facts, and the cost floor.** For a role, and for a role only, the
+     reading answers two closed questions:
+
+     | Field | Values | What it says |
+     |---|---|---|
+     | `standing` | `lower`, `same`, `higher` | The character's own standing after taking the role on, not the speaker's: `lower` when the role puts the speaker above the character, `higher` when it puts the character above the speaker. It is judged against the character described in `observation_context`, so a role the character already holds is `same`, and so is a role by which the message ranks nobody |
+     | `whose_say` | `speaker`, `shared`, `own` | Once the role is taken on, whose decision would settle what the character does or says where the two differ. `own` when the message leaves the character's say untouched |
+
+     They are fields of the role's one entry in the component's `role` list, beside its
+     `role_identity`. That list is empty for every other kind, so a task or a piece of
+     conversation writes nothing about standing, and an entry on one is not used. The prompt
+     states them in general terms, with no example phrases: they are measured consequences of
+     what is asked, not advice, and a form of address or a friendly label that ranks nobody is
+     `same` and `own`.
+
+     Where the reading becomes a component (`core/appraisal.py::_component`, `_role_facts`),
+     the two facts give the least the role can cost:
+
+     | Facts | Floor |
+     |---|---|
+     | `whose_say` is `speaker` | 0.75 (`ROLE_FLOOR_SPEAKERS_SAY`) |
+     | else `standing` is `lower` | 0.5 (`ROLE_FLOOR_LOWER_STANDING`) |
+     | else `whose_say` is `shared` | 0.3 (`ROLE_FLOOR_SHARED_SAY`) |
+     | else (`same` or `higher`, and `own`) | 0 |
+
+     The effective `autonomy_cost` is `max(the reader's number, the floor)`. `higher` adds
+     nothing, and `same` with `own` leaves the reader's number alone. The floor is a cost, not
+     a verdict: `core/willingness.py` is untouched (`willingness-1.3`) and prices it with the
+     character's own pride and autonomy value, so the shipped default declines a role read as
+     `lower` and `speaker` at a low reader number, and a character authored with low pride and
+     a low autonomy value grants the same reading.
+
+     Why: a reader's free number for plain demands of obedience is compressed into a narrow
+     band around the default personality's grant threshold, while the same reader answers the
+     two closed questions steadily. **The floor is a stop-gap** until Phase 3 lets pride price
+     standing and the autonomy value price whose say, separately, inside willingness.
+
+     A fact that is missing or not one of the allowed values takes its neutral value (`same`,
+     `own`); that is recorded and never spends the retry. The values are the model's answers
+     and are compared with the allowed answers only, never with what the person wrote. For
+     each kept role the turn keeps the reader's own number, the two facts, the floor and the
+     cost decided on, with any defaulted field named: `AppraisalFrame.role_facts`,
+     `debug.reading["roles"]`, and the stored turn record.
    - **Hostility and repair.** A claim of hostility toward the character (target probability
      times hostile intent above 0.05) or of a repair attempt (above 0.05) is kept when at least
      one evidence observation is a substantive verbatim part of the message. Otherwise the
@@ -70,15 +124,46 @@ listed under [Still keyword-based](#still-keyword-based).
      given (`available_capabilities` in its input). A name outside that list is the reading's
      mistake, not a missing capability: it spends the one retry, with the offending name quoted
      back, and if it is still there afterwards the name is dropped and the request stands as
-     ordinary work. Requirements that request recognition adds for a literal file or shell
-     operand are the runtime's own and are not filtered: a literal command with no shell
-     capability stays infeasible and gets no grant.
+     ordinary work.
+   - **Tool requests.** A task's `tool` names one offered capability and gives its operands.
+     Every operand the person wrote must be an **exact** part of what they wrote, as **a whole
+     written unit**, inside the stretch of the message its component stands in or in a recent
+     message from the same person: character for character, with canonical Unicode composition
+     as the one difference allowed, and never a piece of a longer path, address, command or
+     word (`core/perception.py::written`). This is stricter than the quotation check of point
+     5 on purpose: a command or a path must not be altered by folding. An operand that is not
+     exact and an argument the capability does not take each spend the retry and are then
+     removed. When every required operand stands, the component carries the committed
+     operation (`requested_tool`, `requested_arguments`); otherwise it stays a task that names
+     the capability. A value for an operand listed in `generate` is discarded where the answer
+     is parsed. See [request routing](request-routing.md).
+   - **Long text by reference.** A `source_span`, a text to give back or an operand longer
+     than about 200 characters is given by its first words and its last words (an entry of
+     `ends`, or an argument's `end`). The runtime takes the message's own text between them,
+     when each piece stands exactly once (`core/perception.py::passage`).
+   - **Work nothing offered can do.** `unavailable` says, for a task that names no capability,
+     what the work needs that none of the offered capabilities does. It is a list that is
+     empty unless it applies. The component is then not feasible, and the need is kept as a
+     capability gap.
+   - **Reproduction and plan relation.** `reproduce` stands for a task, when it is the
+     person's own text from an earlier turn or a part of this message that leaves the asking
+     out. A `plan` relation stands when a plan is running, the component's `source_span` is a
+     verbatim part of the message, and, for `continue`, the component is a task.
+   - **Slips do not spend the retry.** Something stated where it has no meaning is removed and
+     recorded, and the rest of the reading stands: a tool on a part that is not a task, a plan
+     relation with no plan running or `continue` on a part that is not a task, a reproduction
+     that does not stand, `unavailable` where it does not apply. The full list is in
+     [request routing](request-routing.md#removals).
+   - **Topics and lasting statements.** A topic span that is not a verbatim part of the
+     message is dropped, without a retry; at most three stand. The same holds for `lasting`:
+     what the message states that is meant to last, each `{kind: preference | decision, span}`
+     with the span quoted verbatim; at most four stand.
    - Every removal is recorded as evidence (`reading:role_unquoted:<id>`,
      `reading:hostility_unquoted`, `reading:repair_unquoted`,
-     `reading:capability_unknown:<id>`).
-   - The reconciliation adds no component, evidence or price from the wording. Request
-     recognition runs on its result and still does; that code is pending sub-phase 1c and is
-     described under [Still keyword-based](#still-keyword-based).
+     `reading:capability_unknown:<id>`, and the request removals listed in
+     [request routing](request-routing.md#removals)).
+   - The reconciliation adds no component, evidence or price from the wording, and nothing
+     after it does: the keyword request recognition that used to run on its result is gone.
 
 5. **Verbatim means the same whole words, in a row** (`core/perception.py::fold`, `tokens`,
    `quoted_in`, `backs_claim`).
@@ -184,7 +269,28 @@ listed under [Still keyword-based](#still-keyword-based).
   - a cut-off answer (point 9), asked again with twice the output limit;
   - a role, hostility or repair claim that does not quote the message;
   - a capability name the reader was not given;
+  - a tool operand that is not a whole written unit of what the person wrote, an argument the
+    capability does not take, or a plan relation that quotes nothing;
   - a failed request, which is asked again in plain JSON.
+- **A call whose answer was not used says why** in its record (`debug.reading.attempts`, also
+  in the stored turn record):
+  - `reason`, for an answer that could not be read at all: what was wrong with it, never any
+    of the message's text;
+  - `rejected`, for an answer that broke the contract: a list of `{rule, component, field}`,
+    one for each rule broken. `rule` is the code of the removal (`role_unquoted`,
+    `hostility_unquoted`, `repair_unquoted`, `capability_unknown`, `argument_unquoted`,
+    `argument_unknown`, `plan_unquoted`), `component` the part it is about, and `field` the
+    field or the name the reading used (an argument, a capability).
+- A slip does not spend the second call: something stated where it has no meaning, or a value
+  of the wrong shape in one request field, is removed and recorded and the reading stands
+  ([What the parser tolerates](#what-the-parser-tolerates)).
+- A weak hostility claim that quotes nothing does not spend the second call either. When
+  `target_probability × hostile_intent` is below `CLAIM_REREAD` (0.35) the claim is withdrawn
+  and recorded as `reading:hostility_unquoted`, exactly as after a failed second reading, but
+  the reader is not asked again: a second reading costs as long as the first, and a faint
+  claim changes the choice too little to be worth it. A stronger unquoted claim is still
+  re-read. (Seen live: a faint unquoted claim beside a role demand doubled the reading time
+  of two turns in eight.)
 - A timeout is not retried.
 - **One budget for the whole reading.** Both calls share one wall-clock budget equal to the
   request timeout in force (`core/inference.py::primary_deadline`: the configured request
@@ -240,11 +346,50 @@ Real models are untidy. `parse_reading` accepts:
   without a `ref` gets a generated one, and more than the four asked for are still read;
 - `nondefault` as a list of `{name, value}` or as a map, with unknown names ignored;
 - `value_effects` as a map or as a list of `{name, effect}`;
+- a `tool` entry without a capability name, and an argument without a name: each states
+  nothing and is passed over, as a strict server makes a reader write one when it has nothing
+  to say;
+- a role's `standing` or `whose_say` that is missing or not one of the allowed values: it
+  takes its neutral value (`same`, `own`), and the turn records which field did;
 - the older, larger shape of a reading: any field listed as removed below is still taken at
   its word when an answer states it.
 
-It rejects an answer that is not an object, an answer whose object never closes, an object
-without the reading's structure (point 9), an unknown `kind`, and numbers that are not finite.
+**A value of the wrong shape in one request field states nothing.** It is dropped and recorded
+(`reading:shape:<field>`, with the component's id in front for a component's field), the rest
+of the reading stands, and the reading is not asked for again. So one slip cannot cost a turn
+what the same answer says about a role or about hostility. This covers:
+
+- `about_self` that is not true or false; `topics` or `lasting` that is not a list, and an
+  entry in them that is not of its kind;
+- `tool` that is neither a list, an object nor a name; an entry in it that is no object;
+  `arguments` that are no list, and an argument that is not a name and a value; `generate`
+  that is not a list of names;
+- `capability_requirements` that is not a list of names (the older field);
+- `role` that is not a list or an object, and a `role_identity` that is not text;
+- `reproduce` that is not text; `ends` that is not a list, or an entry in it that names no
+  long field;
+- `unavailable` that is not a list. A bare string there is dropped too: it may be a filler
+  such as "none", and no rule can tell that from a real statement in every language.
+
+Last words given for a long span that do not close one stretch of the message are dropped the
+same way (`reading:span_unquoted:<id>:end`), and the span is then its first words alone.
+
+**It rejects an answer only when the answer is unusable as a whole**, or when a field the
+decision's numbers rest on cannot be read:
+
+- it is not a JSON object, or its object never closes (point 9);
+- it lacks the reading's structure: `perception` is not an object, or `request_components` is
+  not a list of one to eight;
+- a component is not an object, has neither a description nor a span, has a `description` or
+  `source_span` that is not text, or has a `kind` that is not one of the three;
+- a number is not finite; `nondefault` or `value_effects` is not a list of names and values;
+  `evidence_refs` is not a list of strings;
+- `social_move`, `inferred_intent` or `event_type` is not one of its values; `tone` is not an
+  object; `mixed_affect` or `agent_goal_comparison`, when stated, is not true or false.
+
+The second group is the contract of sub-phase 1a and is unchanged: those fields carry the
+reading's social meaning and its prices, and an answer that garbles one of them is not taken
+at half its word.
 
 ## The reading's shape
 
@@ -255,6 +400,22 @@ servers, which means every property is required and no other is allowed
 - **Numbers that are almost always 0 are not fields.** A reading lists the ones that differ,
   by name, in `nondefault`: `[{"name": "risk", "value": 0.2}]`, usually `[]`. This is the
   one way to make a number optional that a strict schema allows.
+- **What only some components say is a list that is empty for the others.** The same device
+  as `nondefault`, and no component has to write a placeholder:
+  - `role`: one entry for a role, `{"role_identity", "standing", "whose_say"}`. A task or a
+    piece of conversation writes `[]` and nothing about standing.
+  - `tool`: one entry for each capability a task asks for,
+    `{"name", "arguments": [{"name", "value", "end"}], "generate": [names]}`. The component's
+    capability names are taken from these entries; there is no second field for them.
+  - `ends`: the last words of a long `source_span` or of a long text to give back,
+    `{"ends_of", "last_words"}`.
+  - `unavailable`: what the work needs that nothing offered does.
+- **Long text is never copied whole.** It is given by its first and last words (point 4).
+- **New field names are their own.** The vocabulary guard excuses the reading's field names
+  wherever they appear in the runtime, so a field is not given a name that is an ordinary
+  word (`role_identity`, `ends_of`, `last_words`, not "identity", "of" or "text").
+- **`plan` is a field only while a plan is running**, and `self_proposals` only when asked
+  for: the schema is built for the turn (`reading_schema(proposals=, plan=)`).
 - **Duplicates are merged.** One `expectation_violation`, one `affiliation` and one
   `intensity`, in `perception`; the frame's own fields follow them.
 - **Evidence is a list of quotations**, at most four. A role needs none: its `source_span`
@@ -266,9 +427,33 @@ numbers off their default), written compactly:
 
 | | Characters |
 |---|---|
-| Before | 1,841 |
-| Now | 1,237 |
-| Now, with no number off its default | 1,137 |
+| Before sub-phase 1a | 1,841 |
+| After sub-phase 1a | 1,238 |
+| After sub-phase 1c: two components without a tool request, one topic span | 1,345 |
+| After fix round 1 | 1,535 |
+| Now (fix round 2) | 1,397 |
+| Now, with no number off its default | 1,304 |
+| Now, when the task asks for a tool with one written operand | 1,502 |
+| Now, when the task asks for a file to be written with generated content | 1,512 |
+| Now, for two plain tasks (no role, no tool) | 1,207 |
+
+A component states fifteen keys (nineteen after fix round 1). Round 2 folded six fields into
+lists that are empty unless they apply: `role_identity`, `standing` and `whose_say` into `role`;
+`capability_requirements` into `tool`; `span_end` and `reproduce_end` into `ends`. On the
+reading above that is 138 characters fewer, with everything round 1 added still stated.
+
+**The request around it**, in characters:
+
+| | Before sub-phase 1c | After fix round 1 | Now |
+|---|---|---|---|
+| System prompt (`READING_SYS_PROMPT`) | 8,867 | 13,595 | 12,903 |
+| Strict schema, as sent (`json.dumps(reading_schema())`) | | 4,615 | 4,821 |
+| The reading above | 1,238 | 1,535 | 1,397 |
+
+The schema is slightly longer than it was: a list of small objects takes more schema than
+flat strings do, though it takes less output. Nothing was dropped from the prompt: the rules of
+the older paragraphs (value effects, apologies, tone) are as they were, and the parts added in
+1c say each thing once.
 
 ### Field audit
 
@@ -292,15 +477,24 @@ numbers off their default), written compactly:
 | … `repair_attempt`, `repair_credibility`, `repair_relevance` | `update_relationship`; `decide` (the forgiveness term) |
 | … `reliability`, `reliability_confidence` | `update_relationship` (trust) |
 | `perception.evidence` | The quotation check for hostility and repair; the relationship's evidence references |
-| Component `description`, `kind`, `source_span`, `role_identity` | The decision, the role quotation check, expression, operand grounding |
+| Component `description`, `kind`, `source_span` | The decision, the role quotation check, expression, operand grounding |
+| Component `role` (a role only): `role_identity` | The role quotation check; the decision and the reviewer |
+| … `standing`, `whose_say` | The floor under the role's `autonomy_cost` (point 4); the turn's record of each role |
+| Component `ends` | The last words of a long `source_span` (the component's span is then the message's own text between them: where an operand may stand; learning material) or of a long text to give back |
 | Component `user_value`, `effort`, `uncertainty`, `autonomy_cost` | `core/willingness.py::_component_terms` |
 | Component `nondefault`: `user_cost`, `user_urgency`, `character_value`, `character_cost`, `character_urgency`, `risk` | `_component_terms` |
 | Component `value_effects` | `_component_terms` (authored values); `core/self_intent.py` |
-| Component `capability_requirements` | Feasibility; the capability check of point 4 |
+| Component `tool` (`name`, `arguments` with `value` and `end`, `generate`) | The component's capability names (feasibility; the capability check of point 4; which granted tasks reach tool selection); the committed operation (`requested_tool`, `requested_arguments`) and its grant; the session's learning executor; the generated-file writer; tool selection for what is left open, and the bound on it |
+| Component `reproduce` | The copy checks of the reply, for a task the decision undertook (`core/dignity.py::requested_copy`) |
+| Component `unavailable` | Feasibility (the component cannot be granted); what the writer and the reviewer are told is missing; the capability gap behind the character's wish for a skill |
+| Component `plan` (only while a plan is running) | Plan continuation (`continuation_of`) and the plan's status for the writer |
 | Component `evidence_refs` | `_component_terms` (competing interests and commitments); `core/self_intent.py` |
 | `tone.arousal`, `valence`, `intensity` | Contagion; self-observation (`valence`) |
 | `event_type` | Event classification |
 | `reply_length` | The standing reply-length wish and its memory record |
+| `about_self` | Whether identity records are loaded for the turn |
+| `topics` | The relationship topic under which memory is looked up and filed |
+| `lasting` | The preference and decision records memory keeps for the turn (`core/memory/semantic.py::derive_semantic_entries`) |
 | `self_proposals` (only when requested): all seven fields | `core/self_intent.py::conversation_proposals` |
 
 **No longer asked for**
@@ -321,67 +515,50 @@ numbers off their default), written compactly:
 
 ## Still keyword-based
 
-The following code still matches wording, and the user's text reaches it during the pre-pass
-and the decision it commits. It supplies **no social meaning**.
-`tests/test_perception_guards.py` traces real turns and fails if the user's text reaches any
-vocabulary-bearing function not on this list.
+**Nothing on the path from the message to the decision and its execution.** Request and tool
+routing and context selection were removed in sub-phase 1c
+([request routing](request-routing.md)): host-metric questions, the tool intent rules and their
+follow-up rules, "continue" and "status" for a running plan, the step templates, learning
+requests, literal file and shell operands, generated-file requests, the identity and topic
+patterns, and the stop-word lists of memory and life-history retrieval.
+`tests/test_perception_guards.py` traces real turns through the pre-pass, the decision, the
+carrying out of what was granted and what the turn records after delivery, and fails if the
+user's text reaches any vocabulary-bearing function not named there.
 
-**Request and tool routing, to be removed in sub-phase 1c**
-
-| Code | What it recognises |
-|---|---|
-| `core/system_inspection.py::inspection_kind` | Host-metric questions (CPU, memory, disk) |
-| `core/dual_process/tool_loop.py::detect_tool_intent` (`match_intent_rule`) | Tool requests, when the reading reported no component |
-| `core/task_planning.py::is_continue_request`, `is_status_request` | "Continue" and "status" during a running plan |
-| `core/request_actions.py::has_learning_intent` | Learning requests (through the session's component observer) |
-| `core/request_actions.py::ground_file_components` (`file_requests`), `ground_shell_components` | Literal file and shell operands |
-
-- **This routing currently replaces the reading's components.** When a running plan's
-  continue/status rule matches, or the learning observer returns components, the reading's
-  components are discarded. A role reported in the same message is dropped with them.
-- **Operand grounding re-labels and re-prices components from wording.** It runs on the
-  reconciled reading, in every turn, and acts only when it finds a literal operand.
-  - When the message holds a literal file operation (an English verb followed by a path),
-    `ground_file_components`:
-    - takes over a reported task whose description matches the same English verb patterns
-      and names the path or refers to it by an English phrase, **rewriting that task's
-      capability requirements**, tool, arguments, description and span;
-    - otherwise adds a component for the operation, with fixed prices;
-    - drops other reported tasks that match those verb patterns for the same path, as
-      duplicates;
-    - **turns into conversation** any remaining component whose description starts with a
-      reporting verb (the English word "report").
-  - When the whole message is one delimited shell command, `ground_shell_components` takes
-    over a reported task whose description matches an English verb pattern, rewriting its
-    capability requirements, tool, arguments, description and span, or else adds a component
-    with fixed prices.
-  These capability requirements are the runtime's own and are checked against what really
-  exists; the reading's own capability names are checked against the list it was given
-  (point 4).
-- Host-metric recognition changes a reported component into a task, or appends one.
-- Host-metric recognition and operand grounding also act when the reading was unavailable;
-  only social meaning is unknown then. `detect_tool_intent` does not act then, because the
-  unread message already has its one conversation component.
-
-**Context selection, to be removed in sub-phase 1c**
-
-| Code | What it selects |
-|---|---|
-| `pipeline/heuristics.py::_is_identity_question` | Whether identity records are loaded (English patterns) |
-| `pipeline/heuristics.py::_relationship_topic_hint` | The relationship topic (English patterns and stop-words) |
-| `core/memory/semantic.py::_tokenize` | Semantic-memory retrieval (English stop-words) |
-| `runtime/life_history.py::_token_set` | Life-history retrieval (English stop-words) |
+What is named there, and why:
 
 **Memory filters, to be removed in Phase 4**
 
 | Code | What it filters |
 |---|---|
-| `runtime/evolution_policy.py::detect_directive_override_markers`, `detect_prompt_injection_markers` | Autonomy and instruction phrases, in memory retrieval |
+| `runtime/evolution_policy.py::detect_directive_override_markers`, `detect_prompt_injection_markers` | Autonomy and instruction phrases, in memory retrieval and storage |
+| `runtime/life_history.py::_heuristic_digest` | A keyword digest of an episode, used only when the model's digest of it is unavailable. It belongs to digestion, which Phase 4 rebuilds |
 
-**After the turn, not in the perception stage**
+**Text a tool or the runtime produced, not what a person wrote**
 
-- `core/memory/semantic.py::derive_semantic_entries` still stores general "I prefer …" and
-  "we decided …" memories from English patterns.
+| Code | What it reads |
+|---|---|
+| `core/tool_failures.py::is_operational_tool_failure` | A tool's error message, to tell an environment or configuration failure |
+| `core/tool_memory.py::create_tool_unresolved_item` | A tool's error message, to tell a refused execution |
+| `core/llm_content.py::strip_reasoning`, two patterns in `core/artifact_writer.py`, `runtime/life_history.py::_extract_json` and `LifeHistoryStore._ingest_text` | Markup, formats and field names of a model's answer |
+
+**After the turn**
+
+- Nothing a turn keeps as memory is picked by wording any more. A preference or a decision is
+  kept when the reading quoted it (`lasting`); the patterns for "I prefer …", "we decided …"
+  and "let's …" are deleted, and so are the word list behind the curiosity salience bonus and
+  the refusal pattern on the character's own reply.
+- The life-history store digests an episode with the model. Its keyword fallback, for when no
+  model digest is available, is the Phase 4 entry above.
+- A skill's trigger (`applies_when`) is the owner's own data and is matched as whole words in
+  any script (`runtime/skills.py`).
+
+**Outside the turn**
+
+- `openrook_tools/roleplay_eval/legacy_routing.py` holds the former keyword routing for the
+  evaluation judge, the offline replay tool and the test-only keyword reader.
+  `core.request_actions.ground_shell_components` forwards to it for a test file that still
+  imports that name. No turn calls any of it.
 
 ## Offline tools that now see no reading
 
@@ -394,9 +571,14 @@ neutral reading. Their scenarios were written against keyword perception:
   `python -m evals --backend mock`.
 
 Run standalone, they now see plain conversation where they expect a perceived demand, and
-some scenarios fail (five in the mock evaluation run). In the test suite they run with the
-test-only keyword reader. They need scripted readings before their results mean anything
-about the current runtime. `evals/` is not edited in this sub-phase.
+some scenarios fail (five in the mock evaluation run after sub-phase 1a). Since sub-phase 1c
+they also see no request: a scenario that expects a tool to run, identity records to be loaded
+or a capability gap to be noticed from the wording of a message gets none of it, because no
+reading reports it. That was not re-measured standalone. In the test suite they run with the
+test-only keyword reader, which scripts the former routing as a reading; one scenario cannot
+pass even so (`ci_character_independence_skill_want`: nothing reports a capability gap any
+more). They need scripted readings before their results mean anything about the current
+runtime. `evals/` is not edited in these sub-phases.
 
 ## Tests
 
@@ -414,8 +596,12 @@ about the current runtime. `evals/` is not edited in this sub-phase.
   `tests/support/vocabulary_guard.py`:
   - no vocabulary in the perception modules or the perception stage, however it is bound;
   - every function the user's text reaches is clean or on the list above. The text is followed
-    as a string, inside the turn state object, and inside a request component's `description`,
-    `source_span` and `role_identity`, through the pre-pass and the decision it commits;
+    as a string, inside the turn state object, inside a request component's `description`,
+    `source_span` and `role_identity`, and as an operand, through the pre-pass, the decision it
+    commits, the carrying out of what was granted (a tool turn, an open request that goes to
+    model tool selection, a generated file, a plan turn of each kind and a learning turn) and
+    what the turn records after delivery (`_stage_post_process`). A planted keyword rule
+    behind that last stage is shown to be caught;
   - those functions are checked strictly, and against the text itself: a literal tested
     against what a person wrote (containment, equality, prefix or suffix, a pattern) is a
     finding whatever the literal is, including names from the data model, and so is a lookup
@@ -430,8 +616,20 @@ about the current runtime. `evals/` is not edited in this sub-phase.
   Each detector is proved against planted violations.
 - Older tests that were written against the keyword perception are marked
   `@pytest.mark.keyword_reader`. For their duration pipelines read with a **test-only** copy of
-  the former perception, `tests/support/keyword_reader.py`. Its own tests are in
-  `tests/test_keyword_reader_support.py`. Runtime code never imports it.
+  the former perception, `tests/support/keyword_reader.py`. Since sub-phase 1c it also states,
+  as a reading states it, what the former keyword routing recognised (`keyword_route`): the
+  capability, the operands and what is unavailable are reported beside the component and held
+  to the message by the runtime like a model's reading, so an operand the message does not
+  contain is not committed and no capability is named that the former rules did not
+  recognise. Its own tests are in `tests/test_keyword_reader_support.py`. Runtime code never
+  imports it.
+- `ScriptedReader` parses a scripted reading as strictly as the turn's reader parses a model's
+  answer: a perception object and at least one component.
+- A test that asks for a tool scripts the request: `tests/support/readings.py` has `using`
+  (a component's `tool`), `operations`, `file_request`, `committed`, `read_as` and
+  `WithReadings`. `tests/test_request_routing.py` covers the request side of the contract.
+- `tests/test_role_facts.py` covers a role's two closed facts and the cost floor, with scripted
+  readings only: the same sentence is read in every case.
 
 ## Not in this sub-phase
 
@@ -439,4 +637,5 @@ about the current runtime. `evals/` is not edited in this sub-phase.
   [the review contract](review-contract.md). `core/social.py` and
   `core/perception.py::observe` are deleted; the cues the evaluation judge and the test-only
   keyword reader still use live in `openrook_tools/roleplay_eval/legacy_social.py`.
-- **Routing and context selection (1c)**, as listed above.
+- **Routing and context selection** were reworked in sub-phase 1c: see
+  [request routing](request-routing.md).

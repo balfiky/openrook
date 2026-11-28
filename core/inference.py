@@ -273,12 +273,20 @@ def call_telemetry() -> list[dict]:
     return [dict(item) for item in _calls.get() or []]
 
 
+# The calls that produce what a granted task needs before it can run: the
+# selection of its tool call, or the text of a file it asked to have written.
+GRANTED_TASK_PHASES = ("tool_selection", "artifact_draft")
+
+
 @contextmanager
 def primary_tool_inference():
-    """One protected selection for this granted task, independent of optional work.
+    """One protected call for this granted task, independent of optional work.
 
-    At most eight atomic grants exist. Additional selections still share the
-    ordinary turn budget; every actual call remains in the same telemetry.
+    The call is the task's tool selection or, for a task that asked for text
+    to be written to a file, the draft of that text; a task makes one or the
+    other. At most eight atomic grants exist. Additional selections still
+    share the ordinary turn budget; every actual call remains in the same
+    telemetry.
     """
     token = _primary_tool_calls.set(1)
     try:
@@ -435,7 +443,7 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
                review=False, review_retry=False, review_confirmation=False, limit_seconds=None,
                output_tokens=None):
     phase = _phase.get() or phase
-    primary_tool = primary_tool and phase == "tool_selection" and _primary_tool_calls.get() > 0
+    primary_tool = primary_tool and phase in GRANTED_TASK_PHASES and _primary_tool_calls.get() > 0
     if primary_tool:
         _primary_tool_calls.set(_primary_tool_calls.get() - 1)
         optional = False
@@ -540,9 +548,10 @@ def model_call(phase: str, *, optional=False, backend=None, primary_tool=False, 
 
 
 def generate(backend, phase, system_prompt, user_message, *, optional=False, reading=False, review=False,
-             review_retry=False, review_confirmation=False, limit_seconds=None, output_tokens=None, **kwargs):
+             review_retry=False, review_confirmation=False, limit_seconds=None, output_tokens=None,
+             primary_tool=False, **kwargs):
     with model_call(phase, optional=optional, backend=backend, reading=reading, review=review,
                     review_retry=review_retry, review_confirmation=review_confirmation,
-                    limit_seconds=limit_seconds, output_tokens=output_tokens):
+                    limit_seconds=limit_seconds, output_tokens=output_tokens, primary_tool=primary_tool):
         result = backend.generate(system_prompt, user_message, **kwargs)
         return strip_reasoning(result) if isinstance(result, str) else result

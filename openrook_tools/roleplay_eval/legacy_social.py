@@ -200,7 +200,7 @@ _REQUEST_SPLIT = re.compile(
 
 def role_request_spans(text: str) -> tuple[str, ...]:
     """Spans worded as a requested identity or relationship, for reply review only."""
-    from core.request_actions import has_learning_intent
+    from openrook_tools.roleplay_eval.legacy_routing import has_learning_intent
 
     if has_learning_intent(text):
         return ()  # A pasted source is one learning request, not many sentences.

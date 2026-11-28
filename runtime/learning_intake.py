@@ -1,20 +1,25 @@
 """Explicit conversation-triggered learning intake.
 
-This module turns direct requests like "learn from this URL" into durable
-Life History experiences. It deliberately does not run for ordinary web
-questions or casual discussion; identity-level mutation needs explicit intent.
+This module turns a granted request to learn from a source into durable Life
+History experiences. Whether a message asks for that is not decided here, and
+no wording is matched: the reading of the message reports a learning request
+as a task that names the learning capability, and the pipeline hands the
+request it was granted to this module (:func:`granted_learning`). Identity-level
+mutation still needs that explicit, granted request; ordinary web questions and
+casual discussion never reach it.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 import json
-import re
+import unicodedata
 from core.clock import clock as time
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 from urllib.parse import urlparse
 
-from core.request_actions import has_learning_intent as _has_learning_intent
 from openrook_tools.builtin.web_provider import RequestsWebProvider
 from runtime.config import RuntimeConfig
 from runtime.life_history import LifeHistoryStore
@@ -24,9 +29,6 @@ from runtime.llm.backend import create_llm_backend
 MAX_LEARNING_URLS = 3
 MAX_LEARNING_TEXT_CHARS = 200_000
 MIN_LEARNING_TEXT_CHARS = 120
-
-_URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+", re.I)
-
 
 
 class LearningIntakeError(RuntimeError):
@@ -112,19 +114,74 @@ class LearningIntakeResult:
         )
 
 
-def detect_learning_request(message: str) -> LearningRequest | None:
-    """Return an explicit learning request, or ``None`` for ordinary chat."""
-    text = (message or "").strip()
-    if not text or not _has_learning_intent(text):
-        return None
+# The learning request the turn in progress was granted, set by the pipeline
+# while it carries that grant out. Outside such a scope there is none.
+_granted: ContextVar[LearningRequest | None] = ContextVar("granted_learning_request", default=None)
 
-    urls = tuple(_extract_urls(text)[:MAX_LEARNING_URLS])
-    inline_text = _extract_inline_text(text) if not urls else ""
-    if not urls and len(inline_text) < MIN_LEARNING_TEXT_CHARS:
+
+def learning_request(*, url: str = "", message: str = "", asked_in: str = "") -> LearningRequest:
+    """The request a learning task comes to: material at an address, or the message's own text.
+
+    ``url`` is the address the person wrote, when the reading reported one.
+    Without it the material is the message itself. ``asked_in`` is the part of
+    the message that asks for the learning (the task's ``source_span``): when
+    it stands at the very start or end of the message, the material is the
+    rest. Nothing is read from the wording.
+    """
+    if url:
+        return LearningRequest(urls=(url,)[:MAX_LEARNING_URLS], inline_text="")
+    return LearningRequest(urls=(), inline_text=_material(message, asked_in))
+
+
+def _material(message: str, asked_in: str) -> str:
+    """The message without the part that asks, when that part opens or closes it."""
+    text, asking = (message or "").strip(), (asked_in or "").strip()
+    if not asking or len(asking) >= len(text):
+        return text
+
+    def bare(piece: str) -> str:
+        # What separates the asking from the material: spaces and punctuation, by Unicode category.
+        while piece and unicodedata.category(piece[0])[0] in ("Z", "P", "C"):
+            piece = piece[1:]
+        while piece and unicodedata.category(piece[-1])[0] in ("Z", "C"):
+            piece = piece[:-1]
+        return piece
+
+    if text.startswith(asking):
+        return bare(text[len(asking):])
+    if text.endswith(asking):
+        return bare(text[:-len(asking)])
+    return text
+
+
+@contextmanager
+def granted_learning(request: LearningRequest | None) -> Iterator[None]:
+    """Carry out a granted learning task: within this scope ``request`` is the turn's learning request."""
+    token = _granted.set(request)
+    try:
+        yield
+    finally:
+        _granted.reset(token)
+
+
+def _usable(request: LearningRequest) -> LearningRequest:
+    if not request.urls and len(request.inline_text) < MIN_LEARNING_TEXT_CHARS:
         raise LearningIntakeError(
             "I need a URL or a longer pasted text block before I can learn from it."
         )
-    return LearningRequest(urls=urls, inline_text=inline_text)
+    return request
+
+
+def detect_learning_request(message: str) -> LearningRequest | None:
+    """The learning request the turn in progress was granted, or ``None``.
+
+    No wording is examined: ``message`` is accepted for the callers that pass
+    it and has no effect. A request exists only inside :func:`granted_learning`,
+    where the pipeline put what the reading reported and the decision granted.
+    """
+    del message
+    request = _granted.get()
+    return None if request is None else _usable(request)
 
 
 def ingest_learning_from_message(
@@ -136,13 +193,18 @@ def ingest_learning_from_message(
     web_provider: RequestsWebProvider | None = None,
     llm_client_factory: Callable[[RuntimeConfig], Any] = create_llm_backend,
 ) -> LearningIntakeResult | None:
-    """Detect, fetch, digest, and persist explicit learning material."""
-    request = (
-        LearningRequest(urls=(), inline_text=(message or "").strip())
-        if pending_inline_text
-        else detect_learning_request(message)
-    )
-    if request is None:
+    """Fetch, digest, and persist the learning material of a granted request.
+
+    The request is the one in scope (:func:`granted_learning`). Without one,
+    ``pending_inline_text`` takes ``message`` itself as the material, for the
+    session's older internal callers; otherwise there is nothing to learn.
+    """
+    request = _granted.get()
+    if request is not None:
+        request = _usable(request)
+    elif pending_inline_text:
+        request = LearningRequest(urls=(), inline_text=(message or "").strip())
+    else:
         return None
 
     provider = web_provider or RequestsWebProvider()
@@ -307,41 +369,6 @@ def _to_learning_result(result: dict[str, Any]) -> LearningIntakeResult:
         evolution_counts=counts,
         rejection_counts=rejection_counts,
     )
-
-
-def _extract_urls(text: str) -> list[str]:
-    urls: list[str] = []
-    for match in _URL_RE.finditer(text):
-        url = match.group(0).rstrip(".,;:!?)]}")
-        if url not in urls:
-            urls.append(url)
-    return urls
-
-
-def _extract_inline_text(text: str) -> str:
-    match = re.search(
-        r"^\s*fill\s+(?:it|life\s+history|life\s+learning|memory)\s+with\s+this\s*:?\s*(.+)",
-        text,
-        re.I | re.S,
-    )
-    if match:
-        return match.group(1).strip()
-    match = re.search(
-        r"^\s*(?:add|save|record|store|put)\b.{0,60}\b"
-        r"(?:life\s+history|life\s+learning|life\s+ledger|formative\s+memory)\s*:?\s*(.+)",
-        text,
-        re.I | re.S,
-    )
-    if match:
-        return match.group(1).strip()
-    match = re.search(
-        r"(?:learn|study|absorb|absort|internalize|digest)[^:]*:\s*(.+)",
-        text,
-        re.I | re.S,
-    )
-    if match:
-        return match.group(1).strip()
-    return text.strip()
 
 
 def _title_from_url(url: str) -> str:

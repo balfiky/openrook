@@ -1,44 +1,22 @@
-"""Module-level heuristics for the cognitive pipeline.
+"""Small stateless helpers for the cognitive pipeline.
 
-Regex tables, repair/identity detection, message builders for tool
-routing, and small topic-hint helpers. These are deterministic and
-stateless — the orchestrator in ``pipeline.core`` calls them per turn.
+Nothing here reads the wording of a message. Which context a turn loads is
+taken from the reading of the message (``docs/development/request-routing.md``):
+whether it asks about the character's own past and development, and the spans
+it gives as the message's subject.
 """
 
 from __future__ import annotations
 
-import re
+from typing import Iterable
 
-from core.dual_process.tool_loop import attach_followup_context
+from core.perception import fold
 from core.types import ToolResult
 
-_IDENTITY_QUESTION_RE = re.compile(
-    r"\bwhat (?:did|do) you learn(?: about yourself)?[.!?]?\s*$|"
-    r"\bwhat (?:changed|did you change)(?: about yourself)?[.!?]?\s*$|"
-    r"\b(?:did you evolve|how did you (?:change|evolve)|how have you (?:changed|evolved))[.!?]?\s*$|"
-    r"^\s*evolve[.!?]?\s*$|"
-    r"\bwhat do you (?:remember|believe) about yourself[.!?]?\s*$|"
-    r"\bwhat (?:do you believe|are your (?:beliefs|priorities|drives))[.!?]?\s*$",
-    re.IGNORECASE,
-)
-
-_USER_MEMORY_QUESTION_RE = re.compile(
-    r"\bdo you remember\b(?!\s+about yourself\b)|"
-    r"\bwhat (?:do|did) you (?:know|learn|believe) (?:about|of|from) (?:me|us|my|our)\b",
-    re.IGNORECASE,
-)
-
-_BROAD_REPAIR_RE = re.compile(
-    r"\b(?:everything|all of (?:it|this)|all the tension|all of the tension|"
-    r"forgive(?: me| this| everything)?|move on|make peace|find peace|"
-    r"repair (?:this|everything|all)|start over|clean slate)\b",
-    re.IGNORECASE,
-)
-
 # Hot transcript bound. Every reader uses a recent window (generator: last
-# 10 turns, digestion summary: last 20 messages, model tool routing: last 8,
-# anticipation: last 5 user messages, relationship digestion: bounded by the
-# 200-entry short-term memory), so trimming to the newest 400 entries
+# 10 turns, digestion summary: last 20 messages, the reading and the review:
+# last 6, anticipation: last 5 user messages, relationship digestion: bounded
+# by the 200-entry short-term memory), so trimming to the newest 400 entries
 # (~200 turns) cannot change any consumer's observable behavior.
 _CONVERSATION_HISTORY_MAX = 400
 
@@ -51,16 +29,7 @@ _REPAIRABLE_UNRESOLVED_SOURCES = {
     "hostility",
 }
 
-
-def _is_identity_question(text: str) -> bool:
-    # Questions about the user or past conversations need the normal generation
-    # path, including when the same message also asks about the agent itself.
-    text = text or ""
-    return bool(_IDENTITY_QUESTION_RE.search(text)) and not _USER_MEMORY_QUESTION_RE.search(text)
-
-
-def _is_broad_repair_text(text: str) -> bool:
-    return bool(_BROAD_REPAIR_RE.search(text or ""))
+TOPIC_CHARS = 40   # how much of a topic span names a relationship topic
 
 
 def _is_repairable_unresolved_source(source: str) -> bool:
@@ -82,54 +51,16 @@ def _format_generated_artifact_summary(result: ToolResult, draft_summary: str = 
         details.append(f"Failed: {result.error or 'unknown error'}")
     return "[fs.write_file] " + " | ".join(details)
 
-def _message_for_tool_detection(
-    user_message: str,
-    conversation_history: list[dict[str, str]],
-) -> str:
-    """Attach the prior user request for terse tool follow-ups.
 
-    Delegates to the declarative FOLLOWUP_REWRITE_RULES table that lives
-    next to the heuristic intent rules in core/dual_process/tool_loop.py.
+def relationship_topic(topics: Iterable[str]) -> str:
+    """The topic under which relationship memory is looked up and filed for this turn.
+
+    The first span the reading gave as the message's subject, in the folded
+    form in which copies of a text compare equal. Empty when the reading named
+    no subject, or when there was no reading.
     """
-    return attach_followup_context(user_message, conversation_history)
-
-
-def _message_for_model_tool_routing(
-    user_message: str,
-    conversation_history: list[dict[str, str]],
-) -> str:
-    """Attach recent turns so model-native routers can resolve follow-ups."""
-    if not conversation_history:
-        return user_message
-    lines = ["Recent conversation for tool routing:"]
-    for message in conversation_history[-8:]:
-        role = "User" if message.get("role") == "user" else "Assistant"
-        content = str(message.get("content") or "").strip()
-        if content:
-            lines.append(f"{role}: {content}")
-    lines.append(f"Current user message: {user_message}")
-    return "\n".join(lines)
-
-
-def _relationship_topic_hint(text: str) -> str:
-    """Small topic hint so relationship-memory loops can be prioritized."""
-    lower = text.lower()
-    match = re.search(r"\b(?:about|regarding|around|on)\s+([a-z0-9' -]{2,40})", lower)
-    if match:
-        return _clean_topic_hint(match.group(1))
-    words = re.findall(r"[a-z0-9']+", lower)
-    stopwords = {
-        "the", "and", "that", "this", "with", "your", "you", "for", "from",
-        "have", "been", "just", "really", "very", "again", "still", "please",
-        "drop", "topic", "issue", "thing", "can", "could", "would", "what",
-        "when", "where", "why", "how", "any", "follow", "up",
-        "unresolved", "resolved", "matters", "matter", "pattern",
-    }
-    informative = [word for word in words if len(word) > 2 and word not in stopwords]
-    return " ".join(informative[:3])
-
-
-def _clean_topic_hint(text: str) -> str:
-    phrase = re.sub(r"[^a-z0-9' -]", " ", text.lower())
-    phrase = " ".join(phrase.split())
-    return phrase[:40].strip()
+    for span in topics:
+        topic = fold(span)[:TOPIC_CHARS].strip()
+        if topic:
+            return topic
+    return ""

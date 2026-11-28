@@ -16,6 +16,7 @@ class TestSemanticMemory:
                 assistant_response="Understood.",
                 topic="style",
                 event_intensity=0.4,
+                lasting=(("preference", "concise replies"),),   # as the reading quoted it
             )
             for entry in entries:
                 memory.store(entry)
@@ -94,6 +95,7 @@ class TestSemanticMemory:
                 assistant_response="Noted.",
                 topic="launch",
                 event_intensity=0.4,
+                lasting=(("decision", "use the calm launch plan"),),   # as the reading quoted it
             ):
                 memory.store(entry)
 

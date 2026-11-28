@@ -132,6 +132,9 @@ class DebugState:
     action_variables: ActionVariables | None = None
     tool_memory_effects: ToolMemoryEffects | None = None
     task_trace: TaskTrace | None = None
+    # Model tool selection in this turn: how many requests were made, and why
+    # one was not made or failed (docs/development/request-routing.md).
+    tool_selection: dict[str, Any] = field(default_factory=dict)
     strategy_trace: StrategyDecisionTrace | None = None
 
     # Phase 11.3: Response strategy
@@ -188,7 +191,9 @@ class _TurnState:
     elapsed: float = 0.0
     trust_delta: float = 0.0
     short_replies: bool = False
-    inspection_kind: str = ""
+    # Model tool selection is left alone this turn: the backend failed a
+    # tool-calling request in this turn or in one of the turns before it.
+    tool_selection_paused: bool = False
     timings: dict[str, float] = field(default_factory=dict)
     t_total: float = 0.0
     turn_started_at: float = 0.0

@@ -36,15 +36,6 @@
   "this review was not asked about that",
   "why"
  ],
- "core/dual_process/generator.py::ResponseGenerator.generate": [
-  "current turn receipts",
-  "domain",
-  "freshness",
-  "host_metrics",
-  "meaning",
-  "memory",
-  "topic"
- ],
  "core/dual_process/generator.py::_expression_components": [
   "choice"
  ],
@@ -98,6 +89,10 @@
  ],
  "core/grounding.py::blocked_before_execution": [
   "shell_command_allowlist"
+ ],
+ "core/grounding.py::component_receipt_indices": [
+  "content",
+  "fs.write_file"
  ],
  "core/review.py": [
   "arguments",

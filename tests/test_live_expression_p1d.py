@@ -9,13 +9,13 @@ from config.loader import configuration_scope, load_config
 from core.dignity import review_response
 from core.dual_process.generator import ResponseGenerator, build_system_prompt
 from core.llm_content import strip_expression_artifacts
-from core.system_inspection import inspection_kind
 from core.types import PipelineContext, ToolResult, ToolTrace
 from core.willingness import Personality, RelationshipDynamics, RequestComponent, Stance
 from openrook_tools.replay_dignity import fixture_executor
 from pipeline import CognitivePipeline
 from runtime.config import RuntimeConfig
 from tests.policy_fakes import ExpressionBackend, frozen
+from tests.support.readings import ScriptedReader, reading, task, using
 
 
 @pytest.fixture(autouse=True)
@@ -38,10 +38,10 @@ def reviewer(request):
     return [] if request.param == "approves" else [TimeoutError("review unavailable") for _ in range(5)]
 
 
-def make_pipe(drafts, reviewer, *, reserved=False, executor=None):
+def make_pipe(drafts, reviewer, *, reserved=False, executor=None, reader=None):
     backend = ExpressionBackend(drafts=drafts, reviews=reviewer)
     # These finite drafts exercise delivery, not the live learning interpreter.
-    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="high_risk",
+    pipe = CognitivePipeline(backend, tool_executor=executor, autonomy_level="high_risk", message_reader=reader,
                              runtime_config=RuntimeConfig(appraisal_use_llm=False, autobiographical_learning=False))
     if reserved:
         pipe.relationship_memory.save_dynamics("alice", RelationshipDynamics(h=0.6, r=0.3), 0)
@@ -133,21 +133,13 @@ def test_unchanged_measurements_remain_valid_but_do_not_waive_whole_reply_freshn
         recent_context=[{"role": "assistant", "content": reply}]).issues
 
 
-def test_host_metric_followups_survive_intervening_turns_but_respect_topic_changes():
-    history = [{"role": "user", "content": MESSAGES[4]}]
-    for _ in range(3):
-        history += [{"role": "assistant", "content": "CPU utilization: 12%."},
-                    {"role": "user", "content": "Be brief"}]
-    assert inspection_kind("what about memory", history) == "memory"
-    assert inspection_kind("and disk", history) == "disk"
-    history.append({"role": "user", "content": "What is your memory of our conversation?"})
-    assert not inspection_kind("what about memory", history)
-
-
 def test_memory_followup_remains_component_grant_gated():
     executor = fixture_executor()
     executor.register_handler("system.memory_usage", lambda _: pytest.fail("Declined inspection ran"))
-    pipe, _ = make_pipe(["I won't do that now."], [], executor=executor)
+    # The reader resolves the follow-up from the turn before it and names the capability.
+    pipe, _ = make_pipe(["I won't do that now."], [], executor=executor, reader=ScriptedReader(
+        lambda text: reading(task("current memory usage", source_span=text, user_value=0.6, effort=0.12,
+                                  tool=using("system.memory_usage")))))
     pipe.restore_conversation_history([{"role": "user", "content": MESSAGES[4]}])
     pipe.relationship_memory.save_dynamics("alice", RelationshipDynamics(h=1, r=1), 0)
     pipe.engine.state.energy = 0.01

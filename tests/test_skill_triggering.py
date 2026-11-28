@@ -8,6 +8,8 @@ Validates that:
 
 from __future__ import annotations
 
+import pytest
+
 from runtime.config import RuntimeConfig
 from runtime.skills import (
     audit_skill_text,
@@ -176,3 +178,42 @@ def test_context_hint_tokens_returned_for_observability(tmp_path):
     tokens = ctx["context_hint_tokens"]
     assert "pdf" in tokens
     assert "read" in tokens
+
+
+# ---------------------------------------------------------------------------
+# Triggers are the owner's own words, in whatever language they wrote them
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(("applies_when", "matching", "other"), [
+    ("погода, прогноз", "Какая сегодня ПОГОДА в городе?", "Расскажи мне о приливах."),
+    ("天气 预报", "今天天气怎么样？", "给我讲讲潮汐。"),
+    ("天気", "今日の天気はどうですか。", "潮の満ち引きについて教えて。"),
+    ("ملف، جدول", "افتح الملف من فضلك", "حدثني عن المد والجزر"),
+    ("สภาพอากาศ", "วันนี้สภาพอากาศเป็นอย่างไร", "เล่าเรื่องน้ำขึ้นน้ำลงให้ฟังหน่อย"),
+])
+def test_a_trigger_in_a_non_latin_script_matches_as_whole_words(tmp_path, applies_when, matching, other):
+    config = _config(tmp_path)
+    _install_skill(config, name="local_helper", description="A skill with a trigger in another script.",
+                   applies_when=applies_when)
+
+    def loaded(message):
+        ctx = enabled_skill_context(config, context_hint={"user_message": message})
+        return [skill["name"] for skill in ctx["skills"]], ctx["context_hint_tokens"]
+
+    names, tokens = loaded(matching)
+    assert names == ["local_helper"] and tokens      # the message has words, in its own script
+    assert loaded(other)[0] == []
+
+
+def test_a_trigger_is_a_whole_word_or_tool_name_and_never_a_piece_of_one(tmp_path):
+    config = _config(tmp_path)
+    _install_skill(config, name="reader", description="Reads files.", applies_when="fs.read_file, pdf")
+    names = lambda hint: [s["name"] for s in enabled_skill_context(config, context_hint=hint)["skills"]]  # noqa: E731
+    assert names({"tool_name": "fs.read_file"}) == ["reader"]
+    assert names({"user_message": "Summarise this PDF, please."}) == ["reader"]
+    assert names({"user_message": "the pdfs are elsewhere"}) == []          # another word
+    assert names({"tool_name": "fs.read_files"}) == []
+    # A run of an unspaced script is one term: its characters scattered through a message are not it.
+    _install_skill(config, name="weather", description="Weather.", applies_when="天气预报")
+    assert names({"user_message": "今天天气怎么样？"}) == []
+    assert names({"user_message": "看一下天气预报吧"}) == ["weather"]

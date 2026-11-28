@@ -196,14 +196,15 @@ def apply_character_vector_to_action_variables(
     )
 
 
-def curiosity_salience_bonus(influence: LifeInfluence, text: str) -> float:
-    """Return a small salience bonus for learning-related semantic entries."""
-    if influence.curiosity_pressure <= 0:
+def curiosity_salience_bonus(influence: LifeInfluence, learned: bool) -> float:
+    """A small salience bonus for what a turn remembers when the turn took in learning material.
+
+    ``learned`` is a fact about the turn (a learning receipt), not something
+    read off its words.
+    """
+    if influence.curiosity_pressure <= 0 or not learned:
         return 0.0
-    lower = text.lower()
-    if any(word in lower for word in ("learn", "learning", "question", "curious", "study", "read")):
-        return influence.curiosity_pressure
-    return 0.0
+    return influence.curiosity_pressure
 
 
 def action_variable_deltas(before: ActionVariables, after: ActionVariables) -> dict[str, float]:

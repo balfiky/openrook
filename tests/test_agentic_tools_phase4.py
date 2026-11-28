@@ -28,6 +28,7 @@ from core.types import (
 )
 from pipeline import CognitivePipeline, DebugState
 from tests._fakes import MockLLMBackend
+from tests.support.readings import ScriptedReader, file_request
 from runtime.debug.api import _debug_to_dict, _build_tool_summary
 from openrook_tools.registry import ToolRegistry
 from openrook_tools.executor import ToolExecutor
@@ -38,12 +39,18 @@ from openrook_tools import register_builtins
 # Helpers
 # ===================================================================
 
-def _make_pipeline_with_tools():
-    """Create a CognitivePipeline wired to a ToolExecutor."""
+def _make_pipeline_with_tools(scripted=True):
+    """Create a CognitivePipeline wired to a ToolExecutor.
+
+    Its reader is scripted: a message of the form "read file <path>" is read as
+    a task that asks the file capability for that path. ``scripted=False``
+    leaves the reader to the test (the keyword reader of a marked test).
+    """
     reg = ToolRegistry()
     exe = ToolExecutor(reg)
     register_builtins(reg, exe)
-    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe)
+    pipe = CognitivePipeline(llm_backend=MockLLMBackend(), tool_executor=exe,
+                             message_reader=ScriptedReader(file_request) if scripted else None)
     return pipe, reg, exe
 
 

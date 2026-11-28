@@ -50,7 +50,7 @@ reply prompt's fixed rule list is one short contract.
    |---|---|
    | `user_message` | What the person wrote in this turn |
    | `recent_context` | Up to six earlier turns, as `{speaker, text}` |
-   | `decision.components` | Each part of the message: `id`, `kind`, `description`, `source_span`, `choice` (`undertake` or `decline`), `role_identity` for a role, and for a requested operation its `requested_operation`, `outcome` (declined, not attempted, succeeded, failed) and the bound `receipt_indices` |
+   | `decision.components` | Each part of the message: `id`, `kind`, `description`, `source_span`, `choice` (`undertake` or `decline`), `role_identity` for a role, and for a requested operation its `requested_operation`, `outcome` (declined, not attempted, succeeded, failed) and the bound `receipt_indices`. A receipt that was stopped before it ran (`execution_started: false`, a grant denial, the operator's allowlist) is `not attempted`, not `failed`. A part that asked for work nothing the character can reach does carries `possible: false` and, when the reading said what is missing, `unavailable` ([request routing](request-routing.md)) |
    | `decision.stance` | The six selected stance values, as background |
    | `decision.selected_intention` | The character's own selected intention, or null |
    | `decision.chosen_silence` | Whether silence was chosen |
@@ -178,8 +178,8 @@ reply prompt's fixed rule list is one short contract.
 
    | Finding | What is compared | Eligible? |
    |---|---|---|
-   | `user_message_echo` (whole) | The reply's words are the user's message, in order, and the message is at least four words long | No |
-   | `user_message_echo` (opening) | The reply's first sentence is a copy of the start of the user's message (this one or a recent one), at least four words long | No; the copied opening is cut out |
+   | `user_message_echo` (whole) | The reply's words are the user's message, in order, and the message is at least four words long. Not when the copy was asked for (below) | No |
+   | `user_message_echo` (opening) | The reply's first sentence is a copy of the start of the user's message (this one or a recent one), at least four words long. Not when the copy was asked for (below) | No; the copied opening is cut out |
    | `stale_response` (whole) | The reply's words are an earlier reply of this chat, in order, at every length | No |
    | `stale_response` (span) | A run of twelve words copied from an earlier reply, or several near-copied sentences that make up 40% of the reply | Yes, medium |
    | `private_instruction_leak` | A run of eight words copied from the contract the draft was written under, or from the private controls block of its prompt (field names with their values, in the order written), unless the user supplied that text | No; fresh expression |
@@ -196,6 +196,15 @@ reply prompt's fixed rule list is one short contract.
      shorter than that may be answered with itself. The cost is stated plainly: a recited
      two- or three-word message is no longer caught locally. A whole repeat of an **earlier
      reply** is different and stays ineligible at every length.
+   - **A copy the person asked for is no echo** (`core/dignity.py::requested_copy`). The
+     reading reports, per component, text the person asks to be given back word for word
+     (`reproduce`); it stands when it is a verbatim part of the message or of a recent message
+     from the same person ([request routing](request-routing.md)). The two echo checks exempt
+     a copy whose words lie within such a span, in that turn, and **only for a component the
+     decision undertook**. A copy that runs on beyond the span, into the rest of the message,
+     is an echo; so is the same reply when the reading reported no such request, or when the
+     decision declined the component. A repeat of the character's own earlier reply stays a
+     repeat, requested or not.
    - **The controls block is compared as field names with their values.** A text value longer
      than three words (a component's description, the content of the selected intention) is
      what the turn is about, not a control: it is left out and breaks the sequence, so a reply
@@ -416,9 +425,17 @@ unrecorded.
   | Review, first call for a candidate | 12 | `review: true` |
   | Review, the confirmation | 1 | `review: true`, `review_confirmation: true` |
   | Review, second call | 4 | `review: true`, `review_retry: true` |
-  | Protected primary tool selections | 8 | `primary_tool: true` |
+  | Protected call of a granted task: its tool selection, or the draft of a file it asked to have written | 8 | `primary_tool: true`, with `phase` `tool_selection` or `artifact_draft` |
 
   At most six generations and seventeen review calls; thirty-three model calls in all.
+  Since sub-phase 1c a tool selection is made only for a granted task that names a capability
+  without a committed operation ([request routing](request-routing.md)): one protected call
+  for each such task, at most eight, and none for a task that names no capability. A task
+  that asked for text to be written to a file spends that same call on the draft of the text
+  instead (`artifact_draft`); a task makes one or the other, so the draft is inside this
+  maximum and in the telemetry, with the request deadline in force. After a tool-calling
+  request failed as unsupported or at the transport level, no further selection is made in
+  the turn, so that failure costs a turn one `T`, not eight.
 - **Why twelve, and one.** A turn writes at most six drafts (five base calls and the protected
   final attempt), and a cut proposes a remainder of a draft. Twelve gives every draft and one
   remainder of each a review. A longer chain of cuts than that is not reviewed and is ordered
@@ -431,7 +448,7 @@ unrecorded.
   | Reading (two calls, one budget) | `T` |
   | Base calls, five | `5 T` (the optional ones have the shorter auxiliary deadline) |
   | Protected final attempt | `T` |
-  | Protected primary tool selections, eight | `8 T` |
+  | Protected calls of granted tasks (selection or file draft), eight | `8 T` |
   | **All review calls together** | **`T`** |
 
   `8 T` for a turn without tools and `16 T` at the maximum of tool selections, plus the time
@@ -470,9 +487,10 @@ decision, the reviewer's eight codes cover them.
   language from a drift only through English request patterns. The prompt line stays, as
   pending above; a reply in another language is no longer ineligible.
 - Normalising English contractions when comparing a copy, and the "requested literal"
-  exemption of the copy checks. A reply that copies four or more words of the user's message
-  as its whole or its opening is ineligible whether or not the copy was asked for (pending,
-  below); quoting a part of the message inside a sentence of its own is not a copy.
+  exemption of the copy checks, which recognised a request by English patterns. A reply that
+  copies four or more words of the user's message as its whole or its opening is ineligible
+  unless the reading reported that copy as asked for and the decision undertook it (point 8);
+  quoting a part of the message inside a sentence of its own is not a copy.
 - Copies shorter than four words: the two-word clause rule is gone (point 8).
 - Unwrapping a whole reply set in asterisks, and removing asterisk-wrapped lines.
 
@@ -485,6 +503,7 @@ fails if one does, or if a runtime module outside the harness imports the moved 
 
 | Name kept in `core` | Now lives in |
 |---|---|
+| `core.request_actions.ground_shell_components` (since sub-phase 1c) | `openrook_tools/roleplay_eval/legacy_routing.py` |
 | `core.grounding.verify_response_grounding` | `openrook_tools/roleplay_eval/legacy_claims.py` |
 | `core.metric_claims`: `cpu_idle_percentages`, `cpu_measurement_complete`, `percentage_comparisons`, `cpu_interpretation_conflicts`, `capacity_interpretation_conflicts` | the same |
 | `core.system_inspection.addresses_inspection` | the same |
@@ -504,35 +523,29 @@ test-only keyword reader. `core/social.py`, `core/expression_claims.py`,
 its scripted drafts (`REVIEW_FINDINGS`), so it exercises the gate as it now is. Its scripted
 readings are still those described in the reading contract.
 
-## Still keyword-based: sub-phase 1c
+## Request routing: done in sub-phase 1c
 
-Nothing in the review or the delivery path matches wording. What remains on the turn path is
-request routing and context selection, which the user's text reaches before the decision, and
-it is unchanged by this sub-phase:
-
-| Code | What it recognises |
-|---|---|
-| `core/system_inspection.py::inspection_kind` | Host-metric questions |
-| `core/dual_process/tool_loop.py` (`INTENT_RULES`, the follow-up rules, `match_intent_rule`) | Tool requests |
-| `core/task_planning.py` (`is_continue_request`, `is_status_request`, the plan templates) | "Continue" and "status" for a running plan |
-| `core/request_actions.py` (`has_learning_intent`, `file_requests`, `ground_file_components`, `ground_shell_components`) | Learning requests; literal file and shell operands |
-| `core/artifact_writer.py::detect_artifact_write_request` | Requests to write generated text to a file |
-| `pipeline/heuristics.py` (`_is_identity_question`, `_relationship_topic_hint`) | Context selection |
+Nothing in the review or the delivery path matches wording, and since sub-phase 1c nothing
+before it does either: what a message asks for, which tool runs and which context is loaded
+come from the reading ([request routing](request-routing.md)). The code this section used to
+list as pending (`inspection_kind`, the intent and follow-up rules, the plan follow-up and step
+patterns, learning and literal-operand recognition, `detect_artifact_write_request`, the
+identity and topic patterns) is deleted from the runtime.
 
 `tests/test_reply_guards.py` holds the exact list of runtime modules whose source still carries
-evaluation wording, with the reason for each.
+evaluation wording, with the reason for each. No module under `core/` or `pipeline/` is on it:
+what is left is the Phase 4 memory filter, the offline replay tool and the evaluation harness.
 
-Two more things are noted for 1c. Both were seen in a run against a hosted model, and neither
-is changed here:
+The two findings from the run against a hosted model:
 
-- **Tool selection without a capability.** With tools enabled, a text-only task whose reading
-  lists no capability still triggers a model call to select a tool. Seen live: it stalled for
-  two minutes, and the reply then mentioned a tool timeout. Tool selection should run only
-  when the reading says a capability is needed.
-- **A requested exact reproduction.** A reply that reproduces the user's text word for word
-  cannot be delivered even when that was the request, because nothing structural can tell a
-  requested copy from an echo. The reading should report that literal reproduction was
-  requested, and the copy checks should take that from the reading.
+- **Tool selection without a capability.** Fixed. Model tool selection is asked only for a
+  granted task that names a capability without a committed operation. A task that names none
+  is work done in the reply and reaches no tool-calling request, with any backend. A
+  tool-calling request that fails as unsupported or at the transport level is not repeated in
+  the turn and pauses selection for ten turns; the reply is told what did and did not run.
+- **A requested exact reproduction.** Fixed, as far as structure can: the reading reports the
+  text to reproduce, and the copy checks exempt exactly that span for a component the decision
+  undertook (point 8). Whether the reader reports such a request is its judgement.
 
 ## Tests
 
@@ -561,14 +574,10 @@ is changed here:
     `_stage_self_check`: the reply prompt, the writer, the gate, the reviews and the delivery.
     They are traced in conversation and in research mode, with receipts a real tool loop
     produced, through rewrites, excision, the protected final attempt and the confirmation
-    review. **Not traced**, by this guard or by the perception guard, is the deliberation stage
-    (`_stage_deliberation`), where tools are selected and run and requests are routed. The
-    user's text reaches that stage and is still matched against wording there, by the routing
-    of the 1c table above; a probe of one tool turn finds
-    `core/system_inspection.py::inspection_kind` and
-    `core/artifact_writer.py::detect_artifact_write_request` on that path. Only the
-    source-level wording guard and its exact list cover that stage. The draft never reaches
-    it: it runs before the reply is written;
+    review. The stages before them, including the deliberation stage (`_stage_deliberation`)
+    where requests are routed and tools are selected and run, are traced by the perception
+    guard since sub-phase 1c. The draft never reaches them: they run before the reply is
+    written;
   - the moved wording-based code is never reached by a turn and is imported only by the
     harness and the named compatibility;
   - no evaluation wording in any runtime module outside an exact list. A pattern counts when

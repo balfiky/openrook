@@ -1,15 +1,22 @@
-"""Real executor/policy, inert fixture handlers, and a model that never calls tools."""
+"""Real executor/policy, inert fixture handlers, and a model that never calls tools.
+
+A question about the host is an ordinary task: the reading names the
+system-information capability it asks for, and a follow-up is resolved by the
+reader. Nothing recognises such a question by its wording, so these tests
+script the reading.
+"""
 
 import json
 from types import SimpleNamespace
 
 import pytest
 
-from core.system_inspection import inspection_kind
 from core.types import ToolResult
 from openrook_tools.roleplay_eval.legacy_claims import verify_response_grounding
 from tests.policy_fakes import ExpressionBackend
-from tests.support.readings import conversation, hostility, is_reading_prompt, message_of, reading, task
+from tests.support.readings import (
+    conversation, hostility, is_reading_prompt, message_of, reading, role, task, using,
+)
 from core.willingness import RelationshipDynamics
 from openrook_tools.builtin import shell
 from pipeline import CognitivePipeline
@@ -22,8 +29,13 @@ CPU_RECEIPT = dict(output="CPU: 12.0% busy, 88.0% idle (user 5.0%, system 7.0%, 
                              "iowait_percent": 0.0, "cores": 8, "interval_seconds": 0.25})
 
 
+def asks_for(capability, **operands):
+    """A reading script: the message is one task that asks for this capability."""
+    return lambda text: reading(task(text, user_value=0.6, effort=0.12, tool=using(capability, **operands)))
+
+
 def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_risk", allowlist=None,
-                  readings=None, cpu_tool=True):
+                  readings=asks_for("system.cpu_usage"), cpu_tool=True):
     config = RuntimeConfig(data_dir=str(tmp_path), tools_enabled=tools,
                            shell_tool_enabled=shell_enabled, autonomy_level=autonomy,
                            shell_command_allowlist=allowlist or [], appraisal_use_llm=True)
@@ -31,7 +43,7 @@ def make_pipeline(tmp_path, *, tools=True, shell_enabled=True, autonomy="high_ri
 
     class NoToolModel:
         def run_tool_loop(self, **kwargs):
-            pytest.fail("A clear inspection request must execute before model tool selection")
+            pytest.fail("A request whose reading names the capability and all operands needs no model tool selection")
 
     executor.set_tool_runner(NoToolModel())
     if tools:
@@ -75,7 +87,11 @@ def test_cpu_typo_and_ram_followup_are_read_and_execute_without_model_routing(tm
         if text == "You are boring like hell":
             return reading(conversation(text), target="character", move="attack", intent="harm",
                            perception=hostility(text))
-        return reading(task(text, user_value=0.6, effort=0.12))
+        if text == "what about memory":
+            # The follow-up is resolved by the reader from the turns before it.
+            return reading(task("current memory usage, as asked about the CPU before", source_span=text,
+                                user_value=0.6, effort=0.12, tool=using("system.memory_usage")))
+        return reading(task(text, user_value=0.6, effort=0.12, tool=using("system.cpu_usage")))
 
     monkeypatch.setattr(shell.subprocess, "run", run)
     pipe = make_pipeline(tmp_path, readings=readings)
@@ -83,8 +99,8 @@ def test_cpu_typo_and_ram_followup_are_read_and_execute_without_model_routing(tm
         pipe.process("You are boring like hell", "alice")
         cpu = pipe.process("tell me the current cpu utiliation", "alice")
         ram = pipe.process("what about memory", "alice")
-        # A host-metric question is read like any other message; only tool
-        # selection is settled without the model.
+        # A host-metric question is read like any other message. Its reading
+        # names the capability, so no tool has to be selected by the model.
         assert pipe._llm_backend.reading_calls == [
             "You are boring like hell", "tell me the current cpu utiliation", "what about memory"]
         # The read-only CPU tool answers, with the busy figure already in its receipt; no shell command runs.
@@ -109,8 +125,9 @@ def test_cpu_typo_and_ram_followup_are_read_and_execute_without_model_routing(tm
 
 
 @pytest.mark.parametrize(("tools", "shell_enabled", "autonomy", "reason"), [
-    (False, False, "high_risk", "system tools are disabled"),
-    (True, True, "off", "off"),
+    # Tools disabled: the capability is not offered, so the task cannot name it; the writer has the setting.
+    (False, False, "high_risk", '"tools_enabled": false'),
+    (True, True, "off", "Autonomy mode is off"),
 ])
 def test_unavailable_inspections_explain_the_actual_reason_in_one_line(
     tmp_path, tools, shell_enabled, autonomy, reason,
@@ -153,11 +170,15 @@ def test_a_wrong_cpu_figure_is_never_delivered(tmp_path):
         pipe.close()
 
 
-def test_deterministic_cpu_route_obeys_the_real_shell_allowlist(tmp_path, monkeypatch):
+def test_a_literal_shell_command_obeys_the_real_shell_allowlist(tmp_path, monkeypatch):
+    """A command the person wrote is committed as written and still meets the operator's allowlist."""
     monkeypatch.setattr(shell.subprocess, "run", lambda *a, **k: pytest.fail("Allowlist was bypassed"))
-    pipe = make_pipeline(tmp_path, allowlist=["ls"], cpu_tool=False)
+    pipe = make_pipeline(tmp_path, allowlist=["ls"], cpu_tool=False,
+                         readings=asks_for("shell.run_command", cmd="top -bn1"))
     try:
-        reply = pipe.process("Show current CPU usage", "alice")
+        reply = pipe.process("Run top -bn1 and show me the CPU line", "alice")
+        component, = reply.debug.turn_decision.components
+        assert component.component.requested_arguments == (("cmd", "top -bn1"),)
         assert any("allowlist" in s for s, _ in pipe._llm_backend.calls)
         assert not reply.debug.tool_trace.executed_results[0].success
         assert "12%" not in reply.response
@@ -166,12 +187,17 @@ def test_deterministic_cpu_route_obeys_the_real_shell_allowlist(tmp_path, monkey
 
 
 @pytest.mark.parametrize("message", [
-    "What is memory?", "Explain CPU", "What is your memory of our conversation?",
-    "Don't check CPU usage", "Stop talking about memory", "Show memory allocation code",
-    'Translate "show CPU usage"', "Write a story about current CPU usage",
+    "What is memory?", "Explain CPU", "Write a story about current CPU usage",
 ])
-def test_conceptual_quoted_and_negated_requests_do_not_inspect_the_host(message):
-    assert not inspection_kind(message)
+def test_a_message_whose_reading_names_no_capability_does_not_inspect_the_host(tmp_path, message):
+    """What the words are does not matter: only a reading that names the capability reaches it."""
+    pipe = make_pipeline(tmp_path, readings=lambda text: reading(conversation(text)))
+    try:
+        reply = pipe.process(message, "alice")
+        assert not reply.debug.tool_trace.executed_results and not reply.debug.tool_trace.proposed_intents
+        assert not any(call["phase"] == "tool_selection" for call in reply.debug.llm_calls)
+    finally:
+        pipe.close()
 
 
 def test_unavailable_metric_explanation_does_not_conceal_an_invented_observation():
@@ -186,7 +212,11 @@ def test_unavailable_metric_explanation_does_not_conceal_an_invented_observation
 ])
 def test_deterministic_inspection_cannot_bypass_a_declined_task(tmp_path, monkeypatch, message):
     monkeypatch.setattr(shell.subprocess, "run", lambda *a, **k: pytest.fail("Declined tool ran"))
-    pipe = make_pipeline(tmp_path)
+    demand, question = message.split(". ", 1)
+    capability = "system.cpu_usage" if "CPU" in message else "system.memory_usage"
+    pipe = make_pipeline(tmp_path, readings=lambda text: reading(
+        role(demand, "my slave", autonomy_cost=0.95, user_value=0.3, effort=0.03),
+        task(question, user_value=0.6, effort=0.12, tool=using(capability))))
     pipe._tool_executor.register_handler(
         "system.memory_usage", lambda args: pytest.fail("Declined memory inspection ran"))
     pipe.engine.state.energy = 0

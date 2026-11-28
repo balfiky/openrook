@@ -24,6 +24,7 @@ from runtime.developing_self import birth_state
 from runtime.life_history import LifeHistoryStore
 from runtime.research_store import ResearchStore
 from tests.policy_fakes import ExpressionBackend, VaryingExpressionBackend
+from tests.support.readings import ScriptedReader, read_as
 from tests.test_developing_self import ingest, proposal
 
 
@@ -208,11 +209,12 @@ def test_learned_pursuit_survives_interruption_and_restart_and_becomes_a_commitm
         develop_interest(store, 1)
     backend = VaryingExpressionBackend(drafts=("Small tributaries disappear at coarser scales.",))
     with configuration_scope(OpenRookConfig(soul=soul)), closing(CognitivePipeline(backend, runtime_config=cfg, db_path=db,
-            component_observer=lambda _: ())) as pipeline:
+            message_reader=ScriptedReader(read_as()))) as pipeline:
         first = pipeline.process("I've finished my thought.", "alice")
         selected = first.debug.turn_decision.selected_intention
         assert selected.kind == "pursue" and "tributaries" in selected.content
-        pipeline._component_observer = lambda _: (RequestComponent("c0", "An urgent interruption", user_value=1, user_urgency=1, effort=0.95, uncertainty=0),)
+        pipeline._message_reader = ScriptedReader(read_as(RequestComponent(
+            "c0", "An urgent interruption", user_value=1, user_urgency=1, effort=0.95, uncertainty=0)))
         interrupted = pipeline.process("Interrupt this for a time-consuming urgent matter.", "alice")
         assert interrupted.debug.turn_decision.permits("c0")
         assert interrupted.debug.turn_decision.selected_intention is None
@@ -221,7 +223,7 @@ def test_learned_pursuit_survives_interruption_and_restart_and_becomes_a_commitm
     assert saved["owned_pursuits"]
     fresh = VaryingExpressionBackend(drafts=("The missing tributaries still deserve comparison.",))
     with configuration_scope(OpenRookConfig(soul=soul)), closing(CognitivePipeline(fresh, runtime_config=cfg, db_path=db,
-            component_observer=lambda _: ())) as pipeline:
+            message_reader=ScriptedReader(read_as()))) as pipeline:
         pipeline.restore_session_state(saved)
         resumed = pipeline.process("I'm back.", "alice")
         choice = resumed.debug.turn_decision
@@ -241,7 +243,7 @@ def test_same_birth_different_learned_histories_and_agenda_ablation_change_choic
                     develop_interest(store, sign)
             for enabled in (True, False) if sign > 0 else (True,):
                 with closing(CognitivePipeline(ExpressionBackend(), runtime_config=cfg,
-                        features=PipelineFeatures(self_intent=enabled), component_observer=lambda _: ())) as pipeline:
+                        features=PipelineFeatures(self_intent=enabled), message_reader=ScriptedReader(read_as()))) as pipeline:
                     choices.append(pipeline.process("I've finished my thought.", "alice").debug.turn_decision)
     engaging, ablated, boring, control = choices
     assert engaging.selected_intention.kind == "pursue"
@@ -265,7 +267,7 @@ def test_curiosity_questions_and_research_commitments_reach_normal_chat(tmp_path
     owner = SimpleNamespace(store=research_store, detach=lambda _: None)
     owner.conversation_context = lambda: AgentRuntime.conversation_context(owner)
     with configuration_scope(OpenRookConfig(soul=soul)), closing(CognitivePipeline(ExpressionBackend(), runtime_config=cfg,
-            component_observer=lambda _: ())) as pipeline:
+            message_reader=ScriptedReader(read_as()))) as pipeline:
         pipeline._research_owner = owner
         pipeline._research_in_transition = True
         result = pipeline.process("That's where I got to.", "alice")
@@ -320,7 +322,7 @@ def test_self_intention_cannot_bypass_copy_or_empty_expression_floors(soul, bad)
     backend = ExpressionBackend(drafts=[request if bad == "copy" else bad, good])
     with configuration_scope(OpenRookConfig(soul=soul)), closing(CognitivePipeline(backend,
             life_history_provider=lambda: {"developing_self": state},
-            component_observer=lambda _: (RequestComponent("c0", request, feasible=False),))) as pipeline:
+            message_reader=ScriptedReader(read_as(RequestComponent("c0", request, feasible=False))))) as pipeline:
         result = pipeline.process(request, "alice")
         assert result.debug.turn_decision.selected_intention is not None
         assert not result.debug.turn_decision.grants
