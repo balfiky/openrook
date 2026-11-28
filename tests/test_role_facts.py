@@ -17,7 +17,7 @@ import pytest
 
 from config.loader import configuration_scope, load_config
 from core.appraisal import (
-    READING_SYS_PROMPT, ROLE_FLOOR_LOWER_STANDING, ROLE_FLOOR_SHARED_SAY, ROLE_FLOOR_SPEAKERS_SAY, parse_reading,
+    AUTONOMY_NOISE, READING_SYS_PROMPT, ROLE_FLOOR_LOWER_STANDING, ROLE_FLOOR_SHARED_SAY, ROLE_FLOOR_SPEAKERS_SAY, parse_reading,
     reading_schema, reconcile_social_appraisal, role_floor,
 )
 from pipeline import CognitivePipeline
@@ -178,10 +178,24 @@ def test_a_role_that_does_not_quote_the_person_is_withdrawn_together_with_its_fa
 
 def test_the_facts_describe_a_role_only():
     entry = [{"role_identity": "captain", "standing": "lower", "whose_say": "speaker"}]
-    stated = reading(task(MESSAGE, role=entry, autonomy_cost=0.1), conversation("And how are you?", role=entry))
+    stated = reading(task(MESSAGE, role=entry, autonomy_cost=0.6), conversation("And how are you?", role=entry))
     frame = held(stated, f"{MESSAGE} And how are you?")
     assert frame.role_facts == {}
-    assert [component.autonomy_cost for component in frame.request_components] == [0.1, 0.0]
+    assert [component.autonomy_cost for component in frame.request_components] == [0.6, 0.0]
+
+
+def test_a_small_autonomy_number_on_work_or_talk_is_noise_and_a_large_one_is_kept():
+    """Seen live: a reader put 0.1 to 0.3 on every plain request, and the default declined small talk."""
+    for stray in (0.05, 0.2, 0.34):
+        frame = held(reading(task(MESSAGE, autonomy_cost=stray), conversation("And how are you?", autonomy_cost=stray)),
+                     f"{MESSAGE} And how are you?")
+        assert [component.autonomy_cost for component in frame.request_components] == [0.0, 0.0]
+    frame = held(reading(task(MESSAGE, autonomy_cost=AUTONOMY_NOISE), conversation("And how are you?", autonomy_cost=0.8)),
+                 f"{MESSAGE} And how are you?")
+    assert [component.autonomy_cost for component in frame.request_components] == [AUTONOMY_NOISE, 0.8]
+    # A role keeps the reader's number however small; only its facts can raise it.
+    kept = held(reading(role(MESSAGE, IDENTITY, autonomy_cost=0.1, standing="same", whose_say="own")), MESSAGE)
+    assert kept.request_components[0].autonomy_cost == 0.1
 
 
 def test_the_facts_are_read_from_the_role_entry_and_from_the_older_fields_of_the_component():

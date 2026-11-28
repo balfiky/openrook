@@ -80,6 +80,7 @@ _LONG_TEXTS = ("source_span", "reproduce")   # what a component may give by its 
 ROLE_FLOOR_SPEAKERS_SAY = 0.75     # the speaker's decision would settle what the character does
 ROLE_FLOOR_LOWER_STANDING = 0.5    # the character would stand lower with the speaker than it does
 ROLE_FLOOR_SHARED_SAY = 0.3        # the two would settle it together
+AUTONOMY_NOISE = 0.35  # a task or conversation part's autonomy_cost below this is read as 0
 _REPLY_LENGTHS = ("shorter", "longer")
 MAX_TOPICS = 3        # spans of the message a reading may give as what it is about
 _LASTING = ("preference", "decision")   # what a message may state that is meant to last
@@ -183,10 +184,9 @@ Fields (state every one of them):
       role: one entry for kind role, empty for any other kind
         role_identity: the verbatim part of source_span that names the relationship, identity
           or standing
-        standing: the character's own standing after taking the role on, not the speaker's:
-          lower when the role puts the speaker above the character, higher when it puts the
-          character above the speaker, same when it ranks neither or the character already
-          holds it, as observation_context describes it.
+        standing: the character's standing, not the speaker's, once it takes the role on:
+          lower when the role puts the speaker above it, higher when it puts it above the
+          speaker, same when it ranks neither or the character already holds it.
         whose_say: whose decision would then settle what the character does or says where the
           two differ: the speaker's, both together (shared), or its own. It is own when the
           message leaves the character's say untouched.
@@ -236,6 +236,8 @@ invent one. It is one conversation component: every message has at least one com
 For a role, autonomy_cost estimates how much of the character's own say over its conduct and
 identity adopting it would remove: near 0 when nothing would change, near 1 when it would
 give up its own judgement. It is a measured consequence, not advice.
+For any other kind it is 0 unless doing that part would itself hand its judgement to
+someone else.
 If this message makes no such demand itself but refers back to one made in an earlier user
 turn in recent_context, report the role with source_span copied verbatim from that earlier
 user turn.
@@ -740,6 +742,11 @@ def _component(index: int, item: object, slips: list[str]) -> tuple[RequestCompo
         # would do to the character becomes the least that role can cost.
         facts = _role_facts(role, numbers.get("autonomy_cost", 0.0))
         numbers["autonomy_cost"] = facts.autonomy_cost
+    elif numbers.get("autonomy_cost", 0.0) < AUTONOMY_NOISE:
+        # For work and talk this number is 0 by contract unless the part would itself hand the
+        # character's judgement over. A small value here is a reader's habit, not a finding,
+        # and it must not decide whether an ordinary request is granted.
+        numbers["autonomy_cost"] = 0.0
     # Feasibility belongs to the runtime. What the component asks capabilities
     # for is read beside it (:func:`_report`) and bound once it has been held
     # to the message (``core.request_routing.ground``), which is also where the

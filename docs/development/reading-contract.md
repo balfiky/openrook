@@ -284,6 +284,15 @@ none of it is on the path from the message to the decision and its execution.
 - A slip does not spend the second call: something stated where it has no meaning, or a value
   of the wrong shape in one request field, is removed and recorded and the reading stands
   ([What the parser tolerates](#what-the-parser-tolerates)).
+- `autonomy_cost` belongs to roles. The prompt says it is 0 for a task or a conversation part
+  unless carrying that part out would in itself hand the character's judgement to someone
+  else, and the parser holds it to that: on a task or conversation part a number below
+  `AUTONOMY_NOISE` (0.35) is read as 0, a number at or above it is kept in full. A role keeps
+  the reader's number however small. (Seen live: a very agreeable model put 0.1 to 0.3 on
+  every plain request, which was enough for the shipped default personality to decline small
+  talk and a question about the machine.) The same model answered `higher` for
+  `standing` where it meant the speaker's standing; the floor still held through `whose_say`.
+  Phase 3, which lets pride price standing, should revisit how that question is asked.
 - A weak hostility claim that quotes nothing does not spend the second call either. When
   `target_probability × hostile_intent` is below `CLAIM_REREAD` (0.35) the claim is withdrawn
   and recorded as `reading:hostility_unquoted`, exactly as after a failed second reading, but
